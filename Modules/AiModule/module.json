@@ -1,0 +1,13 @@
+{
+    "name": "AiModule",
+    "alias": "aimodule",
+    "description": "",
+    "keywords": [],
+    "priority": 0,
+    "providers": [
+        "Modules\\AiModule\\Providers\\AiModuleServiceProvider"
+    ],
+    "aliases": {},
+    "files": [],
+    "requires": []
+}

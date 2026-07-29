@@ -1,0 +1,13 @@
+{
+    "name": "BlogManagement",
+    "alias": "blogmanagement",
+    "description": "",
+    "keywords": [],
+    "priority": 0,
+    "providers": [
+        "Modules\\BlogManagement\\Providers\\BlogManagementServiceProvider"
+    ],
+    "aliases": {},
+    "files": [],
+    "requires": []
+}
