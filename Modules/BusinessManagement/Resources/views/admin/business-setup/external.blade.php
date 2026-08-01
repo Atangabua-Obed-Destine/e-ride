@@ -15,7 +15,7 @@
                         </span>
                     </h3>
                     <p class="m-0">
-                        {{translate('connect_6ammart_system_with_drivemond')}}
+                        {{translate('connect_6ammart_system_with_eride')}}
                     </p>
                 </div>
                 <div class="text--primary-2 py-1 d-flex flex-wrap align-items-center" type="button"
@@ -38,7 +38,7 @@
                                     <div class="w-160px flex-grow-1">
                                         <h5>{{translate('Activation Mode')}}</h5>
                                         <p class="fs-12 m-0">
-                                            {{translate('Enable the switch to activate the purchased Software- 6amMart in the Drivemond system. You must input the correct information to make sure the functionality works properly.')}}
+                                            {{translate('Enable the switch to activate the purchased Software- 6amMart in the E-Ride system. You must input the correct information to make sure the functionality works properly.')}}
                                         </p>
                                     </div>
                                     <label class="switcher ml-auto mb-0">
@@ -87,11 +87,11 @@
                                     <div class="p-3 p-sm-4 bg-body rounded">
                                         <div class="d-flex justify-content-between">
                                             <label
-                                                class="mb-2">{{ (businessConfig('business_name')?->value ?? "DriveMond"). ' ' .translate('System Token') }}
+                                                class="mb-2">{{ (businessConfig('business_name')?->value ?? "E-Ride"). ' ' .translate('System Token') }}
                                                 <i
                                                     class="bi bi-info-circle-fill text-primary cursor-pointer"
                                                     data-bs-toggle="tooltip"
-                                                    data-bs-title="{{translate("Click on the Generate Token button, It will automatically generate the Drivemond System Token and insert it into the input field.")}}">
+                                                    data-bs-title="{{translate("Click on the Generate Token button, It will automatically generate the E-Ride System Token and insert it into the input field.")}}">
                                                 </i>
                                             </label>
                                         </div>
@@ -176,19 +176,19 @@
                                         <div class="how-it-count">
                                             <span>3</span>
                                         </div>
-                                        <h5 class="mb-2">{{(businessConfig('business_name')?->value ?? "DriveMond" ) . ' ' .translate('System Token Generate')}}</h5>
+                                        <h5 class="mb-2">{{(businessConfig('business_name')?->value ?? "E-Ride" ) . ' ' .translate('System Token Generate')}}</h5>
                                         <p>
                                             {{translate("At last,  Click on the  ")}}
                                             <strong>{{translate("Generate Token ")}}</strong>
                                             {{translate("button for automatic token generation & paste it Into the input field of ")}}
-                                            {{(businessConfig('business_name')?->value ?? "DriveMond") . ' ' .translate('System Token Generate')}}
+                                            {{(businessConfig('business_name')?->value ?? "E-Ride") . ' ' .translate('System Token Generate')}}
                                         </p>
                                     </div>
                                 </div>
                             </div>
                             <br>
                             <div class="pb-1">
-                                <i class="text-dark">{{translate('Note :  Follow the same steps on 6amMart to successfully connect DriveMond with 6amMart')}}</i>
+                                <i class="text-dark">{{translate('Note :  Follow the same steps on 6amMart to successfully connect E-Ride with 6amMart')}}</i>
                             </div>
                         </div>
                     </div>

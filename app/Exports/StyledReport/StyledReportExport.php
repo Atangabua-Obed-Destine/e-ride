@@ -305,7 +305,7 @@ class StyledReportExport implements WithEvents
 
     /**
      * Best-effort coercion so that pre-formatted strings (e.g. "$ 1,500.00",
-     * "৳ 1500", "1,500 €") still land as numeric values in numeric columns —
+     * "FCFA 1500", "1,500 €") still land as numeric values in numeric columns —
      * preserving SUM/AVG/MIN/MAX in Excel. Date strings are passed through to
      * setCellValue which then renders via the column number-format code.
      */

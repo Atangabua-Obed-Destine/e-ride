@@ -101,7 +101,7 @@ class BkashPaymentController extends Controller
         $requestbody = array(
             'mode' => '0011',
             'amount' => round($data->payment_amount, 2),
-            'currency' => 'BDT',
+            'currency' => 'XAF',
             'intent' => 'sale',
             'payerReference' => $payer->phone,
             'merchantInvoiceNumber' => 'invoice_' . Str::random('15'),

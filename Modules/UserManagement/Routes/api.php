@@ -53,8 +53,8 @@ Route::group(['prefix' => 'customer'], function () {
 
         Route::group(['prefix' => 'wallet'], function () {
             Route::controller(WalletTransferController::class)->group(function () {
-                Route::post('transfer-drivemond-to-mart', 'transferDrivemondToMartWallet');
-                Route::post('transfer-drivemond-from-mart', 'transferDrivemondFromMartWallet')->withoutMiddleware('auth:api');
+                Route::post('transfer-e-ride-to-mart', 'transferE-RideToMartWallet');
+                Route::post('transfer-e-ride-from-mart', 'transferE-RideFromMartWallet')->withoutMiddleware('auth:api');
             });
             Route::controller(WalletController::class)->group(function () {
                 Route::get('bonus-list', 'bonusList');

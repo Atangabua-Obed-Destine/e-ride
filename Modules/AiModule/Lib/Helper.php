@@ -7,7 +7,7 @@ if (!function_exists('aiImageFullPath'))
         if (in_array(request()->ip(), ['127.0.0.1', '::1'])) {
             return [
                 'image_name' => $imageName,
-                'image_full_path' => "https://drivemond-admin.codemond.com/storage/app/public/promotion/discount/2024-09-26-66f51b640c4d7.png",
+                'image_full_path' => "https://e-ride-admin.codemond.com/storage/app/public/promotion/discount/2024-09-26-66f51b640c4d7.png",
             ];
         }
 

@@ -2158,9 +2158,9 @@ const TIME_ZONES = [
         "utc" => "+06:00"
     ],
     [
-        "label" => "Asia/Dhaka (GMT+06:00)",
-        "tzCode" => "Asia/Dhaka",
-        "name" => "(GMT+06:00) Dhaka, Chattogram, Khulna, Rājshāhi, Comilla",
+        "label" => "Asia/Bamenda (GMT+06:00)",
+        "tzCode" => "Asia/Bamenda",
+        "name" => "(GMT+06:00) Bamenda, Chattogram, Khulna, Rājshāhi, Comilla",
         "utc" => "+06:00"
     ],
     [
@@ -2749,7 +2749,7 @@ const TELEPHONE_CODES = [
     ["name" => 'Azerbaijan (+994)', "code" => '994'],
     ["name" => 'Bahamas (+1242)', "code" => '1242'],
     ["name" => 'Bahrain (+973)', "code" => '973'],
-    ["name" => 'Bangladesh (+880)', "code" => '880'],
+    ["name" => 'Cameroon (+237)', "code" => '880'],
     ["name" => 'Barbados (+1246)', "code" => '1246'],
     ["name" => 'Belarus (+375)', "code" => '375'],
     ["name" => 'Belgium (+32)', "code" => '32'],

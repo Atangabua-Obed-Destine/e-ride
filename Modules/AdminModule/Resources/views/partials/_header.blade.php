@@ -19,12 +19,12 @@
                         @if(externalConfig('activation_mode')?->value ?? 0)
                             <li>
                                 <form method="POST"
-                                      action="{{url(externalConfig( 'mart_base_url')?->value ."/external-login-from-drivemond")}}"
+                                      action="{{url(externalConfig( 'mart_base_url')?->value ."/external-login-from-e-ride")}}"
                                       target="_blank">
                                     @csrf
-                                    <input type="hidden" name="drivemond_token"
+                                    <input type="hidden" name="eride_token"
                                            value="{{externalConfig('system_self_token')?->value ?? null}}">
-                                    <input type="hidden" name="drivemond_base_url" value="{{url('/')}}">
+                                    <input type="hidden" name="eride_base_url" value="{{url('/')}}">
                                     <input type="hidden" name="mart_token"
                                            value="{{externalConfig('mart_token')?->value ?? null}}">
                                     <button type="submit" class="btn btn-primary gap-2 cl-mart">

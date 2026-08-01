@@ -22,7 +22,7 @@
                         <td align="center" style="padding:30px 20px 20px;">
                             <img src="{{ $businessLogoUrl }}"
                                 width="100"
-                                alt="{{ $businessName ?? 'Drivemond' }}"
+                                alt="{{ $businessName ?? 'E-Ride' }}"
                                 style="display:block; border:0; outline:none; text-decoration:none; width:100px;">
                         </td>
                     </tr>
@@ -94,7 +94,7 @@
                                 {{ translate('Thanks & Regards,') }}
                             </p>
                             <p style="margin:6px 0 0; font-size:14px; color:#6b7280;">
-                                {{ $businessName ?? 'Drivemond' }}
+                                {{ $businessName ?? 'E-Ride' }}
                             </p>
                         </td>
                     </tr>

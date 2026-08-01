@@ -93,7 +93,7 @@
                                 {{ translate('Thanks & Regards,') }}
                             </p>
                             <p style="margin:6px 0 0; font-size:14px; color:#6b7280;">
-                                {{ $businessName ?? 'Drivemond' }}
+                                {{ $businessName ?? 'E-Ride' }}
                             </p>
                         </td>
                     </tr>

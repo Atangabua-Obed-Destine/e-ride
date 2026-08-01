@@ -1,5 +1,5 @@
 /*---------------------------------------------
-	Template name:  DriveMond
+	Template name:  E-Ride
 	Version:        1.0
 	Author:         6amtech
 	Author url:     https://6amtech.com/

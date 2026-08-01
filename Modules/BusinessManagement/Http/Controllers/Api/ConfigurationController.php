@@ -24,7 +24,7 @@ class ConfigurationController extends Controller
         $cta = $this->businessSettingService->findOneBy(criteria: ['key_name' => CTA, 'settings_type' => LANDING_PAGES_SETTINGS]);
 
         $configs = [
-            'business_name' => businessConfig('business_name', BUSINESS_INFORMATION)?->value ?? "DriveMond",
+            'business_name' => businessConfig('business_name', BUSINESS_INFORMATION)?->value ?? "E-Ride",
             'logo' => businessConfig('header_logo', BUSINESS_INFORMATION)?->value ? asset(businessConfig('header_logo', BUSINESS_INFORMATION)?->value) : dynamicAsset('public/assets/admin-module/img/logo.png'),
             'app_url_android' => $cta?->value && $cta?->value['play_store']['user_download_link'] ? $cta?->value['play_store']['user_download_link'] : "",
             'app_url_ios' => $cta?->value && $cta?->value['app_store']['user_download_link'] ? $cta?->value['app_store']['user_download_link'] : "",
@@ -43,7 +43,7 @@ class ConfigurationController extends Controller
         $validator = Validator::make($request->all(), [
             'mart_base_url' => 'required',
             'mart_token' => 'required',
-            'drivemond_token' => 'required',
+            'eride_token' => 'required',
         ]);
 
         if ($validator->fails()) {
@@ -53,7 +53,7 @@ class ConfigurationController extends Controller
         $martBaseUrl = externalConfig('mart_base_url')?->value;
         $martToken = externalConfig('mart_token')?->value;
         $systemSelfToken = externalConfig('system_self_token')?->value;
-        if ($activationMode == 1 && $request->mart_base_url == $martBaseUrl && $request->mart_token == $martToken && $request->drivemond_token == $systemSelfToken) {
+        if ($activationMode == 1 && $request->mart_base_url == $martBaseUrl && $request->mart_token == $martToken && $request->eride_token == $systemSelfToken) {
             return response()->json(['status' => true]);
         }
 

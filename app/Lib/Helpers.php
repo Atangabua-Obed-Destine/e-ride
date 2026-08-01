@@ -335,13 +335,13 @@ if (!function_exists('externalConfig')) {
     }
 }
 if (!function_exists('checkExternalConfiguration')) {
-    function checkExternalConfiguration(string $externalBaseUrl, int|string $externalToken, int|string $drivemondToken): bool
+    function checkExternalConfiguration(string $externalBaseUrl, int|string $externalToken, int|string $erideToken): bool
     {
         $activationMode = externalConfig('activation_mode')?->value;
         $martBaseUrl = externalConfig('mart_base_url')?->value;
         $martToken = externalConfig('mart_token')?->value;
         $systemSelfToken = externalConfig('system_self_token')?->value;
-        return $activationMode == 1 && $martBaseUrl == $externalBaseUrl && $martToken == $externalToken && $systemSelfToken == $drivemondToken;
+        return $activationMode == 1 && $martBaseUrl == $externalBaseUrl && $martToken == $externalToken && $systemSelfToken == $erideToken;
     }
 }
 if (!function_exists('checkSelfExternalConfiguration')) {

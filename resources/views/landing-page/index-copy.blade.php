@@ -10,7 +10,7 @@
                  data-img="{{ $introSection?->value && $introSection?->value['background_image'] ? dynamicStorage(path: 'storage/app/public/business/landing-pages/intro-section/'.$introSectionImage?->value['background_image']) : dynamicAsset(path: 'public/landing-page/assets/img/banner/banner-bg.png') }}">
                 <div class="banner-content text-center text-sm-start">
                     <h1 class="title fs-20-mobile max-w-100">{{ $introSection?->value && $introSection?->value['title'] ? translate($introSection?->value['title']) : translate("It’s Time to Change The Riding Experience") }}</h1>
-                    <p class="txt fs-12-mobile">{{ $introSection?->value && $introSection?->value['sub_title'] ? translate($introSection?->value['sub_title']) : translate("Embrace the future today and explore the amazing features that make "). (($business_name && $business_name['value']) ? $business_name['value'] : "DriveMond") .translate("the smart, sustainable, and efficient ride sharing & delivery solution.") }}
+                    <p class="txt fs-12-mobile">{{ $introSection?->value && $introSection?->value['sub_title'] ? translate($introSection?->value['sub_title']) : translate("Embrace the future today and explore the amazing features that make "). (($business_name && $business_name['value']) ? $business_name['value'] : "E-Ride") .translate("the smart, sustainable, and efficient ride sharing & delivery solution.") }}
                     </p>
                     <div class="app--btns d-flex flex-wrap flex-column flex-sm-row">
                         <div class="dropdown">
@@ -33,7 +33,7 @@
                             </div>
                         </div>
                         <a href="#about" class="cmn--btn btn-white text-nowrap overflow-hidden text-truncate h-50">
-                            {{translate('Earn_From')}} {{ (($business_name && $business_name['value']) ? $business_name['value'] : "DriveMond") }}
+                            {{translate('Earn_From')}} {{ (($business_name && $business_name['value']) ? $business_name['value'] : "E-Ride") }}
                         </a>
                     </div>
                 </div>
@@ -245,7 +245,7 @@
                         <div class="col-lg-6">
                             <div class="mt-3 mt-sm-5">
                                 <h4 class="mb-3 fs-16-mobile">
-                                    {{ translate('Plan your next adventure with DriveMonds trip') }}
+                                    {{ translate('Plan your next adventure with E-Rides trip') }}
                                     <span class="text--base">{{ translate('scheduling') }}</span>
                                     {{ translate('features.') }}
                                 </h4>
@@ -275,7 +275,7 @@
                         <div class="col-lg-6">
                             <div class="mt-3 mt-sm-5">
                                 <h4 class="mb-3 fs-16-mobile">
-                                    {{ translate('Plan your next adventure with DriveMonds trip') }}
+                                    {{ translate('Plan your next adventure with E-Rides trip') }}
                                     <span class="text--base">{{ translate('scheduling') }}</span>
                                     {{ translate('features.') }}
                                 </h4>
@@ -301,7 +301,7 @@
                         <div class="col-lg-6">
                             <div class="mt-3 mt-sm-5">
                                 <h4 class="mb-3 fs-16-mobile">
-                                    {{ translate('Plan your next adventure with DriveMonds trip') }}
+                                    {{ translate('Plan your next adventure with E-Rides trip') }}
                                     <span class="text--base">{{ translate('scheduling') }}</span>
                                     {{ translate('features.') }}
                                 </h4>
@@ -345,7 +345,7 @@
                                 {{ translate('Ride Completed') }} <span class="text--base">{{ translate('Hassle-Free') }}</span>
                             </h3>
                             <p class="fs-16 mb-0 fs-12-mobile wow animate__fadeInUp">
-                                {{ translate('Experience comfort, safety, and satisfaction with every trip. End your journey with a smile — every time with DriveMond.') }}
+                                {{ translate('Experience comfort, safety, and satisfaction with every trip. End your journey with a smile — every time with E-Ride.') }}
                             </p>
                         </div>
                     </div>
@@ -385,7 +385,7 @@
                                 {{ translate('Your') }} <span class="text--base">{{ translate('Share') }}</span> {{ translate('Your Ride') }}
                             </h3>
                             <p class="fs-16 mb-0 fs-12-mobile">
-                                {{ translate('Experience hassle-free transportation with DriveMond. Reliable rides anytime, anywhere.') }}
+                                {{ translate('Experience hassle-free transportation with E-Ride. Reliable rides anytime, anywhere.') }}
                             </p>
                         </div>
                         <div class="bg-fafafa border rounded-20 p-3 p-sm-4 d-flex justify-content-between align-items-end gap-3 gap-sm-4 w-auto">
@@ -445,7 +445,7 @@
                     <div class="h-100 wow animate__fadeInDown">
                         <div class="mb-4 mb-sm-30">
                             <h3 class="mb-3 mb-sm-4 fs-16-mobile">
-                                {{ translate('Earn Money with') }} <span class="text--base">{{ translate('DriveMond') }}</span>
+                                {{ translate('Earn Money with') }} <span class="text--base">{{ translate('E-Ride') }}</span>
                             </h3>
                             <p class="fs-16 mb-0 fs-12-mobile">
                                 {{ translate('Explore limitless possibilities with our platform — turning your skills, time, and passion into a rewarding source of income.') }}
@@ -495,9 +495,9 @@
 
                 <div class="about__wrapper-content bg-transparent wow animate__fadeInDown">
                     <h2 class="section-title text-start ms-0">{{ $earnMoney?->value && $earnMoney?->value['title'] ? translate($earnMoney?->value['title']) : translate("Earn Money with") }}
-                        <span class="text--base">{{ (($business_name && $business_name['value']) ? $business_name['value'] : "DriveMond")}}</span></h2>
+                        <span class="text--base">{{ (($business_name && $business_name['value']) ? $business_name['value'] : "E-Ride")}}</span></h2>
                     <p>
-                        {{ $earnMoney?->value && $earnMoney?->value['sub_title'] ? translate($earnMoney?->value['sub_title']) : translate("With flexible schedules and a user-friendly platform, you can earn money with every ride. Become a ").(($business_name && $business_name['value']) ? $business_name['value'] : "DriveMond"). translate("today!") }}
+                        {{ $earnMoney?->value && $earnMoney?->value['sub_title'] ? translate($earnMoney?->value['sub_title']) : translate("With flexible schedules and a user-friendly platform, you can earn money with every ride. Become a ").(($business_name && $business_name['value']) ? $business_name['value'] : "E-Ride"). translate("today!") }}
                     </p>
                     <br>
                     <div class="dropdown d-inline-block">

@@ -995,7 +995,7 @@ class AuthController extends Controller
                             if ($customer) {
                                 return response()->json(responseFormatter([
                                     'response_code' => 'email_unique_402',
-                                    'message' => 'Email already exists, Please update mart email and switch drivemond',
+                                    'message' => 'Email already exists, Please update mart email and switch e-ride',
                                 ]), 403);
                             }
                             $customer = $this->customerService->createExternalCustomer($customerData);

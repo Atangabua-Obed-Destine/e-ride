@@ -59,7 +59,7 @@
                                             <label for="address" class="mb-2">{{ translate('address') }}</label>
                                             <input type="text" name="address" id="address" class="form-control"
                                                    value="{{ $employeeAddress->address ?? '' }}"
-                                                   placeholder="{{ translate('Ex: Dhaka') }}"
+                                                   placeholder="{{ translate('Ex: Bamenda') }}"
                                                    required tabindex="4">
                                         </div>
                                     </div>

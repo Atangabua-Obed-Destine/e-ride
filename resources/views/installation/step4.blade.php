@@ -5,7 +5,7 @@
 
     <!-- Progress -->
     <div class="pb-2">
-        <div class="progress cursor-pointer" role="progressbar" aria-label="DriveMond Software Installation"
+        <div class="progress cursor-pointer" role="progressbar" aria-label="E-Ride Software Installation"
              aria-valuenow="80" aria-valuemin="0" aria-valuemax="100" data-bs-toggle="tooltip"
              data-bs-placement="top" data-bs-custom-class="custom-progress-tooltip" data-bs-title="Fourth Step!"
              data-bs-delay='{"hide":1000}'>

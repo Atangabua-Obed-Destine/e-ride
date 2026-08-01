@@ -38,7 +38,7 @@
                                         <label class="title-color d-flex mb-2">{{translate('APP_NAME')}}</label>
                                         <input type="text" value="{{ env('APP_NAME') }}"
                                                name="app_name" class="form-control"
-                                               placeholder="Ex : DriveMond" required disabled tabindex="1">
+                                               placeholder="Ex : E-Ride" required disabled tabindex="1">
                                     </div>
                                 </div>
                                 <div class="col-md-4 col-12">

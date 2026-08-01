@@ -21,7 +21,7 @@ class WalletTransferController extends Controller
         $this->customerAccountService = $customerAccountService;
     }
 
-    public function transferDrivemondToMartWallet(Request $request)
+    public function transferE-RideToMartWallet(Request $request)
     {
         $validator = Validator::make($request->all(), [
             'amount' => [
@@ -42,7 +42,7 @@ class WalletTransferController extends Controller
             $systemSelfToken = externalConfig('system_self_token')?->value;
             $martToken = externalConfig('mart_token')?->value;
             try {
-                $response = Http::post($martBaseUrl . '/api/v1/customer/wallet/transfer-mart-from-drivemond',
+                $response = Http::post($martBaseUrl . '/api/v1/customer/wallet/transfer-mart-from-e-ride',
                     [
                         'bearer_token' => $request->bearerToken(),
                         'currency' => businessConfig('currency_code')?->value??"USD",
@@ -92,7 +92,7 @@ class WalletTransferController extends Controller
 
     }
 
-    public function transferDrivemondFromMartWallet(Request $request)
+    public function transferE-RideFromMartWallet(Request $request)
     {
         $validator = Validator::make($request->all(), [
             'currency' => 'required',
@@ -139,8 +139,8 @@ class WalletTransferController extends Controller
                             ]);
                             sendDeviceNotification(
                                 fcm_token: $customer?->fcm_token,
-                                title:translate("wallet_transfer_drivemond_from_mart") ,
-                                description: translate("you_transfer_your_wallet_balance_drivemond_from_mart"),
+                                title:translate("wallet_transfer_eride_from_mart") ,
+                                description: translate("you_transfer_your_wallet_balance_eride_from_mart"),
                                 status: 1
                             );
                             $data = [

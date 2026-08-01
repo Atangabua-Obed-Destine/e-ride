@@ -123,7 +123,7 @@
 </main>
 <!-- End wrapper -->
 
-<span class="system-default-country-code" data-value="{{ getSession('country_code') ?? 'us' }}"></span>
+<span class="system-default-country-code" data-value="{{ getSession('country_code') ?: 'cm' }}"></span>
 <span class="image-file-size-data-to-js"
       data-max-upload-size-for-image="{{ readableUploadMaxFileSize('image') }}"
       data-max-upload-size-for-file="{{ readableUploadMaxFileSize('file') }}"

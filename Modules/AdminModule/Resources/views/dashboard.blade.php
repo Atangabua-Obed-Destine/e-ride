@@ -17,7 +17,7 @@
                         <div class="media-body text-dark">
                             <h4 class="mb-1">{{ translate('welcome')}} {{auth('web')->user()?->first_name}}</h4>
                             <p class="fs-12 text-capitalize">{{ translate('monitor_your')}}
-                                <strong>{{ getSession('business_name') ?? 'DriveMond' }}</strong> {{ translate('business_statistics')}}
+                                <strong>{{ getSession('business_name') ?? 'E-Ride' }}</strong> {{ translate('business_statistics')}}
                             </p>
                         </div>
                     </div>

@@ -51,16 +51,16 @@ class BusinessInfoController extends BaseController
         $activationMode = externalConfig('activation_mode');
         $martBaseUrl = externalConfig('mart_base_url');
         if ($activationMode && $activationMode->value == 1 && $martBaseUrl && $martBaseUrl->value != null) {
-            $name = businessConfig('business_name', BUSINESS_INFORMATION)?->value ?? "DriveMond";
+            $name = businessConfig('business_name', BUSINESS_INFORMATION)?->value ?? "E-Ride";
             $logo = businessConfig('header_logo', BUSINESS_INFORMATION)?->value ? asset(businessConfig('header_logo', BUSINESS_INFORMATION)?->value) : dynamicAsset('public/assets/admin-module/img/logo.png');
             $cta = $this->businessSettingService->findOneBy(criteria: ['key_name' => CTA, 'settings_type' => LANDING_PAGES_SETTINGS]);
 
             try {
                 $response = Http::post($martBaseUrl->value . '/api/v1/configurations/store', [
-                    'drivemond_business_name' => $name,
-                    'drivemond_business_logo' => $logo,
-                    'drivemond_app_url_android' => $cta?->value && $cta?->value['play_store']['user_download_link'] ? $cta?->value['play_store']['user_download_link'] : "",
-                    'drivemond_app_url_ios' => $cta?->value && $cta?->value['app_store']['user_download_link'] ? $cta?->value['app_store']['user_download_link'] : "",
+                    'eride_business_name' => $name,
+                    'eride_business_logo' => $logo,
+                    'eride_app_url_android' => $cta?->value && $cta?->value['play_store']['user_download_link'] ? $cta?->value['play_store']['user_download_link'] : "",
+                    'eride_app_url_ios' => $cta?->value && $cta?->value['app_store']['user_download_link'] ? $cta?->value['app_store']['user_download_link'] : "",
                 ]);
             } catch (\Exception $exception) {
 

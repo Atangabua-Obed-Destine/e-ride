@@ -1,7 +1,7 @@
 "use strict";
 
 $(document).ready(function () {
-    const DEFAULT_LOCATION = { lat: 23.8103, lng: 90.4125 };
+    const DEFAULT_LOCATION = { lat: 5.9631, lng: 10.1591 };
     const DEFAULT_ZOOM = 13;
     const geocoder = new google.maps.Geocoder();
     const $textarea = $("#business_address");

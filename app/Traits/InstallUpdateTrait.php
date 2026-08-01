@@ -48,8 +48,8 @@ trait InstallUpdateTrait
                 'key_name' => 'intro_contents',
                 'settings_type' => 'intro_section',
                 'value' => [
-                    'title' => 'Navigate Life with Ease: Welcome to DriveMond, Your Premier Ride-Sharing Experience!',
-                    'sub_title' => 'Unlock a World of Convenience: Welcome to DriveMond, Your Ultimate Ride-Sharing Destination! Seamlessly Connect with Reliable Drivers, Enjoy Comfortable Journeys- One Ride at a Time.',
+                    'title' => 'Navigate Life with Ease: Welcome to E-Ride, Your Premier Ride-Sharing Experience!',
+                    'sub_title' => 'Unlock a World of Convenience: Welcome to E-Ride, Your Ultimate Ride-Sharing Destination! Seamlessly Connect with Reliable Drivers, Enjoy Comfortable Journeys- One Ride at a Time.',
                     'background_image' => '',
                 ],
             ],
@@ -205,7 +205,7 @@ trait InstallUpdateTrait
                 'value' => [
                     'image' => '',
                     'title' => "Your **Smooth Ride**, Just a Tap Away",
-                    'subtitle' => "Experience hassle-free transportation with DriveMond. Reliable rides anytime, anywhere."
+                    'subtitle' => "Experience hassle-free transportation with E-Ride. Reliable rides anytime, anywhere."
                 ],
             ],
             [
@@ -246,7 +246,7 @@ trait InstallUpdateTrait
                     'title' => "Hit the road instantly and start **earning** on your own terms",
                     'status' => 1,
                     'tab_name' => "Regular Trip",
-                    'description' => "<p>Join the DriveMond community of drivers and turn every mile into a milestone with our seamless, real-time trip booking system.</p><ul><li>Accept trip requests that fit your current location and availability with just a single tap.</li><li>Whether you prefer the comfort of a car or the agility of a motorbike, we support your choice of ride.</li><li>Track your income in real-time with instant payouts and performance-based rewards after every ride.</li></ul>"
+                    'description' => "<p>Join the E-Ride community of drivers and turn every mile into a milestone with our seamless, real-time trip booking system.</p><ul><li>Accept trip requests that fit your current location and availability with just a single tap.</li><li>Whether you prefer the comfort of a car or the agility of a motorbike, we support your choice of ride.</li><li>Track your income in real-time with instant payouts and performance-based rewards after every ride.</li></ul>"
                 ],
             ]);
         }
@@ -257,7 +257,7 @@ trait InstallUpdateTrait
             LandingPageSection::updateOrCreate(['key_name' => 'service_2', 'settings_type' => OUR_SERVICES], [
                 'value' => [
                     'image' => '',
-                    'title' => "Plan your next adventure with DriveMond's trip **scheduling** features.",
+                    'title' => "Plan your next adventure with E-Ride's trip **scheduling** features.",
                     'status' => 1,
                     'tab_name' => "Schedule Trip",
                     'description' => "<p>Discover endless opportunities to schedule trips that align with your skills and interests, transforming your time into a profitable venture.</p><ul><li>Discover endless opportunities to schedule trips that align with your skills and interests, transforming your time into a profitable venture.</li><li>Enjoy the freedom of scheduling trips that suit your personal timetable.</li><li>Enjoy the freedom of scheduling trips that suit your personal timetable.                                                \r\n                                            </li></ul>"
@@ -286,7 +286,7 @@ trait InstallUpdateTrait
                 'value' => [
                     'image' => '',
                     'title' => "Ride Completed **Hassle-Free**",
-                    'subtitle' => "Experience comfort, safety, and satisfaction with every trip. End your journey with a smile — every time with DriveMond.",
+                    'subtitle' => "Experience comfort, safety, and satisfaction with every trip. End your journey with a smile — every time with E-Ride.",
                 ]
             ]);
         }

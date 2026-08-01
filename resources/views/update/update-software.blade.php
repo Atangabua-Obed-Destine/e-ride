@@ -14,7 +14,7 @@
                                 {{ translate("Important Notice: We've upgraded the Firebase push notification system to a new and improved version as the old one will be phased out by June 2024.
                                     Make sure your system is up-to-date to keep getting all the notification seamlessly please do check the Notification settings in the Admin panel.
                                     Thanks for staying connected!.")  }}
-                                <a class="alert-link" target="_blank" href="https://drivemond.app/documentation/admin-panel-setup/admin-mandatory-setup/#firebase-configuration">{{ translate('kindly follow the documentation') }}</a>
+                                <a class="alert-link" target="_blank" href="https://e-ride.app/documentation/admin-panel-setup/admin-mandatory-setup/#firebase-configuration">{{ translate('kindly follow the documentation') }}</a>
                             </div>
                         @endif
                     </div>

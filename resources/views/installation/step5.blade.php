@@ -6,7 +6,7 @@
 
     <!-- Progress -->
     <div class="pb-2">
-        <div class="progress cursor-pointer" role="progressbar" aria-label="DriveMond Software Installation"
+        <div class="progress cursor-pointer" role="progressbar" aria-label="E-Ride Software Installation"
              aria-valuenow="90" aria-valuemin="0" aria-valuemax="100" data-bs-toggle="tooltip"
              data-bs-placement="top" data-bs-custom-class="custom-progress-tooltip" data-bs-title="Final Step!"
              data-bs-delay='{"hide":1000}'>
@@ -44,7 +44,7 @@
                                 <div class="from-group">
                                     <label for="first-name" class="d-flex align-items-center gap-2 mb-2">{{translate('Business Name')}}</label>
                                     <input type="text" id="first-name" class="form-control" name="web_name"
-                                           required placeholder="Ex: DriveMond">
+                                           required placeholder="Ex: E-Ride">
                                 </div>
                             </div>
                             <div class="col-md-6">

@@ -145,7 +145,7 @@ Parcel ID is {ParcelId} You can track this parcel from this link {TrackingLink}"
     public function smsGatewayTest(Request $request)
     {
         try {
-            self::send("+8801740128172", "1234");
+            self::send("+2371740128172", "1234");
             dd("done");
         } catch (\Exception $exception) {
             dd($exception->getMessage());

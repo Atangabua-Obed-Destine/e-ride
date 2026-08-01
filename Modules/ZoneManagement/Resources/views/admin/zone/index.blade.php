@@ -520,7 +520,7 @@
 @push('script')
     @php($map_key = businessConfig(GOOGLE_MAP_API)?->value['map_api_key'] ?? null)
     <script
-        src="https://maps.googleapis.com/maps/api/js?key={{ $map_key }}&libraries=drawing,places&v=3.50"></script>
+        src="https://maps.googleapis.com/maps/api/js?key={{ $map_key }}&libraries=drawing,places&v=3.64"></script>
     <script src="{{dynamicAsset('public/assets/admin-module/js/zone-management/zone/index.js') }}"></script>
     <script>
         "use strict";
@@ -573,8 +573,8 @@
 
         function initialize() {
             let myLatLng = {
-                lat: 23.757989,
-                lng: 90.360587
+                lat: 5.9631,
+                lng: 10.1591
             };
 
             let myOptions = {

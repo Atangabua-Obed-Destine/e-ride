@@ -249,7 +249,7 @@ Parcel ID is {ParcelId} You can track this parcel from this link {TrackingLink}"
             // Remove www.
             $url = preg_replace('/^www\./', '', $url);
             $key = base64_encode(random_bytes(32));
-            $output = 'APP_NAME=DriveMond' . time() . '
+            $output = 'APP_NAME=E-Ride' . time() . '
                     APP_ENV=live
                     APP_MODE=live
                     APP_KEY=base64:' . $key . '
@@ -281,9 +281,9 @@ Parcel ID is {ParcelId} You can track this parcel from this link {TrackingLink}"
                     REDIS_PASSWORD=null
                     REDIS_PORT=6379
 
-                    PUSHER_APP_ID=drivemond
-                    PUSHER_APP_KEY=drivemond
-                    PUSHER_APP_SECRET=drivemond
+                    PUSHER_APP_ID=e-ride
+                    PUSHER_APP_KEY=e-ride
+                    PUSHER_APP_SECRET=e-ride
                     PUSHER_APP_CLUSTER=mt1
                     PUSHER_HOST=' . $url . '
                     PUSHER_PORT=6001
@@ -296,8 +296,8 @@ Parcel ID is {ParcelId} You can track this parcel from this link {TrackingLink}"
                     MIX_PUSHER_APP_CLUSTER="${PUSHER_APP_CLUSTER}"
 
                     REVERB_APP_ID=10000000
-                    REVERB_APP_KEY=drivemond
-                    REVERB_APP_SECRET=drivemond
+                    REVERB_APP_KEY=e-ride
+                    REVERB_APP_SECRET=e-ride
                     REVERB_HOST=' . $url . '
                     REVERB_PORT=6001
                     REVERB_SCHEME="http"

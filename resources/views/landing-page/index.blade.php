@@ -14,7 +14,7 @@
                  data-img="{{ $introSection && $introSection['background_image'] ? dynamicStorage(path: 'storage/app/public/business/landing-pages/intro-section/'.$introSection['background_image']) : dynamicAsset(path: 'public/landing-page/assets/img/banner/banner-bg.png') }}">
                 <div class="banner-content text-center text-sm-start">
                     <h1 class="title fs-20-mobile max-w-100">{!! $introSection && $introSection['title'] ? change_text_color_or_bg($introSection['title']) : translate("It’s Time to Change The Riding Experience") !!}</h1>
-                    <p class="txt fs-12-mobile">{!! $introSection && $introSection['sub_title'] ? change_text_color_or_bg($introSection['sub_title']) : translate("Embrace the future today and explore the amazing features that make "). ($businessName  ??  "DriveMond") .translate("the smart, sustainable, and efficient ride sharing & delivery solution.") !!}
+                    <p class="txt fs-12-mobile">{!! $introSection && $introSection['sub_title'] ? change_text_color_or_bg($introSection['sub_title']) : translate("Embrace the future today and explore the amazing features that make "). ($businessName  ??  "E-Ride") .translate("the smart, sustainable, and efficient ride sharing & delivery solution.") !!}
                     </p>
                     @if($driverAppVersionControlForAndroid || $driverAppVersionControlForIos || $customerAppVersionControlForAndroid || $customerAppVersionControlForIos)
                         <div class="app--btns d-flex flex-wrap flex-column flex-sm-row">
@@ -65,7 +65,7 @@
                                 <div class="dropdown py-0">
                                     <a href="#"
                                        class="cmn--btn btn-white text-nowrap overflow-hidden text-truncate h-50 d-flex gap-2 lh-1"
-                                       data-bs-toggle="dropdown">{{translate('Earn_From')}} {{ $businessName ?? "DriveMond" }}
+                                       data-bs-toggle="dropdown">{{translate('Earn_From')}} {{ $businessName ?? "E-Ride" }}
                                         <i
                                             class="bi bi-chevron-down"></i></a>
                                     <div class="dropdown-menu dropdown-button-menu">
@@ -94,12 +94,12 @@
                             @elseif($driverAppVersionControlForAndroid)
                                 <a href="{{$driverAppVersionControlForAndroid['app_url']}}" target="_blank"
                                    class="cmn--btn btn-white text-nowrap overflow-hidden text-truncate h-50">
-                                    {{translate('Earn_From')}} {{ $businessName ?? "DriveMond" }}
+                                    {{translate('Earn_From')}} {{ $businessName ?? "E-Ride" }}
                                 </a>
                             @elseif($driverAppVersionControlForIos)
                                 <a href="{{$driverAppVersionControlForIos['app_url']}}" target="_blank"
                                    class="cmn--btn btn-white text-nowrap overflow-hidden text-truncate h-50">
-                                    {{translate('Earn_From')}} {{ $businessName ?? "DriveMond" }}
+                                    {{translate('Earn_From')}} {{ $businessName ?? "E-Ride" }}
                                 </a>
                             @endif
                         </div>
@@ -289,7 +289,7 @@
                                     {!! $cardOneGallery['title'] ?  change_text_color_or_bg($cardOneGallery['title']) : translate('Ride Completed ') .change_text_color_or_bg(('**'. translate('Hassle-Free') .'**'))  !!}
                                 </h3>
                                 <p class="fs-16 mb-0 fs-12-mobile wow animate__fadeInUp">
-                                    {!! $cardOneGallery['subtitle'] ? change_text_color_or_bg($cardOneGallery['subtitle']) : translate('Experience comfort, safety, and satisfaction with every trip. End your journey with a smile — every time with DriveMond.') !!}
+                                    {!! $cardOneGallery['subtitle'] ? change_text_color_or_bg($cardOneGallery['subtitle']) : translate('Experience comfort, safety, and satisfaction with every trip. End your journey with a smile — every time with E-Ride.') !!}
                                 </p>
                             </div>
                         </div>
