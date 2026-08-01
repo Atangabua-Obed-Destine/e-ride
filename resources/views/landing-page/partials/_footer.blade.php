@@ -189,7 +189,7 @@
                         <div>
                             <a href="Tel:{{ $contactNumber ?? "+90-327-539" }}">{{ $contactNumber ?? "+90-327-539" }}</a>
                         </div>
-                        <a href={{ "Mailto:".$email ?? "Mailto:support@6amtech.com"}}>{{ $email ?? "support@6amtech.com"}}</a>
+                        <a href={{ "Mailto:".$email ?? "Mailto:support@e-ride.com"}}>{{ $email ?? "support@e-ride.com"}}</a>
                     </div>
                 </div>
                 <div class="footer__wrapper-widget">

@@ -13,8 +13,14 @@
             <div class="banner-wrapper justify-content-between bg__img wow animate__fadeInDown"
                  data-img="{{ $introSection && $introSection['background_image'] ? dynamicStorage(path: 'storage/app/public/business/landing-pages/intro-section/'.$introSection['background_image']) : dynamicAsset(path: 'public/landing-page/assets/img/banner/banner-bg.png') }}">
                 <div class="banner-content text-center text-sm-start">
-                    <h1 class="title fs-20-mobile max-w-100">{!! $introSection && $introSection['title'] ? change_text_color_or_bg($introSection['title']) : translate("It’s Time to Change The Riding Experience") !!}</h1>
-                    <p class="txt fs-12-mobile">{!! $introSection && $introSection['sub_title'] ? change_text_color_or_bg($introSection['sub_title']) : translate("Embrace the future today and explore the amazing features that make "). ($businessName  ??  "E-Ride") .translate("the smart, sustainable, and efficient ride sharing & delivery solution.") !!}
+                    <h1 class="title fs-20-mobile max-w-100 text-uppercase">PUT YOUR CAR TO WORK WITH <span class="text-primary">E-RIDE</span></h1>
+                    <p class="txt fs-12-mobile">
+                        Earn Over <strong class="text-primary">200,000 FCFA</strong> Per Month<br><br>
+                        <span class="d-block mb-1"><i class="bi bi-check-circle-fill text-primary me-2"></i> Flexible driving schedule</span>
+                        <span class="d-block mb-1"><i class="bi bi-check-circle-fill text-primary me-2"></i> Safe and reliable ride requests</span>
+                        <span class="d-block mb-1"><i class="bi bi-check-circle-fill text-primary me-2"></i> Work with your own car</span>
+                        <span class="d-block mb-1"><i class="bi bi-check-circle-fill text-primary me-2"></i> Start earning immediately</span><br>
+                        <span class="d-block mt-2 h5"><i class="bi bi-whatsapp text-success me-2"></i> <strong>+237 672 694 672</strong></span>
                     </p>
                     @if($driverAppVersionControlForAndroid || $driverAppVersionControlForIos || $customerAppVersionControlForAndroid || $customerAppVersionControlForIos)
                         <div class="app--btns d-flex flex-wrap flex-column flex-sm-row">
@@ -65,7 +71,7 @@
                                 <div class="dropdown py-0">
                                     <a href="#"
                                        class="cmn--btn btn-white text-nowrap overflow-hidden text-truncate h-50 d-flex gap-2 lh-1"
-                                       data-bs-toggle="dropdown">{{translate('Earn_From')}} {{ $businessName ?? "E-Ride" }}
+                                       data-bs-toggle="dropdown">Become an E-RIDE Driver Today
                                         <i
                                             class="bi bi-chevron-down"></i></a>
                                     <div class="dropdown-menu dropdown-button-menu">
@@ -94,12 +100,12 @@
                             @elseif($driverAppVersionControlForAndroid)
                                 <a href="{{$driverAppVersionControlForAndroid['app_url']}}" target="_blank"
                                    class="cmn--btn btn-white text-nowrap overflow-hidden text-truncate h-50">
-                                    {{translate('Earn_From')}} {{ $businessName ?? "E-Ride" }}
+                                    Become an E-RIDE Driver Today
                                 </a>
                             @elseif($driverAppVersionControlForIos)
                                 <a href="{{$driverAppVersionControlForIos['app_url']}}" target="_blank"
                                    class="cmn--btn btn-white text-nowrap overflow-hidden text-truncate h-50">
-                                    {{translate('Earn_From')}} {{ $businessName ?? "E-Ride" }}
+                                    Become an E-RIDE Driver Today
                                 </a>
                             @endif
                         </div>
@@ -110,30 +116,7 @@
     </section>
     <!-- Intro Section End -->
 
-    <!-- Business Statistics Section Start -->
-    @if($showBusinessStatisticsSection)
-        <section class="basic-info-section">
-            <div class="container position-relative">
-                <div class="basic-info-wrapper wow animate__fadeInUp">
-                    @foreach($businessStatistics as $key => $item)
-                        @if($item?->value && $item?->value['status'] ?? 0)
-                            <div
-                                class="basic-info-item d-flex align-items-center justify-content-center justify-content-lg-start">
-                                <img
-                                    src="{{ $item?->value['image']  ? dynamicStorage(path: 'storage/app/public/business/landing-pages/business-statistics/'. str_replace('_', '-', $item?->key_name) .  '/' .$item?->value['image']) : dynamicAsset(path: 'public/landing-page/assets/img/icons/' . $key + 1 . '.png') }}"
-                                    alt="">
-                                <div class="content text-center text-lg-start">
-                                    <h2 class="h5 fw-bold mb-3 fs-14-mobile line-clamp-1">{!! change_text_color_or_bg($item?->value['title'] ??  "1M+" ) !!}</h2>
-                                    <p class="fs-16 fs-12-mobile line-clamp-2">{!! change_text_color_or_bg($item?->value['content'] ?? translate("download")) !!}</p>
-                                </div>
-                            </div>
-                        @endif
-                    @endforeach
-                </div>
-            </div>
-        </section>
-    @endif
-    <!-- Business Statistics Section End -->
+    <!-- Business Statistics Section Removed -->
 
     <!-- Our Solution Section Start -->
     @if($showOurSolutionsSection)
@@ -142,53 +125,47 @@
                  class="shape d-none d-lg-block" alt="">
             <div class="container">
                 <div class="mb-3 mb-sm-4 text-center">
-                    <h2 class="section-title mb-2 mb-sm-3 fs-16-mobile wow animate__fadeInUp">{!! $ourSolutionsSectionContent && $ourSolutionsSectionContent['title'] ? change_text_color_or_bg($ourSolutionsSectionContent['title']) :  translate('Our ') .change_text_color_or_bg(('**'. translate('Solutions') .'**')) !!}</h2>
-                    <p class="fs-18 mb-0 fs-12-mobile">{!! $ourSolutionsSectionContent && $ourSolutionsSectionContent['sub_title'] ? change_text_color_or_bg($ourSolutionsSectionContent['sub_title']) : translate("Explore our dynamic day-to-day solution for everyday life") !!}</p>
+                    <h2 class="section-title mb-2 mb-sm-3 fs-16-mobile wow animate__fadeInUp">Safe • Reliable • Affordable</h2>
+                    <p class="fs-18 mb-0 fs-12-mobile">Going out on a date? Need a comfortable ride? We bring you smooth, reliable movement.</p>
                 </div>
                 <div class="position-relative wow animate__fadeInDown">
-                    <div class="ourSolution-slider  owl-theme owl-carousel sliderItem-sameHeight {{ $activeOurSolutions->count() > 3 ? '' : 'slider-center' }}">
-                        @if($activeOurSolutions->isNotEmpty())
-                            @foreach($activeOurSolutions as $ourSolutionSingle)
-                                <!-- ourSolution Slider Single Slide -->
-                                <div class="ourSolution__item sliderItem">
-                                    <div class="w-200 w-150-mobile aspect-1 mx-auto mb-3">
-                                        <img src="{{ onErrorImage(
-                                                $ourSolutionSingle?->value['image'],
-                                                dynamicStorage(path: 'storage/app/public/business/landing-pages/our-solutions/'.$ourSolutionSingle?->value['image']),
-                                                dynamicAsset(path: 'public/landing-page/assets/img/platform/'.rand(1,2).'.png'),
-                                                'business/landing-pages/our-solutions/',
-                                            ) }}" alt="" class="object-cover h-100 rounded">
-                                    </div>
-                                    <div>
-                                        <h4 class="fs-20 fs-16-mobile mb-3">{!! $ourSolutionSingle?->value['title']?  change_text_color_or_bg($ourSolutionSingle?->value['title']) : '' !!}</h4>
-                                        <p class="fs-12-mobile">{!! $ourSolutionSingle?->value['description'] ? change_text_color_or_bg($ourSolutionSingle?->value['description']) : '' !!}</p>
-                                    </div>
-                                </div>
-                            @endforeach
-                        @else
-                            <div class="ourSolution__item sliderItem">
-                                <div class="w-200 w-150-mobile aspect-1 mx-auto mb-3">
-                                    <img class="object-cover h-100 rounded"
-                                         src="{{dynamicAsset(path: 'public/landing-page/assets/img/platform/1.png')}}"
-                                         alt="client">
-                                </div>
-                                <div>
-                                    <h4 class="fs-20 fs-16-mobile mb-3">{{ translate('Parcel Delivery') }}</h4>
-                                    <p class="fs-12-mobile">{{ translate('Send important parcels to the right place with custom fare setup option.') }}</p>
-                                </div>
+                    <div class="ourSolution-slider owl-theme owl-carousel sliderItem-sameHeight">
+                        <!-- Rides -->
+                        <div class="ourSolution__item sliderItem">
+                            <div class="w-200 w-150-mobile aspect-1 mx-auto mb-3">
+                                <img class="object-cover h-100 rounded"
+                                     src="{{dynamicAsset(path: 'public/landing-page/assets/img/platform/1.png')}}"
+                                     alt="client">
                             </div>
-                            <div class="ourSolution__item sliderItem">
-                                <div class="w-200 w-150-mobile aspect-1 mx-auto mb-3">
-                                    <img class="object-cover h-100 rounded"
-                                         src="{{dynamicAsset(path: 'public/landing-page/assets/img/platform/2.png')}}"
-                                         alt="client">
-                                </div>
-                                <div>
-                                    <h4 class="fs-20 fs-16-mobile mb-3">{{ translate('Ride Sharing') }}</h4>
-                                    <p class="fs-12-mobile">{{ translate('Book a ride to your desired destination and set a custom fare from the app.') }}</p>
-                                </div>
+                            <div>
+                                <h4 class="fs-20 fs-16-mobile mb-3">Rides</h4>
+                                <p class="fs-12-mobile">Comfortable and reliable rides.</p>
                             </div>
-                        @endif
+                        </div>
+                        <!-- Food Delivery -->
+                        <div class="ourSolution__item sliderItem">
+                            <div class="w-200 w-150-mobile aspect-1 mx-auto mb-3">
+                                <img class="object-cover h-100 rounded"
+                                     src="{{dynamicAsset(path: 'public/landing-page/assets/img/platform/2.png')}}"
+                                     alt="client">
+                            </div>
+                            <div>
+                                <h4 class="fs-20 fs-16-mobile mb-3">Food Delivery</h4>
+                                <p class="fs-12-mobile">Food delivery from your favorite spots.</p>
+                            </div>
+                        </div>
+                        <!-- Errands -->
+                        <div class="ourSolution__item sliderItem">
+                            <div class="w-200 w-150-mobile aspect-1 mx-auto mb-3">
+                                <img class="object-cover h-100 rounded"
+                                     src="{{dynamicAsset(path: 'public/landing-page/assets/img/platform/1.png')}}"
+                                     alt="client">
+                            </div>
+                            <div>
+                                <h4 class="fs-20 fs-16-mobile mb-3">Errands</h4>
+                                <p class="fs-12-mobile">Fast errands anywhere in town.</p>
+                            </div>
+                        </div>
                     </div>
                     @if($solutionCount > 3 ||  ($userAgent?->isMobile() && $solutionCount > 1) || ( $userAgent?->isTablet() && $solutionCount > 2))
                         <!-- ourSolution Slider Middle Nav Icons -->

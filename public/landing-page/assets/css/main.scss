@@ -1,11 +1,11 @@
 @import url("https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap");
 
 :root {
-    --text-primary: #14b19e;
+    --text-primary: #d31111;
     --text-secondary: #d7f9f5;
-    --base-rgb: 20, 177, 158;
-    --base-title: #14b19e;
-    --base-white: #14b19e;
+    --base-rgb: 211, 17, 17;
+    --base-title: #d31111;
+    --base-white: #d31111;
     --body-clr: #758590;
     --light-clr: #ded6ff;
     --title-color: #293231;
@@ -40,8 +40,8 @@
     --card-shadow: 0px 0px 6px 0px rgba(51, 66, 87, 0.07);
     --card-hover-shadow: 0 8px 24px rgba(51, 66, 87, 0.14);
 
-    --bs-primary: #14b19e;
-    --bs-primary-rgb: 20, 177, 158;
+    --bs-primary: #d31111;
+    --bs-primary-rgb: 211, 17, 17;
 
     --bs-info: #016ACD;
     --bs-info-rgb: 1, 106, 205;
@@ -52,8 +52,8 @@
 
 /*
 .dark-theme {
-	--text-primary: #14b19e;
-	--base-rgb: 20, 177, 158;
+	--text-primary: #d31111;
+	--base-rgb: 211, 17, 17;
 	--base-title: #98d3ff;
 	--base-white: #fff;
 	--body-clr: #a3bdd0;
@@ -1810,9 +1810,9 @@ div[class*="col"]:nth-of-type(3n + 3) > .counter__item {
     background: var(--section-bg-2);
     box-shadow: 0px 0px 20px rgba(4, 97, 165, 0.05);
     border-radius: 30px;
-    outline: 1px solid rgba(20, 177, 158, 0.2);
+    outline: 1px solid rgba(211, 17, 17, 0.2);
     background: #fff;
-    box-shadow: 0px 5px 20px -10px rgba(20, 177, 158, 0.15);
+    box-shadow: 0px 5px 20px -10px rgba(211, 17, 17, 0.15);
     opacity: 1;
 }
 
@@ -2499,9 +2499,9 @@ textarea.form--control {
 
 .basic-info-wrapper {
     border-radius: 30px;
-    border: 1px solid rgba(20, 177, 158, 0.2);
+    border: 1px solid rgba(211, 17, 17, 0.2);
     background: #fff;
-    box-shadow: 0px 5px 20px -10px rgba(20, 177, 158, 0.15);
+    box-shadow: 0px 5px 20px -10px rgba(211, 17, 17, 0.15);
     padding: 39px 27px;
     line-height: 1.4;
     display: flex;
