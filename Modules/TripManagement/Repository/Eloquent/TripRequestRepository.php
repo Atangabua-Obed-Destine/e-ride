@@ -131,6 +131,9 @@ class TripRequestRepository extends BaseRepository implements TripRequestReposit
     {
         $trip = $this->findOne(id: $attributes['value']);
 
+        if ($attributes['fee'] ?? null) {
+            $trip->fee()->update($attributes['fee']);
+        }
         if ($attributes['trip_status'] ?? null) {
             $tripData['current_status'] = $attributes['trip_status'];
 
@@ -147,10 +150,28 @@ class TripRequestRepository extends BaseRepository implements TripRequestReposit
         if ($attributes['coordinate'] ?? null) {
             $trip->coordinate()->update($attributes['coordinate']);
         }
-        if ($attributes['fee'] ?? null) {
-            $trip->fee()->update($attributes['fee']);
-        }
         return $trip->tripStatus;
+    }
+
+    public function hasUnsettledTripForDriver(int|string $driverId): bool
+    {
+        return $this->model
+            ->where('driver_id', $driverId)
+            ->where(function ($query) {
+                $query->whereIn('current_status', [ACCEPTED, ONGOING, OUT_FOR_PICKUP, RETURNING])
+                    ->orWhere(function ($query) {
+                        $query->where('current_status', COMPLETED)
+                            ->where('payment_status', '!=', PAID);
+                    })
+                    ->orWhere(function ($query) {
+                        $query->where('current_status', CANCELLED)
+                            ->where('payment_status', '!=', PAID)
+                            ->whereHas('fee', function ($query) {
+                                $query->where('cancelled_by', CUSTOMER);
+                            });
+                    });
+            })
+            ->exists();
     }
 
 

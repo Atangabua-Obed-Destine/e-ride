@@ -54,7 +54,8 @@ class User extends Authenticatable
         'deleted_at',
         'created_at',
         'updated_at',
-        'logged_in_via'
+        'logged_in_via',
+        'social_refresh_token'
     ];
 
     protected $casts = [
@@ -234,6 +235,11 @@ class User extends Authenticatable
     public function driverDetails()
     {
         return $this->hasOne(DriverDetail::class, 'user_id');
+    }
+
+    public function availabilitySchedules()
+    {
+        return $this->hasMany(DriverAvailabilitySchedule::class, 'user_id');
     }
 
     public function additionalInfo()

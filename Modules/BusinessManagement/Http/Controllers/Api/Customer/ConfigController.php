@@ -96,6 +96,10 @@ class ConfigController extends Controller
                 'reason' => $query->extra_fare_reason,
             ];
         });
+        $customerLoginOptions = $info->firstWhere('key_name', 'customer_login_options')?->value ?? [];
+        $socialMediaLogin = (bool)($customerLoginOptions['social_media_login'] ?? 0);
+        $driverIdentityVerification = (bool)($info->firstWhere('key_name', 'driver_identity_verification')?->value ?? 0);
+        $autoArrivalNotification = (bool)($info->firstWhere('key_name', 'auto_arrival_notification')?->value ?? 0);
         $configs = [
             'is_demo' => env('APP_MODE') != 'live',
             'maintenance_mode' => checkMaintenanceMode(),
@@ -154,8 +158,10 @@ class ConfigController extends Controller
             'verification' => (bool)$info->firstWhere('key_name', 'customer_verification')?->value ?? 0,
             'sms_verification' => (bool)$info->firstWhere('key_name', 'sms_verification')?->value ?? 0,
             'email_verification' => (bool)$info->firstWhere('key_name', 'email_verification')?->value ?? 0,
-            'facebook_login' => (bool)$info->firstWhere('key_name', 'facebook_login')?->value['status'] ?? 0,
-            'google_login' => (bool)$info->firstWhere('key_name', 'google_login')?->value['status'] ?? 0,
+            'facebook_login' => $socialMediaLogin && (bool)($customerLoginOptions['social_login']['facebook'] ?? 0),
+            'google_login' => $socialMediaLogin && (bool)($customerLoginOptions['social_login']['google'] ?? 0),
+            'apple_login' => $socialMediaLogin && (bool)($customerLoginOptions['social_login']['apple'] ?? 0),
+            'social_media_login' => $socialMediaLogin,
             'otp_resend_time' => (int)($info->firstWhere('key_name', 'otp_resend_time')?->value ?? 60),
             'vat_tax' => (double)get_cache('vat_percent') ?? 1,
             'payment_gateways' => collect($this->getPaymentMethods()),
@@ -180,6 +186,7 @@ class ConfigController extends Controller
             'maximum_parcel_weight_capacity' => $info->firstWhere('key_name', 'max_parcel_weight_status')?->value == 1 ? (double)$info->firstWhere('key_name', 'max_parcel_weight')?->value : null,
             'parcel_weight_unit' => businessConfig(key: 'parcel_weight_unit', settingsType: PARCEL_SETTINGS)?->value ?? 'kg',
             'safety_feature_status' => (bool)$info->firstWhere('key_name', 'safety_feature_status')?->value == 1,
+            'voice_message_status' => (bool)$info->firstWhere('key_name', 'chatting_setup_status')?->value == 1 && (bool)$info->firstWhere('key_name', 'voice_message_status')?->value == 1,
             'safety_feature_minimum_trip_delay_time' => $info->firstWhere('key_name', 'safety_feature_status')?->value == 1 ? convertTimeToSecond(
                 $info->firstWhere('key_name', 'for_trip_delay')?->value['minimum_delay_time'],
                 $info->firstWhere('key_name', 'for_trip_delay')?->value['time_format']
@@ -214,10 +221,15 @@ class ConfigController extends Controller
             'upload_max_image_size' => maxUploadSize('image'),
             'upload_max_file_size' => maxUploadSize('file'),
             'is_otp_enabled' => isOtpEnabled(),
-            'customer_login_options' => $info->firstWhere(key: 'key_name', operator: 'customer_login_options')?->value ?? ['manual_login' => 1, 'otp_login' => 0],
+            'customer_login_options' => $info->firstWhere(key: 'key_name', operator: 'customer_login_options')?->value ?? ['manual_login' => 1, 'otp_login' => 0, 'social_media_login' => 0, 'social_login' => ['google' => 0, 'facebook' => 0, 'apple' => 0]],
             'is_real_time_location_sharing_enabled' => (bool) (businessConfig('enable_real_time_location_sharing', TRIP_SETTINGS)?->value ?? 0),
             'customer_additional_registration_form_fields' => AdditionalDataForm::fields(CUSTOMER),
             'female_only_ride_service' => (bool) (businessConfig('female_only_ride_service', TRIP_SETTINGS)?->value ?? 0),
+            'driver_identity_verification' => $driverIdentityVerification,
+            'driver_identity_verification_message' => $driverIdentityVerification ? translate($info->firstWhere('key_name', 'driver_identity_verification_message')?->value) : null,
+            'auto_arrival_notification' => $autoArrivalNotification,
+            'auto_arrival_notification_time' => $autoArrivalNotification ? (int)convertTimeToSecond($info->firstWhere('key_name', 'auto_arrival_notification_time')?->value, 'minute') : null,
+            'auto_arrival_notification_message' => $autoArrivalNotification ? translate(key: $info->firstWhere('key_name', 'auto_arrival_notification_customer_message')?->value, replace: ['min' => convertTimeToSecond($info->firstWhere('key_name', 'auto_arrival_notification_time')?->value, 'minute')]) : null,
         ];
 
         return response()->json($configs);
@@ -359,17 +371,18 @@ class ConfigController extends Controller
             ];
         }
 
-        return getRoutes(
+        $drivingMode = resolveDrivingMode($trip->vehicleCategory?->type);
+
+        $getRoutes = getRoutes(
             originCoordinates: $pickupCoordinates,
             destinationCoordinates: $destinationCoordinates,
             intermediateCoordinates: $intermediateCoordinates,
-        ); //["DRIVE", "TWO_WHEELER"]
+            drivingMode: $drivingMode,
+        );
 
-        $result = [];
         foreach ($getRoutes as $route) {
-            if ($route['drive_mode'] == $drivingMode) {
-                $result['is_picked'] = $trip->current_status == ONGOING;
-                return [array_merge($result, $route)];
+            if ($route['drive_mode'] == $drivingMode[0]) {
+                return [$this->tripRequestService->resolveRouteProgress($trip, $route)];
             }
         }
 

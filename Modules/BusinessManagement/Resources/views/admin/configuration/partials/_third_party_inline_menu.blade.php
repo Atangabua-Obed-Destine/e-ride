@@ -1,6 +1,11 @@
 <div class="position-relative nav--tab-wrapper mb-20">
     <ul class="nav d-flex gap-3 flex-nowrap nav--tabs bg-transparent overflow-x-auto text-nowrap">
         <li class="nav-item">
+            <a href="{{route('admin.business.configuration.third-party.social-login.index')}}" class="text-capitalize nav-link
+                {{Request::is('admin/business/configuration/third-party/social-login') ? 'active' : ''}}
+            ">{{translate('Social Media')}}</a>
+        </li>
+        <li class="nav-item">
             <a href="{{route('admin.business.configuration.third-party.payment-method.index')}}" class="text-capitalize nav-link
                 {{Request::is('admin/business/configuration/third-party/payment-method') ? 'active' : ''}}
             ">{{translate('payment_methods')}}</a>

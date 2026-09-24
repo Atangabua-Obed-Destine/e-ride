@@ -5,6 +5,7 @@ namespace Modules\UserManagement\Http\Controllers\Api\Driver;
 use Carbon\Carbon;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Routing\Controller;
+use Modules\UserManagement\Service\Interfaces\DriverAvailabilityScheduleServiceInterface;
 use Modules\UserManagement\Service\Interfaces\DriverDetailServiceInterface;
 use Modules\UserManagement\Service\Interfaces\TimeTrackServiceInterface;
 use Modules\UserManagement\Transformers\TimeTrackResource;
@@ -13,11 +14,13 @@ class TimeTrackController extends Controller
 {
     protected $timeTrackService;
     protected $driverDetailService;
+    protected $driverAvailabilityScheduleService;
 
-    public function __construct(TimeTrackServiceInterface $timeTrackService, DriverDetailServiceInterface $driverDetailService)
+    public function __construct(TimeTrackServiceInterface $timeTrackService, DriverDetailServiceInterface $driverDetailService, DriverAvailabilityScheduleServiceInterface $driverAvailabilityScheduleService)
     {
         $this->timeTrackService = $timeTrackService;
         $this->driverDetailService = $driverDetailService;
+        $this->driverAvailabilityScheduleService = $driverAvailabilityScheduleService;
     }
 
 
@@ -90,9 +93,15 @@ class TimeTrackController extends Controller
     {
         $id = auth('api')->id();
         $details = $this->driverDetailService->findOneBy(criteria: ['user_id' => $id]);
+        if ($details->isCurrentlyPaused()) {
+            return response()->json(responseFormatter(ACCOUNT_PAUSED), 403);
+        }
         if ($details['availability_status'] == 'on_trip') {
 
             return response()->json(responseFormatter(OFFLINE_403), 403);
+        }
+        if (!$details['is_online'] && !$this->driverAvailabilityScheduleService->canGoOnline($id)) {
+            return response()->json(responseFormatter(OUT_OF_AVAILABILITY_403), 403);
         }
 
         $trackCriteria = [
@@ -136,6 +145,7 @@ class TimeTrackController extends Controller
         $attributes = [
             'is_online' => $details['is_online'] == 1 ? 0 : 1,
             'availability_status' => $details['is_online'] == 1 ? 'unavailable' : 'available',
+            'is_offline_by_schedule' => 0,
         ];
         $this->driverDetailService->updatedBy(criteria: ['user_id' => $id], data: $attributes);
 

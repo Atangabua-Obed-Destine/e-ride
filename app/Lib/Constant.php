@@ -1,4 +1,5 @@
 <?php
+const SOFTWARE_VERSION = '3.3';
 
 //date format
 const MAP_API_BASE_URI = 'https://maps.googleapis.com/maps/api';
@@ -47,6 +48,12 @@ const DISCOUNT = 'discount';
 const CANCELLATION_TYPE = [
     'accepted_ride' => 'Before Pickup',
     'ongoing_ride' => 'Ongoing Ride',
+];
+
+const IDENTITY_MISMATCH_REASONS = [
+    'driver_photo' => 'Driver Photo',
+    'vehicle_model' => 'Vehicle Model',
+    'license_plate_number' => 'License Plate Number',
 ];
 
 //passport address type
@@ -3021,7 +3028,7 @@ const NOTIFICATION_SUBTITLE = [
     'driver_regular_trip' => 'Setup push notifications for the regular trip status updates to drivers.',
     'customer_parcel' => 'Setup push notifications for the parcel status updates to customers.',
     'driver_parcel' => 'Setup push notifications for the parcel status updates to drivers.',
-    'driver_driver_registration' => 'Setup notification for registration approved messages to drivers.',
+    'driver_driver_registration' => 'Setup notification for vehicle and identity approval messages to drivers.',
     'coupon_others' => 'Setup notification applying Coupon.',
     'review_others' => 'Setup the review notification from customer and drivers in different cases.',
     'referral_others' => 'Setup the Referral notification from your code and referral reward in different cases.' ,
@@ -3032,11 +3039,16 @@ const NOTIFICATION_SUBTITLE = [
     'safety_alert_others' => 'Setup the safety alert notification for safety alert and problem solved.',
     'business_page_others' => 'Setup notification to users when updating any of the business pages.',
     'cash_in_hand_others' => 'Send notification when driver exceeds the limit to hold cash.',
-    'face_verification_others' => 'Send notification to drivers about verification status'
+    'face_verification_others' => 'Send notification to drivers about verification status',
+    'driver_others' => 'Setup miscellaneous notifications sent to drivers that do not fall under the other categories.',
+    'customer_others' => 'Setup miscellaneous notifications sent to customers that do not fall under the other categories.'
 ];
 
 const IMAGE_ACCEPTED_EXTENSIONS = ".png, .jpg, .jpeg, .webp, .gif";
 const FILE_ACCEPTED_EXTENSIONS = ".csv, .xlsx, .pdf, .doc, .docx, .zip";
+const AUDIO_ACCEPTED_EXTENSIONS = ".mp3, .wav, .ogg, .m4a, .aac, .webm, .amr";
+const AUDIO_ACCEPTED_MIME_TYPES = "audio/mpeg, audio/mp3, audio/wav, audio/x-wav, audio/wave, audio/ogg, application/ogg, audio/mp4, audio/x-m4a, audio/m4a, video/mp4, audio/aac, audio/x-aac, audio/x-hx-aac-adts, audio/webm, video/webm, audio/amr, audio/3gpp";
+const DOCUMENT_AND_VIDEO_ACCEPTED_EXTENSIONS = ['txt', 'rtf', 'doc', 'docx', 'pdf', 'odt', 'xls', 'xlsx', 'csv', 'ppt', 'pptx', 'log', 'zip', 'mp4', 'mkv', 'avi', 'mov', 'webm'];
 
 const APPLICATION_IMAGE_FORMAT = "webp";
 
@@ -3089,3 +3101,5 @@ const AWS_REGIONS = [
 
 const SUSPEND = 'suspend';
 const REACTIVATE = 'reactivate';
+
+const SMART_REBOOKING_THRESHOLD = 1;

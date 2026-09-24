@@ -60,6 +60,11 @@ const DEFAULT_400 = [
     'message' => 'Invalid or missing information'
 ];
 
+const IMAGE_UPLOAD_FAILED_422 = [
+    'response_code' => 'image_upload_failed_422',
+    'message' => 'Image upload failed. The file may be corrupted or in an unsupported format. Please try again with a valid image.'
+];
+
 const DEFAULT_401 = [
     'response_code' => 'default_401',
     'message' => 'Credential does not match'
@@ -82,7 +87,7 @@ const USER_404 = [
 
 const DEFAULT_USER_UNDER_REVIEW_DISABLED_401 = [
     'response_code' => 'default_user_under_review_or_disabled_401',
-    'message' => 'Your account is under review'
+    'message' => 'Your account is under review or disabled, please talk to the authority'
 ];
 
 const DEFAULT_USER_DISABLED_401 = [
@@ -93,6 +98,10 @@ const DEFAULT_USER_DISABLED_401 = [
 const DEFAULT_403 = [
     'response_code' => 'default_403',
     'message' => 'Your access has been denied'
+];
+const VOICE_MESSAGE_DISABLED_403 = [
+    'response_code' => 'voice_message_disabled_403',
+    'message' => 'Voice message support is currently disabled'
 ];
 const WITHDRAW_METHOD_INFO_EXIST_403 = [
     'response_code' => 'withdraw_method_info_exist_403',
@@ -186,6 +195,11 @@ const AUTH_LOGIN_200 = [
 const AUTH_LOGIN_406 = [
     'response_code' => 'auth_login_406',
     'message' => 'New user detected'
+];
+
+const SOCIAL_LOGIN_DISABLED_403 = [
+    'response_code' => 'social_login_disabled_403',
+    'message' => 'Social media login is currently disabled'
 ];
 
 const AUTH_MERGE_ACCOUNT_407 = [
@@ -1078,6 +1092,11 @@ const DRIVER_UNAVAILABLE_403 = [
     'message' => 'Please change your offline status'
 ];
 
+const DRIVER_SCHEDULE_UNAVAILABLE_403 = [
+    'response_code' => 'driver_schedule_unavailable_403',
+    'message' => 'You are outside your available hours'
+];
+
 const CHAT_UNAVAILABLE_403 = [
     'response_code' => 'chat_unavailable_403',
     'message' => 'Chat available only during active ride'
@@ -1292,9 +1311,19 @@ const MAXIMUM_AMOUNT_TO_HOLD_CASH_EXCEEDS = [
     'message' => 'Your account is on hold, so you cannot start a trip right now.'
 ];
 
-const ACCOUNT_SUSPEND = [
-    'response_code' => 'account_suspend',
-    'message' => 'Your account is suspended, so you cannot start a trip right now.'
+const ACCOUNT_SUSPEND_OR_PAUSE = [
+    'response_code' => 'account_suspend_or_pause',
+    'message' => 'Your account is suspended or paused, so you cannot start a trip right now.'
+];
+
+const ACCOUNT_PAUSED = [
+    'response_code' => 'account_paused',
+    'message' => 'Your account is paused, so you cannot update your availability now.'
+];
+
+const OUT_OF_AVAILABILITY_403 = [
+    'response_code' => 'out_of_availability_403',
+    'message' => 'You are outside your availability schedule, so you cannot go online now.'
 ];
 
 const GATEWAY_INACTIVE = [

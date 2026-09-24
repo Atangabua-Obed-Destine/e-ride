@@ -15,6 +15,8 @@ interface DriverServiceInterface extends BaseServiceInterface
 
     public function getStatisticsData(array $data);
 
+    public function getStatusCounts(): array;
+
     public function getDriverWithoutVehicle(array $criteria = [], array $relations = [], array $orderBy = [], ?int $limit = null, ?int $offset = null, array $withCountQuery = []): Collection|LengthAwarePaginator;
 
     public function changeLanguage(int|string $id, array $data = []): ?Model;
@@ -22,5 +24,12 @@ interface DriverServiceInterface extends BaseServiceInterface
     public function getChattingDriverList(array $data): Collection;
 
     public function changeSuspensionStatus(?Model $driver, string $action): void;
+
+    public function hasUnsettledTrip(int|string $driverId): bool;
+
+    public function pauseStatus(?Model $driver, array $data): void;
+
+    public function resumeStatus(?Model $driver): void;
+
     public function createAfterOtpMatch(array $data): ?Model;
 }

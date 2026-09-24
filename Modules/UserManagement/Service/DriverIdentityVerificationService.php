@@ -10,18 +10,21 @@ use Illuminate\Database\Eloquent\Collection;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Pagination\LengthAwarePaginator;
 use Illuminate\Support\Facades\DB;
-use Modules\UserManagement\Enums\SuspendReasonEnum;
+use Modules\UserManagement\Enums\PauseReasonEnum;
+use Modules\UserManagement\Repository\DriverDetailRepositoryInterface;
 use Modules\UserManagement\Repository\DriverIdentityVerificationRepositoryInterface;
 use Modules\UserManagement\Service\Interfaces\DriverIdentityVerificationServiceInterface;
 
 class DriverIdentityVerificationService extends BaseService implements DriverIdentityVerificationServiceInterface
 {
     protected $driverIdentityVerificationService;
+    protected $driverDetailRepository;
 
-    public function __construct(DriverIdentityVerificationRepositoryInterface $driverIdentityVerificationService)
+    public function __construct(DriverIdentityVerificationRepositoryInterface $driverIdentityVerificationService, DriverDetailRepositoryInterface $driverDetailRepository)
     {
         parent::__construct($driverIdentityVerificationService);
         $this->driverIdentityVerificationService = $driverIdentityVerificationService;
+        $this->driverDetailRepository = $driverDetailRepository;
     }
 
     public function index(array $criteria = [], array $relations = [], array $whereHasRelations = [], array $orderBy = [], ?int $limit = null, ?int $offset = null, array $withCountQuery = [], array $appends = [], array $groupBy = []): Collection|LengthAwarePaginator
@@ -204,7 +207,7 @@ class DriverIdentityVerificationService extends BaseService implements DriverIde
 
         DB::transaction(function() use($user, $triggeringPeriod) {
 
-            $user->driverIdentityVerification()->delete();
+            $this->driverIdentityVerificationService->deleteBy(criteria: ['driver_id' => $user->id]);
 
             $data = [
                 'is_verified' => 1
@@ -215,15 +218,12 @@ class DriverIdentityVerificationService extends BaseService implements DriverIde
                 $data = array_merge($data, ['trigger_verification_at' => now()->addSeconds($triggeringPeriod)]);
             }
 
-            if ($user?->driverDetails?->is_suspended && $user?->driverDetails?->suspend_reason == SuspendReasonEnum::FACE_VERIFICATION->value)
+            if ($user?->driverDetails?->is_paused && $user?->driverDetails?->pause_reason == PauseReasonEnum::FACE_VERIFICATION->value)
             {
-                $data = array_merge($data, [
-                    'is_suspended' => 0,
-                    'suspend_reason' => null
-                ]);
+                $data = array_merge($data, $this->driverDetailRepository->resumePayload());
             }
 
-            $user->driverDetails->update($data);
+            $this->driverDetailRepository->updatedBy(criteria: ['user_id' => $user->id], data: $data);
         });
 
         return [
@@ -241,24 +241,46 @@ class DriverIdentityVerificationService extends BaseService implements DriverIde
             $fileName = fileUploader('driver/face-verification/verified/', image: $data['image'], oldImage: $driverDetails->verified_image ?? '');
         }
 
-        $driverDetails->update([
+        $updateData = [
             'is_verified' => 1,
             'verified_image' => $fileName ?? $driverDetails->verified_image ?? null,
-            'suspend_reason' => null
-        ]);
-        $unverifiedDriverInfo->delete();
+        ];
+
+        if ($driverDetails->is_paused && $driverDetails->pause_reason == PauseReasonEnum::FACE_VERIFICATION->value)
+        {
+            $updateData = array_merge($updateData, $this->driverDetailRepository->resumePayload());
+        }
+
+        $this->driverDetailRepository->updatedBy(criteria: ['user_id' => $unverifiedDriverInfo->driver->id], data: $updateData);
+        $this->driverIdentityVerificationService->delete(id: $unverifiedDriverInfo->id);
     }
 
     public function MarkIdentityAsSuspended(?Model $unverifiedDriverInfo): void
     {
-        $driverDetails = $unverifiedDriverInfo->driver->driverDetails;
-        $data = [
-            'suspend_reason' => SuspendReasonEnum::FACE_VERIFICATION->value,
-            'is_suspended' => 1,
-            'is_verified' => 0,
-            'verified_image' => null
-        ];
-        $driverDetails->update($data);
-        $unverifiedDriverInfo->delete();
+        $driver = $unverifiedDriverInfo->driver;
+        $data = array_merge(
+            $this->driverDetailRepository->pausePayload(PauseReasonEnum::FACE_VERIFICATION->value),
+            [
+                'is_verified' => 0,
+                'verified_image' => null
+            ]
+        );
+        $this->driverDetailRepository->updatedBy(criteria: ['user_id' => $driver->id], data: $data);
+        $this->driverIdentityVerificationService->delete(id: $unverifiedDriverInfo->id);
+
+        if (!$driver->fcm_token) {
+            return;
+        }
+
+        $push = getNotification('face_verification_failed', 'face_verification');
+        sendDeviceNotification(
+            fcm_token: $driver->fcm_token,
+            title: translate(key: $push['title'], locale: $driver->current_language_key),
+            description: textVariableDataFormat(value: $push['description'], userName: $driver->first_name . ' ' . $driver->last_name, locale: $driver->current_language_key),
+            status: $push['status'],
+            notification_type: 'driver',
+            action: $push['action'],
+            user_id: $driver->id
+        );
     }
 }

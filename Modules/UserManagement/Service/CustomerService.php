@@ -82,14 +82,14 @@ class CustomerService extends BaseService implements Interfaces\CustomerServiceI
             'is_active' => 1,
             'ref_code' => generateReferralCode(),
         ]);
-        DB::beginTransaction();
+        return DB::transaction(function () use ($customerData, $additionalData) {
+            $customer = $this->userRepository->create($customerData);
 
-        $customer = $this->userRepository->create($customerData);
+            AdditionalDataForm::store($customer, $additionalData, CUSTOMER);
+            $customer?->userAccount()->create();
 
-        AdditionalDataForm::store($customer, $additionalData, CUSTOMER);
-        $customer?->userAccount()->create();
-        DB::commit();
-        return $customer;
+            return $customer;
+        });
     }
     public function createAfterOtpMatch(array $data): ?Model {
         $firstLevel = $this->userLevelRepository->findOneBy(criteria: ['user_type' => CUSTOMER, 'sequence' => 1]);
@@ -124,6 +124,32 @@ class CustomerService extends BaseService implements Interfaces\CustomerServiceI
 
         $customer = $this->userRepository->create($customerData);
 
+        $customer?->userAccount()->create();
+        DB::commit();
+        return $customer;
+    }
+
+    public function createAfterSocialMatch(array $data): ?Model
+    {
+        $firstLevel = $this->userLevelRepository->findOneBy(criteria: ['user_type' => CUSTOMER, 'sequence' => 1]);
+        $customerData = [
+            'full_name' => trim(($data['first_name'] ?? '') . ' ' . ($data['last_name'] ?? '')),
+            'first_name' => $data['first_name'] ?? null,
+            'last_name' => $data['last_name'] ?? null,
+            'user_level_id' => $firstLevel?->id,
+            'email' => $data['email'],
+            'email_verified_at' => now(),
+            'phone' => $data['phone'],
+            'ref_code' => generateReferralCode(),
+            'user_type' => CUSTOMER,
+            'is_active' => 1,
+            'logged_in_via' => $data['medium'] ?? 'social',
+            'social_refresh_token' => $data['refresh_token'] ?? null,
+            'identification_image' => [],
+        ];
+
+        DB::beginTransaction();
+        $customer = $this->userRepository->create($customerData);
         $customer?->userAccount()->create();
         DB::commit();
         return $customer;
@@ -204,25 +230,26 @@ class CustomerService extends BaseService implements Interfaces\CustomerServiceI
             'is_active' => $customer?->is_active ?? 1,
         ]);
 
-        DB::beginTransaction();
-        $customer = $this->userRepository->update(id: $id, data: $customerData);
-        AdditionalDataForm::store($customer, $additionalData, CUSTOMER);
+        return DB::transaction(function () use ($id, $customerData, $additionalData, $data) {
+            $customer = $this->userRepository->update(id: $id, data: $customerData);
+            AdditionalDataForm::store($customer, $additionalData, CUSTOMER);
 
-        // Customer Address
-        if (array_key_exists('address', $data)) {
-            $address = $customer?->addresses()->where(['user_id' => $customer?->id, 'address_label' => 'default'])->first();
-            if (is_null($address)) {
-                $customer?->addresses()->create([
-                    'address' => $data['address'],
-                    'address_label' => 'default'
-                ]);
-            } else {
-                $address->address = $data['address'];
-                $address->save();
+            // Customer Address
+            if (array_key_exists('address', $data)) {
+                $address = $customer?->addresses()->where(['user_id' => $customer?->id, 'address_label' => 'default'])->first();
+                if (is_null($address)) {
+                    $customer?->addresses()->create([
+                        'address' => $data['address'],
+                        'address_label' => 'default'
+                    ]);
+                } else {
+                    $address->address = $data['address'];
+                    $address->save();
+                }
             }
-        }
-        DB::commit();
-        return $customer;
+
+            return $customer;
+        });
     }
     public function updateLoyaltyPoint(int|string $id, array $data = []): ?Model
     {

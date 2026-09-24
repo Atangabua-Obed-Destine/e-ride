@@ -1,4 +1,4 @@
-@php use Modules\UserManagement\Enums\SuspendReasonEnum; @endphp
+@php use Modules\UserManagement\Enums\PauseReasonEnum; @endphp
 @extends('adminmodule::layouts.master')
 
 @section('title', translate('Driver_Details'))
@@ -37,34 +37,38 @@
                         </a>
                     @endcan
                     @can('user_edit')
-                        <label class="btn text-dark bg-white border-C5D2D2 d-flex align-items-center gap-2 p-2 fs-14">
+                        @php($statusLock = !$driver->is_active ? translate('Driver is suspended') : $driverDetails->systemPauseMessage())
+                        <label class="btn text-dark bg-white border-C5D2D2 d-flex align-items-center gap-2 p-2 fs-14 {{ $statusLock ? 'opacity-50' : 'driver-status-toggle' }}"
+                               @if($statusLock) data-bs-toggle="tooltip" data-bs-title="{{ $statusLock }}"
+                               @else role="button" data-id="{{ $driver->id }}" data-paused="{{ $driverDetails->isCurrentlyPaused() ? 1 : 0 }}" @endif>
                             {{ translate('Status') }}
-                            <label class="switcher">
-                                <input class="switcher_input custom_status_change"
-                                       type="checkbox"
-                                       id="{{ $driver->id }}"
-                                       data-url="{{ route('admin.driver.update-status') }}"
-                                       {{--                                   data-icon="{{ $driver->is_active == 1 ? dynamicAsset('public/assets/admin-module/img/svg/bonus-off.svg') : dynamicAsset('public/assets/admin-module/img/svg/bonus-on.svg')}}"--}}
-                                       data-title="{{$driver->is_active == 1 ? translate('Are you sure to turn off the status') : translate('Are you sure to turn on the status') }}?"
-                                       {{--                                   data-sub-title="{{$driver->is_active == 1 ? translate('When you turn off the status, this bonus offer will be hidden for all customers .') : translate('When you turn on the bonus, customer will receive the bonus after add fund to their wallet .') }}"--}}
-                                       data-confirm-btn="{{ translate('Yes') }}"
-                                       data-cancel-btn="{{ translate('no') }}"
-                                       data-action-button-class="{{ $driver->is_active == 1  ? 'btn-danger' : 'btn-primary' }}"
-                                    {{ $driver->is_active == 1 ? "checked": ""  }}
-                                >
+                            <label class="switcher mb-0">
+                                <input class="switcher_input" type="checkbox" onclick="return false;"
+                                       {{ !$driverDetails->isCurrentlyPaused() ? 'checked' : '' }}
+                                       {{ $statusLock ? 'disabled' : '' }}>
                                 <span class="switcher_control"></span>
                             </label>
                         </label>
-                        @if($driverDetails->is_suspended)
-                            <a href="{{ route('admin.driver.update-suspension-status', ['id' => $driver->id, 'action' => REACTIVATE]) }}"
-                               class="btn btn-success px-3 fs-14 fw-semibold">
+                        @if(!$driver->is_active)
+                            <button type="button"
+                                    class="btn btn-primary px-3 fs-14 fw-semibold driver-suspension-btn"
+                                    data-url="{{ route('admin.driver.update-suspension-status', ['id' => $driver->id, 'action' => REACTIVATE]) }}"
+                                    data-title="{{ translate('Are you sure want to un-suspend the driver') }}?"
+                                    data-sub-title="{{ translate('The driver will regain login access and start receiving trip requests again.') }}"
+                                    data-confirm-btn="{{ translate('Un-suspend Driver') }}"
+                                    data-confirm-class="btn-primary">
                                 {{ translate('Un-suspend Driver') }}
-                            </a>
+                            </button>
                         @else
-                            <a href="{{ route('admin.driver.update-suspension-status', ['id' => $driver->id, 'action' => SUSPEND]) }}"
-                               class="btn btn-danger px-3 fs-14 fw-semibold">
+                            <button type="button"
+                                    class="btn btn-danger px-3 fs-14 fw-semibold driver-suspension-btn"
+                                    data-url="{{ route('admin.driver.update-suspension-status', ['id' => $driver->id, 'action' => SUSPEND]) }}"
+                                    data-title="{{ translate('Are you sure want to Suspend the driver') }}?"
+                                    data-sub-title="{{ translate('Once suspended, the driver is blocked from login and dispatch until the suspension is removed.') }}"
+                                    data-confirm-btn="{{ translate('Suspend Driver') }}"
+                                    data-confirm-class="btn-danger">
                                 {{ translate('Suspend Driver') }}
-                            </a>
+                            </button>
                         @endif
                         @if($driverDetails->is_verified)
                             <a href="{{ route('admin.driver.edit', ['id' => $driver->id]) }}"
@@ -96,26 +100,38 @@
                     @endcan
                 </div>
             </div>
-            @if($driverDetails->is_suspended)
+            @if(!$driver->is_active)
                 <div class="mt-3">
                     <div class="alert alert-danger-custom m-0" role="alert">
                         <div class="d-flex align-items-center gap-2 mb-1">
                             <img width="16"
                                  src="{{ dynamicAsset('public/assets/admin-module/img/svg/info-triangle-danger.svg') }}"
                                  alt="">
-                            <strong class="text-danger">{{ translate('Account is on hold.') }}</strong>
+                            <strong class="text-danger">{{ translate('Account is suspended.') }}</strong>
                         </div>
                         <p class="fs-12 mb-0">
-                            @if($driverDetails->suspend_reason == SuspendReasonEnum::CASH_IN_HAND_LIMIT->value)
-                                {!! translate(key: 'Driver account on hold due to exceeding hand cash limit.') !!} {!! translate('They cannot take new trips.') !!} {!! translate('{collectCash} or contact the driver.', replace: ['collectCash' => $collectCash]) !!}
-                            @elseif($driverDetails->suspend_reason == SuspendReasonEnum::FACE_VERIFICATION->value)
-                                {{ translate('Driver account on hold due to verification failure. The driver cannot take trips until reactivated. You can contact the driver or manage the account from this panel.') }}
-                            @else
-                                {{ translate('Driver account on hold due to suspension. The driver cannot take trips until reactivated. You can contact the driver or manage the account from this panel.') }}
-                            @endif
+                            {{ translate('The driver is blocked from login and dispatch until the suspension is removed.') }}
                         </p>
                     </div>
                 </div>
+            @elseif($driverDetails->isCurrentlyPaused())
+                <span class="bg-warning rounded bg-warning-10 d-flex align-items-centre gap-2 py-2 px-3 mb-20 mt-3">
+                    <i class="bi bi-info-circle-fill text-warning mt-1"></i>
+                    <div class="text-dark fw-medium">
+                        @if($driverDetails->pauseRemainingLabel())
+                            {{ translate('This driver is paused for {duration}.', replace: ['duration' => $driverDetails->pauseRemainingLabel()]) }}
+                        @else
+                            {{ translate('This driver is currently paused.') }}
+                        @endif
+                    </div>
+                    @if($driverDetails->pause_reason == PauseReasonEnum::CASH_IN_HAND_LIMIT->value)
+                        <div>{!! translate('Reason : Exceeded cash-in-hand limit.') !!} {!! translate('{collectCash} or contact the driver.', replace: ['collectCash' => $collectCash]) !!}</div>
+                    @elseif($driverDetails->pause_reason == PauseReasonEnum::FACE_VERIFICATION->value)
+                        <div>{{ translate('Reason : Face verification failure.') }}</div>
+                    @elseif($driverDetails->pause_reason)
+                        <div>{{ translate('Reason : {reason}', replace: ['reason' => $driverDetails->pause_reason]) }}</div>
+                    @endif
+                </span>
             @endif
 
             <div class="card my-3">
@@ -140,13 +156,13 @@
                                         ) }}"
                                              class="rounded dark-support custom-box-size" alt=""
                                              style="--size: 136px">
-                                        @if( $driverDetails->is_suspended)
+                                        @if( $driverDetails->isCurrentlyPaused())
                                             <div
                                                 class="position-absolute top-0 start-0 h-100 w-100 bg-black bg-opacity-25 rounded custom-box-size"
                                                 style="--size: 136px">
                                                 <div class="d-flex justify-content-center align-items-end p-3 h-100">
                                                     <div class="bg-danger text-white fs-12 fw-medium rounded px-2 py-1">
-                                                        {{ translate('On Hold') }}
+                                                        {{ translate('paused') }}
                                                     </div>
                                                 </div>
                                             </div>
@@ -156,11 +172,11 @@
                                         <div class="d-flex flex-column align-items-start gap-1">
                                             <h6 class="mb-10 d-flex gap-1 align-items-center">
                                                 {{ $driver?->first_name . ' ' . $driver?->last_name }}
-                                                @if($driverDetails->is_suspended)
+                                                @if($driverDetails->isCurrentlyPaused())
                                                     <img width="14"
                                                          src="{{ dynamicAsset('public/assets/admin-module/img/svg/on-hold.svg') }}"
                                                          alt="" data-bs-toggle="tooltip" data-bs-placement="right"
-                                                         data-bs-title="{{ translate('on_hold') }}">
+                                                         data-bs-title="{{ translate('paused') }}">
                                                 @endif
                                                 @if($driverDetails->is_verified)
                                                     <span class="fs-14 lh-1" data-bs-toggle="tooltip"
@@ -462,6 +478,11 @@
                            class="nav-link {{ $commonData['tab'] == 'review' ? 'active' : '' }}"
                            tabindex="-1">{{ translate('review') }}</a>
                     </li>
+                    <li class="nav-item" role="presentation">
+                        <a href="{{ route('admin.driver.show', ['id' => $driver->id, 'tab' => 'availability']) }}"
+                           class="nav-link {{ $commonData['tab'] == 'availability' ? 'active' : '' }}"
+                           tabindex="-1">{{ translate('Availability') }}</a>
+                    </li>
                 </ul>
             </div>
 
@@ -496,10 +517,108 @@
                         'otherData' => $otherData,
                     ])
                 @endif
+
+                @if ($commonData['tab'] == 'availability')
+                    @include('usermanagement::admin.driver.partials.availability', [
+                        'commonData' => $commonData,
+                        'otherData' => $otherData,
+                    ])
+                @endif
             </div>
         </div>
     </div>
     <!-- End Main Content -->
+
+
+    <div class="modal fade" id="sameTimeEveryDayModal">
+        <div class="modal-dialog modal-dialog-centered">
+            <div class="modal-content">
+                <div class="modal-header border-0">
+                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                </div>
+                <div class="modal-body pb-5 pt-0 px-4">
+                    <div class="max-349 mx-auto text-center">
+                        <img alt="img" class="mb-20" src="{{ dynamicAsset('public/assets/admin-module/img/modal/delete-worning.png') }}">
+                        <h3 class="text-dark fs-18 mb-2">
+                            {{ translate('Are you sure want to set same time for every day') }}?
+                        </h3>
+                        <p class="fs-14 mb-4 pb-1">
+                            {{ translate('The available time set for the first day will be applied to all days of the week.') }}
+                        </p>
+                        <div class="btn--container justify-content-center">
+                            <button type="button" class="btn btn-secondary min-w-120" data-bs-dismiss="modal">
+                                {{ translate('Cancel') }}
+                            </button>
+                            <button type="button" id="sameTimeConfirmBtn" class="btn btn-primary min-w-120" data-bs-dismiss="modal">
+                                {{ translate('Yes') }}
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="modal fade" id="deleteScheduleModal">
+        <div class="modal-dialog modal-dialog-centered">
+            <div class="modal-content">
+                <div class="modal-header border-0">
+                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                </div>
+                <div class="modal-body pb-5 pt-0 px-4">
+                    <div class="max-349 mx-auto text-center">
+                        <img alt="img" class="mb-20" src="{{ dynamicAsset('public/assets/admin-module/img/modal/delete-worning.png') }}">
+                        <h3 class="text-dark fs-18 mb-2">
+                            {{ translate('Are you sure want to delete this schedule') }}?
+                        </h3>
+                        <p class="fs-14 mb-4 pb-1">
+                            {{ translate('Once deleted, this time slot will be removed from the availability schedule.') }}
+                        </p>
+                        <div class="btn--container justify-content-center">
+                            <button type="button" class="btn btn-secondary min-w-120" data-bs-dismiss="modal">
+                                {{ translate('Cancel') }}
+                            </button>
+                            <button type="button" id="deleteScheduleConfirmBtn" class="btn btn-danger min-w-120" data-bs-dismiss="modal">
+                                {{ translate('Yes, Delete') }}
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="offcanvas offcanvas-end" id="addshedule_offcanvas" style="--bs-offcanvas-width: 500px;z-index: 1051">
+        <div class="offcanvas-header">
+            <h6 class="offcanvas-title fs-16 flex-grow-1">
+                {{ translate('Create Schedule') }}
+            </h6>
+            <button type="button" class="btn-close border" data-bs-dismiss="offcanvas" aria-label="Close"></button>
+        </div>
+        <div class="offcanvas-body scrollbar-thin">
+            <div class="p-lg-4 p-3 rounded bg-F6F6F6">
+                <div class="form-group mb-20">
+                    <label for="addSlotStart"
+                        class="input-label text-capitalize mb-2 text-dark fw-medium">{{ translate('Start_time') }}</label>
+                    <input type="time" id="addSlotStart" class="form-control" name="start_time" required>
+                </div>
+                <div class="form-group">
+                    <label for="addSlotEnd"
+                        class="input-label text-capitalize mb-2 text-dark fw-medium">{{ translate('End_time') }}</label>
+                    <input type="time" id="addSlotEnd" class="form-control" name="end_time" required>
+                </div>
+            </div>
+        </div>
+        <div class="offcanvas-footer d-flex gap-3 bg-white shadow position-sticky bottom-0 p-3 justify-content-center">
+            <button type="reset" class="btn w-100 btn-secondary text-capitalize fw-semibold min-w-120">
+                {{ translate('reset') }}
+            </button>
+            <button type="button" id="addSlotConfirmBtn" class="btn w-100 btn-primary text-capitalize fw-semibold cmn_focus  min-w-120">
+                {{ translate('submit') }}
+            </button>
+        </div>
+    </div>
+
 
 @endsection
 

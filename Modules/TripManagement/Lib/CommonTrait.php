@@ -50,7 +50,7 @@ trait CommonTrait
         $waiting_fee = 0;
         $distance_in_km = 0;
 
-        $drivingMode = $trip?->vehicleCategory?->type === 'motor_bike' ? 'TWO_WHEELER' : 'DRIVE';
+        $drivingMode = resolveDrivingMode($trip?->vehicleCategory?->type);
         $drop_coordinate = [
             $trip->coordinate->drop_coordinates->latitude,
             $trip->coordinate->drop_coordinates->longitude
@@ -78,7 +78,7 @@ trait CommonTrait
         }
 
         if ($current_status === 'cancelled') {
-            $route = getRoutes($pickup_coordinate, $drop_coordinate, $intermediate_coordinate, [$drivingMode]);
+            $route = getRoutes($pickup_coordinate, $drop_coordinate, $intermediate_coordinate, $drivingMode);
             $distance_in_km = $route[0]['distance'];
 
             $distance_wise_fare_cancelled = $fare->base_fare_per_km * $distance_in_km;
@@ -98,7 +98,7 @@ trait CommonTrait
                 $cancellation_fee = max((($cancellation_percent * $distance_wise_fare_cancelled) / 100), $fare->min_cancellation_fee);
             }
         } elseif ($current_status == 'completed') {
-            $route = getRoutes($pickup_coordinate, $drop_coordinate, $intermediate_coordinate, [$drivingMode]);
+            $route = getRoutes($pickup_coordinate, $drop_coordinate, $intermediate_coordinate, $drivingMode);
             $distance_in_km = $route[0]['distance'];
 
             $distance_wise_fare_completed = $fare->base_fare_per_km * $distance_in_km;
@@ -275,13 +275,13 @@ trait CommonTrait
                     if ($route['drive_mode'] === 'DRIVE') {
                         $distance = $route['distance'];
                         $drive_fare = $baseFarePerKm * $distance;
-                        $drive_est_distance = (double)$routes[0]['distance'];
+                        $drive_est_distance = (double)$route['distance'];
                         $drive_est_duration = $route['duration'];
                         $drive_polyline = $route['encoded_polyline'];
                     } elseif ($route['drive_mode'] === 'TWO_WHEELER') {
                         $distance = $route['distance'];
                         $bike_fare = $baseFarePerKm * $distance;
-                        $bike_est_distance = (double)$routes[0]['distance'];
+                        $bike_est_distance = (double)$route['distance'];
                         $bike_est_duration = $route['duration'];
                         $bike_polyline = $route['encoded_polyline'];
                     }

@@ -2,6 +2,7 @@
 
 namespace Modules\AiModule\Http\Controllers\Web\Admin;
 
+use App\Exceptions\ImageUploadException;
 use App\Http\Controllers\Controller;
 use Exception as ExceptionAlias;
 use Illuminate\Http\JsonResponse;
@@ -93,6 +94,8 @@ class BlogController extends Controller
             $result = $this->contentGeneratorService->generateContent(contentType: "BlogTitleFromContents", description:$request['description'] , imageUrl: $image['image_full_path']);
             fileRemover('blog/ai-image/', $fileName);
             return successResponse(data: $result, status: 200);
+        } catch (ImageUploadException $e) {
+            return errorResponse(message: $e->getMessage(), status: 422);
         } catch (\Exception $e) {
             $status = $e->getCode() > 0 ? $e->getCode() : 500;
             return errorResponse(message: $e->getMessage(), status: $status);

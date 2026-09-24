@@ -1,0 +1,27 @@
+.w-24px{
+    width: 24px;
+}
+.min-w-24px{
+    min-width: 24px;
+}
+.h-24px{
+    height: 24px;
+}
+.dismiss--date-absolute{
+    position: absolute;
+    top: -6px;
+    right: -6px;
+    cursor: pointer;
+}
+.disabled-shedule{
+    pointer-events: none;
+    background-color: var(--bs-gray-200) !important;
+    border-color: var(--bs-gray-200) !important;
+}
+[theme="dark"] .disabled-shedule {
+    background-color: #3a3a3a !important;
+    border-color: #3a3a3a !important;
+}
+.disabled-shedule .dismiss--date-absolute{
+    display: none;
+}

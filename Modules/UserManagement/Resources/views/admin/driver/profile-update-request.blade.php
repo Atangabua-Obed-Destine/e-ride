@@ -152,12 +152,13 @@
                                                     </td>
                                                     @can('user_edit')
                                                         <td class="status">
-                                                            <label class="switcher">
-                                                                <input class="switcher_input status-change"
-                                                                       type="checkbox"
-                                                                       {{ $driver->is_active == 1 ? 'checked' : '' }}
-                                                                       data-url="{{ route('admin.driver.update-status') }}"
-                                                                       id="{{ $driver->id }}">
+                                                            @php($statusLock = !$driver->is_active ? translate('Driver is suspended') : $driver->driverDetails->systemPauseMessage())
+                                                            <label class="switcher {{ $statusLock ? 'opacity-50' : 'driver-status-toggle' }}"
+                                                                   @if($statusLock) data-bs-toggle="tooltip" data-bs-title="{{ $statusLock }}"
+                                                                   @else role="button" data-id="{{ $driver->id }}" data-paused="{{ $driver->driverDetails->isCurrentlyPaused() ? 1 : 0 }}" @endif>
+                                                                <input class="switcher_input" type="checkbox" onclick="return false;"
+                                                                       {{ !$driver->driverDetails->isCurrentlyPaused() ? 'checked' : '' }}
+                                                                       {{ $statusLock ? 'disabled' : '' }}>
                                                                 <span class="switcher_control"></span>
                                                             </label>
                                                         </td>

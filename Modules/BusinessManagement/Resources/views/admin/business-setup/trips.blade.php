@@ -15,7 +15,7 @@
             </div>
             <div class="card mb-3 text-capitalize">
                 <form action="{{route('admin.business.setup.trip-fare.store')."?type=".TRIP_SETTINGS}}" id="trips_form"
-                      method="POST">
+                      class="submit-by-ajax" method="POST">
                     @csrf
 
                     <div class="card-header">
@@ -30,7 +30,7 @@
                     </div>
                     <div class="card-body">
                         <div class="d-flex flex-column gap-4">
-                            <div class="pb-xl-4 pb-3">
+                            <div>
                                 <div class="row g-3 align-items-center">
                                     <div class="col-md-6 col-lg-5">
                                         <div>
@@ -110,7 +110,7 @@
                                                 <label class="switcher">
                                                     <input type="checkbox" name="driver_otp_confirmation_for_trip"
                                                            class="switcher_input" tabindex="3"
-                                                        {{ $settings->where('key_name', 'driver_otp_confirmation_for_trip')->first()->value ?? 0 == 1 ? 'checked' : '' }}>
+                                                        {{ $settings->firstWhere('key_name', 'driver_otp_confirmation_for_trip')?->value ? 'checked' : '' }}>
                                                     <span class="switcher_control"></span>
                                                 </label>
                                             </div>
@@ -138,7 +138,7 @@
                                             <div class="position-relative">
                                                 <label class="switcher">
                                                     <input type="checkbox" name="enable_real_time_location_sharing" class="switcher_input" tabindex="4"
-                                                        {{ $settings->where('key_name', 'enable_real_time_location_sharing')->first()->value ?? 0 == 1 ? 'checked' : '' }}>
+                                                        {{ $settings->firstWhere('key_name', 'enable_real_time_location_sharing')?->value ? 'checked' : '' }}>
                                                     <span class="switcher_control"></span>
                                                 </label>
                                             </div>
@@ -146,7 +146,49 @@
                                     </div>
                                 </div>
                             </div>
-                            <div class="pb-xl-4 pb-3">
+                            <div class="pb-xl-4 pb-3 border-bottom">
+                                <div class="row g-3">
+                                    <div class="col-md-6 col-lg-5">
+                                        <div>
+                                            <h5 class="d-flex align-items-center gap-2 mb-1">
+                                                {{ translate('Driver Identity Verification') }}
+                                            </h5>
+                                            <div class="fs-14">
+                                                {{ translate('Verify driver identity before start trip') }}
+                                            </div>
+                                        </div>
+                                    </div>
+                                    <div class="col-md-6 col-lg-7">
+                                        <div class="form-control gap-2 align-items-center d-flex justify-content-between rounded cmn_focus">
+                                            <div class="d-flex align-items-center fw-medium gap-2">
+                                                {{ translate('Enable Identity Verification') }}
+                                            </div>
+                                            <div class="position-relative">
+                                                <label class="switcher">
+                                                    <input type="checkbox" name="driver_identity_verification" id="driverIdentityVerification" class="switcher_input" tabindex="5"
+                                                        {{ $settings->firstWhere('key_name', 'driver_identity_verification')?->value ? 'checked' : '' }}>
+                                                    <span class="switcher_control"></span>
+                                                </label>
+                                            </div>
+                                        </div>
+                                        <div class="mt-3" id="driverIdentityVerificationWrapper">
+                                            <div class="d-flex align-items-center gap-2 fs-14 mb-3">
+                                                <i class="bi bi-info-circle-fill text-primary"></i>
+                                                {{ translate('Set notification verify driver identity before customer start trip') }}
+                                            </div>
+                                            <div class="bg-F6F6F6 rounded p-lg-4 p-3">
+                                                <label for="driverIdentityVerificationMessage" class="form-label">{{ translate('Verify Driver Identity') }}</label>
+                                                <div class="character-count">
+                                                    <textarea class="form-control character-count-field" id="driverIdentityVerificationMessage" name="driver_identity_verification_message" rows="2" maxlength="255" data-max-character="255" placeholder="{{ translate('Write a message') }}" tabindex="6">{{ $settings->firstWhere('key_name', 'driver_identity_verification_message')?->value ?? 'For safety, check your driver identity & vehicle number before start the trip.' }}</textarea>
+                                                    <span class="mt-1 d-block text-end text-muted">0/255</span>
+                                                </div>
+                                                <span class="error-text text-danger fs-12" data-error="driver_identity_verification_message"></span>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                            <div class="pb-xl-4 pb-3 border-bottom">
                                 <div class="row g-3 align-items-center">
                                     <div class="col-md-6 col-lg-5">
                                         <div>
@@ -165,10 +207,108 @@
                                             </div>
                                             <div class="position-relative">
                                                 <label class="switcher">
-                                                    <input type="checkbox" name="female_only_ride_service" class="switcher_input" tabindex="5"
-                                                        {{ $settings->where('key_name', 'female_only_ride_service')->first()->value ?? 0 == 1 ? 'checked' : '' }}>
+                                                    <input type="checkbox" name="female_only_ride_service" class="switcher_input" tabindex="7"
+                                                        {{ $settings->firstWhere('key_name', 'female_only_ride_service')?->value ? 'checked' : '' }}>
                                                     <span class="switcher_control"></span>
                                                 </label>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                            <div class="pb-xl-4 pb-3 border-bottom">
+                                <div class="row g-3 align-items-center">
+                                    <div class="col-md-6 col-lg-5">
+                                        <div>
+                                            <h5 class="d-flex align-items-center gap-2 mb-1">
+                                                {{ translate('Smart Rebooking') }}
+                                            </h5>
+                                            <div class="fs-14">
+                                                {{ translate('Automatically rebook trips by sending requests to nearby drivers if a cancellation occurs.') }}
+                                            </div>
+                                        </div>
+                                    </div>
+                                    <div class="col-md-6 col-lg-7">
+                                        <div class="form-control gap-2 align-items-center d-flex justify-content-between rounded cmn_focus">
+                                            <div class="d-flex align-items-center fw-medium gap-2">
+                                                {{ translate('Enable Smart Rebooking') }}
+                                            </div>
+                                            <div class="position-relative">
+                                                <label class="switcher">
+                                                    <input type="checkbox" name="smart_rebooking" class="switcher_input" tabindex="8"
+                                                        {{ $settings->firstWhere('key_name', 'smart_rebooking')?->value ? 'checked' : '' }}>
+                                                    <span class="switcher_control"></span>
+                                                </label>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                            <div class="pb-xl-4 pb-3">
+                                <div class="row g-3">
+                                    <div class="col-md-6 col-lg-5">
+                                        <div>
+                                            <h5 class="d-flex align-items-center gap-2 mb-1">
+                                                {{ translate('Auto Arrival Notification') }}
+                                            </h5>
+                                            <div class="fs-14">
+                                                {{ translate('Allow Send Auto Arrival Notification for Customer & Driver') }}
+                                            </div>
+                                        </div>
+                                    </div>
+                                    <div class="col-md-6 col-lg-7">
+                                        <div class="form-control gap-2 align-items-center d-flex justify-content-between rounded cmn_focus">
+                                            <div class="d-flex align-items-center fw-medium gap-2">
+                                                {{ translate('Auto Arrival Notification') }}
+                                            </div>
+                                            <div class="position-relative">
+                                                <label class="switcher">
+                                                    <input type="checkbox" name="auto_arrival_notification" id="autoArrivalNotification" class="switcher_input" tabindex="12"
+                                                        {{ $settings->firstWhere('key_name', 'auto_arrival_notification')?->value ? 'checked' : '' }}>
+                                                    <span class="switcher_control"></span>
+                                                </label>
+                                            </div>
+                                        </div>
+                                        <div class="mt-3" id="autoArrivalNotificationWrapper">
+                                            <div class="bg-F6F6F6 rounded p-lg-4 p-3 mb-20">
+                                                <label for="autoArrivalNotificationTime" class="form-label">
+                                                    {{ translate('Set How Many Minutes Before Auto Arrival Notification Show') }}
+                                                    <span class="text-danger">*</span>
+                                                    <i class="bi bi-info-circle-fill text-primary cursor-pointer" data-bs-toggle="tooltip"
+                                                       data-bs-title="{{ translate('Set how many minutes before arrival the notification should be sent.') }}"></i>
+                                                </label>
+                                                <input type="number" name="auto_arrival_notification_time" id="autoArrivalNotificationTime" step="1" min="1" max="99999999" class="form-control"
+                                                       value="{{ $settings->firstWhere('key_name', 'auto_arrival_notification_time')?->value }}"
+                                                       placeholder="{{ translate('Ex : 5') }}" tabindex="13">
+                                                <span class="error-text text-danger fs-12" data-error="auto_arrival_notification_time"></span>
+                                            </div>
+                                            <div class="d-flex align-items-center gap-2 fs-14 mb-3">
+                                                <i class="bi bi-info-circle-fill text-primary"></i>
+                                                {{ translate('Set auto arrival notification for customer & driver') }}
+                                            </div>
+                                            <div class="bg-F6F6F6 rounded p-lg-4 p-3 mb-20">
+                                                <label for="autoArrivalCustomerMessage" class="form-label d-flex align-items-center gap-2">
+                                                    {{ translate('Driver is Nearby (For Customer)') }}
+                                                    <i class="bi bi-info-circle-fill text-primary cursor-pointer" data-bs-toggle="tooltip"
+                                                       data-bs-title="{{ translate('Message sent to the customer when the driver is nearby.') }} {{ translate('Use :placeholder to display minutes', ['placeholder' => '{min}']) }}"></i>
+                                                </label>
+                                                <div class="character-count">
+                                                    <textarea class="form-control character-count-field" id="autoArrivalCustomerMessage" name="auto_arrival_notification_customer_message" rows="2" maxlength="255" data-max-character="255" placeholder="{{ translate('Write a message') }}" tabindex="14">{{ $settings->firstWhere('key_name', 'auto_arrival_notification_customer_message')?->value ?? 'Driver is {min} minutes away. Avoid unnecessary calls for a smoother experience.' }}</textarea>
+                                                    <span class="mt-1 d-block text-end text-muted">0/255</span>
+                                                </div>
+                                                <span class="error-text text-danger fs-12" data-error="auto_arrival_notification_customer_message"></span>
+                                            </div>
+                                            <div class="bg-F6F6F6 rounded p-lg-4 p-3">
+                                                <label for="autoArrivalDriverMessage" class="form-label d-flex align-items-center gap-2">
+                                                    {{ translate('Almost at pickup point (For Driver)') }}
+                                                    <i class="bi bi-info-circle-fill text-primary cursor-pointer" data-bs-toggle="tooltip"
+                                                       data-bs-title="{{ translate('Message sent to the driver when close to the pickup point.') }} {{ translate('Use :placeholder to display minutes', ['placeholder' => '{min}']) }}"></i>
+                                                </label>
+                                                <div class="character-count">
+                                                    <textarea class="form-control character-count-field" id="autoArrivalDriverMessage" name="auto_arrival_notification_driver_message" rows="2" maxlength="255" data-max-character="255" placeholder="{{ translate('Write a message') }}" tabindex="15">{{ $settings->firstWhere('key_name', 'auto_arrival_notification_driver_message')?->value ?? 'Almost there! Just {min} minutes away. Please avoid calling for a smoother experience.' }}</textarea>
+                                                    <span class="mt-1 d-block text-end text-muted">0/255</span>
+                                                </div>
+                                                <span class="error-text text-danger fs-12" data-error="auto_arrival_notification_driver_message"></span>
                                             </div>
                                         </div>
                                     </div>
@@ -178,9 +318,9 @@
 
                         <div class="d-flex gap-3 flex-wrap justify-content-end">
                             <button class="btn btn-secondary text-uppercase cmn_focus"
-                                    type="reset" tabindex="6">{{ translate('Reset') }}</button>
+                                    type="reset" tabindex="16">{{ translate('Reset') }}</button>
                             <button type="submit"
-                                    class="btn btn-primary text-uppercase cmn_focus" tabindex="7">{{ translate('Save') }}</button>
+                                    class="btn btn-primary text-uppercase cmn_focus" tabindex="17">{{ translate('Save') }}</button>
                         </div>
                     </div>
                 </form>
@@ -188,7 +328,7 @@
 
             <div class="card mb-3 text-capitalize">
                 <form action="{{ route('admin.business.setup.schedule-trip.store')}}"
-                      id="schedule_trip_form" method="POST">
+                      id="schedule_trip_form" class="submit-by-ajax" method="POST">
                     @csrf
                     <div class="collapsible-card-body">
                         <div class="card-header flex-sm-nowrap flex-wrap d-flex align-items-center justify-content-between gap-3">
@@ -262,6 +402,7 @@
                                                                 {{ translate('Minute') }}</option>
                                                         </select>
                                                     </div>
+                                                    <span class="error-text text-danger fs-12" data-error="minimum_schedule_book_time"></span>
                                                 </div>
                                                 <div>
                                                     <label for="advanceScheduleBook"
@@ -286,6 +427,7 @@
                                                                 {{ translate('Minute') }}</option>
                                                         </select>
                                                     </div>
+                                                    <span class="error-text text-danger fs-12" data-error="advance_schedule_book_time"></span>
                                                     <p id="time_conflicts_text_for_advance_schedule_book" class="text-danger text-end mt-2">{{ translate('your_input_time_conflicts_with_Minimum_Schedule_Book.') }}</p>
                                                 </div>
                                             </div>
@@ -329,6 +471,7 @@
                                                                 {{ translate('Minute') }}</option>
                                                         </select>
                                                     </div>
+                                                    <span class="error-text text-danger fs-12" data-error="driver_request_notify_time"></span>
                                                     <p id="time_conflicts_text_for_driver_request_notify" class="text-danger text-end mt-2">{{ translate('your_input_time_conflicts_with_Minimum_Schedule_Book.') }}</p>
                                                 </div>
                                             </div>
@@ -379,6 +522,7 @@
                                                     <input type="number" name="increase_fare_amount" min="1" max="100" step="1" id="IncreaseFareAmount" class="form-control" placeholder="Ex : 10"
                                                         value="{{ $settings->firstWhere('key_name', 'increase_fare_amount')?->value }}" tabindex="14"
                                                     >
+                                                    <span class="error-text text-danger fs-12" data-error="increase_fare_amount"></span>
                                                 </div>
                                             </div>
                                         </div>
@@ -583,6 +727,7 @@
             if (!permission) {
                 toastr.error('{{ translate('you_do_not_have_enough_permission_to_update_this_settings') }}');
                 e.preventDefault();
+                e.stopImmediatePropagation();
             }
         });
         $(document).ready(function () {

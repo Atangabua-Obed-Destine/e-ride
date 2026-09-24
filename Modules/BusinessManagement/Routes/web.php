@@ -20,6 +20,7 @@ use Modules\BusinessManagement\Http\Controllers\Web\Admin\Configuration\LoginSet
 use Modules\BusinessManagement\Http\Controllers\Web\Admin\Configuration\NotificationController;
 use Modules\BusinessManagement\Http\Controllers\Web\Admin\Configuration\PaymentConfigController;
 use Modules\BusinessManagement\Http\Controllers\Web\Admin\Configuration\SMSConfigController;
+use Modules\BusinessManagement\Http\Controllers\Web\Admin\Configuration\SocialLoginController;
 use Modules\BusinessManagement\Http\Controllers\Web\Admin\Configuration\ThirdPartyController;
 use Modules\BusinessManagement\Http\Controllers\Web\Admin\PagesMedia\LandingPageController;
 use Modules\BusinessManagement\Http\Controllers\Web\Admin\PagesMedia\PagesMediaController;
@@ -183,6 +184,12 @@ Route::group(['prefix' => 'admin', 'as' => 'admin.', 'middleware' => 'admin'], f
                 });
 
             Route::group(['prefix' => 'third-party', 'as' => 'third-party.'], function () {
+                Route::group(['prefix' => 'social-login', 'as' => 'social-login.'], function () {
+                    Route::controller(SocialLoginController::class)->group(function () {
+                        Route::get('/', 'index')->name('index');
+                        Route::put('update', 'update')->name('update');
+                    });
+                });
                 Route::group(['prefix' => 'payment-method', 'as' => 'payment-method.'], function () {
                     Route::controller(PaymentConfigController::class)->group(function () {
                         Route::get('/', 'paymentConfigGet')->name('index');

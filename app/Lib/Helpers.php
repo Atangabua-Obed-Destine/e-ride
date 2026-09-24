@@ -1,7 +1,7 @@
 <?php
 
+use App\Exceptions\ImageUploadException;
 use Aws\Exception\AwsException;
-use Brian2694\Toastr\Facades\Toastr;
 use Carbon\Carbon;
 use Barryvdh\DomPDF\Facade\Pdf;
 use Illuminate\Contracts\Translation\Translator;
@@ -99,16 +99,17 @@ if (!function_exists('removeSpecialCharacters')) {
     }
 }
 if (!function_exists('fileUploader')) {
-    function fileUploader(string $dir, string $format= APPLICATION_IMAGE_FORMAT, ?UploadedFile $image = null, $oldImage = null): string|false
+    function fileUploader(string $dir, string $format= APPLICATION_IMAGE_FORMAT, ?UploadedFile $image = null, $oldImage = null): ?string
     {
         if ($image == null) {
-            return 'def.png';
+            return null;
         }
 
         set_time_limit(300);
         $dir = rtrim($dir, '/') . '/';
 
-        if(in_array($format, ['txt', 'rtf', 'doc', 'docx', 'pdf', 'odt', 'xls', 'xlsx', 'csv', 'ppt', 'pptx', 'log', 'zip', 'mp4', 'mkv', 'avi', 'mov', 'webm']))
+        $rawFileExtensions = array_merge(DOCUMENT_AND_VIDEO_ACCEPTED_EXTENSIONS, array_map('trim', explode(',', str_replace('.', '', AUDIO_ACCEPTED_EXTENSIONS))));
+        if(in_array($format, $rawFileExtensions))
         {
             $fileName = date('Y-m-d') . '-' . uniqid() . '.' . $image->getClientOriginalExtension();
 
@@ -122,9 +123,9 @@ if (!function_exists('fileUploader')) {
         }
 
         $sourcePath = $image->getRealPath();
-        $info = getimagesize($sourcePath);
+        $info = @getimagesize($sourcePath);
         if (!$info || empty($info['mime'])) {
-            return false;
+            throw new ImageUploadException();
         }
         $mime = strtolower($info['mime']);
         $format = match ($mime) {
@@ -142,87 +143,98 @@ if (!function_exists('fileUploader')) {
         $savePath = storage_path("app/public/{$dir}{$imageName}");
 
         if ($mime === 'image/gif') {
-            return copy($sourcePath, $savePath) ? $imageName : false;
-        }
-
-        if ($mime === 'image/webp' && $format === 'webp') {
-            return copy($sourcePath, $savePath) ? $imageName : false;
-        }
-
-        $gdImage = match ($mime) {
-            'image/jpeg' => imagecreatefromjpeg($sourcePath),
-            'image/png'  => imagecreatefrompng($sourcePath),
-            'image/webp' => imagecreatefromwebp($sourcePath),
-            default      => false,
-        };
-
-        if (!$gdImage) {
-            return false;
-        }
-
-        if (!imageistruecolor($gdImage)) {
-            imagepalettetotruecolor($gdImage);
-        }
-
-        if (in_array($mime, ['image/png', 'image/webp'])) {
-            imagealphablending($gdImage, false);
-            imagesavealpha($gdImage, true);
-        }
-
-        $maxSize = 2500;
-        $width   = imagesx($gdImage);
-        $height  = imagesy($gdImage);
-
-        if ($width > $maxSize || $height > $maxSize) {
-            $ratio = min($maxSize / $width, $maxSize / $height);
-            $newW  = (int)($width * $ratio);
-            $newH  = (int)($height * $ratio);
-
-            $temp = imagecreatetruecolor($newW, $newH);
-
-            if (in_array($mime, ['image/png', 'image/webp'])) {
-                imagealphablending($temp, false);
-                imagesavealpha($temp, true);
+            if (!copy($sourcePath, $savePath)) {
+                throw new ImageUploadException();
             }
-
-            imagecopyresampled(
-                $temp,
-                $gdImage,
-                0,
-                0,
-                0,
-                0,
-                $newW,
-                $newH,
-                $width,
-                $height
-            );
-
-            imagedestroy($gdImage);
-            $gdImage = $temp;
-        }
-
-        $saved = match ($format) {
-            'jpg', 'jpeg' => imagejpeg($gdImage, $savePath, 85),
-            'png'         => imagepng($gdImage, $savePath, -1),
-            'webp'        => imagewebp($gdImage, $savePath, 78),
-            default       => false,
-        };
-
-        imagedestroy($gdImage);
-
-        if ($saved)
-        {
-            foreach ((array) $oldImage as $file) {
-                if (!empty($file)) {
-                    Storage::disk('public')->delete($dir . $file);
-                }
-            }
-
             return $imageName;
         }
 
-        return false;
+        if ($mime === 'image/webp' && $format === 'webp') {
+            if (!copy($sourcePath, $savePath)) {
+                throw new ImageUploadException();
+            }
+            return $imageName;
+        }
+
+        try {
+            $gdImage = match ($mime) {
+                'image/jpeg' => @imagecreatefromjpeg($sourcePath),
+                'image/png'  => @imagecreatefrompng($sourcePath),
+                'image/webp' => @imagecreatefromwebp($sourcePath),
+                default      => false,
+            };
+
+            if (!$gdImage) {
+                throw new ImageUploadException();
+            }
+
+            if (!imageistruecolor($gdImage)) {
+                imagepalettetotruecolor($gdImage);
+            }
+
+            if (in_array($mime, ['image/png', 'image/webp'])) {
+                imagealphablending($gdImage, false);
+                imagesavealpha($gdImage, true);
+            }
+
+            $maxSize = 2500;
+            $width   = imagesx($gdImage);
+            $height  = imagesy($gdImage);
+
+            if ($width > $maxSize || $height > $maxSize) {
+                $ratio = min($maxSize / $width, $maxSize / $height);
+                $newW  = (int)($width * $ratio);
+                $newH  = (int)($height * $ratio);
+
+                $temp = imagecreatetruecolor($newW, $newH);
+
+                if (in_array($mime, ['image/png', 'image/webp'])) {
+                    imagealphablending($temp, false);
+                    imagesavealpha($temp, true);
+                }
+
+                imagecopyresampled(
+                    $temp,
+                    $gdImage,
+                    0,
+                    0,
+                    0,
+                    0,
+                    $newW,
+                    $newH,
+                    $width,
+                    $height
+                );
+
+                imagedestroy($gdImage);
+                $gdImage = $temp;
+            }
+
+            $saved = match ($format) {
+                'jpg', 'jpeg' => imagejpeg($gdImage, $savePath, 85),
+                'png'         => imagepng($gdImage, $savePath, -1),
+                'webp'        => imagewebp($gdImage, $savePath, 78),
+                default       => false,
+            };
+
+            imagedestroy($gdImage);
+        } catch (ImageUploadException $e) {
+            throw $e;
+        } catch (\Throwable) {
+            throw new ImageUploadException();
+        }
+
+        if (!$saved) {
+            throw new ImageUploadException();
+        }
+
+        foreach ((array) $oldImage as $file) {
+            if (!empty($file)) {
+                Storage::disk('public')->delete($dir . $file);
+            }
+        }
+
+        return $imageName;
     }
 }
 
@@ -775,6 +787,12 @@ if (!function_exists('getMainDomain')) {
         return $parts[0];
     }
 }
+if (!function_exists('resolveDrivingMode')) {
+    function resolveDrivingMode(?string $vehicleType): array
+    {
+        return $vehicleType === 'motor_bike' ? ['TWO_WHEELER'] : ['DRIVE'];
+    }
+}
 if (!function_exists('getRoutes')) {
     function getRoutes(array $originCoordinates, array $destinationCoordinates, array $intermediateCoordinates = [], array $drivingMode = ["DRIVE"]): array
     {
@@ -799,7 +817,6 @@ if (!function_exists('getRoutes')) {
             ]
         ];
 
-        // Format waypoints
         $waypoints = [];
         if (!empty($intermediateCoordinates) && !is_null($intermediateCoordinates[0][0])) {
             foreach ($intermediateCoordinates as $wp) {
@@ -814,78 +831,88 @@ if (!function_exists('getRoutes')) {
             }
         }
 
-        $data = [
-            "origin" => $origin,
-            "destination" => $destination,
-            "intermediates" => $waypoints,
-            "travelMode" => 'DRIVE', // DRIVE, TWO_WHEELER, etc.
-            "routingPreference" => "TRAFFIC_AWARE", // Enables traffic-based duration
-            "computeAlternativeRoutes" => false,
-            "languageCode" => "en-US",
-            "units" => "METRIC"
-        ];
-
-
-        // API Headers
         $headers = [
             'Content-Type' => 'application/json',
             'X-Goog-Api-Key' => $mapApiKey,
             'X-Goog-FieldMask' => 'routes.distanceMeters,routes.duration,routes.staticDuration,routes.polyline.encodedPolyline'
         ];
 
-        // Send POST request
-        $response = Http::withHeaders($headers)->post($url, $data);
+        $fetchRoute = function (string $travelMode) use ($url, $headers, $origin, $destination, $waypoints) {
+            $data = [
+                "origin" => $origin,
+                "destination" => $destination,
+                "intermediates" => $waypoints,
+                "travelMode" => $travelMode,
+                "routingPreference" => "TRAFFIC_AWARE",
+                "computeAlternativeRoutes" => false,
+                "languageCode" => "en-US",
+                "units" => "METRIC"
+            ];
 
-        if ($response->successful()) {
+            $response = Http::withHeaders($headers)->post($url, $data);
+
+            if (!$response->successful()) {
+                return ['error' => 'API request failed', 'status' => $response->status(), 'details' => $response];
+            }
+
             $result = $response->json();
             if (!isset($result['routes'][0])) {
                 return ['error' => 'No route found'];
             }
 
             $route = $result['routes'][0];
-            $encoded_polyline = $route['polyline']['encodedPolyline'] ?? null;
-            $distance = $route['distanceMeters'] ?? 0;
             $duration = $route['duration'] ?? '0s';
-            $durationInTraffic = $route['staticDuration'] ?? $duration; // Fallback to normal duration if no traffic data
+            $durationInTraffic = $route['staticDuration'] ?? $duration;
 
-            // Convert duration to seconds
             preg_match('/(\d+)s/i', $duration, $matches);
-            $durationSec = isset($matches[1]) ? (int)$matches[1] : 0;
-
-            // Convert traffic duration to seconds
             preg_match('/(\d+)s/i', $durationInTraffic, $trafficMatches);
-            $durationInTrafficSec = isset($trafficMatches[1]) ? (int)$trafficMatches[1] : 0;
 
-            $convert_to_bike = 1.2; // Adjustment factor for bike mode
-
-            $responses[0] = [
-                'distance' => (double)number_format(($distance / 1000), 2),
-                'distance_text' => number_format(($distance / 1000), 2) . ' km',
-                'duration' => number_format((($durationSec / 60) / $convert_to_bike), 2) . ' min',
-                'duration_sec' => (int)($durationSec / $convert_to_bike),
-                'duration_in_traffic' => number_format((($durationInTrafficSec / 60) / $convert_to_bike), 2) . ' min',
-                'duration_in_traffic_sec' => (int)($durationInTrafficSec / $convert_to_bike),
-                'status' => "OK",
-                'drive_mode' => 'TWO_WHEELER',
-                'encoded_polyline' => $encoded_polyline,
+            return [
+                'distance_m' => $route['distanceMeters'] ?? 0,
+                'duration_sec' => isset($matches[1]) ? (int)$matches[1] : 0,
+                'duration_in_traffic_sec' => isset($trafficMatches[1]) ? (int)$trafficMatches[1] : 0,
+                'encoded_polyline' => $route['polyline']['encodedPolyline'] ?? null,
             ];
+        };
 
-            $responses[1] = [
-                'distance' => (double)number_format(($distance / 1000), 2),
-                'distance_text' => number_format(($distance / 1000), 2) . ' km',
-                'duration' => number_format(($durationSec / 60), 2) . ' min',
-                'duration_sec' => $durationSec,
-                'duration_in_traffic' => number_format(($durationInTrafficSec / 60), 2) . ' min',
-                'duration_in_traffic_sec' => $durationInTrafficSec,
+        $buildEntry = function (array $route, string $driveMode, float $divisor) {
+            $distance = $route['distance_m'] / 1000;
+            $durationSec = $route['duration_sec'];
+            $durationInTrafficSec = $route['duration_in_traffic_sec'];
+
+            return [
+                'distance' => (double)number_format($distance, 2),
+                'distance_text' => number_format($distance, 2) . ' km',
+                'duration' => number_format((($durationSec / 60) / $divisor), 2) . ' min',
+                'duration_sec' => (int)($durationSec / $divisor),
+                'duration_in_traffic' => number_format((($durationInTrafficSec / 60) / $divisor), 2) . ' min',
+                'duration_in_traffic_sec' => (int)($durationInTrafficSec / $divisor),
                 'status' => "OK",
-                'drive_mode' => 'DRIVE',
-                'encoded_polyline' => $encoded_polyline,
+                'drive_mode' => $driveMode,
+                'encoded_polyline' => $route['encoded_polyline'],
             ];
+        };
 
-            return $responses;
-        } else {
-            return ['error' => 'API request failed', 'status' => $response->status(), 'details' => $response];
+        $convert_to_bike = 1.2;
+
+        $driveRoute = $fetchRoute('DRIVE');
+        if (isset($driveRoute['error'])) {
+            return $driveRoute;
         }
+        $driveEntry = $buildEntry($driveRoute, 'DRIVE', 1);
+
+        $bikeRoute = $driveRoute;
+        $bikeDivisor = $convert_to_bike;
+        if (in_array('TWO_WHEELER', $drivingMode)) {
+            $twoWheelerRoute = $fetchRoute('TWO_WHEELER');
+            if (!isset($twoWheelerRoute['error'])) {
+                $bikeRoute = $twoWheelerRoute;
+                $bikeDivisor = 1;
+            }
+        }
+        $bikeEntry = $buildEntry($bikeRoute, 'TWO_WHEELER', $bikeDivisor);
+
+        return [$bikeEntry, $driveEntry];
     }
 }
 if (!function_exists('onErrorImage')) {
@@ -1042,12 +1069,12 @@ if (!function_exists('textVariableDataFormat')) {
                                     ?string $sentTime = null, ?string $vehicleCategory = null, ?string $reason = null, ?string $dropOffLocation = null,
                                     ?string $customerName = null, ?string $driverName = null, ?string $pickUpLocation = null, ?string $dueTime = null,
                                     int|float|string|null $bonusAmount = null, int|float|string|null $totalAmount = null,
-                                    ?string $businessName = null, ?string $locale = null): array|string|Translator|null
+                                    ?string $businessName = null, ?string $pauseDuration = null, int|string|null $min = null,  ?string $locale = null): array|string|Translator|null
     {
         $replace = compact(
             'tipsAmount', 'levelName', 'walletAmount', 'tripId', 'userName', 'withdrawNote',
             'paidAmount', 'methodName', 'referralRewardAmount', 'otp', 'parcelId', 'approximateAmount',
-            'sentTime', 'vehicleCategory', 'reason', 'dropOffLocation', 'customerName', 'driverName', 'pickUpLocation', 'dueTime', 'bonusAmount', 'totalAmount', 'businessName'
+            'sentTime', 'vehicleCategory', 'reason', 'dropOffLocation', 'customerName', 'driverName', 'pickUpLocation', 'dueTime', 'bonusAmount', 'totalAmount', 'businessName', 'pauseDuration', 'min'
         );
         return translate(key: $value, replace: array_filter($replace, fn($value) => $value !== null), locale: $locale);
     }
@@ -1397,7 +1424,7 @@ if (!function_exists('maxUploadSize'))
 }
 if (!function_exists('readableUploadMaxFileSize'))
 {
-     function readableUploadMaxFileSize(string $fileType): string
+    function readableUploadMaxFileSize(string $fileType): string
     {
         return  convertToReadableSize(maxUploadSize($fileType));
     }
@@ -1406,6 +1433,10 @@ if (!function_exists('showValidationMessageForUploadMaxSize')) {
     function showValidationMessageForUploadMaxSize(array $files, bool $isAjax, bool $doesExpectJson)
     {
         $maximumSize = readableUploadMaxFileSize('image');
+        $largeFileExtensions = array_merge(
+            DOCUMENT_AND_VIDEO_ACCEPTED_EXTENSIONS,
+            array_map('trim', explode(',', str_replace('.', '', AUDIO_ACCEPTED_EXTENSIONS)))
+        );
 
         foreach (flattenFiles($files) as $key => $file)
         {
@@ -1415,7 +1446,7 @@ if (!function_exists('showValidationMessageForUploadMaxSize')) {
             {
                 if ($item->getError() == 0) continue;
                 $fileExtension = $item->getClientOriginalExtension();
-                if(in_array($fileExtension, ['txt', 'rtf', 'doc', 'docx', 'pdf', 'odt', 'xls', 'xlsx', 'csv', 'ppt', 'pptx', 'log', 'zip', 'mp4' ,'mkv' , 'avi', 'mov', 'webm']))
+                if(in_array($fileExtension, $largeFileExtensions))
                 {
                     $maximumSize = readableUploadMaxFileSize('file');
                 }
@@ -1763,8 +1794,41 @@ if (!function_exists('isOtpEnabled')) {
     }
 }
 
+if (!function_exists('formatDurationLabel')) {
+    function formatDurationLabel(int $minutes): string
+    {
+        if ($minutes <= 0) {
+            return '';
+        }
 
+        $units = [
+            ['size' => 525600, 'singular' => 'year', 'plural' => 'years'],
+            ['size' => 1440, 'singular' => 'day', 'plural' => 'days'],
+            ['size' => 60, 'singular' => 'hour', 'plural' => 'hours'],
+            ['size' => 1, 'singular' => 'minute', 'plural' => 'minutes'],
+        ];
 
+        foreach ($units as $index => $unit) {
+            if ($minutes < $unit['size']) {
+                continue;
+            }
 
+            $primaryValue = intdiv($minutes, $unit['size']);
+            $label = $primaryValue . ' ' . translate($primaryValue == 1 ? $unit['singular'] : $unit['plural']);
+
+            $next = $units[$index + 1] ?? null;
+            if ($next) {
+                $secondaryValue = intdiv($minutes % $unit['size'], $next['size']);
+                if ($secondaryValue > 0) {
+                    $label .= ' ' . translate('and') . ' ' . $secondaryValue . ' ' . translate($secondaryValue == 1 ? $next['singular'] : $next['plural']);
+                }
+            }
+
+            return $label;
+        }
+
+        return '';
+    }
+}
 
 

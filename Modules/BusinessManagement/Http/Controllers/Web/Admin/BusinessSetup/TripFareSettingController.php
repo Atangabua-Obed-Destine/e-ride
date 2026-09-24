@@ -49,6 +49,13 @@ class TripFareSettingController extends BaseController
     {
         $this->authorize('business_edit');
         $this->businessSettingService->storeTripFareSetting($request->validated());
+
+        if ($request->expectsJson()) {
+            return response()->json([
+                'successMessage' => translate(BUSINESS_SETTING_UPDATE_200['message']),
+                'redirectUrl' => url()->previous(),
+            ]);
+        }
         Toastr::success(BUSINESS_SETTING_UPDATE_200['message']);
         return back();
     }

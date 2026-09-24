@@ -141,13 +141,21 @@
                     <option selected>{{translate($trip->payment_status)}}</option>
                 </select>
             </div>
+
+            @if($trip->is_identity_mismatched && $trip->trip_cancellation_reason)
+                <div class="bg-danger bg-opacity-10 text-dark p-12px rounded mb-4">
+                    <h5 class="fw-medium fs-14 mb-2">{{ translate('Cancelled by Customer') }}</h5>
+                    <p><span class="text-danger fw-medium">{{ translate('Cancellation Reason') }} :</span> {{ translate($trip->trip_cancellation_reason) }}</p>
+                </div>
+            @endif
+
             <div class="mb-4">
                 <div class="map-wrapper rounded-10 overflow-hidden" id="mapWrapper">
 
                     <div class="map-overlay" id="mapOverlay"></div>
                     <div id="map-layer" class="rounded-10 overflow-hidden"></div>
                     <button id="mapToggleBtn" class="map-toggle-btn">
-                        View In Map
+                        {{ translate('View In Map') }}
                     </button>
 
                 </div>

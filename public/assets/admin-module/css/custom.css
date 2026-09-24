@@ -1049,3 +1049,34 @@ body[theme="dark"] *::-webkit-scrollbar-thumb {
 .other-documents-wrapper > .additional-selected-files-container:not(.d-none) {
     display: contents !important;
 }
+
+.map-pac-controller #pac-input {
+    position: absolute !important;
+    top: 56px !important;
+    left: 50% !important;
+    right: auto !important;
+    transform: translateX(-50%) !important;
+    width: 320px !important;
+    max-width: calc(100% - 130px) !important;
+    height: 2.6rem !important;
+    margin: 0 !important;
+    z-index: 3 !important;
+    background: #fff !important;
+    box-shadow: 0 1px 4px rgba(0, 0, 0, .15) !important;
+}
+
+@media (max-width: 1399.98px) {
+    .map-pac-controller #pac-input { width: 280px !important; }
+}
+
+@media (max-width: 1199.98px) {
+    .map-pac-controller #pac-input { width: 240px !important; }
+}
+
+@media (max-width: 767.98px) {
+    .map-pac-controller #pac-input { width: 190px !important; top: 52px !important; }
+}
+
+@media (max-width: 479.98px) {
+    .map-pac-controller #pac-input { width: 150px !important; }
+}

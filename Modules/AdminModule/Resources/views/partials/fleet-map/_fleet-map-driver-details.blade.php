@@ -107,7 +107,7 @@
                                     <img
                                         src="{{dynamicAsset('public/assets/admin-module/img/maps/paper-plane-2.svg')}}"
                                         alt="" class="svg">
-                                    <span class="value">{{$trip->coordinate->destination_address}}</span>
+                                    <span class="value">{{$trip?->coordinate?->destination_address}}</span>
                                 </li>
                             </ul>
                         </div>

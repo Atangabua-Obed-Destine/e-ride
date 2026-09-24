@@ -46,6 +46,8 @@ interface BusinessSettingServiceInterface extends BaseServiceInterface
 
     public function storeRecaptha(array $data);
 
+    public function storeSocialLoginConfig(array $data): void;
+
     public function storeAppVersion(array $data);
 
     public function storeAllZoneExtraFare(array $data);

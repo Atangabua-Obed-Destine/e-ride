@@ -2,7 +2,7 @@
 
 use Modules\TransactionManagement\Traits\TransactionTrait;
 use Modules\UserManagement\Entities\User;
-use Modules\UserManagement\Enums\SuspendReasonEnum;
+use Modules\UserManagement\Service\Interfaces\DriverDetailServiceInterface;
 
 if (!function_exists('driverDigitalPay'))
 {
@@ -22,13 +22,7 @@ if (!function_exists('driverDigitalPay'))
 
         $driver->load('userAccount', 'driverDetails');
 
-        $maximumCashInHandLimit = businessConfig('max_amount_to_hold_cash')?->value ?? 0;
-        $collectableAmount = $driver?->userAccount->payable_balance > $driver?->userAccount->receivable_balance ? ($driver?->userAccount->payable_balance - $driver?->userAccount->receivable_balance) : 0;
-
-        if ($maximumCashInHandLimit > $collectableAmount && $driver->driverDetails->is_suspended && $driver->driverDetails->suspend_reason == SuspendReasonEnum::CASH_IN_HAND_LIMIT->value)
-        {
-            $driver->driverDetails->update(['is_suspended' => 0, 'suspend_reason' => null]);
-        }
+        app(DriverDetailServiceInterface::class)->resumeIfCashInHandLimitCleared($driver);
 
         return true;
     }

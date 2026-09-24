@@ -141,7 +141,7 @@
                         @endif
 
                         {{-- END RIDER NOT FOUND --}}
-                        @if($trip->trip_cancellation_reason)
+                        @if($trip->trip_cancellation_reason && !$trip->is_identity_mismatched)
                             <div class="col-12">
                                 <div class="card">
                                     <div class="card-body">
@@ -450,6 +450,18 @@
                                                     <dd class="m-0">
                                                         + {{ set_currency_symbol($trip?->fee?->delay_fee) }}</dd>
 
+                                                    @if($trip?->extra_fare_fee>0)
+                                                        <dt class="text-capitalize">
+                                                            {{ translate('extra_fare') }}
+                                                            <i
+                                                                class="bi bi-info-circle-fill text-primary tooltip-icon"
+                                                                data-bs-toggle="tooltip"
+                                                                data-bs-title="{{ translate('This charge is added to a ride for special conditions, such as extreme weather.') }}"></i>
+                                                        </dt>
+                                                        <dd class="m-0">
+                                                            +{{ set_currency_symbol($trip->extra_fare_amount + 0) }}</dd>
+                                                    @endif
+
                                                     <dt class="ps-custom-4">
                                                         <div class="d-flex align-items-center gap-2 text-capitalize">
                                                             {{ translate('idle_fee') }} <i
@@ -490,17 +502,6 @@
                                                 </dt>
                                                 <dd class="m-0">
                                                     -{{ set_currency_symbol($trip->coupon_amount + 0) }}</dd>
-                                                @if($trip?->extra_fare_fee>0)
-                                                    <dt class="text-capitalize">
-                                                        {{ translate('extra_fare') }}
-                                                        <i
-                                                            class="bi bi-info-circle-fill text-primary tooltip-icon"
-                                                            data-bs-toggle="tooltip"
-                                                            data-bs-title="{{ translate('This charge is added to a ride for special conditions, such as extreme weather.') }}"></i>
-                                                    </dt>
-                                                    <dd class="m-0">
-                                                        +{{ set_currency_symbol($trip->extra_fare_amount + 0) }}</dd>
-                                                @endif
 
                                                     <?php
                                                     $totalAmount = $trip->actual_fare + ($trip?->fee?->delay_fee ?? 0) + ($trip?->fee?->idle_fee ?? 0) + ($trip?->fee?->cancellation_fee ?? 0) - ($trip->coupon_amount ?? 0) - ($trip->discount_amount ?? 0);

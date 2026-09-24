@@ -33,6 +33,17 @@
         </div>
     </div>
     <div class="col-xl-2 col-lg-3 col-md-4 col-6">
+        <div class="card border text-center analytical_data analytical_data-color6">
+            <div class="card-body">
+                <div class="analytical_data-icon rounded-circle mx-auto">
+                    <img src="{{dynamicAsset('public/assets/admin-module/img/svg/blocked_customer.svg')}}" class="svg" alt="">
+                </div>
+                <h3 class="analytical_data-count">{{$suspended}}</h3>
+                <div class="fw-semibold text-capitalize">{{translate('suspended_driver')}}</div>
+            </div>
+        </div>
+    </div>
+    <div class="col-xl-2 col-lg-3 col-md-4 col-6">
         <div class="card border text-center analytical_data analytical_data-color4">
             <div class="card-body">
                 <div class="analytical_data-icon rounded-circle mx-auto">

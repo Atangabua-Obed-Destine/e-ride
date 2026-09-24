@@ -14,7 +14,7 @@
                     <img src="{{ dynamicAsset('public/assets/admin-module/img/chat-logo.png') }}" alt="">
                     {{ translate('Chatting List') }}
                 </h2>
-                @if (businessConfig(key: 'chatting_setup_status')?->value)
+                @if (businessConfig(key: 'support_saved_reply_status')?->value)
                     <button type="button" class="btn btn-outline-primary light-border radius-35"
                             data-bs-toggle="offcanvas"
                             data-bs-target="#filter-offcanvas">
@@ -87,7 +87,7 @@
 
     </div>
     {{-- Saved answer offcanvas --}}
-    @if (businessConfig(key: 'chatting_setup_status')?->value)
+    @if (businessConfig(key: 'support_saved_reply_status')?->value)
         <div class="offcanvas offcanvas-end" id="filter-offcanvas">
             <div class="offcanvas-header">
                 <button type="button" class="btn-close" data-bs-dismiss="offcanvas" aria-label="Close"></button>

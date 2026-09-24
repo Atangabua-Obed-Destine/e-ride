@@ -4,7 +4,6 @@ namespace Modules\BusinessManagement\Http\Requests;
 
 use Illuminate\Foundation\Http\FormRequest;
 use Illuminate\Support\Facades\Auth;
-use Illuminate\Validation\Rule;
 
 class ScheduleTripStoreRequest extends FormRequest
 {
@@ -18,9 +17,27 @@ class ScheduleTripStoreRequest extends FormRequest
             'driver_request_notify_time' => 'required|int|gt:0',
             'driver_request_notify_time_type' => 'required|in:minute,hour,day',
             'increase_fare' => 'nullable|string|in:on',
-            'increase_fare_amount' => Rule::requiredIf(function (){
-                return request()->input('increase_fare') === 'on';
-            }), 'gt:0|max:100'
+            'increase_fare_amount' => 'nullable|required_if:increase_fare,on|integer|gt:0|max:100',
+        ];
+    }
+
+    /**
+     * Normalize a blank fare amount to null so the numeric rules skip it when disabled.
+     */
+    protected function prepareForValidation(): void
+    {
+        if (is_string($this->input('increase_fare_amount')) && trim($this->input('increase_fare_amount')) === '') {
+            $this->merge(['increase_fare_amount' => null]);
+        }
+    }
+
+    /**
+     * Custom validation messages.
+     */
+    public function messages(): array
+    {
+        return [
+            'increase_fare_amount.required_if' => translate('Please set the increase fare amount before enabling fare increase.'),
         ];
     }
 

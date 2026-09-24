@@ -4,7 +4,6 @@ namespace Modules\AuthManagement\Http\Controllers\Api;
 
 use Carbon\Carbon;
 use Carbon\CarbonInterval;
-use GuzzleHttp\Client;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Routing\Controller;
@@ -17,6 +16,7 @@ use Illuminate\Validation\Rule;
 use Modules\AuthManagement\Http\Controllers\Api\New\Exception;
 use Modules\AuthManagement\Http\Requests\AuthApiRequest;
 use Modules\AuthManagement\Http\Requests\RegistrationFromOtpStoreRequest;
+use Modules\AuthManagement\Http\Requests\RegistrationFromSocialStoreRequest;
 use Modules\AuthManagement\Http\Requests\UserRegisterApiRequest;
 use Modules\AuthManagement\Service\Interfaces\AuthServiceInterface;
 use Modules\AuthManagement\Traits\AdditionalRegistrationDataTrait;
@@ -436,7 +436,7 @@ class AuthController extends Controller
             $user->save();
         }
         if (!Hash::check($request['password'], $user['password'])) {
-            if ($user->logged_in_via == 'otp') {
+            if ($user->logged_in_via !== 'manual') {
 
                 return response()->json(responseFormatter(AUTH_UPDATE_PASSWORD_408), 408);
             }
@@ -450,7 +450,7 @@ class AuthController extends Controller
         }
 
         if (Hash::check($request['password'], $user['password'])) {
-            if ($user->is_active) {
+            if ($user->is_active || ($user->user_type === 'driver' && $this->driverService->hasUnsettledTrip($user->id))) {
                 $verification = $user->user_type == CUSTOMER ? (businessConfig('customer_verification')?->value ?? 0) : (businessConfig('driver_verification')?->value ?? 0);
                 if ($verification && !$user->phone_verified_at && isOtpEnabled()) {
                     $this->authService->sendOtpToClient($user);
@@ -524,10 +524,14 @@ class AuthController extends Controller
 
         }
 
+        if ($user->social_refresh_token) {
+            $this->authService->revokeSocialToken($user->social_refresh_token);
+        }
 
         if (auth('api')->user() !== null) {
             auth('api')->user()->token()->revoke();
             auth()->user()->fcm_token = null;
+            auth()->user()->social_refresh_token = null;
             auth()->user()->deleted_at = now();
             auth()->user()->save();
         }
@@ -607,6 +611,9 @@ class AuthController extends Controller
         if (Carbon::parse($otp->expires_at) > now() && ((int)$otp->otp) === ((int)$request['otp'])) {
             $user = $this->authService->checkClientRoute($request);
             if ($user) {
+                if (!$user->is_active && !($user->user_type === 'driver' && $this->driverService->hasUnsettledTrip($user->id))) {
+                    return response()->json(responseFormatter($user->user_type === 'driver' ? DEFAULT_USER_UNDER_REVIEW_DISABLED_401 : DEFAULT_USER_DISABLED_401), 403);
+                }
                 if (!$user->phone_verified_at) {
                     $userData = [
                         'phone_verified_at' => now()
@@ -670,6 +677,9 @@ class AuthController extends Controller
 
         $user = $this->authService->checkClientRoute($request);
         if ($user) {
+            if (!$user->is_active && !($user->user_type === 'driver' && $this->driverService->hasUnsettledTrip($user->id))) {
+                return response()->json(responseFormatter($user->user_type === 'driver' ? DEFAULT_USER_UNDER_REVIEW_DISABLED_401 : DEFAULT_USER_DISABLED_401), 403);
+            }
             if (!$user->phone_verified_at) {
                 $userData = [
                     'phone_verified_at' => now()
@@ -695,48 +705,99 @@ class AuthController extends Controller
         $validator = Validator::make($request->all(), [
             'token' => 'required',
             'unique_id' => 'required',
-            'email' => 'required',
-            'medium' => 'required|in:google,facebook',
+            'medium' => 'required|in:google,facebook,apple',
+            'email' => 'required_if:medium,google,facebook',
         ]);
 
         if ($validator->fails()) {
             return response()->json(responseFormatter(constant: DEFAULT_400, errors: errorProcessor($validator)), 403);
         }
 
-        $client = new Client();
-        $token = $request['token'];
-        $email = $request['email'];
-        $unique_id = $request['unique_id'];
+        if (!$this->authService->isSocialLoginEnabled($request->medium)) {
+            return response()->json(responseFormatter(SOCIAL_LOGIN_DISABLED_403), 403);
+        }
 
         try {
-            if ($request['medium'] == 'google') {
-                $res = $client->request('GET', 'https://www.googleapis.com/oauth2/v3/tokeninfo?id_token=' . $token);
-            } elseif ($request['medium'] == 'facebook') {
-                $res = $client->request('GET', 'https://graph.facebook.com/' . $unique_id . '?access_token=' . $token . '&&fields=name,email');
-            }
-            $data = json_decode($res->getBody()->getContents(), true);
-
-        } catch (Exception $exception) {
+            $data = $this->authService->getSocialProfile($request->medium, $request->token, $request->unique_id);
+        } catch (\Throwable $exception) {
             return response()->json(responseFormatter(DEFAULT_401), 403);
         }
 
-        if (strcmp($email, $data['email']) === 0) {
-            $user = $this->customer->getBy(column: 'email', value: $request['email']);
-            if (!$user) {
-                $name = explode(' ', $data['name']);
-                $attributes = [
-                    'first_name' => $name[0],
-                    'last_name' => end($name),
-                    'email' => $data['email'],
-                    'profile_image' => 'def.png',
-                    'password' => bcrypt(rand(1000000, 9999999))
-                ];
-                $user = $this->customer->store($attributes);
-            }
-            return response()->json(responseFormatter(AUTH_LOGIN_200, self::authenticate($user, CUSTOMER_PANEL_ACCESS)), 200);
+        if (!($data['email'] ?? null)) {
+            return response()->json(responseFormatter(DEFAULT_401), 403);
         }
 
-        return response()->json(responseFormatter(DEFAULT_404), 401);
+        if (in_array($request->medium, ['google', 'facebook']) && strcmp($request->email, $data['email']) !== 0) {
+            return response()->json(responseFormatter(DEFAULT_404), 401);
+        }
+
+        $user = $this->customerService->findOneBy(criteria: ['email' => $data['email'], 'user_type' => CUSTOMER]);
+
+        if (!$user) {
+            $name = array_values(array_filter(explode(' ', trim($data['name'] ?? ''))));
+            return response()->json(responseFormatter(AUTH_LOGIN_406, content: [
+                'medium' => $request->medium,
+                'email' => $data['email'],
+                'first_name' => $name[0] ?? '',
+                'last_name' => count($name) > 1 ? end($name) : '',
+                'refresh_token' => $data['refresh_token'] ?? null,
+            ]), 406);
+        }
+
+        if (!$user->is_active) {
+            return response()->json(responseFormatter(DEFAULT_USER_DISABLED_401), 403);
+        }
+
+        if ($request->medium == 'apple' && ($data['refresh_token'] ?? null)) {
+            $this->authService->updateLoginUser($user->id, ['social_refresh_token' => $data['refresh_token']]);
+        }
+
+        $verification = businessConfig('customer_verification', BUSINESS_INFORMATION)?->value ?? 0;
+        if ($verification && !$user->phone_verified_at && isOtpEnabled()) {
+            $this->authService->sendOtpToClient($user);
+            return response()->json(responseFormatter(DEFAULT_SENT_OTP_200, content: [
+                'is_phone_verified' => is_null($user->phone_verified_at) ? 0 : 1,
+                'verification_url' => '/api/customer/auth/otp-login',
+                'phone' => $user->phone,
+            ]), 202);
+        }
+
+        return response()->json(responseFormatter(AUTH_LOGIN_200, $this->authenticate($user, CUSTOMER_PANEL_ACCESS)));
+    }
+
+    public function registrationFromSocial(RegistrationFromSocialStoreRequest $request): JsonResponse
+    {
+        if (array_key_exists('referral_code', $request->all()) && $request->referral_code) {
+            $referralUser = $this->customerService->findOneBy(criteria: ['ref_code' => $request->referral_code, 'user_type' => CUSTOMER]);
+            if (!$referralUser) {
+                return response()->json(responseFormatter(REFERRAL_CODE_NOT_MATCH_403), 403);
+            }
+        }
+
+        $firstLevel = $this->customerLevelService->findOneBy(['user_type' => CUSTOMER, 'sequence' => 1]);
+        if (!$firstLevel) {
+            return response()->json(responseFormatter(LEVEL_403), 403);
+        }
+
+        $this->validateAdditionalRegistrationData($request, 'customer');
+
+        $user = $this->customerService->createAfterSocialMatch($request->all());
+        $this->storeAdditionalRegistrationData($user, $request, 'customer');
+
+        if (array_key_exists('referral_code', $request->all()) && $request->referral_code && $referralUser && $user) {
+            $this->referralCustomerService->createReferralEarning($user, $referralUser);
+        }
+
+        $verification = businessConfig('customer_verification', BUSINESS_INFORMATION)?->value ?? 0;
+        if ($verification && isOtpEnabled()) {
+            $this->authService->sendOtpToClient($user);
+            return response()->json(responseFormatter(DEFAULT_SENT_OTP_200, content: [
+                'is_phone_verified' => is_null($user->phone_verified_at) ? 0 : 1,
+                'verification_url' => '/api/customer/auth/otp-login'
+            ]), 202);
+        }
+
+        return response()->json(responseFormatter(AUTH_LOGIN_200, $this->authenticate($user, CUSTOMER_PANEL_ACCESS)));
     }
 
     public function otpLogin(Request $request): JsonResponse

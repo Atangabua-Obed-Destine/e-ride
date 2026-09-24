@@ -11,7 +11,6 @@ use Illuminate\Pagination\LengthAwarePaginator;
 use Illuminate\View\View;
 use Modules\TransactionManagement\Service\Interfaces\TransactionServiceInterface;
 use Modules\TransactionManagement\Traits\TransactionTrait;
-use Modules\UserManagement\Enums\SuspendReasonEnum;
 use Modules\UserManagement\Service\Interfaces\DriverDetailServiceInterface;
 use Modules\UserManagement\Service\Interfaces\DriverServiceInterface;
 
@@ -56,7 +55,9 @@ class CashCollectController extends BaseController
         ]);
 
         $driver = $this->driverService->findOne(id: $id, relations: ['userAccount', 'driverDetails']);
-        if ($request->amount > ($driver?->userAccount?->payable_balance - $driver?->userAccount?->receivable_balance)) {
+        $points = (int)getSession('currency_decimal_point') ?? 0;
+        $collectableBalance = round($driver?->userAccount?->payable_balance - $driver?->userAccount?->receivable_balance, $points);
+        if ($request->amount > $collectableBalance) {
 
             Toastr::error(AMOUNT_400['message']);
             return back();
@@ -68,14 +69,7 @@ class CashCollectController extends BaseController
             $this->collectCashWithAdjustTransaction($driver, $request->amount);
         }
 
-        $maximumCashInHandLimit = businessConfig('max_amount_to_hold_cash')?->value ?? 0;
-        $collectableAmount = $driver?->userAccount->payable_balance > $driver?->userAccount->receivable_balance ? ($driver?->userAccount->payable_balance - $driver?->userAccount->receivable_balance) : 0;
-
-
-        if ($maximumCashInHandLimit > $collectableAmount && $driver->driverDetails->is_suspended && $driver->driverDetails->suspend_reason == SuspendReasonEnum::CASH_IN_HAND_LIMIT->value)
-        {
-           $this->driverDetailService->updatedBy(criteria: ['user_id' => $driver->id], data: ['is_suspended' => 0, 'suspend_reason' => null]);
-        }
+        $this->driverDetailService->resumeIfCashInHandLimitCleared($driver);
 
         Toastr::success(DEFAULT_UPDATE_200['message']);
 

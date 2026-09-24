@@ -8,7 +8,6 @@ use Illuminate\Routing\Controller;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Validator;
 use MatanYadaev\EloquentSpatial\Objects\Point;
-use Modules\BusinessManagement\Lib\AdditionalDataFieldNormalizer;
 use Modules\BusinessManagement\Service\Interfaces\BusinessSettingServiceInterface;
 use Modules\BusinessManagement\Service\Interfaces\CancellationReasonServiceInterface;
 use Modules\BusinessManagement\Service\Interfaces\ParcelCancellationReasonServiceInterface;
@@ -72,6 +71,7 @@ class ConfigController extends Controller
         $chooseVerificationWhenToTrigger = $driverVerifyIdentity
         && in_array('at_intervals', $info->firstWhere('key_name', 'initiate_face_verification')?->value ?? [])
             ? $info->firstWhere('key_name', 'choose_verification_when_to_trigger')?->value : null;
+        $autoArrivalNotification = (bool)($info->firstWhere('key_name', 'auto_arrival_notification')?->value ?? 0);
 
         $configs = [
             'is_demo' => env('APP_MODE') != 'live',
@@ -144,6 +144,7 @@ class ConfigController extends Controller
             'sms_gateway' => (bool)$smsConfiguration,
             'chatting_setup_status' => (bool)$info->firstWhere('key_name', 'chatting_setup_status')?->value == 1,
             'driver_question_answer_status' => (bool)$info->firstWhere('key_name', 'chatting_setup_status')?->value == 1 && (bool)$info->firstWhere('key_name', 'driver_question_answer_status')?->value == 1,
+            'voice_message_status' => (bool)$info->firstWhere('key_name', 'chatting_setup_status')?->value == 1 && (bool)$info->firstWhere('key_name', 'voice_message_status')?->value == 1,
             'maximum_parcel_request_accept_limit_status_for_driver' => (bool)$info->firstWhere('key_name', 'maximum_parcel_request_accept_limit')?->value['status'] == 1,
             'maximum_parcel_request_accept_limit_for_driver' => (int)$info->firstWhere('key_name', 'maximum_parcel_request_accept_limit')?->value['limit'] ?? 0,
             'parcel_weight_unit' => businessConfig(key: 'parcel_weight_unit', settingsType: PARCEL_SETTINGS)?->value ?? 'kg',
@@ -185,6 +186,9 @@ class ConfigController extends Controller
             'is_real_time_location_sharing_enabled' => (bool) (businessConfig('enable_real_time_location_sharing', TRIP_SETTINGS)?->value ?? 0),
             'driver_additional_registration_form_fields' => AdditionalDataForm::fields(DRIVER),
             'enable_parcel_delivery_proof' => (bool) (businessConfig('enable_parcel_delivery_proof', PARCEL_SETTINGS)?->value ?? 0),
+            'auto_arrival_notification' => $autoArrivalNotification,
+            'auto_arrival_notification_time' => $autoArrivalNotification ? (int)convertTimeToSecond($info->firstWhere('key_name', 'auto_arrival_notification_time')?->value, 'minute') : null,
+            'auto_arrival_notification_message' => $autoArrivalNotification ? translate(key: $info->firstWhere('key_name', 'auto_arrival_notification_driver_message')?->value, replace: ['min' => convertTimeToSecond($info->firstWhere('key_name', 'auto_arrival_notification_time')?->value, 'minute')]) : null,
         ];
 
         return response()->json($configs);
@@ -332,7 +336,7 @@ class ConfigController extends Controller
         if ($validator->fails()) {
             return response()->json(responseFormatter(constant: DEFAULT_400, errors: errorProcessor($validator)), 403);
         }
-        $trip = $this->tripRequestService->findOne(id: $request->trip_request_id, relations: ['coordinate', 'vehicleCategory']);
+        $trip = $this->tripRequestService->findOne(id: $request->trip_request_id, relations: ['coordinate', 'vehicleCategory', 'customer']);
         if (!$trip) {
 
             return response()->json(responseFormatter(constant: TRIP_REQUEST_404, errors: errorProcessor($validator)), 403);
@@ -357,13 +361,14 @@ class ConfigController extends Controller
             ];
         }
 
-        $drivingMode = auth()->user()->vehicleCategory->category->type == 'motor_bike' ? 'TWO_WHEELER' : 'DRIVE';
+        $drivingMode = resolveDrivingMode(auth()->user()->vehicleCategory->category->type);
 
         $getRoutes = getRoutes(
             originCoordinates: $pickupCoordinates,
             destinationCoordinates: $destinationCoordinates,
             intermediateCoordinates: $intermediateCoordinates,
-        ); //["DRIVE", "TWO_WHEELER"]
+            drivingMode: $drivingMode,
+        );
 
         if ((businessConfig('enable_real_time_location_sharing', TRIP_SETTINGS)?->value ?? 0) && $trip->type == RIDE_REQUEST && $trip->current_status == ONGOING ) {
             $trip->tripNavigation()->firstOrCreate(
@@ -372,20 +377,10 @@ class ConfigController extends Controller
             );
         }
 
-        $result = [];
         foreach ($getRoutes as $route) {
-            if ($route['drive_mode'] == $drivingMode) {
-                if ($trip->current_status == 'completed' || $trip->current_status == 'cancelled') {
-                    $result['is_dropped'] = true;
-                } else {
-                    $result['is_dropped'] = false;
-                }
-                if ($trip->current_status === PENDING || $trip->current_status === ACCEPTED) {
-                    $result['is_picked'] = false;
-                } else {
-                    $result['is_picked'] = true;
-                }
-                return [array_merge($result, $route)];
+            if ($route['drive_mode'] == $drivingMode[0]) {
+                $this->tripRequestService->sendAutoArrivalNotification($trip, $route, auth()->user());
+                return [$this->tripRequestService->resolveRouteProgress($trip, $route)];
             }
         }
 

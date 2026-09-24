@@ -24,113 +24,113 @@ class EmployeeService extends BaseService implements Interfaces\EmployeeServiceI
 
     public function create(array $data): ?Model
     {
-        DB::beginTransaction();
-        $employeeData = $data;
-        $identityImages = [];
-        if (array_key_exists('identity_images', $data)) {
-            foreach ($data['identity_images'] as $image) {
-                $identityImages[] = fileUploader('employee/identity/', APPLICATION_IMAGE_FORMAT, $image);
+        return DB::transaction(function () use ($data) {
+            $employeeData = $data;
+            $identityImages = [];
+            if (array_key_exists('identity_images', $data)) {
+                foreach ($data['identity_images'] as $image) {
+                    $identityImages[] = fileUploader('employee/identity/', APPLICATION_IMAGE_FORMAT, $image);
+                }
             }
-        }
-        $employeeData = array_merge($employeeData, [
-            'identification_image' => $identityImages,
-            'is_active' => 1,
-            'user_type' => 'admin-employee',
-            'password' => bcrypt($data['password']),
-        ]);
-        if (array_key_exists('profile_image', $data)) {
-            $profileImage = fileUploader('employee/profile/', APPLICATION_IMAGE_FORMAT, $data['profile_image']);
             $employeeData = array_merge($employeeData, [
-                'profile_image' => $profileImage
+                'identification_image' => $identityImages,
+                'is_active' => 1,
+                'user_type' => 'admin-employee',
+                'password' => bcrypt($data['password']),
             ]);
-        }
+            if (array_key_exists('profile_image', $data)) {
+                $profileImage = fileUploader('employee/profile/', APPLICATION_IMAGE_FORMAT, $data['profile_image']);
+                $employeeData = array_merge($employeeData, [
+                    'profile_image' => $profileImage
+                ]);
+            }
 
-        $employee = $this->userRepository->create(data: $employeeData);
-        $address = [
-            'user_id' => $employee?->id,
-            'address' => $data['address']
-        ];
-        $this->userAddressRepository->create(data: $address);
+            $employee = $this->userRepository->create(data: $employeeData);
+            $address = [
+                'user_id' => $employee?->id,
+                'address' => $data['address']
+            ];
+            $this->userAddressRepository->create(data: $address);
 
-        $this->storeModulePermission($data['permission'], $employee, $data['role_id']);
-        DB::commit();
-        return $employee;
+            $this->storeModulePermission($data['permission'], $employee, $data['role_id']);
+
+            return $employee;
+        });
     }
 
     public function update(int|string $id, array $data = []): ?Model
     {
-        DB::beginTransaction();
-        $employee = $this->userRepository->findOneBy(criteria: ['id' => $id, 'user_type' => 'admin-employee']);
-        $employeeData = $data;
-        if (array_key_exists('existing_identity_images', $data)) {
-            $oldIdentityImages = $data['existing_identity_images'];
-            foreach ($employee?->identification_image as $id_image) {
-                if (!in_array($id_image, $oldIdentityImages)) {
-                    fileRemover('employee/identity/', $id_image);
+        return DB::transaction(function () use ($id, $data) {
+            $employee = $this->userRepository->findOneBy(criteria: ['id' => $id, 'user_type' => 'admin-employee']);
+            $employeeData = $data;
+            if (array_key_exists('existing_identity_images', $data)) {
+                $oldIdentityImages = $data['existing_identity_images'];
+                foreach ($employee?->identification_image as $id_image) {
+                    if (!in_array($id_image, $oldIdentityImages)) {
+                        fileRemover('employee/identity/', $id_image);
+                    }
                 }
             }
-        }
 
-        if (array_key_exists('identity_images', $data)) {
-            foreach ($data['identity_images'] as $image) {
-                $newIdentityImages[] = fileUploader('employee/identity/', APPLICATION_IMAGE_FORMAT, $image);
-            }
-        }
-        $identityImages = array_merge($oldIdentityImages ?? [], $newIdentityImages ?? []);
-
-
-        if (array_key_exists('other_documents', $data)) {
-            $otherDocuments = [];
-            $extension = '';
-            foreach ($data['other_documents'] as $doc) {
-                $extension = $doc->getClientOriginalExtension();
-                $otherDocuments[] = fileUploader('employee/document/', $extension, $doc, $employee?->other_documents);
-            }
-            if (!is_null($employee?->other_documents)) {
-                foreach ($employee?->other_documents as $doc) {
-                    fileRemover('employee/document/', $doc);
+            if (array_key_exists('identity_images', $data)) {
+                foreach ($data['identity_images'] as $image) {
+                    $newIdentityImages[] = fileUploader('employee/identity/', APPLICATION_IMAGE_FORMAT, $image);
                 }
             }
-        } else {
-            $otherDocuments = $employee?->other_documents;
-        }
-        if (array_key_exists('profile_image', $data)) {
-            $profileImage = fileUploader('employee/profile/', APPLICATION_IMAGE_FORMAT, $data['profile_image'], $employee?->profile_image);
-            $employeeData = array_merge($employeeData, [
-                'profile_image' => $profileImage
-            ]);
-        }
-        if (array_key_exists('password', $data) && $data['password'] != null) {
-            $password = bcrypt($data['password']);
-            $employeeData = array_merge($employeeData, [
-                'password' => $password
-            ]);
-        } else {
-            unset($employeeData['password']);
-        }
-        $employeeData = array_merge($employeeData, [
-            'identification_image' => $identityImages,
-            'other_documents' => $otherDocuments,
-            'role_id' => $data['role_id'] ?? $employee?->role_id,
-            'is_active' => $employee?->is_active ?? 1,
-        ]);
-        if ($data['permission'] ?? null) {
-            $employee?->moduleAccess()->delete();
-            $this->storeModulePermission($data['permission'], $employee, $data['role_id']);
-        }
-        $employee = $this->userRepository->update(id: $id, data: $employeeData);
-        if (array_key_exists('address', $data)) {
-            $address = $this->userAddressRepository->findOneBy(criteria: ['user_id' => $id]);
-            $addressData = [
-                'user_id' => $id,
-                'address' => $data['address']
-            ];
-            $this->userAddressRepository->update(id: $address?->id, data: $addressData);
-        }
+            $identityImages = array_merge($oldIdentityImages ?? [], $newIdentityImages ?? []);
 
-        DB::commit();
-        return $employee;
 
+            if (array_key_exists('other_documents', $data)) {
+                $otherDocuments = [];
+                $extension = '';
+                foreach ($data['other_documents'] as $doc) {
+                    $extension = $doc->getClientOriginalExtension();
+                    $otherDocuments[] = fileUploader('employee/document/', $extension, $doc, $employee?->other_documents);
+                }
+                if (!is_null($employee?->other_documents)) {
+                    foreach ($employee?->other_documents as $doc) {
+                        fileRemover('employee/document/', $doc);
+                    }
+                }
+            } else {
+                $otherDocuments = $employee?->other_documents;
+            }
+            if (array_key_exists('profile_image', $data)) {
+                $profileImage = fileUploader('employee/profile/', APPLICATION_IMAGE_FORMAT, $data['profile_image'], $employee?->profile_image);
+                $employeeData = array_merge($employeeData, [
+                    'profile_image' => $profileImage
+                ]);
+            }
+            if (array_key_exists('password', $data) && $data['password'] != null) {
+                $password = bcrypt($data['password']);
+                $employeeData = array_merge($employeeData, [
+                    'password' => $password
+                ]);
+            } else {
+                unset($employeeData['password']);
+            }
+            $employeeData = array_merge($employeeData, [
+                'identification_image' => $identityImages,
+                'other_documents' => $otherDocuments,
+                'role_id' => $data['role_id'] ?? $employee?->role_id,
+                'is_active' => $employee?->is_active ?? 1,
+            ]);
+            if ($data['permission'] ?? null) {
+                $employee?->moduleAccess()->delete();
+                $this->storeModulePermission($data['permission'], $employee, $data['role_id']);
+            }
+            $employee = $this->userRepository->update(id: $id, data: $employeeData);
+            if (array_key_exists('address', $data)) {
+                $address = $this->userAddressRepository->findOneBy(criteria: ['user_id' => $id]);
+                $addressData = [
+                    'user_id' => $id,
+                    'address' => $data['address']
+                ];
+                $this->userAddressRepository->update(id: $address?->id, data: $addressData);
+            }
+
+            return $employee;
+        });
     }
 
     private function storeModulePermission($permissions, $employee, $role_id)

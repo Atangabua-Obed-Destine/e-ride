@@ -646,6 +646,7 @@ class TripRequestController extends Controller
                     $driver->lastLocations->latitude,
                     $driver->lastLocations->longitude
                 ],
+                drivingMode: resolveDrivingMode($trip?->vehicleCategory?->type)
             );
             if (array_key_exists('error', $driver_arrival_time)) {
                 return response()->json(responseFormatter(ROUTE_NOT_FOUND_404), 403);
@@ -676,6 +677,7 @@ class TripRequestController extends Controller
                 notification_type: 'trip',
                 action: $push['action'],
                 user_id: $driver->id);
+            $this->tripRequestService->sendDriverIdentityVerificationPush($trip);
         } else {
             if (get_cache('bid_on_fare') ?? 0) {
                 $all_bidding = $this->fareBiddingService->getBy(criteria: ['trip_request_id' => $request['trip_request_id']]);
@@ -721,8 +723,12 @@ class TripRequestController extends Controller
 
     public function rideStatusUpdate($trip_request_id, Request $request): JsonResponse
     {
+        $this->tripRequestService->normalizeBracketedInput($request, 'identity_mismatch_reason');
+
         $validator = Validator::make($request->all(), [
             'status' => 'required',
+            'identity_mismatch_reason' => 'sometimes|array',
+            'identity_mismatch_reason.*' => 'in:' . implode(',', array_keys(IDENTITY_MISMATCH_REASONS)),
         ]);
 
         if ($validator->fails()) {
@@ -746,9 +752,12 @@ class TripRequestController extends Controller
             return response()->json(responseFormatter(constant: $response), 403);
         }
 
+        $identityMismatch = $this->tripRequestService->resolveIdentityMismatch($trip, $request->status, $request['identity_mismatch_reason'] ?? null);
+
         $attributes = [
             'trip_status' => $request['status'],
-            'trip_cancellation_reason' => $request['cancel_reason'] ?? null
+            'trip_cancellation_reason' => $identityMismatch['cancel_reason'] ?? $request['cancel_reason'] ?? null,
+            'is_identity_mismatched' => $identityMismatch['is_identity_mismatched'] ? 1 : 0,
         ];
 
         $parcelReturnTimeFeeStatus = businessConfig('parcel_return_time_fee_status', PARCEL_SETTINGS)?->value ?? false;
@@ -847,7 +856,7 @@ class TripRequestController extends Controller
                 $attributes['fee']['cancelled_by'] = 'customer';
             }
             $attributes['coordinate']['drop_coordinates'] = new Point($trip->driver->lastLocations->latitude, $trip->driver->lastLocations->longitude);
-            $drivingMode = $trip?->vehicleCategory?->type === 'motor_bike' ? 'TWO_WHEELER' : 'DRIVE';
+            $drivingMode = resolveDrivingMode($trip?->vehicleCategory?->type);
             $intermediate_coordinate = [];
             if ($trip->coordinate->is_reached_1) {
                 if ($trip->coordinate->is_reached_2) {
@@ -864,7 +873,7 @@ class TripRequestController extends Controller
             $getRoutes = getRoutes([
                 $trip->coordinate->pickup_coordinates->latitude,
                 $trip->coordinate->pickup_coordinates->longitude
-            ], [$trip->driver->lastLocations->latitude, $trip->driver->lastLocations->longitude], $intermediate_coordinate, [$drivingMode]);
+            ], [$trip->driver->lastLocations->latitude, $trip->driver->lastLocations->longitude], $intermediate_coordinate, $drivingMode);
             if (array_key_exists('error', $getRoutes)) {
                 return response()->json(responseFormatter(constant: [ 'response_code' => 'drop_off_location_not_found_404',
                     'message' => translate('Drop off location not found')]), 403);
@@ -909,6 +918,9 @@ class TripRequestController extends Controller
         try
         {
             DB::beginTransaction();
+            if ($attributes['fee'] ?? null) {
+                $trip->fee()->update($attributes['fee']);
+            }
             if ($attributes['trip_status'] ?? null) {
                 $this->tripRequestService->update(id: $trip->id, data: ['current_status' => $attributes['trip_status']]);
                 $trip->tripStatus()->update([$attributes['trip_status'] => now()]);
@@ -918,6 +930,9 @@ class TripRequestController extends Controller
             }
             if ($attributes['trip_cancellation_reason'] ?? null) {
                 $this->tripRequestService->update(id: $trip->id, data: ['trip_cancellation_reason' => $attributes['trip_cancellation_reason']]);
+            }
+            if ($attributes['is_identity_mismatched'] ?? null) {
+                $this->tripRequestService->update(id: $trip->id, data: ['is_identity_mismatched' => 1]);
             }
             if ($attributes['driver_id'] ?? null) {
                 $this->tripRequestService->update(id: $trip->id, data: ['driver_id' => null]);
@@ -929,9 +944,6 @@ class TripRequestController extends Controller
                         'drop_coordinates' => $attributes['coordinate']['drop_coordinates'],
                     ]);
                 }
-            }
-            if ($attributes['fee'] ?? null) {
-                $trip->fee()->update($attributes['fee']);
             }
             if (($request->status == 'cancelled' || $request->status == 'completed') && $trip->driver_id && $trip->current_status == ONGOING) {
                 $this->customerLevelUpdateChecker(auth()->user());
@@ -976,6 +988,9 @@ class TripRequestController extends Controller
             return $response()->json(responseFormatter(constant: DEFAULT_FAIL_200), 403);
         }
 
+        if ($attributes['is_identity_mismatched'] ?? null) {
+            $this->tripRequestService->sendIdentityMismatchCancellationPush($trip, $request['identity_mismatch_reason'] ?? []);
+        }
 
         return response()->json(responseFormatter(DEFAULT_UPDATE_200, TripRequestResource::make($trip)));
     }

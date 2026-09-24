@@ -32,8 +32,9 @@ class LoginSettingsController extends BaseController
        $isOtpEnabled = isOtpEnabled();
         $isDriverVerificationEnabled = businessConfig(key: 'driver_verification', settingsType: BUSINESS_INFORMATION)?->value;
         $isCustomerVerificationEnabled = businessConfig(key: 'customer_verification', settingsType: BUSINESS_INFORMATION)?->value;
+        $appleLoginStatus = businessConfig(key: 'apple_login', settingsType: SOCIAL_LOGIN)?->value['status'] ?? 0;
 
-        return view('businessmanagement::admin.configuration.login', compact('isOtpEnabled', 'isDriverVerificationEnabled', 'isCustomerVerificationEnabled'));
+        return view('businessmanagement::admin.configuration.login', compact('isOtpEnabled', 'isDriverVerificationEnabled', 'isCustomerVerificationEnabled', 'appleLoginStatus'));
     }
 
     public function store(LoginSettingsStoreOrUpdateRequest $request) {

@@ -5,7 +5,6 @@
 @push('css_or_js')
     @php($map_key = businessConfig(GOOGLE_MAP_API)?->value['map_api_key'] ?? null)
     <script src="https://maps.googleapis.com/maps/api/js?key={{$map_key}}&libraries=places"></script>
-    <script src="{{dynamicAsset('public/assets/admin-module/js/maps/markerclusterer.js')}}"></script>
 @endpush
 
 @section('content')
@@ -232,9 +231,10 @@
             let bounds = new google.maps.LatLngBounds();
             let map = "";
             let polygons = [];
-            let markerCluster = null;
             let activeInfoWindow = null;
             let markers = [];
+            let allPoints = [];
+            let renderedMarkers = new Map();
             let activeData = null
 
             function initMap(
@@ -346,6 +346,7 @@
                     map.fitBounds(bounds);
                 });
 
+                map.addListener("idle", renderClusters);
                 updateMarkers(markersData);
 
             }
@@ -370,23 +371,6 @@
                 fetchSingleModelUpdate();
                 localStorage.removeItem('safetyAlertUserDetailsStatus');
                 localStorage.removeItem('safetyAlertUserIdFromTrip');
-            }
-
-            function animateMarker(marker, startLatLng, endLatLng, duration = 14980) {
-                const startTime = performance.now();
-
-                function moveMarker(timestamp) {
-                    const elapsed = timestamp - startTime;
-                    const progress = Math.min(elapsed / duration, 1);
-
-                    const lat = startLatLng.lat + (endLatLng.lat - startLatLng.lat) * progress;
-                    const lng = startLatLng.lng + (endLatLng.lng - startLatLng.lng) * progress;
-                    marker.setPosition(new google.maps.LatLng(lat, lng));
-
-                    if (progress < 1) requestAnimationFrame(moveMarker);
-                }
-
-                requestAnimationFrame(moveMarker);
             }
 
             function openInfoWindowForMarker(marker, data) {
@@ -414,80 +398,152 @@
                 singleViewZoom(data.position);
             }
 
+            const CLUSTER_CELL_PX = 55;
+            const RENDER_ALL_THRESHOLD = 200;
+
             function updateMarkers(markerData, openMarkers = false) {
-                const updatedMarkersMap = new Map();
-                const newMarkers = [];
+                allPoints = Array.isArray(markerData) ? markerData : [];
+                renderClusters();
+            }
 
-                markerData.forEach(data => {
-                    const existingMarker = markers.find(marker => marker.id === data.id);
-
-                    if (existingMarker) {
-                        const oldPosition = existingMarker.getPosition();
-                        const newPosition = new google.maps.LatLng(data.position.lat, data.position.lng);
-
-                        if (!oldPosition.equals(newPosition)) {
-                            animateMarker(existingMarker, {
-                                lat: oldPosition.lat(),
-                                lng: oldPosition.lng()
-                            }, data.position);
-                        }
-                        if (existingMarker.getIcon() !== data.icon) {
-                            existingMarker.setIcon(data.icon);
-                        }
-                        if (currentlyOpenMarkerId === data.id) {
-                            openInfoWindowForMarker(existingMarker, data);
-                        }
-                        updatedMarkersMap.set(data.id, existingMarker);
-                    } else {
-                        const marker = new google.maps.Marker({
-                            id: data.id,
-                            position: data.position,
-                            title: data.title,
-                            icon: data.icon,
-                        });
-
-                        marker.addListener('click', () => openInfoWindowForMarker(marker, data));
-                        marker.setMap(map);
-                        newMarkers.push(marker);
-                        updatedMarkersMap.set(data.id, marker);
-                    }
-                });
-
-                markers.forEach(marker => {
-                    if (!updatedMarkersMap.has(marker.id)) {
-                        if (markerCluster) markerCluster.removeMarker(marker);
-                        marker.setMap(null);
-                    }
-                });
-
-                markers = Array.from(updatedMarkersMap.values());
-                if (markerCluster) {
-                    markerCluster.addMarkers(newMarkers);
+            function upsertPointMarker(data, nextKeys, nextMarkers) {
+                const key = 'p:' + data.id;
+                nextKeys.add(key);
+                let marker = renderedMarkers.get(key);
+                if (marker && marker.__isCluster) {
+                    marker.setMap(null);
+                    renderedMarkers.delete(key);
+                    marker = null;
+                }
+                if (!marker) {
+                    marker = new google.maps.Marker({
+                        position: data.position,
+                        title: data.title,
+                        icon: data.icon,
+                    });
+                    marker.id = data.id;
+                    marker.__data = data;
+                    marker.addListener('click', () => openInfoWindowForMarker(marker, marker.__data));
+                    marker.setMap(map);
+                    renderedMarkers.set(key, marker);
                 } else {
-                    markerCluster = new markerClusterer.MarkerClusterer({map: map, markers});
+                    marker.__data = data;
+                    if (marker.getIcon() !== data.icon) marker.setIcon(data.icon);
+                    const cur = marker.getPosition();
+                    if (!cur || cur.lat() !== data.position.lat || cur.lng() !== data.position.lng) {
+                        marker.setPosition(data.position);
+                    }
+                    if (currentlyOpenMarkerId === data.id) openInfoWindowForMarker(marker, data);
+                }
+                nextMarkers.push(marker);
+            }
+
+            function upsertClusterMarker(cellKey, center, count, nextKeys, cell) {
+                const key = 'c:' + cellKey;
+                nextKeys.add(key);
+                let marker = renderedMarkers.get(key);
+                if (marker && !marker.__isCluster) {
+                    marker.setMap(null);
+                    renderedMarkers.delete(key);
+                    marker = null;
+                }
+                if (!marker) {
+                    marker = new google.maps.Marker({position: center});
+                    marker.__isCluster = true;
+                    marker.addListener('click', () => {
+                        google.maps.event.addListenerOnce(map, 'idle', () => {
+                            if (map.getZoom() > 21) map.setZoom(21);
+                        });
+                        map.fitBounds(marker.__clusterBounds, 100);
+                    });
+                    marker.setMap(map);
+                    renderedMarkers.set(key, marker);
+                } else {
+                    marker.setPosition(center);
+                }
+                marker.__clusterBounds = new google.maps.LatLngBounds(
+                    {lat: cell.mnLat, lng: cell.mnLng},
+                    {lat: cell.mxLat, lng: cell.mxLng}
+                );
+                marker.setIcon({
+                    path: google.maps.SymbolPath.CIRCLE,
+                    scale: 12 + Math.min(count, 500) / 12,
+                    fillColor: '#1e88e5',
+                    fillOpacity: 0.9,
+                    strokeColor: '#ffffff',
+                    strokeWeight: 2,
+                });
+                marker.setLabel({text: String(count), color: '#ffffff', fontSize: '12px', fontWeight: 'bold'});
+            }
+
+            function renderClusters() {
+                if (!map || typeof map.getProjection !== 'function') return;
+                const projection = map.getProjection();
+                const mapBounds = map.getBounds();
+                if (!projection || !mapBounds) return;
+
+                const scale = Math.pow(2, map.getZoom());
+                const nextKeys = new Set();
+                const nextMarkers = [];
+
+                const useViewport = allPoints.length > RENDER_ALL_THRESHOLD;
+                const cells = new Map();
+                allPoints.forEach(p => {
+                    const pos = p.position;
+                    if (!pos || (pos.lat === 0 && pos.lng === 0)) return;
+                    const ll = new google.maps.LatLng(pos.lat, pos.lng);
+                    if (useViewport && !mapBounds.contains(ll)) return;
+                    const world = projection.fromLatLngToPoint(ll);
+                    const cx = Math.floor(world.x * scale / CLUSTER_CELL_PX);
+                    const cy = Math.floor(world.y * scale / CLUSTER_CELL_PX);
+                    const k = cx + '_' + cy;
+                    let cell = cells.get(k);
+                    if (!cell) {
+                        cell = {pts: [], sLat: 0, sLng: 0, mnLat: pos.lat, mxLat: pos.lat, mnLng: pos.lng, mxLng: pos.lng};
+                        cells.set(k, cell);
+                    }
+                    cell.pts.push(p);
+                    cell.sLat += pos.lat;
+                    cell.sLng += pos.lng;
+                    if (pos.lat < cell.mnLat) cell.mnLat = pos.lat;
+                    if (pos.lat > cell.mxLat) cell.mxLat = pos.lat;
+                    if (pos.lng < cell.mnLng) cell.mnLng = pos.lng;
+                    if (pos.lng > cell.mxLng) cell.mxLng = pos.lng;
+                });
+                cells.forEach((cell, k) => {
+                    if (cell.pts.length === 1) {
+                        upsertPointMarker(cell.pts[0], nextKeys, nextMarkers);
+                    } else {
+                        upsertClusterMarker(k, {lat: cell.sLat / cell.pts.length, lng: cell.sLng / cell.pts.length}, cell.pts.length, nextKeys, cell);
+                    }
+                });
+
+                renderedMarkers.forEach((marker, key) => {
+                    if (!nextKeys.has(key)) {
+                        marker.setMap(null);
+                        renderedMarkers.delete(key);
+                    }
+                });
+                markers = nextMarkers;
+
+                if (currentlyOpenMarkerId && !markers.find(m => m.id === currentlyOpenMarkerId) && currentlyOpenInfoWindow) {
+                    currentlyOpenInfoWindow.close();
+                    currentlyOpenInfoWindow = null;
+                    currentlyOpenMarkerId = null;
                 }
             }
 
             function fetchModelUpdate() {
+                if (document.hidden) return;
                 const requestData = getRequestData();
                 $.get({
                     url: "{{ route('admin.fleet-map-view-using-ajax') }}",
                     dataType: "json",
                     data: requestData,
+                    timeout: 12000,
                     success: function (response) {
-                        if (response) {
-                            const listUrl = getListUrl();
-                            $.get({
-                                url: listUrl,
-                                dataType: "json",
-                                data: requestData,
-                                success: function (userListResponse) {
-                                    $(".zone-list").empty().html(userListResponse);
-                                    updateMarkers(JSON.parse(response.markers), false);
-                                    userZoneList();
-                                },
-                                error: showError('{{ translate('failed_to_load_list') }}')
-                            });
+                        if (response && !$("#userId").val()) {
+                            updateMarkers(JSON.parse(response.markers), false);
                         }
                     },
                     error: showError('{{ translate('failed_to_load_data') }}')
@@ -495,6 +551,7 @@
             }
 
             function fetchSingleModelUpdate() {
+                if (document.hidden) return;
                 if (typeof safetyAlertUserId !== 'undefined' && safetyAlertUserId && $("#userId").val() == '') {
                     $("#userId").val(safetyAlertUserId);
                 }
@@ -504,6 +561,7 @@
                     url,
                     dataType: "json",
                     data: {zone_id: "{{ request('zone_id') }}"},
+                    timeout: 12000,
                     success: function (response) {
                         const markerData = JSON.parse(response.markers);
                         updateMarkers(markerData, true);
@@ -523,10 +581,10 @@
             function manageIntervals() {
                 if ($("#userId").val()) {
                     clearInterval(doubleInterval);
-                    if (!singleInterval) singleInterval = setInterval(fetchSingleModelUpdate, 15000);
+                    if (!singleInterval) singleInterval = setInterval(fetchSingleModelUpdate, 60000);
                 } else {
                     clearInterval(singleInterval);
-                    if (!doubleInterval) doubleInterval = setInterval(fetchModelUpdate, 15000);
+                    if (!doubleInterval) doubleInterval = setInterval(fetchModelUpdate, 60000);
                 }
             }
 
@@ -536,13 +594,6 @@
                     type: "{{ $type }}",
                     search: "{{ request('search') }}"
                 };
-            }
-
-            function getListUrl() {
-                return @json($type) ===
-                'all-customer'
-                    ? "{{ route('admin.fleet-map-customer-list', $type) }}"
-                    : "{{ route('admin.fleet-map-driver-list', $type) }}";
             }
 
             function getSingleViewUrl(id) {
@@ -581,12 +632,12 @@
             }
 
             function userZoneList() {
-                $('.zone-list').find('.user-details').on('click', 'label', function (e) {
+                $('.zone-list').off('click.fleetUser').on('click.fleetUser', '.user-details label', function (e) {
                     const id = $(this).data('id');
                     $("#userId").val(id);
                     fetchSingleModelUpdate();
                     if (singleInterval) clearInterval(singleInterval);
-                    singleInterval = setInterval(fetchSingleModelUpdate, 15000);
+                    singleInterval = setInterval(fetchSingleModelUpdate, 60000);
 
                     isSingleView = false;
                     clearInterval(doubleInterval);
@@ -600,6 +651,7 @@
                 $.get({
                     url,
                     dataType: 'json',
+                    timeout: 12000,
                     success: function (response) {
                         $('#zone-tab-content').hide();
                         $('#userDetails').show().empty().html(response);
@@ -651,7 +703,7 @@
                 $("#userId").val("");
                 clearInterval(singleInterval);
                 fetchModelUpdate();
-                doubleInterval = setInterval(fetchModelUpdate, 15000);
+                doubleInterval = setInterval(fetchModelUpdate, 60000);
                 map.fitBounds(bounds);
                 if (infoWindow) infoWindow.close();
                 resetView();
@@ -660,6 +712,16 @@
             manageIntervals();
             userZoneList();
             resetView();
+
+            document.addEventListener('visibilitychange', function () {
+                if (!document.hidden) {
+                    if ($("#userId").val()) {
+                        fetchSingleModelUpdate();
+                    } else {
+                        fetchModelUpdate();
+                    }
+                }
+            });
 
             $(".map-container").each(function () {
                 const map = $(this).find(".map");

@@ -9,6 +9,7 @@ Route::controller(\Modules\AuthManagement\Http\Controllers\Api\AuthController::c
             Route::post('registration-from-otp', 'registrationFromOtp');
             Route::post('login', 'login')->name('customer-login');
             Route::post('social-login', 'customerSocialLogin');
+            Route::post('registration-from-social', 'registrationFromSocial');
             Route::post('update-data', 'updateData');
             //login
             Route::post('otp-login', 'otpLogin');
