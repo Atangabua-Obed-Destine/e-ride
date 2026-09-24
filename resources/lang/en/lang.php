@@ -4736,4 +4736,5 @@
   '3rd Party APIs' => '3rd Party APIs',
   'Landing Page' => 'Landing Page',
   'zone_not_found' => 'Zone not found',
+  'Fragile' => 'Fragile',
 );
