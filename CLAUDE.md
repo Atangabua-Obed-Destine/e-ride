@@ -2,7 +2,7 @@
 
 ## What this is
 
-The single backend for the E-Ride ride-hailing + parcel-delivery platform (DriveMond-family, v3.2).
+The single backend for the E-Ride ride-hailing + parcel-delivery platform (DriveMond-family, v3.3).
 It serves three clients:
 
 - **Admin panel** — server-rendered Blade at `http://localhost/e-ride/admin`
