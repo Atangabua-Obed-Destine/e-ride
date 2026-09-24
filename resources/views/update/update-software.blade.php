@@ -14,7 +14,7 @@
                                 {{ translate("Important Notice: We've upgraded the Firebase push notification system to a new and improved version as the old one will be phased out by June 2024.
                                     Make sure your system is up-to-date to keep getting all the notification seamlessly please do check the Notification settings in the Admin panel.
                                     Thanks for staying connected!.")  }}
-                                <a class="alert-link" target="_blank" href="https://e-ride.app/documentation/admin-panel-setup/admin-mandatory-setup/#firebase-configuration">{{ translate('kindly follow the documentation') }}</a>
+                                {{ translate("For assistance, contact") }} I-NNOVA: <a class="alert-link" href="tel:+237671008494">671 008 494</a>
                             </div>
                         @endif
                     </div>
@@ -32,7 +32,7 @@
                                                 <span class="cursor-pointer" data-bs-toggle="tooltip"
                                                       data-bs-placement="top" data-bs-custom-class="custom-tooltip"
                                                       data-bs-html="true"
-                                                      data-bs-title="The username of your account">
+                                                      data-bs-title="The username provided with your I-NNOVA license">
                                                       <img src="{{dynamicAsset('public/assets/installation/assets/img/svg-icons/info2.svg')}}" class="svg" alt="">
                                                 </span>
                                             </label>
@@ -43,7 +43,7 @@
                                     </div>
                                     <div class="col-md-6">
                                         <div class="from-group">
-                                            <label for="purchase_key" class="mb-2">Purchase Code</label>
+                                            <label for="purchase_key" class="mb-2">License Code</label>
                                             <input type="text" id="purchase_key" class="form-control" name="purchase_key"
                                                    value="{{env('PURCHASE_CODE')}}"
                                                    placeholder="Ex: 19xxxxxx-ca5c-49c2-83f6-696a738b0000" required>

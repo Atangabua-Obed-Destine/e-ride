@@ -5,10 +5,10 @@
     <meta charset="UTF-8">
     <meta http-equiv="X-UA-Compatible" content="IE=edge">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>@yield('title')</title>
+    <title>@yield('title') | I-NNOVA</title>
 
     <!-- Favicon -->
-    <link rel="shortcut icon" href="{{dynamicAsset('public/assets/installation/assets/img/favicon.png')}}">
+    <link rel="icon" type="image/svg+xml" href="{{dynamicAsset('public/assets/installation/assets/img/favicon.svg')}}">
 
     <!-- Web Fonts -->
     <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -27,7 +27,7 @@
 
     <!-- Logo -->
     <div class="logo">
-        <img src="{{dynamicAsset('public/assets/installation')}}/assets/img/favicon.svg" alt="">
+        <img src="{{dynamicAsset('public/assets/installation')}}/assets/img/favicon.svg" alt="I-NNOVA">
     </div>
 
     <div class="custom-container">
@@ -37,9 +37,12 @@
         <footer class="footer py-3 mt-4">
             <div class="d-flex flex-column flex-sm-row justify-content-between gap-2 align-items-center">
                 <div class="footer-logo">
-                    <img src="{{dynamicAsset('public/assets/installation')}}/assets/img/logo.svg" width="150" alt="">
+                    <img src="{{dynamicAsset('public/assets/installation')}}/assets/img/logo.svg" width="150" alt="I-NNOVA">
                 </div>
-                <p class="copyright-text mb-0">© {{date("Y")}} | {{translate('All Rights Reserved')}}</p>
+                <p class="mb-0 text-white">{{translate('Need help')}}? {{translate('Contact')}} I-NNOVA:
+                    <a href="tel:+237671008494" class="text-white fw-semibold text-decoration-none">671 008 494</a>
+                </p>
+                <p class="copyright-text mb-0">© {{date("Y")}} I-NNOVA | {{translate('All Rights Reserved')}}</p>
             </div>
         </footer>
     </div>

@@ -6,7 +6,7 @@
 
     <!-- Progress -->
     <div class="pb-2">
-        <div class="progress cursor-pointer" role="progressbar" aria-label="E-Ride Software Installation"
+        <div class="progress cursor-pointer" role="progressbar" aria-label="I-NNOVA Software Installation"
              aria-valuenow="40" aria-valuemin="0" aria-valuemax="100" data-bs-toggle="tooltip"
              data-bs-placement="top" data-bs-custom-class="custom-progress-tooltip" data-bs-title="Second Step!"
              data-bs-delay='{"hide":1000}'>
@@ -23,9 +23,9 @@
 
             <div class="d-flex align-items-center column-gap-3 flex-wrap">
                 <h5 class="fw-bold fs text-uppercase">Step 2. </h5>
-                <h5 class="fw-normal">{{translate('Update Purchase Information')}}</h5>
+                <h5 class="fw-normal">I-NNOVA {{translate('License Information')}}</h5>
             </div>
-            <p class="mb-4">{{translate('Provide your')}} <strong>{{translate('username')}} </strong> {{translate('& the purchase code')}} </p>
+            <p class="mb-4">{{translate('Provide your')}} <strong>{{translate('username')}} </strong> {{translate('& the license code')}} </p>
 
             <form method="POST" action="{{ route('purchase.code',['token'=>bcrypt('step_3')]) }}">
                 @csrf
@@ -40,7 +40,7 @@
                                         <span class="cursor-pointer" data-bs-toggle="tooltip"
                                               data-bs-placement="top" data-bs-custom-class="custom-tooltip"
                                               data-bs-html="true"
-                                              data-bs-title="The username of your codecanyon account">
+                                              data-bs-title="The username provided with your I-NNOVA license">
                                                     <img
                                                         src="{{dynamicAsset('public/assets/installation/assets/img/svg-icons/info2.svg')}}"
                                                         class="svg" alt="">
@@ -52,7 +52,7 @@
                             </div>
                             <div class="col-md-6">
                                 <div class="from-group">
-                                    <label for="purchase_key" class="mb-2">{{translate('Purchase Code')}}</label>
+                                    <label for="purchase_key" class="mb-2">{{translate('License Code')}}</label>
                                     <input type="text" id="purchase_key" class="form-control" name="purchase_key"
                                            placeholder="Ex: 19xxxxxx-ca5c-49c2-83f6-696a738b0000" required>
                                 </div>
