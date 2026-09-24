@@ -82,7 +82,10 @@ class WithdrawController extends Controller
         }
         $user = auth('api')->user();
         $account = $user->userAccount;
-        if (($account?->receivable_balance - $account?->payable_balance) < $request->amount) {
+        $points = (int)getSession('currency_decimal_point') ?? 0;
+        $balance = round($account?->receivable_balance - $account?->payable_balance, $points);
+
+        if ($balance < $request->amount) {
             return response()->json(responseFormatter(INSUFFICIENT_FUND_403), 403);
         }
 

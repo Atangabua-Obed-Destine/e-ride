@@ -18,10 +18,12 @@ use Illuminate\View\View;
 use Modules\AdminModule\Service\Interfaces\ActivityLogServiceInterface;
 use Modules\TransactionManagement\Service\Interfaces\TransactionServiceInterface;
 use Modules\UserManagement\Entities\User;
-use Modules\UserManagement\Enums\SuspendReasonEnum;
+use Modules\UserManagement\Http\Requests\DriverAvailabilityScheduleRequest;
+use Modules\UserManagement\Http\Requests\DriverSameTimeForEveryDayRequest;
+use Modules\UserManagement\Http\Requests\DriverStatusUpdateRequest;
 use Modules\UserManagement\Http\Requests\DriverStoreOrUpdateRequest;
 use Modules\UserManagement\Lib\AdditionalDataForm;
-use Modules\UserManagement\Service\Interfaces\AppNotificationServiceInterface;
+use Modules\UserManagement\Service\Interfaces\DriverAvailabilityScheduleServiceInterface;
 use Modules\UserManagement\Service\Interfaces\DriverDetailServiceInterface;
 use Modules\UserManagement\Service\Interfaces\DriverLevelServiceInterface;
 use Modules\UserManagement\Service\Interfaces\DriverServiceInterface;
@@ -34,34 +36,35 @@ class DriverController extends BaseController
 
     protected $driverService;
     protected $driverLevelService;
-    protected $appNotificationService;
     protected $transactionService;
     protected $activityLogService;
     protected $driverDetailService;
+    protected $driverAvailabilityScheduleService;
 
     public function __construct(
         DriverServiceInterface          $driverService,
         DriverLevelServiceInterface     $driverLevelService,
-        AppNotificationServiceInterface $appNotificationService,
         TransactionServiceInterface     $transactionService,
         ActivityLogServiceInterface $activityLogService,
-        DriverDetailServiceInterface $driverDetailService
+        DriverDetailServiceInterface $driverDetailService,
+        DriverAvailabilityScheduleServiceInterface $driverAvailabilityScheduleService
     )
     {
         parent::__construct($driverService);
         $this->driverService = $driverService;
         $this->driverLevelService = $driverLevelService;
-        $this->appNotificationService = $appNotificationService;
         $this->transactionService = $transactionService;
         $this->activityLogService = $activityLogService;
         $this->driverDetailService = $driverDetailService;
+        $this->driverAvailabilityScheduleService = $driverAvailabilityScheduleService;
     }
 
     public function index(?Request $request, string $type = null): View|Collection|LengthAwarePaginator|null|callable|RedirectResponse
     {
         $this->authorize('user_view');
-        $drivers = $this->driverService->index(criteria: $request?->all(), relations: ['level', 'driverTrips', 'driverTripsStatus', 'lastLocations.zone'], orderBy: ['created_at' => 'desc'], limit: paginationLimit(), offset: $request['page'] ?? 1);
-        return view('usermanagement::admin.driver.index', compact('drivers'));
+        $drivers = $this->driverService->index(criteria: $request?->all(), relations: ['level', 'driverTrips', 'driverTripsStatus', 'lastLocations.zone', 'driverDetails'], orderBy: ['created_at' => 'desc'], limit: paginationLimit(), offset: $request['page'] ?? 1);
+        $statusCounts = $this->driverService->getStatusCounts();
+        return view('usermanagement::admin.driver.index', compact('drivers', 'statusCounts'));
     }
 
     public function create(): Renderable
@@ -160,32 +163,36 @@ class DriverController extends BaseController
         return back();
     }
 
-    public function updateStatus(Request $request): JsonResponse
+    public function updateStatus(DriverStatusUpdateRequest $request): RedirectResponse
     {
         $this->authorize('user_edit');
-        $driver = $this->driverService->statusChange(id: $request->id, data: $request->all());
-        $sentTime = pushSentTime($driver->updated_at);
-        $driverNotification = $this->appNotificationService->getBy(criteria: ['user_id' => $request->id, 'action' => 'account_approved']);
-        if (count($driverNotification) == 0) {
-            $push = getNotification('registration_approved');
-            if ($request->status && $driver?->fcm_token) {
-                sendDeviceNotification(
-                    fcm_token: $driver?->fcm_token,
-                    title: translate(key: $push['title'], locale: $driver?->current_language_key),
-                    description: textVariableDataFormat(value: $push['description'], userName: $driver->first_name . ' ' . $driver->last_name, sentTime: $sentTime, locale: $driver?->current_language_key),
-                    status: $push['status'],
-                    notification_type: 'driver',
-                    action: $push['action'],
-                    user_id: $driver?->id
-                );
-            }
+
+        $driver = $this->driverService->findOneBy(criteria: ['id' => $request->id, 'user_type' => DRIVER], relations: ['driverDetails']);
+        if (!$driver) {
+            Toastr::error(translate('Driver not found'));
+            return back();
         }
-        if ($driver?->is_active == 0) {
-            foreach ($driver?->tokens as $token) {
-                $token->revoke();
-            }
+
+        if (!$driver->is_active) {
+            Toastr::error(translate('You cannot change the status of a suspended driver'));
+            return back();
         }
-        return response()->json($driver);
+
+        if ($driver->driverDetails?->isSystemPaused()) {
+            Toastr::error($driver->driverDetails->systemPauseMessage());
+            return back();
+        }
+
+        if ($request->status) {
+            $this->driverService->resumeStatus(driver: $driver);
+            Toastr::success(translate('Driver status resumed successfully'));
+            return back();
+        }
+
+        $this->driverService->pauseStatus(driver: $driver, data: $request->validated());
+        Toastr::success(translate('Driver status paused successfully'));
+
+        return back();
     }
 
     public function getAllAjax(Request $request): JsonResponse
@@ -235,10 +242,11 @@ class DriverController extends BaseController
         $total = $analytics['total'];
         $active = $analytics['active'];
         $inactive = $analytics['inactive'];
+        $suspended = $analytics['suspended'];
         $car = $analytics['car'];
         $motor_bike = $analytics['motor_bike'];
         return response()->json(view('usermanagement::admin.driver._statistics',
-            compact('total', 'active', 'inactive', 'car', 'motor_bike'))->render());
+            compact('total', 'active', 'inactive', 'suspended', 'car', 'motor_bike'))->render());
     }
 
     public function export(Request $request): View|Factory|Response|StreamedResponse|string|Application
@@ -349,7 +357,7 @@ class DriverController extends BaseController
     {
         $this->authorize('user_edit');
         $request->merge(['pending' => true]);
-        $drivers = $this->driverService->index(criteria: $request?->all(), relations: ['level', 'driverTrips', 'driverTripsStatus', 'lastLocations.zone'], orderBy : ['created_at' => 'desc'], limit: paginationLimit(), offset:$request['page'] ?? 1);
+        $drivers = $this->driverService->index(criteria: $request?->all(), relations: ['level', 'driverTrips', 'driverTripsStatus', 'lastLocations.zone', 'driverDetails'], orderBy : ['created_at' => 'desc'], limit: paginationLimit(), offset:$request['page'] ?? 1);
         return view('usermanagement::admin.driver.profile-update-request', compact('drivers'));
     }
 
@@ -427,24 +435,15 @@ class DriverController extends BaseController
     public function updateSuspensionStatus(Request $request, $id)
     {
         $this->authorize('user_edit');
+
+        if (!in_array($request->action, [SUSPEND, REACTIVATE])) {
+            return back();
+        }
+
         $driver = $this->driverService
             ->findOneBy(criteria: ['id' => $id, 'user_type' => DRIVER], relations: ['driverDetails']);
 
-        if ($driver->driverDetails->suspend_reason == SuspendReasonEnum::CASH_IN_HAND_LIMIT->value && $request->action == REACTIVATE)
-        {
-            Toastr::error(DRIVER_SUSPEND_FOR_CASH_IN_HAND_LIMIT_EXCEEDS['message']);
-
-            return back();
-        }
-
-        if ($driver->driverDetails->suspend_reason == SuspendReasonEnum::FACE_VERIFICATION->value && $request->action == REACTIVATE)
-        {
-            Toastr::error(DRIVER_SUSPEND_FOR_FACE_VERIFICATION['message']);
-
-            return back();
-        }
-
-        if ($request->action == SUSPEND && $driver->driverDetails->is_suspended)
+        if ($request->action == SUSPEND && !$driver->is_active)
         {
             Toastr::error(DRIVER_ALREADY_SUSPENDED['message']);
 
@@ -467,6 +466,30 @@ class DriverController extends BaseController
         Toastr::success(DRIVER_MARK_AS_VERIFIED['message']);
 
         return back();
+    }
+
+    public function storeAvailabilitySchedule($id, DriverAvailabilityScheduleRequest $request): JsonResponse
+    {
+        $this->authorize('user_edit');
+        $this->driverAvailabilityScheduleService->storeSlot(userId: $id, data: $request->validated());
+
+        return response()->json(['message' => translate(DEFAULT_STORE_200['message'])]);
+    }
+
+    public function destroyAvailabilitySchedule($id, $scheduleId): JsonResponse
+    {
+        $this->authorize('user_edit');
+        $this->driverAvailabilityScheduleService->deleteSlot(userId: $id, scheduleId: $scheduleId);
+
+        return response()->json(['message' => translate(DEFAULT_DELETE_200['message'])]);
+    }
+
+    public function updateSameTimeForEveryDay($id, DriverSameTimeForEveryDayRequest $request): JsonResponse
+    {
+        $this->authorize('user_edit');
+        $this->driverAvailabilityScheduleService->setSameTime(userId: $id, sameTime: (bool)$request->input('same_time_for_every_day'));
+
+        return response()->json(['message' => translate(DEFAULT_UPDATE_200['message'])]);
     }
 
 }

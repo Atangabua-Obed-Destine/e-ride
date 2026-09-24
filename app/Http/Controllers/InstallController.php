@@ -313,7 +313,7 @@ Parcel ID is {ParcelId} You can track this parcel from this link {TrackingLink}"
                     BUYER_USERNAME=' . session('username') . '
                     SOFTWARE_ID=MTAwMDAwMDA=
 
-                    SOFTWARE_VERSION=3.2
+                    SOFTWARE_VERSION=' . SOFTWARE_VERSION . '
                     ';
             $file = fopen(base_path('.env'), 'w');
             fwrite($file, $output);

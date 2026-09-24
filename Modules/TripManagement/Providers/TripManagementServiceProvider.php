@@ -5,7 +5,9 @@ namespace Modules\TripManagement\Providers;
 use Illuminate\Support\ServiceProvider;
 use Illuminate\Database\Eloquent\Factory;
 use Modules\TripManagement\Entities\ParcelRefund;
+use Modules\TripManagement\Entities\TripRequest;
 use Modules\TripManagement\Observers\ParcelRefundObserver;
+use Modules\TripManagement\Observers\TripRequestObserver;
 
 class TripManagementServiceProvider extends ServiceProvider
 {
@@ -31,6 +33,7 @@ class TripManagementServiceProvider extends ServiceProvider
         $this->registerViews();
         $this->loadMigrationsFrom(module_path($this->moduleName, 'Database/Migrations'));
         ParcelRefund::observe(ParcelRefundObserver::class);
+        TripRequest::observe(TripRequestObserver::class);
     }
 
     /**

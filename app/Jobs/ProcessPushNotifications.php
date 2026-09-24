@@ -18,11 +18,13 @@ class ProcessPushNotifications implements ShouldQueue
     protected $radius;
     protected $trip;
     protected $parcelWeight;
-    public function __construct( $radius, $trip, $parcelWeight = null)
+    protected $exceptDriverId;
+    public function __construct( $radius, $trip, $parcelWeight = null, $exceptDriverId = null)
     {
         $this->radius = $radius;
         $this->trip = $trip;
         $this->parcelWeight = $parcelWeight;
+        $this->exceptDriverId = $exceptDriverId;
     }
 
 
@@ -40,7 +42,8 @@ class ProcessPushNotifications implements ShouldQueue
                 requestType: $this->trip->type,
                 rideRequestType: $this->trip->ride_request_type,
                 parcelWeight: $this->parcelWeight,
-                femaleDriverOnly: (bool)($this->trip->is_female_driver_requested ?? false)
+                femaleDriverOnly: (bool)($this->trip->is_female_driver_requested ?? false),
+                scheduledAt: $this->trip->scheduled_at
             );
             $reverbConnected = checkReverbConnection();
 
@@ -73,6 +76,9 @@ class ProcessPushNotifications implements ShouldQueue
             $deviceNotifications = [];
 
             foreach ($find_drivers as $data) {
+                if ($this->exceptDriverId && $data?->user?->id == $this->exceptDriverId) {
+                    continue;
+                }
                 try {
                     if ($data?->user?->fcm_token && $data?->user?->is_active) {
                         $tempNotificationRows[] = [

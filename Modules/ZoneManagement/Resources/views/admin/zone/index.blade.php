@@ -519,83 +519,50 @@
 
 @push('script')
     @php($map_key = businessConfig(GOOGLE_MAP_API)?->value['map_api_key'] ?? null)
+    <span class="zone-map-data-to-js d-none"
+          data-map-id="{{ $map_key }}"
+          data-close-polygon-text="{{ translate('Click_to_close_polygon') }}"
+          data-clear-drawing-text="{{ translate('Clear_drawing') }}"></span>
     <script
-        src="https://maps.googleapis.com/maps/api/js?key={{ $map_key }}&libraries=drawing,places&v=3.64"></script>
+        src="https://maps.googleapis.com/maps/api/js?key={{ $map_key }}&libraries=places,marker"></script>
     <script src="{{dynamicAsset('public/assets/admin-module/js/zone-management/zone/index.js') }}"></script>
+    <script src="{{dynamicAsset('public/assets/admin-module/js/zone-management/zone/zone-map.js') }}"></script>
     <script>
         "use strict";
-        //zone form submit
-        $('#zone_form').on('submit', function (e) {
-            if ($('#coordinates').val() === '') {
-                toastr.error('{{ translate('please_define_zone') }}')
-                e.preventDefault();
-            }
-        })
+
         let permission = false;
         @can('business_edit')
             permission = true;
         @endcan
 
-        let map; // Global declaration of the map
-        let drawingManager;
-        let lastPolygon = null;
-        let polygons = [];
-
-        function resetMap(controlDiv) {
-            // Set CSS for the control border.
-            const controlUI = document.createElement("div");
-            controlUI.style.backgroundColor = "#fff";
-            controlUI.style.border = "2px solid #fff";
-            controlUI.style.borderRadius = "3px";
-            controlUI.style.boxShadow = "0 2px 6px rgba(0,0,0,.3)";
-            controlUI.style.cursor = "pointer";
-            controlUI.style.marginTop = "8px";
-            controlUI.style.marginBottom = "22px";
-            controlUI.style.textAlign = "center";
-            controlUI.title = "Reset map";
-            controlDiv.appendChild(controlUI);
-            // Set CSS for the control interior.
-            const controlText = document.createElement("div");
-            controlText.style.color = "rgb(25,25,25)";
-            controlText.style.fontFamily = "Roboto,Arial,sans-serif";
-            controlText.style.fontSize = "10px";
-            controlText.style.lineHeight = "16px";
-            controlText.style.paddingLeft = "2px";
-            controlText.style.paddingRight = "2px";
-            controlText.innerHTML = "X";
-            controlUI.appendChild(controlText);
-            // Setup the click event listeners: simply set the map to Chicago.
-            controlUI.addEventListener("click", () => {
-                lastPolygon.setMap(null);
-                $('#coordinates').val('');
-            });
-        }
+        $('#zone_form').on('submit', function (e) {
+            if (!polygonClosed) {
+                e.preventDefault();
+                if ($('#coordinates').val() === '') {
+                    toastr.error('{{ translate('please_define_zone') }}');
+                } else {
+                    toastr.warning("{{ translate('Connect_the_last_dot_to_the_first_dot_to_close_the_polygon_before_saving') }}");
+                }
+            }
+        });
 
         function initialize() {
-            let myLatLng = {
+            let myLatlng = {
                 lat: 5.9631,
                 lng: 10.1591
             };
 
             let myOptions = {
                 zoom: 10,
-                center: myLatLng,
+                center: myLatlng,
+                mapId: mapId,
                 mapTypeId: google.maps.MapTypeId.ROADMAP,
+                mapTypeControlOptions: { position: google.maps.ControlPosition.TOP_LEFT },
             }
             map = new google.maps.Map(document.getElementById("map-canvas"), myOptions);
-            drawingManager = new google.maps.drawing.DrawingManager({
-                drawingMode: google.maps.drawing.OverlayType.POLYGON,
-                drawingControl: true,
-                drawingControlOptions: {
-                    position: google.maps.ControlPosition.TOP_CENTER,
-                    drawingModes: [google.maps.drawing.OverlayType.POLYGON]
-                },
-                polygonOptions: {
-                    editable: true
-                }
-            });
-            drawingManager.setMap(map);
-            // Try HTML5 geolocation.
+
+            setupDrawingTools();
+
             if (navigator.geolocation) {
                 navigator.geolocation.getCurrentPosition(
                     (position) => {
@@ -606,76 +573,6 @@
                         map.setCenter(pos);
                     });
             }
-
-            google.maps.event.addListener(drawingManager, "overlaycomplete", function (event) {
-
-                if (lastPolygon) {
-                    lastPolygon.setMap(null);
-                }
-                $('#coordinates').val(event.overlay.getPath().getArray());
-                lastPolygon = event.overlay;
-                auto_grow();
-            });
-
-            const resetDiv = document.createElement("div");
-            resetMap(resetDiv, lastPolygon);
-            map.controls[google.maps.ControlPosition.TOP_CENTER].push(resetDiv);
-
-            // Create the search box and link it to the UI element.
-            const input = document.getElementById("pac-input");
-            const searchBox = new google.maps.places.SearchBox(input);
-            map.controls[google.maps.ControlPosition.TOP_CENTER].push(input);
-            // Bias the SearchBox results towards current map's viewport.
-            map.addListener("bounds_changed", () => {
-                searchBox.setBounds(map.getBounds());
-            });
-            let markers = [];
-
-            // Listen for the event fired when the user selects a prediction and retrieve
-            // more details for that place.
-            searchBox.addListener("places_changed", () => {
-                const places = searchBox.getPlaces();
-
-                if (places.length === 0) {
-                    return;
-                }
-                // Clear out the old markers.
-                markers.forEach((marker) => {
-                    marker.setMap(null);
-                });
-                markers = [];
-                // For each place, get the icon, name and location.
-                const bounds = new google.maps.LatLngBounds();
-                places.forEach((place) => {
-                    if (!place.geometry || !place.geometry.location) {
-                        return;
-                    }
-                    const icon = {
-                        url: place.icon,
-                        size: new google.maps.Size(71, 71),
-                        origin: new google.maps.Point(0, 0),
-                        anchor: new google.maps.Point(17, 34),
-                        scaledSize: new google.maps.Size(25, 25),
-                    };
-                    // Create a marker for each place.
-                    markers.push(
-                        new google.maps.Marker({
-                            map,
-                            icon,
-                            title: place.name,
-                            position: place.geometry.location,
-                        })
-                    );
-
-                    if (place.geometry.viewport) {
-                        // Only geocodes have viewport.
-                        bounds.union(place.geometry.viewport);
-                    } else {
-                        bounds.extend(place.geometry.location);
-                    }
-                });
-                map.fitBounds(bounds);
-            });
         }
 
         window.addEventListener('load', initialize);
@@ -688,6 +585,7 @@
                     for (let i = 0; i < data.length; i++) {
                         polygons.push(new google.maps.Polygon({
                             paths: data[i],
+                            clickable: false,
                             strokeColor: "#FF0000",
                             strokeOpacity: 0.8,
                             strokeWeight: 2,

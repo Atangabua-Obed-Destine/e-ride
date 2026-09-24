@@ -679,7 +679,7 @@
                                 </a>
                             </li>
                             <li class="{{Request::is('admin/business/configuration/third-party/*') ? 'active open' : ''}}">
-                                <a href="{{route('admin.business.configuration.third-party.payment-method.index')}}"
+                                <a href="{{route('admin.business.configuration.third-party.social-login.index')}}"
                                    class="text-capitalize">
                                     <i class="bi bi-dash-lg"></i>
                                     {{translate('3rd_party')}}

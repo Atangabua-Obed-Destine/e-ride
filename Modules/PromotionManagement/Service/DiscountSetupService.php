@@ -38,140 +38,143 @@ class DiscountSetupService extends BaseService implements Interfaces\DiscountSet
 
     public function create(array $data): ?Model
     {
-        DB::beginTransaction();
-        $storeData = [
-            'title' => $data['title'],
-            'short_description' => $data['short_description'],
-            'terms_conditions' => $data['terms_conditions'],
-            'min_trip_amount' => $data['min_trip_amount'],
-            'max_discount_amount' => $data['max_discount_amount'] == null ? 0 : $data['max_discount_amount'],
-            'discount_amount' => $data['discount_amount'],
-            'discount_amount_type' => $data['discount_amount_type'],
-            'limit_per_user' => $data['limit_per_user'],
-            'start_date' => $data['start_date'],
-            'end_date' => $data['end_date'],
-            'image' => fileUploader('promotion/discount/', APPLICATION_IMAGE_FORMAT, $data['image']),
-        ];
-        if (in_array(ALL, $data['zone_discount_type'], true)) {
-            $storeData = array_merge($storeData, ['zone_discount_type' => ALL]);
-        }
-        if (in_array(ALL, $data['customer_level_discount_type'], true)) {
-            $storeData = array_merge($storeData, ['customer_level_discount_type' => ALL]);
-        }
-        if (in_array(ALL, $data['customer_discount_type'], true)) {
-            $storeData = array_merge($storeData, ['customer_discount_type' => ALL]);
-        }
-        if (in_array(ALL, $data['module_discount_type'], true)) {
-            $storeData = array_merge($storeData, ['module_discount_type' => [ALL]]);
-            $moduleDiscount = null;
-        }
-        if (in_array(PARCEL, $data['module_discount_type'], true) && count($data['module_discount_type']) === 1) {
-            $storeData = array_merge($storeData, ['module_discount_type' => [PARCEL]]);
-            $moduleDiscount = null;
-        }
-        if (in_array(PARCEL, $data['module_discount_type'], true) && count($data['module_discount_type']) > 1) {
-            $storeData = array_merge($storeData, ['module_discount_type' => [PARCEL, CUSTOM]]);
-            $moduleDiscount = CUSTOM;
-        }
-        if (!in_array(ALL, $data['module_discount_type'], true) && !in_array(PARCEL, $data['module_discount_type'], true) && count($data['module_discount_type']) > 0) {
-            $storeData = array_merge($storeData, ['module_discount_type' => [CUSTOM]]);
-            $moduleDiscount = CUSTOM;
-        }
-        $discount = $this->discountSetupRepository->create(data: $storeData);
+        return DB::transaction(function () use ($data) {
+            $storeData = [
+                'title' => $data['title'],
+                'short_description' => $data['short_description'],
+                'terms_conditions' => $data['terms_conditions'],
+                'min_trip_amount' => $data['min_trip_amount'],
+                'max_discount_amount' => $data['max_discount_amount'] == null ? 0 : $data['max_discount_amount'],
+                'discount_amount' => $data['discount_amount'],
+                'discount_amount_type' => $data['discount_amount_type'],
+                'limit_per_user' => $data['limit_per_user'],
+                'start_date' => $data['start_date'],
+                'end_date' => $data['end_date'],
+                'image' => fileUploader('promotion/discount/', APPLICATION_IMAGE_FORMAT, $data['image']),
+            ];
+            if (in_array(ALL, $data['zone_discount_type'], true)) {
+                $storeData = array_merge($storeData, ['zone_discount_type' => ALL]);
+            }
+            if (in_array(ALL, $data['customer_level_discount_type'], true)) {
+                $storeData = array_merge($storeData, ['customer_level_discount_type' => ALL]);
+            }
+            if (in_array(ALL, $data['customer_discount_type'], true)) {
+                $storeData = array_merge($storeData, ['customer_discount_type' => ALL]);
+            }
+            if (in_array(ALL, $data['module_discount_type'], true)) {
+                $storeData = array_merge($storeData, ['module_discount_type' => [ALL]]);
+                $moduleDiscount = null;
+            }
+            if (in_array(PARCEL, $data['module_discount_type'], true) && count($data['module_discount_type']) === 1) {
+                $storeData = array_merge($storeData, ['module_discount_type' => [PARCEL]]);
+                $moduleDiscount = null;
+            }
+            if (in_array(PARCEL, $data['module_discount_type'], true) && count($data['module_discount_type']) > 1) {
+                $storeData = array_merge($storeData, ['module_discount_type' => [PARCEL, CUSTOM]]);
+                $moduleDiscount = CUSTOM;
+            }
+            if (!in_array(ALL, $data['module_discount_type'], true) && !in_array(PARCEL, $data['module_discount_type'], true) && count($data['module_discount_type']) > 0) {
+                $storeData = array_merge($storeData, ['module_discount_type' => [CUSTOM]]);
+                $moduleDiscount = CUSTOM;
+            }
+            $discount = $this->discountSetupRepository->create(data: $storeData);
 
-        if (!in_array(ALL, $data['zone_discount_type'], true)) {
-            $discount?->zones()->attach($data['zone_discount_type']);
-        }
-        if (!in_array(ALL, $data['customer_level_discount_type'], true)) {
-            $discount?->customerLevels()->attach($data['customer_level_discount_type']);
-        }
-        if (!in_array(ALL, $data['customer_discount_type'], true)) {
-            $discount?->customers()->attach($data['customer_discount_type']);
-        }
-        if ($moduleDiscount && $moduleDiscount == CUSTOM) {
-            $data = array_diff($data['module_discount_type'], array(PARCEL));
-            $data = array_diff($data, array(ALL));
-            $discount?->vehicleCategories()->attach($data);
-        }
-        DB::commit();
-        return $discount;
+            if (!in_array(ALL, $data['zone_discount_type'], true)) {
+                $discount?->zones()->attach($data['zone_discount_type']);
+            }
+            if (!in_array(ALL, $data['customer_level_discount_type'], true)) {
+                $discount?->customerLevels()->attach($data['customer_level_discount_type']);
+            }
+            if (!in_array(ALL, $data['customer_discount_type'], true)) {
+                $discount?->customers()->attach($data['customer_discount_type']);
+            }
+            if (($moduleDiscount ?? null) && $moduleDiscount == CUSTOM) {
+                $data = array_diff($data['module_discount_type'], array(PARCEL));
+                $data = array_diff($data, array(ALL));
+                $discount?->vehicleCategories()->attach($data);
+            }
+
+            return $discount;
+        });
     }
 
     public function update(int|string $id, array $data = []): ?Model
     {
         $model = $this->findOne(id: $id);
-        DB::beginTransaction();
-        $updateData = [
-            'title' => $data['title'],
-            'short_description' => $data['short_description'],
-            'terms_conditions' => $data['terms_conditions'],
-            'min_trip_amount' => $data['min_trip_amount'],
-            'max_discount_amount' => $data['max_discount_amount'] == null ? 0 : $data['max_discount_amount'],
-            'discount_amount' => $data['discount_amount'],
-            'discount_amount_type' => $data['discount_amount_type'],
-            'limit_per_user' => $data['limit_per_user'],
-            'start_date' => $data['start_date'],
-            'end_date' => $data['end_date'],
-        ];
-        if (array_key_exists('image', $data)) {
-            $updateData = array_merge($updateData, [
-                'image' => fileUploader('promotion/discount/', APPLICATION_IMAGE_FORMAT, $data['image'], $model->image),
-            ]);
-        }
-        if (in_array(ALL, $data['zone_discount_type'], true)) {
-            $updateData = array_merge($updateData, ['zone_discount_type' => ALL]);
-            $model?->zones()->detach();
-        } else {
-            $updateData = array_merge($updateData, ['zone_discount_type' => CUSTOM]);
-        }
-        if (in_array(ALL, $data['customer_level_discount_type'], true)) {
-            $updateData = array_merge($updateData, ['customer_level_discount_type' => ALL]);
-            $model?->customerLevels()->detach();
-        } else {
-            $updateData = array_merge($updateData, ['customer_level_discount_type' => CUSTOM]);
-        }
-        if (in_array(ALL, $data['customer_discount_type'], true)) {
-            $updateData = array_merge($updateData, ['customer_discount_type' => ALL]);
-            $model?->customers()->detach();
-        } else {
-            $updateData = array_merge($updateData, ['customer_discount_type' => CUSTOM]);
-        }
-        if (in_array(ALL, $data['module_discount_type'], true)) {
-            $updateData = array_merge($updateData, ['module_discount_type' => [ALL]]);
-            $moduleDiscount = null;
-            $model?->vehicleCategories()->detach();
-        }
-        if (in_array(PARCEL, $data['module_discount_type'], true) && count($data['module_discount_type']) === 1) {
-            $updateData = array_merge($updateData, ['module_discount_type' => [PARCEL]]);
-            $moduleDiscount = null;
-            $model?->vehicleCategories()->detach();
-        }
-        if (in_array(PARCEL, $data['module_discount_type'], true) && count($data['module_discount_type']) > 1) {
-            $updateData = array_merge($updateData, ['module_discount_type' => [PARCEL, CUSTOM]]);
-            $moduleDiscount = CUSTOM;
-        }
-        if (!in_array(ALL, $data['module_discount_type'], true) && !in_array(PARCEL, $data['module_discount_type'], true) && count($data['module_discount_type']) > 0) {
-            $updateData = array_merge($updateData, ['module_discount_type' => [CUSTOM]]);
-            $moduleDiscount = CUSTOM;
-        }
-        $discount = $this->discountSetupRepository->update(id: $id, data: $updateData);
 
-        if (!in_array(ALL, $data['zone_discount_type'], true)) {
-            $discount?->zones()->sync($data['zone_discount_type']);
-        }
-        if (!in_array(ALL, $data['customer_level_discount_type'], true)) {
-            $discount?->customerLevels()->sync($data['customer_level_discount_type']);
-        }
-        if (!in_array(ALL, $data['customer_discount_type'], true)) {
-            $discount?->customers()->sync($data['customer_discount_type']);
-        }
-        if ($moduleDiscount && $moduleDiscount == CUSTOM) {
-            $data = array_diff($data['module_discount_type'], array(PARCEL));
-            $data = array_diff($data, array(ALL));
-            $discount?->vehicleCategories()->sync($data);
-        }
-        DB::commit();
-        return $discount;
+        return DB::transaction(function () use ($id, $data, $model) {
+            $updateData = [
+                'title' => $data['title'],
+                'short_description' => $data['short_description'],
+                'terms_conditions' => $data['terms_conditions'],
+                'min_trip_amount' => $data['min_trip_amount'],
+                'max_discount_amount' => $data['max_discount_amount'] == null ? 0 : $data['max_discount_amount'],
+                'discount_amount' => $data['discount_amount'],
+                'discount_amount_type' => $data['discount_amount_type'],
+                'limit_per_user' => $data['limit_per_user'],
+                'start_date' => $data['start_date'],
+                'end_date' => $data['end_date'],
+            ];
+            if (array_key_exists('image', $data)) {
+                $updateData = array_merge($updateData, [
+                    'image' => fileUploader('promotion/discount/', APPLICATION_IMAGE_FORMAT, $data['image'], $model->image),
+                ]);
+            }
+            if (in_array(ALL, $data['zone_discount_type'], true)) {
+                $updateData = array_merge($updateData, ['zone_discount_type' => ALL]);
+                $model?->zones()->detach();
+            } else {
+                $updateData = array_merge($updateData, ['zone_discount_type' => CUSTOM]);
+            }
+            if (in_array(ALL, $data['customer_level_discount_type'], true)) {
+                $updateData = array_merge($updateData, ['customer_level_discount_type' => ALL]);
+                $model?->customerLevels()->detach();
+            } else {
+                $updateData = array_merge($updateData, ['customer_level_discount_type' => CUSTOM]);
+            }
+            if (in_array(ALL, $data['customer_discount_type'], true)) {
+                $updateData = array_merge($updateData, ['customer_discount_type' => ALL]);
+                $model?->customers()->detach();
+            } else {
+                $updateData = array_merge($updateData, ['customer_discount_type' => CUSTOM]);
+            }
+            if (in_array(ALL, $data['module_discount_type'], true)) {
+                $updateData = array_merge($updateData, ['module_discount_type' => [ALL]]);
+                $moduleDiscount = null;
+                $model?->vehicleCategories()->detach();
+            }
+            if (in_array(PARCEL, $data['module_discount_type'], true) && count($data['module_discount_type']) === 1) {
+                $updateData = array_merge($updateData, ['module_discount_type' => [PARCEL]]);
+                $moduleDiscount = null;
+                $model?->vehicleCategories()->detach();
+            }
+            if (in_array(PARCEL, $data['module_discount_type'], true) && count($data['module_discount_type']) > 1) {
+                $updateData = array_merge($updateData, ['module_discount_type' => [PARCEL, CUSTOM]]);
+                $moduleDiscount = CUSTOM;
+            }
+            if (!in_array(ALL, $data['module_discount_type'], true) && !in_array(PARCEL, $data['module_discount_type'], true) && count($data['module_discount_type']) > 0) {
+                $updateData = array_merge($updateData, ['module_discount_type' => [CUSTOM]]);
+                $moduleDiscount = CUSTOM;
+            }
+            $discount = $this->discountSetupRepository->update(id: $id, data: $updateData);
+
+            if (!in_array(ALL, $data['zone_discount_type'], true)) {
+                $discount?->zones()->sync($data['zone_discount_type']);
+            }
+            if (!in_array(ALL, $data['customer_level_discount_type'], true)) {
+                $discount?->customerLevels()->sync($data['customer_level_discount_type']);
+            }
+            if (!in_array(ALL, $data['customer_discount_type'], true)) {
+                $discount?->customers()->sync($data['customer_discount_type']);
+            }
+            if (($moduleDiscount ?? null) && $moduleDiscount == CUSTOM) {
+                $data = array_diff($data['module_discount_type'], array(PARCEL));
+                $data = array_diff($data, array(ALL));
+                $discount?->vehicleCategories()->sync($data);
+            }
+
+            return $discount;
+        });
     }
 
     public function trashedData(array $criteria = [], array $relations = [], array $orderBy = [], ?int $limit = null, ?int $offset = null, array $withCountQuery = []): Collection|LengthAwarePaginator

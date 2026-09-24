@@ -19,6 +19,8 @@ interface TripRequestRepositoryInterface extends EloquentRepositoryInterface
 
     public function updateRelationalTable($attributes): mixed;
 
+    public function hasUnsettledTripForDriver(int|string $driverId): bool;
+
     public function findOneWithAvg(array $criteria = [], array $relations = [], array $withCountQuery = [], bool $withTrashed = false, bool $onlyTrashed = false, array $withAvgRelation = []): ?Model;
 
     public function getWithAvg(array $criteria = [], array $searchCriteria = [], array $whereInCriteria = [], array $relations = [], array $orderBy = [], ?int $limit = null, ?int $offset = null, bool $onlyTrashed = false, bool $withTrashed = false, array $withCountQuery = [], array $withAvgRelation = [], array $whereBetweenCriteria = [], array $whereNotNullCriteria = []): Collection|LengthAwarePaginator;

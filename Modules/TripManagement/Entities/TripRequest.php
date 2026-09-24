@@ -70,7 +70,9 @@ class TripRequest extends Model
         'current_status',
         'is_notification_sent',
         'sending_notification_at',
+        'is_arrival_notification_sent',
         'trip_cancellation_reason',
+        'is_identity_mismatched',
         'checked',
         'tips',
         'is_paused',
@@ -105,6 +107,8 @@ class TripRequest extends Model
         "is_paused" => 'boolean',
         "rise_request_count" => 'integer',
         "is_notification_sent" => 'boolean',
+        "is_arrival_notification_sent" => 'boolean',
+        "is_identity_mismatched" => 'boolean',
         "is_female_driver_requested" => 'boolean',
         "is_parcel_delivery_proof_enabled" => 'boolean',
     ];
@@ -288,7 +292,7 @@ class TripRequest extends Model
                 $log->after = $item->changes;
                 $item->logs()->save($log);
             }
-            if ($item->current_status == CANCELLED) {
+            if ($item->current_status == CANCELLED && $item->wasChanged('current_status')) {
                 if ($item->type == PARCEL) {
                     $message = 'a_parcel_request_is_cancelled';
                 } else {

@@ -24,4 +24,6 @@ interface CustomerServiceInterface extends BaseServiceInterface
     public function walletTransfer($customer, array $data = []);
 
     public function createAfterOtpMatch(array $data): ?Model;
+
+    public function createAfterSocialMatch(array $data): ?Model;
 }

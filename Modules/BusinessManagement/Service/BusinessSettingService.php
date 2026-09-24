@@ -6,10 +6,12 @@ use App\Jobs\SendPushNotificationForAllUserJob;
 use App\Service\BaseService;
 use App\Traits\UnloadedHelpers;
 use Illuminate\Database\Eloquent\Model;
+use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Session;
+use Illuminate\Support\Facades\Storage;
 use Modules\BusinessManagement\Lib\AdditionalDataFieldNormalizer;
 use Modules\BusinessManagement\Repository\BusinessSettingRepositoryInterface;
 use Modules\BusinessManagement\Repository\ExternalConfigurationRepositoryInterface;
@@ -358,6 +360,31 @@ class BusinessSettingService extends BaseService implements BusinessSettingServi
                 $data['female_only_ride_service'] = 0;
             } else {
                 $data['female_only_ride_service'] = 1;
+            }
+
+            // Upcoming feature toggles: only store the status as enabled when the
+            // feature's required field(s) are filled in. Otherwise keep it disabled.
+            $data['smart_rebooking'] = array_key_exists('smart_rebooking', $data) ? 1 : 0;
+
+            $identityMessageFilled = trim((string)($data['driver_identity_verification_message'] ?? '')) !== '';
+            $data['driver_identity_verification'] = (array_key_exists('driver_identity_verification', $data) && $identityMessageFilled) ? 1 : 0;
+
+            $autoArrivalFilled = trim((string)($data['auto_arrival_notification_time'] ?? '')) !== ''
+                && trim((string)($data['auto_arrival_notification_customer_message'] ?? '')) !== ''
+                && trim((string)($data['auto_arrival_notification_driver_message'] ?? '')) !== '';
+            $data['auto_arrival_notification'] = (array_key_exists('auto_arrival_notification', $data) && $autoArrivalFilled) ? 1 : 0;
+
+            // The `value` column is not nullable; store blank dependent fields as empty strings.
+            $nullableValueFields = [
+                'driver_identity_verification_message',
+                'auto_arrival_notification_time',
+                'auto_arrival_notification_customer_message',
+                'auto_arrival_notification_driver_message',
+            ];
+            foreach ($nullableValueFields as $field) {
+                if (array_key_exists($field, $data) && $data[$field] === null) {
+                    $data[$field] = '';
+                }
             }
         }
         foreach ($data as $key => $value) {
@@ -834,6 +861,66 @@ class BusinessSettingService extends BaseService implements BusinessSettingServi
         } else {
             $this->businessSettingRepository->create(data: ['key_name' => RECAPTCHA, 'settings_type' => RECAPTCHA, 'value' => $data]);
         }
+    }
+
+    public function storeSocialLoginConfig(array $data): void
+    {
+        $keyName = $data['name'];
+        $existing = $this->businessSettingRepository
+            ->findOneBy(criteria: ['key_name' => $keyName, 'settings_type' => SOCIAL_LOGIN]);
+        $existingValue = $existing?->value ?? [];
+
+        $value = [
+            'status' => array_key_exists('status', $data) && $data['status'] ? 1 : 0,
+            'bundle_id' => $data['bundle_id'] ?? null,
+            'client_secret' => $data['client_secret'] ?? null,
+        ];
+
+        if ($keyName === 'apple_login') {
+            $value['team_id'] = $data['team_id'] ?? null;
+            $serviceFile = $data['service_file'] ?? null;
+            $value['service_file'] = $serviceFile instanceof UploadedFile
+                ? $this->uploadSocialLoginFile($serviceFile)
+                : ($existingValue['service_file'] ?? null);
+        }
+
+        if ($existing) {
+            $this->businessSettingRepository->update(id: $existing->id, data: ['key_name' => $keyName, 'settings_type' => SOCIAL_LOGIN, 'value' => $value]);
+        } else {
+            $this->businessSettingRepository->create(data: ['key_name' => $keyName, 'settings_type' => SOCIAL_LOGIN, 'value' => $value]);
+        }
+
+        if (($value['status'] ?? 0) == 0) {
+            $this->clearCustomerSocialSelection(str_replace('_login', '', $keyName));
+        }
+    }
+
+    private function clearCustomerSocialSelection(string $provider): void
+    {
+        $loginOptions = $this->businessSettingRepository
+            ->findOneBy(criteria: ['key_name' => 'customer_login_options', 'settings_type' => LOGIN_SETTINGS]);
+        if (!$loginOptions) {
+            return;
+        }
+        $value = $loginOptions->value ?? [];
+        $value['social_login'][$provider] = 0;
+
+        if (empty(array_filter($value['social_login'] ?? []))) {
+            $value['social_media_login'] = 0;
+        }
+
+        $this->businessSettingRepository->update(id: $loginOptions->id, data: [
+            'key_name' => 'customer_login_options',
+            'value' => $value,
+            'settings_type' => LOGIN_SETTINGS,
+        ]);
+    }
+
+    private function uploadSocialLoginFile(UploadedFile $file): string
+    {
+        $fileName = date('Y-m-d') . '-' . uniqid() . '.' . $file->getClientOriginalExtension();
+        Storage::disk('public')->putFileAs('social-login', $file, $fileName);
+        return $fileName;
     }
 
     public function storeAppVersion(array $data)
@@ -1383,6 +1470,18 @@ class BusinessSettingService extends BaseService implements BusinessSettingServi
                 $storeData['biometric_login'] = array_key_exists('biometric_login', $value) ? 1 : 0;
             }
 
+            if ($user === CUSTOMER) {
+                $submittedSocial = $value['social_login'] ?? [];
+                $appleActive = (businessConfig('apple_login', SOCIAL_LOGIN)?->value['status'] ?? 0) == 1;
+                $socialLogin = [
+                    'google' => array_key_exists('google', $submittedSocial) ? 1 : 0,
+                    'facebook' => array_key_exists('facebook', $submittedSocial) ? 1 : 0,
+                    'apple' => ($appleActive && array_key_exists('apple', $submittedSocial)) ? 1 : 0,
+                ];
+                $storeData['social_login'] = $socialLogin;
+                $storeData['social_media_login'] = (array_key_exists('social_media_login', $value) && !empty(array_filter($socialLogin))) ? 1 : 0;
+            }
+
             $businessSetting = $this->businessSettingRepository
                 ->findOneBy(criteria: ['key_name' => $user . '_login_options', 'settings_type' => LOGIN_SETTINGS]);
             if ($businessSetting) {
@@ -1430,6 +1529,10 @@ class BusinessSettingService extends BaseService implements BusinessSettingServi
                 ];
                 if ($user === DRIVER) {
                     $storeData['biometric_login'] = 0;
+                }
+                if ($user === CUSTOMER) {
+                    $storeData['social_media_login'] = 0;
+                    $storeData['social_login'] = ['google' => 0, 'facebook' => 0, 'apple' => 0];
                 }
                 $businessSetting = $this->businessSettingRepository
                     ->findOneBy(criteria: ['key_name' => $user . '_login_options', 'settings_type' => LOGIN_SETTINGS]);

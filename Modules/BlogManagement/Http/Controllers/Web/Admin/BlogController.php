@@ -2,6 +2,7 @@
 
 namespace Modules\BlogManagement\Http\Controllers\Web\Admin;
 
+use App\Exceptions\ImageUploadException;
 use App\Http\Controllers\Controller;
 use Brian2694\Toastr\Facades\Toastr;
 use Carbon\Carbon;
@@ -190,7 +191,11 @@ class BlogController extends Controller
 
     public function uploadSummernoteImage(BlogSummernoteFileStoreRequest $request)
     {
-        $fileName = fileUploader('blog/summernote/', image: $request->image);
+        try {
+            $fileName = fileUploader('blog/summernote/', image: $request->image);
+        } catch (ImageUploadException $e) {
+            return response()->json(['errors' => [['message' => $e->getMessage()]]], 422);
+        }
 
         return dynamicStorage('storage/app/public/blog/summernote/' . $fileName);
     }

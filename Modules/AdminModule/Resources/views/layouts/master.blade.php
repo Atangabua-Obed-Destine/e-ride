@@ -55,6 +55,7 @@
     <!-- ======= MAIN STYLES ======= -->
     <link rel="stylesheet" href="{{ dynamicAsset('public/assets/admin-module/css/style.css') }}"/>
     <link rel="stylesheet" href="{{ dynamicAsset('public/assets/admin-module/css/custom.css') }}"/>
+    <link rel="stylesheet" href="{{ dynamicAsset('public/assets/admin-module/css/version-three.css') }}"/>
     @include('adminmodule::layouts.css')
     <!-- ======= END MAIN STYLES ======= -->
 
@@ -446,6 +447,35 @@
             }
         })
     }
+
+    $(document).on('click', '.driver-status-toggle', function () {
+        let id = $(this).data('id');
+        if ($(this).data('paused') == 1) {
+            $('#driverSuspensionTitle').text(@json(translate('Are you sure want to resume the driver status')) + '?');
+            $('#driverSuspensionSubTitle').text(@json(translate('The driver can go online and receive trip requests again.')));
+            $('#driverSuspensionConfirmBtn')
+                .attr('href', "{{ route('admin.driver.update-status') }}?id=" + id + "&status=1")
+                .text(@json(translate('Resume')))
+                .removeClass('btn-primary btn-danger btn-success')
+                .addClass('btn-primary');
+            bootstrap.Modal.getOrCreateInstance(document.getElementById('driverSuspensionModal')).show();
+        } else {
+            document.getElementById('driverPauseForm').reset();
+            $('#driverPauseId').val(id);
+            bootstrap.Modal.getOrCreateInstance(document.getElementById('driverStatusPauseModal')).show();
+        }
+    });
+
+    $(document).on('click', '.driver-suspension-btn', function () {
+        $('#driverSuspensionTitle').text($(this).data('title'));
+        $('#driverSuspensionSubTitle').text($(this).data('sub-title'));
+        $('#driverSuspensionConfirmBtn')
+            .attr('href', $(this).data('url'))
+            .text($(this).data('confirm-btn'))
+            .removeClass('btn-primary btn-danger btn-success')
+            .addClass($(this).data('confirm-class') || 'btn-primary');
+        bootstrap.Modal.getOrCreateInstance(document.getElementById('driverSuspensionModal')).show();
+    });
 
     $('.custom_status_change').on('change', function () {
         customStatusChange(this)

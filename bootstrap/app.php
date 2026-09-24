@@ -5,6 +5,8 @@ use Illuminate\Auth\Middleware\Authorize;
 use Illuminate\Auth\Middleware\EnsureEmailIsVerified;
 use Illuminate\Auth\Middleware\RequirePassword;
 use Illuminate\Cookie\Middleware\AddQueuedCookiesToResponse;
+use App\Exceptions\ImageUploadException;
+use Brian2694\Toastr\Facades\Toastr;
 use Illuminate\Foundation\Application;
 use Illuminate\Foundation\Configuration\Exceptions;
 use Illuminate\Foundation\Configuration\Middleware;
@@ -26,6 +28,8 @@ use Illuminate\Http\Middleware\TrustProxies;
 use Illuminate\Routing\Middleware\SubstituteBindings;
 use Illuminate\Routing\Middleware\ThrottleRequests;
 use Illuminate\Routing\Middleware\ValidateSignature;
+use Symfony\Component\HttpKernel\Exception\HttpException;
+use Symfony\Component\HttpKernel\Exception\NotFoundHttpException;
 use Illuminate\Session\Middleware\StartSession;
 use Illuminate\View\Middleware\ShareErrorsFromSession;
 use Modules\AdminModule\Http\Middleware\AdminMiddleware;
@@ -80,7 +84,32 @@ $app = Application::configure(basePath: dirname(__DIR__))
         ]);
     })
     ->withExceptions(function (Exceptions $exceptions) {
-        // You can customize exception handling here if needed
+        $exceptions->render(function (ImageUploadException $e, $request) {
+            if ($request->wantsJson()) {
+                return response()->json(responseFormatter(IMAGE_UPLOAD_FAILED_422), 403);
+            }
+
+            Toastr::error($e->getMessage());
+
+            return back()->withInput();
+        });
+
+        $exceptions->render(function (NotFoundHttpException $e, $request) {
+            if ($request->wantsJson()) {
+                return response()->json(responseFormatter(DEFAULT_404), 404);
+            }
+        });
+
+        $exceptions->render(function (HttpException $e, $request) {
+            if ($request->wantsJson()) {
+                return response()->json([
+                    'response_code' => $e->getStatusCode(),
+                    'message' => $e->getMessage(),
+                    'content' => null,
+                    'errors' => [],
+                ], $e->getStatusCode());
+            }
+        });
     })
     ->create();
 

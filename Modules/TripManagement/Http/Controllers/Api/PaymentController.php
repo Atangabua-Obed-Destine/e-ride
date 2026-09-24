@@ -15,7 +15,7 @@ use Modules\Gateways\Library\Receiver;
 use Modules\Gateways\Traits\Payment;
 use Modules\TransactionManagement\Traits\TransactionTrait;
 use Modules\TripManagement\Service\Interfaces\TripRequestServiceInterface;
-use Modules\UserManagement\Enums\SuspendReasonEnum;
+use Modules\UserManagement\Service\Interfaces\DriverDetailServiceInterface;
 use Modules\UserManagement\Lib\LevelHistoryManagerTrait;
 use Modules\UserManagement\Lib\LevelUpdateCheckerTrait;
 
@@ -25,15 +25,16 @@ class PaymentController extends Controller
     use TransactionTrait, Payment, LevelHistoryManagerTrait, LevelUpdateCheckerTrait;
 
     protected $tripRequestservice;
+    protected $driverDetailService;
 
 
     public function __construct(
         TripRequestServiceInterface $tripRequestservice,
-
-
+        DriverDetailServiceInterface $driverDetailService,
     )
     {
         $this->tripRequestservice = $tripRequestservice;
+        $this->driverDetailService = $driverDetailService;
     }
 
     public function payment(Request $request)
@@ -75,11 +76,11 @@ class PaymentController extends Controller
 
                 return response()->json(responseFormatter(INSUFFICIENT_FUND_403), 403);
             }
-            $method = '_with_wallet_balance';
+            $method = '_wallet_balance';
             $this->walletTransaction($trip);
         } // driver only make cash payment
         elseif ($request->payment_method == 'cash') {
-            $method = '_by_cash';
+            $method = '_cash';
             $this->cashTransaction($trip);
         }
 
@@ -113,23 +114,7 @@ class PaymentController extends Controller
             );
         }
 
-        $maximumAmountToHoldCash = businessConfig('cash_in_hand_setup_status')?->value && businessConfig('max_amount_to_hold_cash')?->value ? businessConfig('max_amount_to_hold_cash')?->value : null;
-        $payableBalance = $trip?->driver?->userAccount->payable_balance > $trip?->driver?->userAccount->receivable_balance ? ($trip?->driver?->userAccount->payable_balance - $trip?->driver?->userAccount->receivable_balance) : 0;
-        if ($maximumAmountToHoldCash && $payableBalance >= $maximumAmountToHoldCash)
-        {
-            $trip->driver->driverDetails->update(['is_suspended' => 1, 'suspend_reason' => SuspendReasonEnum::CASH_IN_HAND_LIMIT->value]);
-            $cashInHandLimitExceeds = getNotification('cash_in_hand_limit_exceeds');
-            sendDeviceNotification(
-                fcm_token: $trip->driver->fcm_token,
-                title: translate(key: $cashInHandLimitExceeds['title'], locale: $trip->driver->current_language_key),
-                description: textVariableDataFormat(value: $cashInHandLimitExceeds['description'], driverName: $trip->customer->first_name . ' ' . $trip->customer->last_name, locale: $trip->driver->current_language_key),
-                status: $cashInHandLimitExceeds['status'],
-                ride_request_id: $trip?->driver->id,
-                notification_type: '',
-                action: $cashInHandLimitExceeds['action'],
-                user_id: $trip?->driver->id,
-            );
-        }
+        $this->driverDetailService->pauseIfCashInHandLimitExceeded($trip);
 
         if (checkReverbConnection()) {
             try {

@@ -3,12 +3,15 @@
 namespace Modules\TripManagement\Service;
 
 use App\Events\RideRequestEvent;
+use App\Jobs\ProcessPushNotifications;
 use App\Jobs\SendPushNotificationJob;
 use App\Service\BaseService;
 use Carbon\Carbon;
 use Carbon\CarbonInterface;
 use Carbon\CarbonPeriod;
 use Illuminate\Http\JsonResponse;
+use Illuminate\Http\Request;
+use Illuminate\Support\Arr;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Database\Eloquent\Collection;
 use MatanYadaev\EloquentSpatial\Objects\Point;
@@ -1106,6 +1109,33 @@ class TripRequestService extends BaseService implements TripRequestServiceInterf
         return $trip;
     }
 
+    public function revokeSuspendedDriverAccess(int|string $driverId): void
+    {
+        $suspendedDriver = $this->userRepository->findOneBy(criteria: ['id' => $driverId, 'is_active' => 0]);
+        if (!$suspendedDriver || $this->tripRequestRepository->hasUnsettledTripForDriver($driverId)) {
+            return;
+        }
+
+        foreach ($suspendedDriver->tokens as $token) {
+            $token->revoke();
+        }
+
+        $this->driverDetailService->suspendOffline($driverId);
+
+        if ($suspendedDriver->fcm_token) {
+            $push = getNotification('driver_suspended', 'driver');
+            sendDeviceNotification(
+                fcm_token: $suspendedDriver->fcm_token,
+                title: translate(key: $push['title'], locale: $suspendedDriver->current_language_key),
+                description: textVariableDataFormat(value: $push['description'], userName: $suspendedDriver->first_name . ' ' . $suspendedDriver->last_name, sentTime: pushSentTime($suspendedDriver->updated_at), locale: $suspendedDriver->current_language_key),
+                status: $push['status'],
+                notification_type: 'driver',
+                action: $push['action'],
+                user_id: $suspendedDriver->id
+            );
+        }
+    }
+
 
     public function handleDriverStatusUpdate($request, $trip)
     {
@@ -1156,51 +1186,6 @@ class TripRequestService extends BaseService implements TripRequestServiceInterf
 
 
         return $data;
-    }
-
-
-    public function handleRequestActionPushNotification($trip, $user)
-    {
-        DB::beginTransaction();
-        Cache::put($trip->id, ACCEPTED, now()->addHour());
-        $driverArrivalTime = getRoutes(
-            originCoordinates: [
-                $trip->coordinate->pickup_coordinates->getLat(),
-                $trip->coordinate->pickup_coordinates->getLng()
-            ],
-            destinationCoordinates: [
-                $user->lastLocations->latitude,
-                $user->lastLocations->longitude
-            ],
-        );
-        $attributes['driver_arrival_time'] = (float)($driverArrivalTime[0]['duration']) / 60;
-        $this->driverDetailService->update(id: $user->id, data: ['availability_status' => 'on_trip']);
-
-        $data = $this->tempTripNotificationService->getBy(criteria: [
-            ['trip_request_id' => $trip->id],
-            ['user_id', '!=', auth('api')->id()]
-        ], relations: ['user']);
-
-        if (!empty($data)) {
-            $push = getNotification('trip_started');
-            $notification = [
-                'title' => translate($push['title']),
-                'description' => translate($push['description']),
-                'status' => $push['status'],
-                'ride_request_id' => $trip->id,
-                'type' => $trip->type,
-                'action' => $push['action']
-            ];
-            dispatch(new SendPushNotificationJob($notification, $data))->onQueue('high');
-            $this->tempTripNotificationService->delete(id: $trip->id);
-            $this->tempTripNotificationService->deleteBy(criteria: ['user_id', $user->id]);
-        }
-        //Trip update
-        $this->update(data: $attributes, id: $trip->id);
-        //deleting exiting rejected driver request for this trip
-        $this->rejectedDriverRequestService->deleteBy(criteria: ['trip_request_id', $trip->id]);
-
-        return getNotification('driver_on_the_way');
     }
 
 
@@ -1756,7 +1741,7 @@ class TripRequestService extends BaseService implements TripRequestServiceInterf
                 }
             }
             $data['coordinate']['drop_coordinates'] = new Point($trip->driver->lastLocations->latitude, $trip->driver->lastLocations->longitude);
-            $drivingMode = $trip?->vehicleCategory?->type === 'motor_bike' ? 'TWO_WHEELER' : 'DRIVE';
+            $drivingMode = resolveDrivingMode($trip?->vehicleCategory?->type);
             $intermediate_coordinate = [];
             if ($trip->coordinate->is_reached_1) {
                 if ($trip->coordinate->is_reached_2) {
@@ -1773,7 +1758,7 @@ class TripRequestService extends BaseService implements TripRequestServiceInterf
             $getRoutes = getRoutes([
                 $trip->coordinate->pickup_coordinates->latitude,
                 $trip->coordinate->pickup_coordinates->longitude
-            ], [$trip->driver->lastLocations->latitude, $trip->driver->lastLocations->longitude], $intermediate_coordinate, [$drivingMode]);
+            ], [$trip->driver->lastLocations->latitude, $trip->driver->lastLocations->longitude], $intermediate_coordinate, $drivingMode);
             if (array_key_exists('error', $getRoutes)) {
                 DB::rollBack();
                 return false;
@@ -1918,7 +1903,7 @@ class TripRequestService extends BaseService implements TripRequestServiceInterf
         return $trip->refresh();
     }
 
-    public function findNearestDrivers(string $latitude, string $longitude, string $zoneId, int|string $radius, ?string $vehicleCategoryId = null, ?string $requestType = null, ?string $rideRequestType = null, int|string|null $parcelWeight = null, bool $femaleDriverOnly = false): mixed
+    public function findNearestDrivers(string $latitude, string $longitude, string $zoneId, int|string $radius, ?string $vehicleCategoryId = null, ?string $requestType = null, ?string $rideRequestType = null, int|string|null $parcelWeight = null, bool $femaleDriverOnly = false, ?string $scheduledAt = null): mixed
     {
         $attributes = [
             'latitude' => $latitude,
@@ -1938,6 +1923,10 @@ class TripRequestService extends BaseService implements TripRequestServiceInterf
         }
         if ($femaleDriverOnly && (bool)(businessConfig(key: 'female_only_ride_service', settingsType: TRIP_SETTINGS)?->value ?? 0)) {
             $attributes['driver_gender'] = GENDER_FEMALE;
+        }
+
+        if ($rideRequestType === SCHEDULED && $scheduledAt) {
+            $attributes['availability_at'] = $scheduledAt;
         }
 
         $maxParcelRequestAcceptLimit = businessConfig(key: 'maximum_parcel_request_accept_limit', settingsType: DRIVER_SETTINGS);
@@ -2104,6 +2093,86 @@ class TripRequestService extends BaseService implements TripRequestServiceInterf
         }
 
         return $trip;
+    }
+
+    public function isSmartRebookingEligible(?Model $trip, ?string $status): bool
+    {
+        if (!$trip
+            || $status != CANCELLED
+            || $trip->type != RIDE_REQUEST
+            || !in_array($trip->current_status, [ACCEPTED, OUT_FOR_PICKUP])
+            || !(bool)(businessConfig('smart_rebooking', TRIP_SETTINGS)?->value ?? 0)) {
+            return false;
+        }
+
+        $trip->loadMissing('tripStatus');
+        $referenceTime = $trip->current_status == OUT_FOR_PICKUP
+            ? ($trip->tripStatus?->out_for_pickup ?? $trip->tripStatus?->accepted)
+            : $trip->tripStatus?->accepted;
+
+        return $referenceTime && Carbon::parse($referenceTime)->diffInSeconds(now()) <= SMART_REBOOKING_THRESHOLD * 60;
+    }
+
+    public function rebookCancelledTrip($oldTrip, $cancellingDriverId): mixed
+    {
+        $oldTrip->loadMissing(['coordinate', 'time']);
+        $coordinate = $oldTrip->coordinate;
+        if (!$coordinate) {
+            return null;
+        }
+
+        $attributes = [
+            'customer_id' => $oldTrip->customer_id,
+            'vehicle_category_id' => $oldTrip->vehicle_category_id,
+            'zone_id' => $oldTrip->zone_id,
+            'area_id' => $oldTrip->area_id,
+            'actual_fare' => $oldTrip->actual_fare,
+            'estimated_fare' => $oldTrip->estimated_fare,
+            'return_fee' => $oldTrip->return_fee,
+            'cancellation_fee' => $oldTrip->cancellation_fee,
+            'extra_fare_fee' => $oldTrip->extra_fare_fee,
+            'extra_fare_amount' => $oldTrip->extra_fare_amount,
+            'surge_multiplier' => $oldTrip->surge_percentage,
+            'rise_request_count' => $oldTrip->rise_request_count,
+            'estimated_distance' => (string)$oldTrip->estimated_distance,
+            'payment_method' => $oldTrip->payment_method,
+            'note' => $oldTrip->note,
+            'pickup_note' => $oldTrip->pickup_note,
+            'type' => $oldTrip->type,
+            'ride_request_type' => $oldTrip->ride_request_type,
+            'is_female_driver_requested' => $oldTrip->is_female_driver_requested,
+            'scheduled_at' => $oldTrip->scheduled_at,
+            'entrance' => $oldTrip->entrance,
+            'encoded_polyline' => $oldTrip->encoded_polyline,
+            'pickup_coordinates' => $coordinate->pickup_coordinates,
+            'destination_coordinates' => $coordinate->destination_coordinates,
+            'pickup_address' => $coordinate->pickup_address,
+            'destination_address' => $coordinate->destination_address,
+            'customer_request_coordinates' => $coordinate->customer_request_coordinates ?? $coordinate->pickup_coordinates,
+            'intermediate_coordinates' => !is_null($coordinate->intermediate_coordinates) ? json_encode($coordinate->intermediate_coordinates) : null,
+            'intermediate_addresses' => $coordinate->intermediate_addresses,
+            'estimated_time' => (string)($oldTrip->time?->estimated_time ?? 0),
+        ];
+
+        DB::beginTransaction();
+        try {
+            $newTrip = $this->createRideRequest(attributes: $attributes);
+            $this->tripRequestRepository->update(id: $newTrip->id, data: ['is_notification_sent' => 1]);
+            $this->rejectedDriverRequestService->create([
+                'trip_request_id' => $newTrip->id,
+                'user_id' => $cancellingDriverId,
+            ]);
+            DB::commit();
+        } catch (\Throwable $e) {
+            DB::rollBack();
+            return null;
+        }
+
+        $final = $this->findOneBy(criteria: ['id' => $newTrip->id], relations: ['coordinate', 'time', 'customer']);
+        $searchRadius = (double)get_cache('search_radius') ?? 5;
+        ProcessPushNotifications::dispatch(radius: $searchRadius, trip: $final, exceptDriverId: $cancellingDriverId)->afterResponse();
+
+        return $final;
     }
 
     public function storeScreenShot(array $attributes): mixed
@@ -2370,5 +2439,172 @@ class TripRequestService extends BaseService implements TripRequestServiceInterf
     public function hasIncompleteRegularRide(array $data): bool
     {
         return $this->tripRequestRepository->hasIncompleteRegularRideQuery(data: $data);
+    }
+
+    public function resolveRouteProgress(Model $trip, array $route): array
+    {
+        $result = [
+            'is_dropped' => in_array($trip->current_status, [COMPLETED, CANCELLED], true),
+            'is_picked' => !in_array($trip->current_status, [PENDING, ACCEPTED], true),
+        ];
+
+        return array_merge($result, $route);
+    }
+
+    public function sendAutoArrivalNotification(Model $trip, array $route, Model $driver): void
+    {
+        if (!(businessConfig('auto_arrival_notification', TRIP_SETTINGS)?->value ?? 0)) {
+            return;
+        }
+
+        if ($trip->current_status !== OUT_FOR_PICKUP || $trip->is_arrival_notification_sent) {
+            return;
+        }
+
+        $thresholdMinutes = (int)(businessConfig('auto_arrival_notification_time', TRIP_SETTINGS)?->value ?? 0);
+        $thresholdSeconds = (int)convertTimeToSecond($thresholdMinutes, 'minute');
+        if ($thresholdSeconds <= 0) {
+            return;
+        }
+
+        $durationSec = (int)($route['duration_sec'] ?? 0);
+        if ($durationSec < 0 || $durationSec > $thresholdSeconds) {
+            return;
+        }
+
+        $customer = $trip->customer;
+        if ($customer?->fcm_token) {
+            sendDeviceNotification(
+                fcm_token: $customer->fcm_token,
+                title: translate(key: 'Driver is Nearby', locale: $customer->current_language_key),
+                description: textVariableDataFormat(value: businessConfig('auto_arrival_notification_customer_message', TRIP_SETTINGS)?->value, min: $thresholdMinutes),
+                status: 1,
+                ride_request_id: $trip->id,
+                type: $trip->type,
+                notification_type: 'auto_arrival',
+                action: 'auto_arrival_notification_customer_message',
+                user_id: $customer->id,
+            );
+        }
+
+        if ($driver?->fcm_token) {
+            sendDeviceNotification(
+                fcm_token: $driver->fcm_token,
+                title: translate(key: 'Almost at pickup point', locale: $driver->current_language_key),
+                description: textVariableDataFormat(value: businessConfig('auto_arrival_notification_driver_message', TRIP_SETTINGS)?->value, min: $thresholdMinutes),
+                status: 1,
+                ride_request_id: $trip->id,
+                type: $trip->type,
+                notification_type: 'auto_arrival',
+                action: 'auto_arrival_notification_driver_message',
+                user_id: $driver->id,
+            );
+        }
+
+        $this->tripRequestRepository->update(id: $trip->id, data: ['is_arrival_notification_sent' => 1]);
+    }
+
+    public function sendDriverIdentityVerificationPush(Model $trip): void
+    {
+        if ($trip->type != RIDE_REQUEST
+            || !(int)(businessConfig(key: 'driver_identity_verification', settingsType: TRIP_SETTINGS)?->value ?? 0)
+            || !$trip->customer?->fcm_token) {
+            return;
+        }
+
+        $identityMessage = businessConfig(key: 'driver_identity_verification_message', settingsType: TRIP_SETTINGS)?->value ?? '';
+        if ($identityMessage === '') {
+            return;
+        }
+
+        sendDeviceNotification(
+            fcm_token: $trip->customer->fcm_token,
+            title: translate(key: 'Verify Driver Identity', locale: $trip->customer->current_language_key),
+            description: $identityMessage,
+            status: 1,
+            ride_request_id: $trip->id,
+            type: $trip->type,
+            notification_type: 'driver_identity_verification_message',
+            action: 'verify_driver_identity',
+            user_id: $trip->customer->id,
+        );
+    }
+
+    public function normalizeBracketedInput(Request $request, string $key): void
+    {
+        if (is_array($request->input($key))) {
+            return;
+        }
+
+        $values = [];
+        foreach ($request->all() as $inputKey => $value) {
+            if (preg_match('/^' . preg_quote($key, '/') . '\[(\d*)]$/', $inputKey, $matches)) {
+                $values[$matches[1] === '' ? count($values) : (int)$matches[1]] = $value;
+            }
+        }
+
+        if (!empty($values)) {
+            ksort($values);
+            $request->merge([$key => array_values($values)]);
+        }
+    }
+
+    public function sendIdentityMismatchCancellationPush(Model $trip, ?array $reasonKeys): void
+    {
+        if (empty($reasonKeys) || !$trip->driver?->fcm_token) {
+            return;
+        }
+
+        $push = getNotification('trip_canceled_for_driver_identity_mismatch', 'driver');
+        if (!$push['status']) {
+            return;
+        }
+
+        $locale = $trip->driver->current_language_key;
+
+        sendDeviceNotification(
+            fcm_token: $trip->driver->fcm_token,
+            title: translate(key: $push['title'], locale: $locale),
+            description: textVariableDataFormat(value: $push['description'], tripId: $trip->ref_id, sentTime: pushSentTime($trip->updated_at), reason: $this->identityMismatchReasonList($reasonKeys, $locale), locale: $locale),
+            status: $push['status'],
+            ride_request_id: $trip->id,
+            type: $trip->type,
+            notification_type: 'trip',
+            action: $push['action'],
+            user_id: $trip->driver->id,
+            notificationData: [
+                'readable_id' => $trip->ref_id,
+                'cancellation_time' => $trip->tripStatus->cancelled
+            ]
+        );
+    }
+
+    private function identityMismatchReasonList(array $reasonKeys, ?string $locale): string
+    {
+        $labels = array_map(fn ($key) => translate(key: IDENTITY_MISMATCH_REASONS[$key], locale: $locale), $reasonKeys);
+
+        return Arr::join(
+            $labels,
+            translate(key: 'list_separator', locale: $locale) . ' ',
+            ' ' . translate(key: 'and', locale: $locale) . ' '
+        );
+    }
+
+    public function resolveIdentityMismatch(Model $trip, ?string $status, ?array $reasonKeys): array
+    {
+        $isMismatched = $status == 'cancelled'
+            && $trip->current_status === OUT_FOR_PICKUP
+            && !empty($reasonKeys);
+
+        if (!$isMismatched) {
+            return ['is_identity_mismatched' => false, 'cancel_reason' => null];
+        }
+
+        $labels = array_map(fn ($key) => IDENTITY_MISMATCH_REASONS[$key], $reasonKeys);
+
+        return [
+            'is_identity_mismatched' => true,
+            'cancel_reason' => 'did not match ' . Arr::join($labels, ', ', ' and '),
+        ];
     }
 }

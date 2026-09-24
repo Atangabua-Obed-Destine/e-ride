@@ -709,3 +709,80 @@
     </div>
 </div>
 {{--surge price modal ends--}}
+
+{{--Driver Suspension Confirmation Modal Start--}}
+<div class="modal fade" id="driverSuspensionModal">
+    <div class="modal-dialog status-warning-modal modal-dialog-centered">
+        <div class="modal-content">
+            <div class="modal-header border-0">
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close">
+                </button>
+            </div>
+            <div class="modal-body pb-5 pt-0 px-4">
+                <div class="max-349 mx-auto text-center">
+                    <img alt="" class="mb-20" id="driverSuspensionIcon"
+                         src="{{ dynamicAsset('public/assets/admin-module/img/modal/delete-worning.png') }}">
+                    <h3 class="text-dark fs-18 mb-2" id="driverSuspensionTitle"></h3>
+                    <p class="fs-14 mb-4 pb-1" id="driverSuspensionSubTitle"></p>
+                    <div class="btn--container justify-content-center">
+                        <button type="button" class="btn btn-secondary min-w-120" data-bs-dismiss="modal">
+                            {{ translate('Cancel') }}
+                        </button>
+                        <a href="#" class="btn btn-primary min-w-120" id="driverSuspensionConfirmBtn"></a>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{{--Driver Suspension Confirmation Modal End--}}
+
+{{--Driver Status Pause Modal Start--}}
+<div class="modal fade" id="driverStatusPauseModal">
+    <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content">
+            <div class="modal-header border-0">
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body pb-4 pt-0 px-4">
+                <form method="GET" action="{{ route('admin.driver.update-status') }}" id="driverPauseForm">
+                    <input type="hidden" name="id" id="driverPauseId">
+                    <input type="hidden" name="status" value="0">
+                    <div class="text-center mb-4">
+                        <img alt="" class="mb-20" src="{{ dynamicAsset('public/assets/admin-module/img/modal/delete-worning.png') }}">
+                        <h3 class="text-dark fs-18 mb-1">{{ translate('Are you sure want to pause the driver status') }}?</h3>
+                        <p class="fs-14 mb-0">{{ translate('This will temporarily stop the driver from receiving new rides.') }}</p>
+                    </div>
+                    <div class="mb-20">
+                        <label for="pause_duration" class="form-label">
+                            {{ translate('Pause Duration') }} <span class="text-danger">*</span>
+                        </label>
+                        <div class="input-group input--group">
+                            <input type="number" name="pause_duration" id="pause_duration" min="1" step="1"
+                                   oninput="this.value = this.value.replace(/[^0-9]/g, '')"
+                                   class="form-control" placeholder="{{ translate('Ex : 5') }}" required>
+                            <select class="form-select" name="pause_duration_type">
+                                <option value="hour">{{ translate('Hour') }}</option>
+                                <option value="day">{{ translate('Day') }}</option>
+                            </select>
+                        </div>
+                    </div>
+                    <div class="mb-4">
+                        <label for="pause_reason" class="form-label">{{ translate('Reason') }}</label>
+                        <div class="character-count">
+                            <textarea class="form-control character-count-field" maxlength="100" data-max-character="100"
+                                      id="pause_reason" rows="3" name="pause_reason"
+                                      placeholder="{{ translate('Write the pause reason') }}"></textarea>
+                            <div class="text-end">{{ translate('0/100') }}</div>
+                        </div>
+                    </div>
+                    <div class="btn--container mb-2 justify-content-center">
+                        <button type="button" class="btn btn-secondary min-w-120" data-bs-dismiss="modal">{{ translate('Cancel') }}</button>
+                        <button type="submit" class="btn btn-primary min-w-120">{{ translate('Pause') }}</button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>
+{{--Driver Status Pause Modal End--}}

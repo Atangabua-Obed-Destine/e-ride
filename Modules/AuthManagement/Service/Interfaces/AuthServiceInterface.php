@@ -14,4 +14,10 @@ interface AuthServiceInterface extends BaseServiceInterface
 
     public function updateLoginUser(string|int $id, array $data): ?Model;
 
+    public function isSocialLoginEnabled(string $medium): bool;
+
+    public function getSocialProfile(string $medium, string $token, ?string $uniqueId): array;
+
+    public function revokeSocialToken(?string $refreshToken): void;
+
 }

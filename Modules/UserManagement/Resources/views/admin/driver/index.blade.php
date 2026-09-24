@@ -32,15 +32,19 @@
                         <ul class="nav nav--tabs p-1 rounded bg-white" role="tablist">
                             <li class="nav-item" role="presentation">
                                 <a href="{{ url()->current() }}?status=all"
-                                   class="nav-link {{ !request()->has('status') || request()->get('status') =='all'? 'active' : '' }}">{{ translate('all') }}</a>
+                                   class="nav-link {{ !request()->has('status') || request()->get('status') =='all'? 'active' : '' }}">{{ translate('all') }} ({{ $statusCounts['all'] }})</a>
                             </li>
                             <li class="nav-item" role="presentation">
                                 <a href="{{ url()->current() }}?status=active"
-                                   class="nav-link {{ request()->get('status') =='active' ? 'active' : '' }}">{{ translate('active') }}</a>
+                                   class="nav-link {{ request()->get('status') =='active' ? 'active' : '' }}">{{ translate('active') }} ({{ $statusCounts['active'] }})</a>
                             </li>
                             <li class="nav-item" role="presentation">
                                 <a href="{{ url()->current() }}?status=inactive"
-                                   class="nav-link {{ request()->get('status') =='inactive' ? 'active' : '' }}">{{ translate('inactive') }}</a>
+                                   class="nav-link {{ request()->get('status') =='inactive' ? 'active' : '' }}">{{ translate('inactive') }} ({{ $statusCounts['inactive'] }})</a>
+                            </li>
+                            <li class="nav-item" role="presentation">
+                                <a href="{{ url()->current() }}?status=suspended"
+                                   class="nav-link {{ request()->get('status') =='suspended' ? 'active' : '' }}">{{ translate('suspended') }} ({{ $statusCounts['suspended'] }})</a>
                             </li>
                         </ul>
 
@@ -160,8 +164,8 @@
                                                                         <i class="bi bi-patch-exclamation-fill text-danger"></i>
                                                                     </span>
                                                                 @endif
-                                                                @if($driver->driverDetails->is_suspended)
-                                                                    <img width="14" src="{{ dynamicAsset('public/assets/admin-module/img/svg/on-hold.svg') }}" alt="" data-bs-toggle="tooltip" data-bs-placement="right" data-bs-title="{{ translate('on_hold') }}">
+                                                                @if($driver->driverDetails->isCurrentlyPaused())
+                                                                    <img width="14" src="{{ dynamicAsset('public/assets/admin-module/img/svg/on-hold.svg') }}" alt="" data-bs-toggle="tooltip" data-bs-placement="right" data-bs-title="{{ translate('paused') }}">
                                                                 @endif
                                                             </span>
                                                         </a>
@@ -183,12 +187,13 @@
                                                     </td>
                                                     @can('user_edit')
                                                         <td class="status">
-                                                            <label class="switcher">
-                                                                <input class="switcher_input status-change"
-                                                                       type="checkbox"
-                                                                       {{ $driver->is_active == 1 ? 'checked' : '' }}
-                                                                       data-url="{{ route('admin.driver.update-status') }}"
-                                                                       id="{{ $driver->id }}">
+                                                            @php($statusLock = !$driver->is_active ? translate('Driver is suspended') : $driver->driverDetails->systemPauseMessage())
+                                                            <label class="switcher {{ $statusLock ? 'opacity-50' : 'driver-status-toggle' }}"
+                                                                   @if($statusLock) data-bs-toggle="tooltip" data-bs-title="{{ $statusLock }}"
+                                                                   @else role="button" data-id="{{ $driver->id }}" data-paused="{{ $driver->driverDetails->isCurrentlyPaused() ? 1 : 0 }}" @endif>
+                                                                <input class="switcher_input" type="checkbox" onclick="return false;"
+                                                                       {{ !$driver->driverDetails->isCurrentlyPaused() ? 'checked' : '' }}
+                                                                       {{ $statusLock ? 'disabled' : '' }}>
                                                                 <span class="switcher_control"></span>
                                                             </label>
                                                         </td>

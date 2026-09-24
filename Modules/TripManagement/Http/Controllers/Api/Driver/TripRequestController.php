@@ -2,6 +2,7 @@
 
 namespace Modules\TripManagement\Http\Controllers\Api\Driver;
 
+use App\Exceptions\ImageUploadException;
 use App\Events\AnotherDriverTripAcceptedEvent;
 use App\Events\DriverTripAcceptedEvent;
 use App\Events\DriverTripCancelledEvent;
@@ -30,6 +31,7 @@ use Modules\TripManagement\Service\Interfaces\TripRequestServiceInterface;
 use Modules\TripManagement\Service\Interfaces\TripRequestTimeServiceInterface;
 use Modules\TripManagement\Transformers\TripRequestResource;
 use Modules\UserManagement\Lib\LevelHistoryManagerTrait;
+use Modules\UserManagement\Service\Interfaces\DriverAvailabilityScheduleServiceInterface;
 use Modules\UserManagement\Service\Interfaces\DriverDetailServiceInterface;
 use Modules\UserManagement\Service\Interfaces\UserLastLocationServiceInterface;
 use Modules\UserManagement\Service\Interfaces\UserServiceInterface;
@@ -48,17 +50,19 @@ class TripRequestController extends Controller
     protected $tempTripNotificationService;
     protected $fareBiddingService;
     protected $rejectedDriverRequestService;
+    protected $driverAvailabilityScheduleService;
 
     public function __construct(
-        TripRequestServiceInterface           $tripRequestService,
-        TripRequestTimeServiceInterface       $tripRequestTimeService,
-        TripRequestCoordinateServiceInterface $tripRequestCoordinateService,
-        UserLastLocationServiceInterface      $userLastLocationService,
-        UserServiceInterface                  $userService,
-        DriverDetailServiceInterface          $driverDetailService,
-        TempTripNotificationServiceInterface  $tempTripNotificationService,
-        FareBiddingServiceInterface           $fareBiddingService,
-        RejectedDriverRequestServiceInterface $rejectedDriverRequestService,
+        TripRequestServiceInterface                $tripRequestService,
+        TripRequestTimeServiceInterface            $tripRequestTimeService,
+        TripRequestCoordinateServiceInterface      $tripRequestCoordinateService,
+        UserLastLocationServiceInterface           $userLastLocationService,
+        UserServiceInterface                       $userService,
+        DriverDetailServiceInterface               $driverDetailService,
+        TempTripNotificationServiceInterface       $tempTripNotificationService,
+        FareBiddingServiceInterface                $fareBiddingService,
+        RejectedDriverRequestServiceInterface      $rejectedDriverRequestService,
+        DriverAvailabilityScheduleServiceInterface $driverAvailabilityScheduleService,
     )
     {
         $this->tripRequestService = $tripRequestService;
@@ -70,6 +74,7 @@ class TripRequestController extends Controller
         $this->tempTripNotificationService = $tempTripNotificationService;
         $this->fareBiddingService = $fareBiddingService;
         $this->rejectedDriverRequestService = $rejectedDriverRequestService;
+        $this->driverAvailabilityScheduleService = $driverAvailabilityScheduleService;
     }
 
     public function showRideDetails(Request $request)
@@ -387,7 +392,11 @@ class TripRequestController extends Controller
         $uploadedPickupImages = [];
         if ($requirePickupProof) {
             foreach ((array)$request->file('pickup_proof_images') as $image) {
-                $fileName = fileUploader('trip/parcel/proof/pickup/', $image->getClientOriginalExtension(), $image);
+                try {
+                    $fileName = fileUploader('trip/parcel/proof/pickup/', $image->getClientOriginalExtension(), $image);
+                } catch (ImageUploadException) {
+                    continue;
+                }
                 if ($fileName) {
                     $uploadedPickupImages[] = $fileName;
                 }
@@ -523,6 +532,14 @@ class TripRequestController extends Controller
 
         if ($user->driverDetails->is_online != 1) {
             return response()->json(responseFormatter(DRIVER_UNAVAILABLE_403), 403);
+        }
+
+        if (!$user->is_active) {
+            return response()->json(responseFormatter(ACCOUNT_SUSPEND_OR_PAUSE), 403);
+        }
+
+        if (!$this->driverAvailabilityScheduleService->isAvailableNow($user->id)) {
+            return response()->json(responseFormatter(DRIVER_SCHEDULE_UNAVAILABLE_403), 403);
         }
 
         $vehicle = $user->vehicle;
@@ -685,7 +702,7 @@ class TripRequestController extends Controller
 
     public function rideStatusUpdate(Request $request)
     {
-        $trip = $this->tripRequestService->findOneBy(criteria: ['id' => $request->trip_request_id], relations: ['customer']);
+        $trip = $this->tripRequestService->findOneBy(criteria: ['id' => $request->trip_request_id], relations: ['customer', 'tripStatus']);
         $requireDeliveryProof = $trip && $trip->is_parcel_delivery_proof_enabled && $trip->type == PARCEL && $request->status == COMPLETED;
 
         $rules = [
@@ -726,7 +743,11 @@ class TripRequestController extends Controller
         $uploadedDeliveryImages = [];
         if ($requireDeliveryProof) {
             foreach ((array)$request->file('delivery_proof_images') as $image) {
-                $fileName = fileUploader('trip/parcel/proof/delivery/', $image->getClientOriginalExtension(), $image);
+                try {
+                    $fileName = fileUploader('trip/parcel/proof/delivery/', $image->getClientOriginalExtension(), $image);
+                } catch (ImageUploadException) {
+                    continue;
+                }
                 if ($fileName) {
                     $uploadedDeliveryImages[] = $fileName;
                 }
@@ -746,6 +767,8 @@ class TripRequestController extends Controller
             $dataToBeMerged['upload_delivery_images'] = $uploadedDeliveryImages;
         }
 
+        $shouldRebook = $this->tripRequestService->isSmartRebookingEligible(trip: $trip, status: $request->status);
+
         try {
             $data = $this->tripRequestService->updateRideStatus(data: array_merge($validator->validated(), $dataToBeMerged));
         } catch (\Throwable $e) {
@@ -762,6 +785,8 @@ class TripRequestController extends Controller
                 'message' => translate('Drop off location not found')]), 403);
         }
 
+        $rebookedTrip = $shouldRebook ? $this->tripRequestService->rebookCancelledTrip($trip, auth('api')->id()) : null;
+
         $tripType = $trip->type == PARCEL ? PARCEL : ($trip->ride_request_type == SCHEDULED ? 'schedule_ride' : 'trip');
         //Get status wise notification message
         if ($request->status == 'cancelled' && $trip->type == PARCEL) {
@@ -775,6 +800,21 @@ class TripRequestController extends Controller
                 notification_type: $trip->type == RIDE_REQUEST ? 'trip' : 'parcel',
                 action: $push['action'],
                 user_id: $trip->customer->id
+            );
+        } elseif ($rebookedTrip) {
+            $push = getNotification(key: 'searching_for_rider', group: 'customer');
+            sendDeviceNotification(fcm_token: $trip->customer->fcm_token,
+                title: translate(key: $push['title'], locale: $trip->customer->current_language_key),
+                description: textVariableDataFormat(value: $push['description'], locale: $trip->customer->current_language_key),
+                status: $push['status'],
+                ride_request_id: $rebookedTrip->id,
+                type: $trip->type,
+                notification_type: 'trip',
+                action: $push['action'],
+                user_id: $trip->customer->id,
+                notificationData: [
+                    'new_trip_id' => $rebookedTrip->id,
+                ]
             );
         } else {
             $rideRequestType = $trip->ride_request_type == SCHEDULED ? 'schedule_ride_' : 'trip_';
@@ -816,9 +856,9 @@ class TripRequestController extends Controller
             return response()->json(responseFormatter(constant: DEFAULT_400, errors: errorProcessor($validator)), 403);
         }
         $user = auth('api')->user()->load(['driverDetails', 'lastLocations', 'userAccount']);
-        if ($user->driverDetails->is_suspended)
+        if ($user->driverDetails->isCurrentlyPaused() || !$user->is_active)
         {
-            return response()->json(responseFormatter(ACCOUNT_SUSPEND), 403);
+            return response()->json(responseFormatter(ACCOUNT_SUSPEND_OR_PAUSE), 403);
         }
 
         $trip = $this->tripRequestService->findOneBy(criteria: ['id' => $request->trip_request_id], relations: ['driver.vehicle.category', 'coordinate']);
@@ -899,6 +939,11 @@ class TripRequestController extends Controller
             ]);
             return response()->json(responseFormatter(constant: DEFAULT_UPDATE_200));
         }
+
+        if (!$this->driverAvailabilityScheduleService->isDriverAvailableForTrip($user->id, $trip)) {
+            return response()->json(responseFormatter(constant: DRIVER_SCHEDULE_UNAVAILABLE_403), 403);
+        }
+
         $env = env('APP_MODE');
         $otp = $env != "live" ? '0000' : rand(1000, 9999);
 
@@ -943,6 +988,7 @@ class TripRequestController extends Controller
                 $user->lastLocations->latitude,
                 $user->lastLocations->longitude
             ],
+            drivingMode: resolveDrivingMode($trip?->vehicleCategory?->type)
         );
 
         if (array_key_exists('error', $driverArrivalTime)) {
@@ -1022,6 +1068,7 @@ class TripRequestController extends Controller
             action: $push['action'],
             user_id: $trip->customer->id
         );
+        $this->tripRequestService->sendDriverIdentityVerificationPush($trip);
         try {
             checkReverbConnection() && DriverTripAcceptedEvent::broadcast($trip);
         } catch (\Exception $exception) {
@@ -1038,9 +1085,9 @@ class TripRequestController extends Controller
             return response()->json(responseFormatter(constant: DRIVER_UNAVAILABLE_403), 403);
         }
 
-        if ($user->driverDetails->is_suspended)
+        if ($user->driverDetails->isCurrentlyPaused() || !$user->is_active)
         {
-            return response()->json(responseFormatter(ACCOUNT_SUSPEND), 403);
+            return response()->json(responseFormatter(ACCOUNT_SUSPEND_OR_PAUSE), 403);
         }
 
         $validator = Validator::make($request->all(), [
@@ -1056,6 +1103,11 @@ class TripRequestController extends Controller
         if (!$trip) {
             return response()->json(responseFormatter(constant: TRIP_REQUEST_404), 403);
         }
+
+        if (!$this->driverAvailabilityScheduleService->isDriverAvailableForTrip($user->id, $trip)) {
+            return response()->json(responseFormatter(constant: DRIVER_SCHEDULE_UNAVAILABLE_403), 403);
+        }
+
         if ($trip->driver_id) {
 
             return response()->json(responseFormatter(constant: TRIP_REQUEST_DRIVER_403), 403);

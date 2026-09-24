@@ -8,6 +8,7 @@ use Illuminate\Database\Eloquent\Collection;
 use Illuminate\Contracts\Pagination\LengthAwarePaginator;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Http\JsonResponse;
+use Illuminate\Http\Request;
 use Modules\UserManagement\Entities\User;
 
 interface TripRequestServiceInterface extends BaseServiceInterface
@@ -67,7 +68,7 @@ interface TripRequestServiceInterface extends BaseServiceInterface
 
     public function getDriverIncompleteRide(): mixed;
 
-    public function handleRequestActionPushNotification($trip, $user);
+    public function revokeSuspendedDriverAccess(int|string $driverId): void;
 
     public function getTripOverview($data);
 
@@ -93,11 +94,15 @@ interface TripRequestServiceInterface extends BaseServiceInterface
 
     public function getLockedTrip(array $data = []): mixed;
 
-    public function findNearestDrivers(string $latitude, string $longitude, string $zoneId, int|string $radius, ?string $vehicleCategoryId = null, ?string $requestType = null, ?string $rideRequestType = null, int|string|null $parcelWeight = null, bool $femaleDriverOnly = false): mixed;
+    public function findNearestDrivers(string $latitude, string $longitude, string $zoneId, int|string $radius, ?string $vehicleCategoryId = null, ?string $requestType = null, ?string $rideRequestType = null, int|string|null $parcelWeight = null, bool $femaleDriverOnly = false, ?string $scheduledAt = null): mixed;
 
     public function getIncompleteRide(array $criteria = []): mixed;
 
     public function createRideRequest(array $attributes = []): mixed;
+
+    public function isSmartRebookingEligible(?Model $trip, ?string $status): bool;
+
+    public function rebookCancelledTrip($oldTrip, $cancellingDriverId): mixed;
 
     public function storeScreenShot(array $attributes): mixed;
 
@@ -115,4 +120,16 @@ interface TripRequestServiceInterface extends BaseServiceInterface
     public function pendingRideResponse(array $data, $request): JsonResponse;
 
     public function hasIncompleteRegularRide(array $data): bool;
+
+    public function resolveRouteProgress(Model $trip, array $route): array;
+
+    public function sendAutoArrivalNotification(Model $trip, array $route, Model $driver): void;
+
+    public function sendDriverIdentityVerificationPush(Model $trip): void;
+
+    public function normalizeBracketedInput(Request $request, string $key): void;
+
+    public function sendIdentityMismatchCancellationPush(Model $trip, ?array $reasonKeys): void;
+
+    public function resolveIdentityMismatch(Model $trip, ?string $status, ?array $reasonKeys): array;
 }

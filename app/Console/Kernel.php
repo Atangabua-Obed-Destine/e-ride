@@ -11,6 +11,8 @@ class Kernel extends ConsoleKernel
     {
         $schedule->command('trip-request:cancel')->everyMinute();
         $schedule->command('app:process-scheduled-trips')->everyMinute();
+        $schedule->command('driver:resume-paused')->everyMinute();
+        $schedule->command('driver:sync-availability')->everyMinute();
     }
 
     protected function commands()

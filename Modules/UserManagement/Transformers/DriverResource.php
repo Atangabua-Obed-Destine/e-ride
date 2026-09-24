@@ -63,14 +63,17 @@ class DriverResource extends JsonResource
             'paid_amount' => $paidAmount,
             'level_up_reward_amount' => $levelUpRewardAmount,
             'is_verified' => (int) ($this->driverDetails?->is_verified ?? 0),
-            'is_suspended' => (int) ($this->driverDetails?->is_suspended ?? 0),
-            'suspend_reason' => $this->driverDetails?->suspend_reason ?? null,
+            'is_paused' => (int) ($this->driverDetails?->isCurrentlyPaused() ?? 0),
+            'pause_reason' => $this->driverDetails?->pause_reason ?? null,
+            'pause_duration' => $this->driverDetails?->pause_duration ?? null,
+            'paused_until' => $this->driverDetails?->paused_until ?? null,
             'trigger_verification_at' => $this->driverDetails?->trigger_verification_at ?? null,
             'need_verification' => (bool) $this->driverIdentityVerification,
             'additional_data' => $this->whenLoaded('additionalInfo', fn () => $this->additionalInfo
                 ? new AdditionalDataResource($this->additionalInfo, DRIVER)
                 : []),
             'logged_in_via' => $this->logged_in_via,
+            'availability_schedule' => $this->when(isset($this->availability_schedule), fn () => $this->availability_schedule),
         ];
     }
 }

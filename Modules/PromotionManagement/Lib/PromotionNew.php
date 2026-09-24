@@ -195,7 +195,10 @@ function buildDeviceNotificationPayload($fcm_token, $title, $description, $statu
                 "reward_amount" => (string)($notificationData['reward_amount'] ?? 0),
                 "next_level" => (string)($notificationData['next_level'] ?? null),
                 "sound" => "notification.wav",
-                "android_channel_id" => "hexaride"
+                "android_channel_id" => "hexaride",
+                "new_trip_id" => (string)($notificationData['new_trip_id'] ?? null),
+                "trip_readable_id" => (string)($notificationData['readable_id'] ?? null),
+                "trip_cancellation_time" => (string)($notificationData['cancellation_time'] ?? null),
             ],
             'notification' => [
                 'title' => (string)$title,

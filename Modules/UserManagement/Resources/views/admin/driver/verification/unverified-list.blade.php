@@ -113,7 +113,7 @@
                                                         <i class="bi bi-patch-exclamation-fill text-danger"></i>
                                                     </span>
                                                 @endif
-                                                @if($unverifiedDriver->driver->driverDetails->is_suspended)
+                                                @if($unverifiedDriver->driver->driverDetails->is_paused)
                                                     <img width="14"
                                                          src="{{ dynamicAsset('public/assets/admin-module/img/svg/on-hold.svg') }}"
                                                          alt="" data-bs-toggle="tooltip" data-bs-placement="right"

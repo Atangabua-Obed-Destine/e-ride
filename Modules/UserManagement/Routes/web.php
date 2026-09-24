@@ -103,6 +103,9 @@ Route::group(['prefix' => 'admin', 'as' => 'admin.', 'middleware' => 'admin'], f
             Route::get('transaction-export', 'driverTransactionExport')->name('transaction-export');
             Route::get('update-suspension-status/{id}', 'updateSuspensionStatus')->name('update-suspension-status');
             Route::get('mark-as-verified/{id}', 'markAsVerified')->name('mark-as-verified');
+            Route::post('availability-schedule/{id}', 'storeAvailabilitySchedule')->name('availability-schedule.store');
+            Route::delete('availability-schedule/{id}/slot/{scheduleId}', 'destroyAvailabilitySchedule')->name('availability-schedule.destroy');
+            Route::post('same-time-for-every-day/{id}', 'updateSameTimeForEveryDay')->name('same-time-for-every-day.update');
         });
 
 

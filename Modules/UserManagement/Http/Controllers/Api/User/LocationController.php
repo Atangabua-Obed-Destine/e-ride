@@ -102,6 +102,7 @@ class LocationController extends Controller
                             originCoordinates: [$lat,$lng],
                             destinationCoordinates: $destinationCoordinates,
                             intermediateCoordinates: $intermediateCoordinates,
+                            drivingMode: resolveDrivingMode($tripNavigation->trip->vehicleCategory?->type)
                         );
 
                         if (!array_key_exists('error', $response)) {

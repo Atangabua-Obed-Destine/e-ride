@@ -23,8 +23,8 @@ class StoreSendMessageRequest extends FormRequest
                 return !$api;
             })],
             'trip_id' => 'sometimes',
-            'message' => $api ? 'required_without:files' : [Rule::requiredIf(function () {
-                return !$this->has('file') && !$this->has('image');
+            'message' =>[Rule::requiredIf(function () {
+                return !$this->has('file') && !$this->has('image') && !$this->has('voice_message');
             })],
             'files' => 'sometimes|array',
             'files.*' => 'mimes:'
@@ -40,6 +40,9 @@ class StoreSendMessageRequest extends FormRequest
             'image' => 'sometimes|array',
             'image.*' => 'mimes:'
                 . str_replace(['.', ' '], '', IMAGE_ACCEPTED_EXTENSIONS)
+                . '|max:' . convertBytesToKiloBytes(maxUploadSize('file')),
+            'voice_message' => 'sometimes|file|mimetypes:'
+                . str_replace(' ', '', AUDIO_ACCEPTED_MIME_TYPES)
                 . '|max:' . convertBytesToKiloBytes(maxUploadSize('file')),
 
         ];

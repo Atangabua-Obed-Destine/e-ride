@@ -4,8 +4,8 @@
 use App\Events\CustomerTripPaymentSuccessfulEvent;
 use Modules\TripManagement\Entities\TripRequest;
 use Modules\TransactionManagement\Traits\TransactionTrait;
-use Modules\UserManagement\Enums\SuspendReasonEnum;
 use Modules\UserManagement\Lib\LevelHistoryManagerTrait;
+use Modules\UserManagement\Service\Interfaces\DriverDetailServiceInterface;
 
 if (!function_exists('tripRequestUpdate'))
 {
@@ -44,23 +44,7 @@ if (!function_exists('tripRequestUpdate'))
             );
         }
 
-        $maximumAmountToHoldCash = businessConfig('cash_in_hand_setup_status')?->value && businessConfig('max_amount_to_hold_cash')?->value ? businessConfig('max_amount_to_hold_cash')?->value : null;
-        $payableBalance = $trip?->driver?->userAccount->payable_balance > $trip?->driver?->userAccount->receivable_balance ? ($trip?->driver?->userAccount->payable_balance - $trip?->driver?->userAccount->receivable_balance) : 0;
-        if ($maximumAmountToHoldCash && $payableBalance >= $maximumAmountToHoldCash)
-        {
-            $trip->driver->driverDetails->update(['is_suspended' => 1, 'suspend_reason' => SuspendReasonEnum::CASH_IN_HAND_LIMIT->value]);
-            $cashInHandLimitExceeds = getNotification('cash_in_hand_limit_exceeds');
-            sendDeviceNotification(
-                fcm_token: $trip->driver->fcm_token,
-                title: translate(key: $cashInHandLimitExceeds['title'], locale: $trip->driver->current_language_key),
-                description: textVariableDataFormat(value: $cashInHandLimitExceeds['description'], driverName: $trip->customer->first_name . ' ' . $trip->customer->last_name, locale: $trip->driver->current_language_key),
-                status: $cashInHandLimitExceeds['status'],
-                ride_request_id: $trip?->driver->id,
-                notification_type: '',
-                action: $cashInHandLimitExceeds['action'],
-                user_id: $trip?->driver->id,
-            );
-        }
+        app(DriverDetailServiceInterface::class)->pauseIfCashInHandLimitExceeded($trip);
 
         if (!empty($trip)) {
             try {

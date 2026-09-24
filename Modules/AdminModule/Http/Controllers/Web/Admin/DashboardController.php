@@ -93,7 +93,7 @@ class DashboardController extends BaseController
         $superAdmin = $this->employeeService->findOneBy(criteria: ['user_type' => 'super-admin']);
         $superAdminAccount = $this->userAccountService->findOneBy(criteria: ['user_id' => $superAdmin?->id]);
         $customers = $this->customerService->getBy(criteria: ['user_type' => CUSTOMER, 'is_active' => true])->count();
-        $drivers = $this->driverService->getBy(criteria: ['user_type' => DRIVER, 'is_active' => true])->count();
+        $drivers = $this->driverService->getBy(criteria: ['user_type' => DRIVER, 'is_active' => 1], whereHasRelations: ['driverDetails' => ['is_paused' => 0]])->count();
         $totalCouponAmountGiven = $this->tripRequestService->getBy(criteria: ['payment_status' => PAID])->SUM('coupon_amount');
         $totalDiscountAmountGiven = $this->tripRequestService->getBy(criteria: ['payment_status' => PAID])->SUM('discount_amount');
         $totalParcels = $this->tripRequestService->getBy(criteria: ['type' => PARCEL])->count();

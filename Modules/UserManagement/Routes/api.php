@@ -82,6 +82,9 @@ Route::group(['prefix' => 'driver'], function () {
             Route::get('my-activity', 'myActivity');
             Route::post('change-language', 'changeLanguage');
             Route::get('info', 'profileInfo');
+            Route::post('availability-schedule', 'storeAvailabilitySchedule');
+            Route::delete('availability-schedule/{id}', 'destroyAvailabilitySchedule');
+            Route::put('same-time-for-every-day', 'updateSameTimeForEveryDay');
             Route::get('income-statement', 'incomeStatement');
             Route::put('update/profile', 'updateProfile');
             Route::get('referral-details', 'referralDetails');

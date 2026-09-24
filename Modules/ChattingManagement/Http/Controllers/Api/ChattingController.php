@@ -2,14 +2,9 @@
 
 namespace Modules\ChattingManagement\Http\Controllers\Api;
 
-use App\Events\CustomerRideChatEvent;
-use App\Events\DriverRideChatEvent;
-use Exception;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Routing\Controller;
-use Illuminate\Support\Facades\DB;
-use Modules\AdminModule\Service\Interfaces\AdminNotificationServiceInterface;
 use Modules\BusinessManagement\Service\Interfaces\QuestionAnswerServiceInterface;
 use Modules\ChattingManagement\Http\Requests\StoreSendMessageRequest;
 use Modules\ChattingManagement\Service\Interfaces\ChannelConversationServiceInterface;
@@ -29,12 +24,11 @@ class ChattingController extends Controller
     protected $tripRequestService;
     protected $userService;
 
-    protected $adminNotificationService;
     protected $questionAnswerService;
 
     public function __construct(ChannelConversationServiceInterface $channelConversationService, ChannelListServiceInterface $channelListService,
                                 ChannelUserServiceInterface         $channelUserService, TripRequestServiceInterface $tripRequestService, UserService $userService,
-                                AdminNotificationServiceInterface   $adminNotificationService, QuestionAnswerServiceInterface $questionAnswerService
+                                QuestionAnswerServiceInterface      $questionAnswerService
     )
     {
         $this->channelConversationService = $channelConversationService;
@@ -42,7 +36,6 @@ class ChattingController extends Controller
         $this->channelUserService = $channelUserService;
         $this->tripRequestService = $tripRequestService;
         $this->userService = $userService;
-        $this->adminNotificationService = $adminNotificationService;
         $this->questionAnswerService = $questionAnswerService;
     }
 
@@ -98,69 +91,27 @@ class ChattingController extends Controller
 
     public function sendMessage(StoreSendMessageRequest $request): JsonResponse
     {
-        $column = 'customer_id';
-        if ($request->user()->user_type == 'driver') {
-            $column = 'driver_id';
-        }
-        $attributes[$column] = auth()->user()->id;
-        $relations = ['customer', 'driver'];
-        $whereInCriteria = [
-            'current_status' => [ONGOING, OUT_FOR_PICKUP, ACCEPTED]
-        ];
-        $trip = $this->tripRequestService->findOneBy(criteria: $attributes, whereInCriteria: $whereInCriteria, relations: $relations);
+        $column = $request->user()->user_type == 'driver' ? 'driver_id' : 'customer_id';
+        $trip = $this->tripRequestService->findOneBy(
+            criteria: [$column => auth()->user()->id],
+            whereInCriteria: ['current_status' => [ONGOING, OUT_FOR_PICKUP, ACCEPTED]],
+            relations: ['customer', 'driver']
+        );
         if (!$trip) {
             return response()->json(responseFormatter(constant: TRIP_REQUEST_404), 403);
         }
-        $user = auth()->user();
-        DB::beginTransaction();
-        $this->channelListService->update(id: $request['channel_id'], data: ['updated_at' => now()]);
-        $channelUserData = [
-            'is_read' => false,
-        ];
+        if ($request->has('voice_message') && !$this->channelConversationService->isVoiceMessageEnabled()) {
+            return response()->json(responseFormatter(constant: VOICE_MESSAGE_DISABLED_403), 403);
+        }
 
-        $this->channelUserService->updatedBy(criteria: ['channel_id' => $request['channel_id'], 'user_id' => $user->id], data: $channelUserData);
-        $attributes = [
+        $this->channelConversationService->sendRideMessage($trip, auth()->user(), [
             'channel_id' => $request['channel_id'],
             'message' => $request['message'],
-            'user_id' => $user->id,
             'trip_id' => $request['trip_id'],
-            'is_read' => 0,
-        ];
-        if ($request->has('files')) {
-            $attributes['files'] = $request->file('files');
-        }
-        $channelConversation = $this->channelConversationService->create($attributes);
+            'files' => $request->has('files') ? $request->file('files') : null,
+            'voice_message' => $request->has('voice_message') ? $request->file('voice_message') : null,
+        ]);
 
-        $channelConversationWithFiles = $this->channelConversationService->findOne(id: $channelConversation?->id, relations: ['user', 'conversation_files', 'channel']);
-        $to_user = $user->user_type == DRIVER ? $trip->customer : $trip->driver;
-        $user_id = $to_user->id;
-
-        if (checkReverbConnection()) {
-            try {
-                $user->user_type == DRIVER ? CustomerRideChatEvent::broadcast($trip, $channelConversationWithFiles) : DriverRideChatEvent::broadcast($trip, $channelConversationWithFiles);
-            } catch (Exception $exception) {
-
-            }
-        }
-
-        $this->channelConversationService->updatedBy(criteria: ['user_id' => $user_id, 'channel_id' => $request['channel_id']], data: ['is_read' => 1]);
-        $sentTime = pushSentTime($channelConversation->created_at);
-        DB::commit();
-
-        $push = getNotification('new_message');
-
-        sendDeviceNotification(
-            fcm_token: $to_user->fcm_token,
-            title: translate(key:$push['title'], locale: $user?->current_language_key),
-            description: textVariableDataFormat(value: $push['description'], tripId: $trip->ref_id, userName: $user?->full_name ?? $user?->first_name, sentTime: $sentTime, locale: $user?->current_language_key),
-            status: $push['status'],
-            ride_request_id: $trip->id,
-            type: $request->channel_id,
-            notification_type: 'chatting',
-            action: $push['action'],
-            user_id: $user_id,
-            user_name: $user?->first_name . " " . $user?->last_name
-        );
         return response()->json(responseFormatter(DEFAULT_STORE_200), 200);
     }
 
@@ -243,30 +194,11 @@ class ChattingController extends Controller
             return response()->json(responseFormatter(constant: CHANNEL_NOT_FOUND_404), 403);
         }
 
-        DB::beginTransaction();
-
-        $channelUserData = [
-            'is_read' => true,
-        ];
-        $this->channelUserService->updatedBy(criteria: ['channel_id' => $request['channel_id'], ['user_id', '=', $user->id]], data: $channelUserData);
-
-        $attributes = [
+        $this->channelConversationService->sendAdminMessage($user, [
             'channel_id' => $request['channel_id'],
             'message' => $request['message'],
-            'user_id' => $user->id,
-            'is_read' => 0,
-        ];
-        if ($request->has('files')) {
-            $attributes['files'] = $request->file('files');
-        }
-        $channelConversation = $this->channelConversationService->create($attributes);
-        $adminNotificationData = [
-            'model' => 'channel_conversation',
-            'model_id' => $channelConversation->id,
-            'message' => 'new_message_arrived'
-        ];
-        $this->adminNotificationService->create($adminNotificationData);
-        DB::commit();
+            'files' => $request->has('files') ? $request->file('files') : null,
+        ]);
 
         return response()->json(responseFormatter(DEFAULT_STORE_200), 200);
     }

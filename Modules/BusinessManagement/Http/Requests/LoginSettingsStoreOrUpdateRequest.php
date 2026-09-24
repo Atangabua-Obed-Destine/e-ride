@@ -19,6 +19,9 @@ class LoginSettingsStoreOrUpdateRequest extends FormRequest
         return [
             'customer.manual_login' => 'nullable|in:on',
             'customer.otp_login' => 'nullable|in:on',
+            'customer.social_media_login' => 'nullable|in:on',
+            'customer.social_login' => 'nullable|array',
+            'customer.social_login.*' => 'nullable|in:on',
             'driver.manual_login' => 'nullable|in:on',
             'driver.otp_login' => 'nullable|in:on',
             'driver.biometric_login' => 'nullable|in:on',
@@ -44,10 +47,17 @@ class LoginSettingsStoreOrUpdateRequest extends FormRequest
             $customer = $this->input('customer', []);
             $driver   = $this->input('driver', []);
 
-            if (empty($customer['manual_login']) && empty($customer['otp_login'])) {
+            if (empty($customer['manual_login']) && empty($customer['otp_login']) && empty($customer['social_media_login'])) {
                 $validator->errors()->add(
                     'customer',
                     translate('At least one customer login option must be enabled.')
+                );
+            }
+
+            if (!empty($customer['social_media_login']) && empty(array_filter($customer['social_login'] ?? []))) {
+                $validator->errors()->add(
+                    'customer',
+                    translate('At least one social media must remain active for login. Otherwise social media login cannot work.')
                 );
             }
 

@@ -7,6 +7,8 @@ use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Routing\Controller;
 use Illuminate\Support\Facades\Validator;
+use Modules\UserManagement\Http\Requests\DriverAvailabilityScheduleRequest;
+use Modules\UserManagement\Http\Requests\DriverSameTimeForEveryDayRequest;
 use Modules\BusinessManagement\Service\Interfaces\SettingServiceInterface;
 use Modules\Gateways\Library\Payer;
 use Modules\Gateways\Library\Payment as PaymentInfo;
@@ -16,9 +18,11 @@ use Modules\TripManagement\Service\Interfaces\TripRequestServiceInterface;
 use Modules\TripManagement\Transformers\TripRequestResource;
 use Modules\UserManagement\Http\Requests\UserProfileUpdateApiRequest;
 use Modules\UserManagement\Lib\AdditionalDataForm;
+use Modules\UserManagement\Service\Interfaces\DriverAvailabilityScheduleServiceInterface;
 use Modules\UserManagement\Service\Interfaces\DriverDetailServiceInterface;
 use Modules\UserManagement\Service\Interfaces\DriverServiceInterface;
 use Modules\UserManagement\Service\Interfaces\DriverTimeLogServiceInterface;
+use Modules\UserManagement\Transformers\DriverAvailabilityScheduleResource;
 use Modules\UserManagement\Transformers\DriverResource;
 use Modules\UserManagement\Transformers\DriverTimeLogResource;
 
@@ -31,16 +35,19 @@ class DriverController extends Controller
     protected $driverTimeLogService;
     protected $tripRequestService;
     protected $settingsService;
+    protected $driverAvailabilityScheduleService;
 
     public function __construct(DriverServiceInterface        $driverService, DriverDetailServiceInterface $driverDetailService,
                                 DriverTimeLogServiceInterface $driverTimeLogService, TripRequestServiceInterface $tripRequestService,
-                                SettingServiceInterface       $settingService)
+                                SettingServiceInterface       $settingService,
+                                DriverAvailabilityScheduleServiceInterface $driverAvailabilityScheduleService)
     {
         $this->driverService = $driverService;
         $this->driverDetailService = $driverDetailService;
         $this->driverTimeLogService = $driverTimeLogService;
         $this->tripRequestService = $tripRequestService;
         $this->settingsService = $settingService;
+        $this->driverAvailabilityScheduleService = $driverAvailabilityScheduleService;
     }
 
     public function profileInfo(Request $request): JsonResponse
@@ -58,11 +65,40 @@ class DriverController extends Controller
 
             $driver = $this->driverService->findOneBy(criteria: ['id' => auth()->user()->id], withAvgRelations: $withAvgRelations, relations: $relations, withCountQuery: $withCountQuery);
             AdditionalDataForm::pruneRemovedFields($driver, DRIVER);
+
+            $driver->availability_schedule = DriverAvailabilityScheduleResource::make(
+                $this->driverAvailabilityScheduleService->getDisplaySchedule($driver->id)
+            )->resolve();
+
             $driver = DriverResource::make($driver);
 
             return response()->json(responseFormatter(DEFAULT_200, $driver), 200);
         }
         return response()->json(responseFormatter(DEFAULT_401), 401);
+    }
+
+    public function storeAvailabilitySchedule(DriverAvailabilityScheduleRequest $request): JsonResponse
+    {
+        $driverId = auth('api')->id();
+        $data = $this->driverAvailabilityScheduleService->storeSlot(userId: $driverId, data: $request->validated());
+
+        return response()->json(responseFormatter(constant: DEFAULT_STORE_200, content: $data), 200);
+    }
+
+    public function destroyAvailabilitySchedule($id): JsonResponse
+    {
+        $driverId = auth('api')->id();
+        $this->driverAvailabilityScheduleService->deleteSlot(userId: $driverId, scheduleId: $id);
+
+        return response()->json(responseFormatter(DEFAULT_DELETE_200), 200);
+    }
+
+    public function updateSameTimeForEveryDay(DriverSameTimeForEveryDayRequest $request): JsonResponse
+    {
+        $driverId = auth('api')->id();
+        $this->driverAvailabilityScheduleService->setSameTime(userId: $driverId, sameTime: (bool)$request->input('same_time_for_every_day'));
+
+        return response()->json(responseFormatter(DEFAULT_UPDATE_200), 200);
     }
 
     /**
@@ -191,7 +227,8 @@ class DriverController extends Controller
     {
         $minimumToPay = businessConfig('min_amount_to_pay')?->value ?? 1;
         $driver = $this->driverService->findOneBy(criteria: ['id' => $request->user_id], relations: ['userAccount']);
-        $maximumToPay = $driver?->userAccount->payable_balance > $driver?->userAccount->receivable_balance ? ($driver?->userAccount->payable_balance - $driver?->userAccount->receivable_balance) : 1;
+        $points = (int)getSession('currency_decimal_point') ?? 0;
+        $maximumToPay = $driver?->userAccount->payable_balance > $driver?->userAccount->receivable_balance ? round($driver?->userAccount->payable_balance - $driver?->userAccount->receivable_balance, $points) : 1;
         $validator = Validator::make($request->all(), [
             'user_id' => 'required|string',
             'amount' => 'required|numeric|gte:' . $minimumToPay . '|lte:' . $maximumToPay,

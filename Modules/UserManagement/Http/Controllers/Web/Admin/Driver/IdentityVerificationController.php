@@ -132,7 +132,7 @@ class IdentityVerificationController extends Controller
         $this->authorize('user_edit');
         $unverifiedDriverInfo = $this->driverIdentityVerificationService->findOne(id: $id, relations: ['driver.driverDetails']);
 
-        if ($unverifiedDriverInfo->driver->driverDetails->is_suspended)
+        if ($unverifiedDriverInfo->driver->driverDetails->is_paused)
         {
             Toastr::error(DRIVER_ALREADY_SUSPENDED['message']);
 

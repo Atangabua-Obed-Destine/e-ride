@@ -20,6 +20,7 @@
                             'loginOptions' => $customerLoginOptions,
                             'isOtpEnabled' => $isOtpEnabled,
                             'isCustomerVerificationEnabled' => $isCustomerVerificationEnabled,
+                            'appleLoginStatus' => $appleLoginStatus,
                         ])
                     </div>
                     <div class="tab-pane fade {{ $activeLoginTab === 'driver' ? 'show active' : '' }}"
@@ -84,8 +85,17 @@
                     $form.find('input[type="checkbox"]').each(function () {
                         this.checked = this.defaultChecked;
                     });
+                    toggleSocialMediaLoginSetup();
                 }, 0);
             });
+
+            function toggleSocialMediaLoginSetup() {
+                let isChecked = $('#customer-social_media_login').is(':checked');
+                $('.social-media-login-setup').toggle(isChecked);
+            }
+
+            $(document).on('change', '#customer-social_media_login', toggleSocialMediaLoginSetup);
+            toggleSocialMediaLoginSetup();
         })();
     </script>
 @endpush

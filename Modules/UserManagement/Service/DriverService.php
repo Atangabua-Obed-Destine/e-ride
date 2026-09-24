@@ -11,10 +11,11 @@ use Illuminate\Support\Facades\DB;
 use Modules\ChattingManagement\Service\Interfaces\ChannelUserServiceInterface;
 use Modules\TransactionManagement\Repository\TransactionRepositoryInterface;
 use Modules\TripManagement\Repository\TripRequestRepositoryInterface;
-use Modules\UserManagement\Enums\SuspendReasonEnum;
 use Modules\UserManagement\Lib\AdditionalDataForm;
+use Modules\UserManagement\Repository\DriverDetailRepositoryInterface;
 use Modules\UserManagement\Repository\UserLevelRepositoryInterface;
 use Modules\UserManagement\Repository\UserRepositoryInterface;
+use Modules\UserManagement\Service\Interfaces\DriverAvailabilityScheduleServiceInterface;
 
 class DriverService extends BaseService implements Interfaces\DriverServiceInterface
 {
@@ -23,10 +24,14 @@ class DriverService extends BaseService implements Interfaces\DriverServiceInter
     protected $transactionRepository;
     protected $userLevelRepository;
     protected $channelUserService;
+    protected $driverAvailabilityScheduleService;
+    protected $driverDetailRepository;
 
     public function __construct(UserRepositoryInterface        $userRepository, TripRequestRepositoryInterface $tripRequestRepository,
                                 TransactionRepositoryInterface $transactionRepository, UserLevelRepositoryInterface $userLevelRepository,
                                 ChannelUserServiceInterface    $channelUserService,
+                                DriverAvailabilityScheduleServiceInterface $driverAvailabilityScheduleService,
+                                DriverDetailRepositoryInterface $driverDetailRepository,
     )
     {
         parent::__construct($userRepository);
@@ -35,13 +40,20 @@ class DriverService extends BaseService implements Interfaces\DriverServiceInter
         $this->transactionRepository = $transactionRepository;
         $this->userLevelRepository = $userLevelRepository;
         $this->channelUserService = $channelUserService;
+        $this->driverAvailabilityScheduleService = $driverAvailabilityScheduleService;
+        $this->driverDetailRepository = $driverDetailRepository;
     }
 
     public function index(array $criteria = [], array $relations = [], array $whereHasRelations = [], array $orderBy = [], ?int $limit = null, ?int $offset = null, array $withCountQuery = [], array $appends = [], array $groupBy = []): Collection|LengthAwarePaginator
     {
         $data = [];
         if (array_key_exists('status', $criteria) && $criteria['status'] !== 'all') {
-            $data['is_active'] = $criteria['status'] == 'active' ? 1 : 0;
+            if ($criteria['status'] == 'suspended') {
+                $data['is_active'] = 0;
+            } else {
+                $data['is_active'] = 1;
+                $whereHasRelations['driverDetails'] = ['is_paused' => $criteria['status'] == 'inactive' ? 1 : 0];
+            }
         }
         if (array_key_exists(PENDING, $criteria)) {
             $data[] = ['old_identification_image', '!=', null];
@@ -52,7 +64,17 @@ class DriverService extends BaseService implements Interfaces\DriverServiceInter
             $searchData['fields'] = ['full_name', 'first_name', 'last_name', 'email', 'phone'];
             $searchData['value'] = $criteria['search'];
         }
-        return $this->userRepository->getBy(criteria: $data, searchCriteria: $searchData, relations: $relations, orderBy: $orderBy, limit: $limit, offset: $offset, withCountQuery: $withCountQuery);
+        return $this->userRepository->getBy(criteria: $data, searchCriteria: $searchData, whereHasRelations: $whereHasRelations, relations: $relations, orderBy: $orderBy, limit: $limit, offset: $offset, withCountQuery: $withCountQuery);
+    }
+
+    public function getStatusCounts(): array
+    {
+        return [
+            'all' => $this->userRepository->getBy(criteria: ['user_type' => DRIVER], limit: 1, offset: 1)->total(),
+            'active' => $this->userRepository->getBy(criteria: ['user_type' => DRIVER, 'is_active' => 1], whereHasRelations: ['driverDetails' => ['is_paused' => 0]], limit: 1, offset: 1)->total(),
+            'inactive' => $this->userRepository->getBy(criteria: ['user_type' => DRIVER, 'is_active' => 1], whereHasRelations: ['driverDetails' => ['is_paused' => 1]], limit: 1, offset: 1)->total(),
+            'suspended' => $this->userRepository->getBy(criteria: ['user_type' => DRIVER, 'is_active' => 0], limit: 1, offset: 1)->total(),
+        ];
     }
 
     public function create(array $data): ?Model
@@ -87,23 +109,24 @@ class DriverService extends BaseService implements Interfaces\DriverServiceInter
             'is_active' => 1,
             'ref_code' => generateReferralCode(),
         ]);
-        DB::beginTransaction();
+        return DB::transaction(function () use ($driverData, $additionalData, $data) {
+            $driver = $this->userRepository->create($driverData);
+            $driverDetailsData = [
+                'is_online' => false,
+                'availability_status' => 'unavailable',
+            ];
+            if (array_key_exists('service', $data)) {
+                $driverDetailsData = array_merge($data, [
+                    'service' => json_decode($data['service']),
+                ]);
+            }
+            $driver?->driverDetails()->create($driverDetailsData);
+            $this->driverAvailabilityScheduleService->createDefault($driver->id);
+            AdditionalDataForm::store($driver, $additionalData, DRIVER);
+            $driver?->userAccount()->create();
 
-        $driver = $this->userRepository->create($driverData);
-        $driverDetailsData = [
-            'is_online' => false,
-            'availability_status' => 'unavailable',
-        ];
-        if (array_key_exists('service', $data)) {
-            $driverDetailsData = array_merge($data, [
-                'service' => json_decode($data['service']),
-            ]);
-        }
-        $driver?->driverDetails()->create($driverDetailsData);
-        AdditionalDataForm::store($driver, $additionalData, DRIVER);
-        $driver?->userAccount()->create();
-        DB::commit();
-        return $driver;
+            return $driver;
+        });
     }
 
     public function createAfterOtpMatch(array $data): ?Model {
@@ -146,6 +169,7 @@ class DriverService extends BaseService implements Interfaces\DriverServiceInter
             ]);
         }
         $driver?->driverDetails()->create($driverDetailsData);
+        $this->driverAvailabilityScheduleService->createDefault($driver->id);
         $driver?->userAccount()->create();
         DB::commit();
 
@@ -231,32 +255,33 @@ class DriverService extends BaseService implements Interfaces\DriverServiceInter
             }
             $driverData['other_documents'] = $documents;
         }
-        DB::beginTransaction();
-        $driver = $this->userRepository->update(id: $id, data: $driverData);
-        AdditionalDataForm::store($driver, $additionalData, DRIVER);
+        return DB::transaction(function () use ($id, $driverData, $additionalData, $data) {
+            $driver = $this->userRepository->update(id: $id, data: $driverData);
+            AdditionalDataForm::store($driver, $additionalData, DRIVER);
 
-        // Driver details
-        if (array_key_exists('service', $data)) {
-            $driver?->driverDetails()->update([
-                'service' => json_decode($data['service'], false)
-            ]);
-        }
-
-        // Customer Address
-        if (array_key_exists('address', $data)) {
-            $address = $driver?->addresses()->where(['user_id' => $driver?->id, 'address_label' => 'default'])->first();
-            if (is_null($address)) {
-                $driver?->addresses()->create([
-                    'address' => $data['address'],
-                    'address_label' => 'default'
+            // Driver details
+            if (array_key_exists('service', $data)) {
+                $driver?->driverDetails()->update([
+                    'service' => json_decode($data['service'], false)
                 ]);
-            } else {
-                $address->address = $data['address'];
-                $address->save();
             }
-        }
-        DB::commit();
-        return $driver;
+
+            // Customer Address
+            if (array_key_exists('address', $data)) {
+                $address = $driver?->addresses()->where(['user_id' => $driver?->id, 'address_label' => 'default'])->first();
+                if (is_null($address)) {
+                    $driver?->addresses()->create([
+                        'address' => $data['address'],
+                        'address_label' => 'default'
+                    ]);
+                } else {
+                    $address->address = $data['address'];
+                    $address->save();
+                }
+            }
+
+            return $driver;
+        });
     }
 
     public function show(int|string $id, array $data)
@@ -373,6 +398,12 @@ class DriverService extends BaseService implements Interfaces\DriverServiceInter
                 'reviews_count' => $reviewData['reviewsCount'],
                 'total_review_count' => $reviewData['totalReviewCount'],
                 'reviewed_by' => $reviewedBy
+            ];
+        } else if ($tab == 'availability') {
+            $display = $this->driverAvailabilityScheduleService->getDisplaySchedule(userId: $driver->id);
+            $otherData = [
+                'availabilitySchedules' => $display['schedules'],
+                'sameTimeForEveryDay' => $display['sameTime'],
             ];
         }
         return [
@@ -574,9 +605,11 @@ class DriverService extends BaseService implements Interfaces\DriverServiceInter
         }
         $total = $this->userRepository->getBy(criteria: ['user_type' => DRIVER], whereBetweenCriteria: $whereBetweenCriteria)
             ->count();
-        $active = $this->userRepository->getBy(criteria: ['user_type' => DRIVER, 'is_active' => true], whereBetweenCriteria: $whereBetweenCriteria)
+        $active = $this->userRepository->getBy(criteria: ['user_type' => DRIVER, 'is_active' => 1], whereHasRelations: ['driverDetails' => ['is_paused' => 0]], whereBetweenCriteria: $whereBetweenCriteria)
             ->count();
-        $inactive = $this->userRepository->getBy(criteria: ['user_type' => DRIVER, 'is_active' => false], whereBetweenCriteria: $whereBetweenCriteria)
+        $inactive = $this->userRepository->getBy(criteria: ['user_type' => DRIVER, 'is_active' => 1], whereHasRelations: ['driverDetails' => ['is_paused' => 1]], whereBetweenCriteria: $whereBetweenCriteria)
+            ->count();
+        $suspended = $this->userRepository->getBy(criteria: ['user_type' => DRIVER, 'is_active' => 0], whereBetweenCriteria: $whereBetweenCriteria)
             ->count();
 
         $relations = [
@@ -605,6 +638,7 @@ class DriverService extends BaseService implements Interfaces\DriverServiceInter
             'total' => $total,
             'active' => $active,
             'inactive' => $inactive,
+            'suspended' => $suspended,
             'car' => $car,
             'motor_bike' => $motorBike
         ];
@@ -612,6 +646,7 @@ class DriverService extends BaseService implements Interfaces\DriverServiceInter
 
     public function export(array $criteria = [], array $relations = [], array $orderBy = [], ?int $limit = null, ?int $offset = null, array $withCountQuery = []): Collection|LengthAwarePaginator|\Illuminate\Support\Collection
     {
+        $relations[] = 'driverDetails';
         return $this->index(criteria: $criteria, relations: $relations, orderBy: $orderBy)->map(function ($item) {
             $count = 0;
             if (!is_null($item?->first_name)) {
@@ -660,7 +695,7 @@ class DriverService extends BaseService implements Interfaces\DriverServiceInter
                 'Level' => $item?->level->name ?? 'No Level Attached',
                 'Total Trip' => $item->driverTrips->count(),
                 'Earning' => $earning,
-                'Status' => $item['is_active'] ? 'Active' : 'Inactive',
+                'Status' => !$item->is_active ? 'Suspended' : ($item->driverDetails?->is_paused ? 'Inactive' : 'Active'),
             ];
         });
     }
@@ -668,8 +703,14 @@ class DriverService extends BaseService implements Interfaces\DriverServiceInter
     public function getDriverWithoutVehicle(array $criteria = [], array $relations = [], array $orderBy = [], ?int $limit = null, ?int $offset = null, array $withCountQuery = []): Collection|LengthAwarePaginator
     {
         $data = [];
+        $whereHasRelations = [];
         if (array_key_exists('status', $criteria) && $criteria['status'] !== 'all') {
-            $data['is_active'] = $criteria['status'] == 'active' ? 1 : 0;
+            if ($criteria['status'] == 'suspended') {
+                $data['is_active'] = 0;
+            } else {
+                $data['is_active'] = 1;
+                $whereHasRelations['driverDetails'] = ['is_paused' => $criteria['status'] == 'inactive' ? 1 : 0];
+            }
         }
         $data['user_type'] = DRIVER;
         $searchData = [];
@@ -677,7 +718,7 @@ class DriverService extends BaseService implements Interfaces\DriverServiceInter
             $searchData['fields'] = ['first_name', 'last_name', 'email', 'phone'];
             $searchData['value'] = $criteria['search'];
         }
-        return $this->userRepository->getDriverWithoutVehicle(criteria: $data, searchCriteria: $searchData, relations: $relations, orderBy: $orderBy, limit: $limit, offset: $offset, withCountQuery: $withCountQuery);
+        return $this->userRepository->getDriverWithoutVehicle(criteria: $data, searchCriteria: $searchData, whereHasRelations: $whereHasRelations, relations: $relations, orderBy: $orderBy, limit: $limit, offset: $offset, withCountQuery: $withCountQuery);
     }
 
     public function updateIdentityImage($id, array $data): ?Model
@@ -759,10 +800,88 @@ class DriverService extends BaseService implements Interfaces\DriverServiceInter
 
     public function changeSuspensionStatus(?Model $driver, string $action): void
     {
-        $data = [
-            'is_suspended' => $action == REACTIVATE ? 0 : 1,
-            'suspend_reason' => $action == REACTIVATE ? null : SuspendReasonEnum::ANONYMOUS->value
-        ];
-        $driver->driverDetails->update($data);
+        if ($action == REACTIVATE) {
+            $this->userRepository->update(id: $driver->id, data: ['is_active' => 1]);
+
+            $details = $this->driverDetailRepository->findOneBy(criteria: ['user_id' => $driver->id]);
+            if ($details?->is_paused && $details->paused_until) {
+                $this->driverDetailRepository->updatedBy(
+                    criteria: ['user_id' => $driver->id],
+                    data: $this->driverDetailRepository->clearPausePayload()
+                );
+            }
+
+            $this->sendSuspensionStatusNotification($driver, 'driver_unsuspended');
+            return;
+        }
+
+        $this->userRepository->update(id: $driver->id, data: ['is_active' => 0]);
+
+        if (!$this->hasUnsettledTrip($driver->id)) {
+            foreach ($driver->tokens as $token) {
+                $token->revoke();
+            }
+            $this->driverDetailRepository->updatedBy(
+                criteria: ['user_id' => $driver->id],
+                data: $this->driverDetailRepository->suspendOfflinePayload()
+            );
+            $this->sendSuspensionStatusNotification($driver, 'driver_suspended');
+        }
+    }
+
+    public function hasUnsettledTrip(int|string $driverId): bool
+    {
+        return $this->tripRequestRepository->hasUnsettledTripForDriver($driverId);
+    }
+
+    private function sendSuspensionStatusNotification(?Model $driver, string $notificationName): void
+    {
+        if (!$driver?->fcm_token) {
+            return;
+        }
+
+        $push = getNotification($notificationName, 'driver');
+        sendDeviceNotification(
+            fcm_token: $driver->fcm_token,
+            title: translate(key: $push['title'], locale: $driver->current_language_key),
+            description: textVariableDataFormat(value: $push['description'], userName: $driver->first_name . ' ' . $driver->last_name, sentTime: pushSentTime($driver->updated_at), locale: $driver->current_language_key),
+            status: $push['status'],
+            notification_type: 'driver',
+            action: $push['action'],
+            user_id: $driver->id
+        );
+    }
+
+    public function pauseStatus(?Model $driver, array $data): void
+    {
+        $minutes = (int)$data['pause_duration'] * ($data['pause_duration_type'] == 'day' ? 1440 : 60);
+
+        $this->driverDetailRepository->updatedBy(
+            criteria: ['user_id' => $driver->id],
+            data: $this->driverDetailRepository->pausePayload(reason: $data['pause_reason'] ?? null, minutes: $minutes)
+        );
+
+        if (!$driver->fcm_token) {
+            return;
+        }
+
+        $push = getNotification('driver_status_paused', 'driver');
+        sendDeviceNotification(
+            fcm_token: $driver->fcm_token,
+            title: translate(key: $push['title'], locale: $driver->current_language_key),
+            description: textVariableDataFormat(value: $push['description'], userName: $driver->first_name . ' ' . $driver->last_name, sentTime: pushSentTime($driver->updated_at), pauseDuration: formatDurationLabel($minutes), locale: $driver->current_language_key),
+            status: $push['status'],
+            notification_type: 'driver',
+            action: $push['action'],
+            user_id: $driver->id
+        );
+    }
+
+    public function resumeStatus(?Model $driver): void
+    {
+        $this->driverDetailRepository->updatedBy(
+            criteria: ['user_id' => $driver->id],
+            data: $this->driverDetailRepository->resumePayload()
+        );
     }
 }
