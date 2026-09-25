@@ -167,6 +167,12 @@ other gateways configured in the admin panel.
 - MySQL database `e-ride`, user `root`. `CACHE_DRIVER=file`, `SESSION_DRIVER=file`,
   `QUEUE_DRIVER=sync` (jobs run inline — there is no worker to start).
 - Reverb must run separately for realtime: `php artisan reverb:start`.
+- **Scheduled jobs** (request expiry, scheduled-trip dispatch, paused-driver resume, availability
+  sync, late-return notices) are registered in `bootstrap/app.php` → `withSchedule()`.
+  `app/Console/Kernel.php` is dead code under Laravel 12 — when a DriveMond update changes its
+  `schedule()`, copy the change into `bootstrap/app.php`. Nothing runs without a cron entry
+  `* * * * * php artisan schedule:run` on the server; locally use `php artisan schedule:work`.
+  `driver-timelog:inserted` (daily driver time-log reset) is deliberately not scheduled.
 - After touching config, routes, or the `composer.json` autoload files: `php artisan optimize:clear`
   (and `composer dump-autoload` for the latter).
 - `modules_statuses.json` enables and disables modules.

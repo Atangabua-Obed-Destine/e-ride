@@ -4,6 +4,7 @@ use Illuminate\Auth\Middleware\AuthenticateWithBasicAuth;
 use Illuminate\Auth\Middleware\Authorize;
 use Illuminate\Auth\Middleware\EnsureEmailIsVerified;
 use Illuminate\Auth\Middleware\RequirePassword;
+use Illuminate\Console\Scheduling\Schedule;
 use Illuminate\Cookie\Middleware\AddQueuedCookiesToResponse;
 use App\Exceptions\ImageUploadException;
 use Brian2694\Toastr\Facades\Toastr;
@@ -110,6 +111,14 @@ $app = Application::configure(basePath: dirname(__DIR__))
                 ], $e->getStatusCode());
             }
         });
+    })
+    // Laravel 12 never loads app/Console/Kernel.php, so its schedule() was dead code. Keep this list in sync with it.
+    ->withSchedule(function (Schedule $schedule) {
+        $schedule->command('trip-request:cancel')->everyMinute()->withoutOverlapping();
+        $schedule->command('app:process-scheduled-trips')->everyMinute()->withoutOverlapping();
+        $schedule->command('driver:resume-paused')->everyMinute()->withoutOverlapping();
+        $schedule->command('driver:sync-availability')->everyMinute()->withoutOverlapping();
+        $schedule->command('app:process-late-return-penalty-notifications')->everyMinute()->withoutOverlapping();
     })
     ->create();
 
