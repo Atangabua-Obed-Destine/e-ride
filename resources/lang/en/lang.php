@@ -4943,4 +4943,11 @@
   'Choose a ride' => 'Choose a ride',
   'Drive with us' => 'Drive with us',
   'Book a ride' => 'Book a ride',
+  'share the' => 'Share the',
+  'Rides, parcels and scheduled trips in one place' => 'Rides, parcels and scheduled trips in one place',
+  'Live trips, drivers and earnings at a glance' => 'Live trips, drivers and earnings at a glance',
+  'Zones, fares and promotions you control' => 'Zones, fares and promotions you control',
+  'All rights reserved' => 'All rights reserved',
+  'Admin panel' => 'Admin panel',
+  'This is a restricted area. All sign-in attempts are recorded.' => 'This is a restricted area. All sign-in attempts are recorded.',
 );

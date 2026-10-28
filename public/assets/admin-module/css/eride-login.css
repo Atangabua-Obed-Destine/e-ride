@@ -1,0 +1,309 @@
+/*
+    E-Ride admin sign-in.
+
+    Everything here is scoped under body.eride-login, so style.css and the rest
+    of the admin panel are untouched. Brand colour comes from --bs-primary,
+    which landing-page/layouts/css.blade.php fills from the admin colour
+    setting, so changing the colour in admin still drives this page.
+*/
+
+body.eride-login {
+    --er-red: var(--bs-primary, #e02020);
+    --er-ink: #0e0e12;
+    --er-ink-2: #16161c;
+    --er-line: rgba(255, 255, 255, .1);
+    --er-text: #eceef3;
+    --er-muted: #9aa0ad;
+
+    background: var(--er-ink);
+    color: var(--er-text);
+    font-family: 'Plus Jakarta Sans', system-ui, -apple-system, 'Segoe UI', sans-serif;
+}
+
+body.eride-login .login-wrap {
+    background: var(--er-ink);
+    grid-template-columns: 1fr minmax(auto, 560px);
+}
+
+@media (max-width: 1199px) {
+    body.eride-login .login-wrap { grid-template-columns: 1fr minmax(440px, 440px); }
+}
+
+@media (max-width: 991px) {
+    body.eride-login .login-wrap { grid-template-columns: 1fr; }
+}
+
+/* ---------- left: the brand panel ---------- */
+
+body.eride-login .login-left {
+    position: relative;
+    isolation: isolate;
+    overflow: hidden;
+}
+
+/* The stock photo stays, pushed back behind a dark wash so the lockup reads */
+body.eride-login .login-left::before {
+    content: '';
+    position: absolute;
+    inset: 0;
+    z-index: -2;
+    background: inherit;
+    background-size: cover;
+    background-position: center;
+    filter: grayscale(.4) brightness(.45);
+    transform: scale(1.04);
+}
+
+body.eride-login .login-left::after {
+    content: '';
+    position: absolute;
+    inset: 0;
+    z-index: -1;
+    background:
+        radial-gradient(900px 520px at 22% 18%, rgba(224, 32, 32, .3), transparent 62%),
+        linear-gradient(135deg, rgba(14, 14, 18, .94), rgba(14, 14, 18, .72) 45%, rgba(14, 14, 18, .95));
+}
+
+body.eride-login .er-brand {
+    display: flex;
+    align-items: center;
+    gap: 14px;
+    color: #fff;
+}
+
+body.eride-login .er-brand-mark { color: var(--er-red); flex: none; }
+
+body.eride-login .er-brand-text {
+    display: flex;
+    flex-direction: column;
+    line-height: 1;
+    white-space: nowrap;
+}
+
+body.eride-login .er-brand-name {
+    font-size: 34px;
+    font-weight: 800;
+    letter-spacing: -.01em;
+    text-transform: uppercase;
+    color: #fff;
+    white-space: nowrap;
+}
+
+body.eride-login .er-brand-sub {
+    margin-top: 6px;
+    font-size: 11px;
+    font-weight: 700;
+    letter-spacing: .26em;
+    text-transform: uppercase;
+    color: rgba(255, 255, 255, .62);
+}
+
+body.eride-login .er-tagline {
+    max-width: 19ch;
+    margin: 0;
+    font-size: clamp(30px, 3.3vw, 46px);
+    font-weight: 800;
+    line-height: 1.12;
+    letter-spacing: -.02em;
+    color: #fff;
+}
+
+body.eride-login .er-tagline strong { color: var(--er-red); font-weight: 800; }
+
+body.eride-login .er-points {
+    list-style: none;
+    margin: 0;
+    padding: 0;
+    display: grid;
+    gap: 14px;
+}
+
+body.eride-login .er-points li {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    font-size: 15px;
+    font-weight: 500;
+    color: rgba(255, 255, 255, .8);
+}
+
+body.eride-login .er-points svg { flex: none; color: var(--er-red); }
+
+/* ---------- right: the form panel ---------- */
+
+body.eride-login .login-right-wrap {
+    background: var(--er-ink-2);
+    border-left: 1px solid var(--er-line);
+    display: flex;
+    flex-direction: column;
+}
+
+@media (max-width: 991px) {
+    body.eride-login .login-right-wrap { border-left: 0; border-top: 1px solid var(--er-line); }
+}
+
+body.eride-login .login-right { max-width: 420px; }
+
+body.eride-login .er-version {
+    background: rgba(255, 255, 255, .06);
+    border: 1px solid var(--er-line);
+    color: var(--er-muted);
+    border-radius: 999px;
+    padding: 5px 12px;
+    font-size: 11px;
+    font-weight: 600;
+    letter-spacing: .04em;
+}
+
+body.eride-login .er-eyebrow {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    padding: 6px 14px;
+    border-radius: 999px;
+    background: rgba(224, 32, 32, .12);
+    border: 1px solid rgba(224, 32, 32, .3);
+    color: #ff8080;
+    font-size: 11px;
+    font-weight: 700;
+    letter-spacing: .16em;
+    text-transform: uppercase;
+}
+
+body.eride-login .er-title {
+    margin: 18px 0 8px;
+    font-size: 30px;
+    font-weight: 800;
+    letter-spacing: -.02em;
+    color: #fff;
+}
+
+body.eride-login .er-sub {
+    margin: 0;
+    font-size: 14px;
+    color: var(--er-muted);
+}
+
+body.eride-login .er-field { margin-bottom: 18px; }
+
+body.eride-login .er-field label {
+    display: block;
+    margin-bottom: 8px;
+    font-size: 13px;
+    font-weight: 600;
+    color: var(--er-text);
+}
+
+body.eride-login .form-control {
+    height: 52px;
+    padding: 0 16px;
+    border-radius: 12px;
+    background: rgba(255, 255, 255, .04);
+    border: 1px solid var(--er-line);
+    color: #fff;
+    font-size: 15px;
+    transition: border-color .18s ease, background .18s ease, box-shadow .18s ease;
+}
+
+body.eride-login .form-control::placeholder { color: #6d7280; }
+
+body.eride-login .form-control:focus {
+    background: rgba(255, 255, 255, .06);
+    border-color: var(--er-red);
+    box-shadow: 0 0 0 4px rgba(224, 32, 32, .16);
+    color: #fff;
+    outline: none;
+}
+
+/* Chrome paints autofilled inputs light blue; this keeps them on-theme */
+body.eride-login .form-control:-webkit-autofill,
+body.eride-login .form-control:-webkit-autofill:focus {
+    -webkit-text-fill-color: #fff;
+    -webkit-box-shadow: 0 0 0 1000px #1d1d24 inset;
+    caret-color: #fff;
+}
+
+body.eride-login .input-group_tooltip { position: relative; display: block; }
+
+body.eride-login #password { padding-right: 48px; }
+
+body.eride-login #password-eye {
+    position: absolute;
+    top: 38px;
+    inset-inline-end: 16px;
+    margin: 0 !important;
+    color: var(--er-muted) !important;
+    cursor: pointer;
+    font-size: 17px;
+    line-height: 1;
+}
+
+body.eride-login #password-eye:hover { color: var(--er-red) !important; }
+
+body.eride-login .er-remember {
+    display: flex;
+    align-items: center;
+    gap: 9px;
+    font-size: 14px;
+    color: var(--er-muted);
+    cursor: pointer;
+    user-select: none;
+}
+
+body.eride-login .er-remember input {
+    width: 17px;
+    height: 17px;
+    accent-color: var(--er-red);
+    cursor: pointer;
+}
+
+body.eride-login .btn-primary {
+    height: 54px;
+    border: 0;
+    border-radius: 12px;
+    background: var(--er-red);
+    color: #fff;
+    font-size: 15px;
+    font-weight: 700;
+    letter-spacing: .01em;
+    box-shadow: 0 10px 26px -10px rgba(224, 32, 32, .7);
+    transition: transform .16s ease, box-shadow .16s ease, filter .16s ease;
+}
+
+body.eride-login .btn-primary:hover,
+body.eride-login .btn-primary:focus {
+    background: var(--er-red);
+    filter: brightness(1.08);
+    transform: translateY(-1px);
+    box-shadow: 0 14px 30px -10px rgba(224, 32, 32, .8);
+}
+
+body.eride-login .btn-primary:active { transform: translateY(0); }
+
+body.eride-login .er-note {
+    margin: 22px 0 0;
+    font-size: 12px;
+    line-height: 1.6;
+    color: #6d7280;
+    text-align: center;
+}
+
+body.eride-login .login-footer {
+    background: rgba(255, 255, 255, .03);
+    border-top: 1px solid var(--er-line);
+    color: var(--er-muted);
+    font-size: 13px;
+}
+
+body.eride-login .login-copy { background: var(--er-red); border: 0; }
+
+body.eride-login .preloader,
+body.eride-login .resource-loader { background: var(--er-ink); }
+
+@media (prefers-reduced-motion: reduce) {
+    body.eride-login * { transition: none !important; }
+}
+
+/* phone-only lockup inside the form panel (the left panel is hidden below 576px) */
+body.eride-login .er-brand-sm .er-brand-name { font-size: 24px; }
+body.eride-login .er-brand-sm .er-brand-sub { font-size: 10px; margin-top: 4px; }

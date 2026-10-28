@@ -17,7 +17,6 @@ use Modules\AuthManagement\Http\Controllers\Web\Admin\Auth\LoginController;
 Route::group(['prefix' => 'admin', 'as' => 'admin.'], function () {
     Route::group(['prefix' => 'auth', 'as' => 'auth.'], function () {
         Route::controller(LoginController::class)->group(function () {
-            Route::get('/code/captcha/{tmp}', 'captcha')->name('default-captcha');
             Route::get('login', 'loginView')->name('login');
             Route::post('login', 'login');
             Route::post('external-login-from-mart', 'externalLoginFromMart');

@@ -2,9 +2,12 @@
 <html lang="en" dir="{{ session()->get('direction') ?? 'ltr' }}">
 
 <head>
-    @php($logo = getSession('header_logo'))
     @php($favicon = getSession('favicon'))
     @php($preloader = getSession('preloader'))
+    @php($businessName = businessConfig('business_name')?->value)
+    @php($businessAddr = getSession('business_address'))
+    @php($addrParts = $businessAddr ? array_filter(array_map('trim', explode(',', (string) $businessAddr))) : [])
+    @php($locality = $addrParts ? end($addrParts) : '')
     <!-- Page Title -->
     <title>{{ translate('admin_login') }}</title>
     <!-- Meta Data -->
@@ -13,13 +16,17 @@
     <meta name="viewport" content="width=device-width, initial-scale=1"/>
     <meta name="description" content=""/>
     <meta name="keywords" content=""/>
+    <meta name="robots" content="noindex, nofollow"/>
     <meta name="csrf-token" content="{{ csrf_token() }}">
     <!-- Favicon -->
     <link rel="shortcut icon" href="{{ $favicon ? dynamicStorage('storage/app/public/business/' . $favicon) : '' }}"/>
 
     <!-- Web Fonts -->
-    <!-- Web Fonts -->
     <link href="{{ dynamicAsset('public/assets/admin-module/css/fonts/google.css') }}" rel="stylesheet">
+    <link rel="preconnect" href="https://fonts.googleapis.com"/>
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin/>
+    <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap"
+          rel="stylesheet"/>
 
     <!-- ======= BEGIN GLOBAL MANDATORY STYLES ======= -->
     <link rel="stylesheet" href="{{ dynamicAsset('public/assets/admin-module/css/bootstrap.min.css') }}"/>
@@ -34,10 +41,12 @@
     <link rel="stylesheet" href="{{ dynamicAsset('public/assets/admin-module/css/custom.css') }}"/>
     <!-- ======= END MAIN STYLES ======= -->
     @include('landing-page.layouts.css')
+    {{-- E-Ride sign-in redesign. Loaded last so it wins; every rule is scoped to body.eride-login --}}
+    <link rel="stylesheet" href="{{ dynamicAsset('public/assets/admin-module/css/eride-login.css') }}"/>
 
 </head>
 
-<body>
+<body class="eride-login">
 <!-- Offcanval Overlay -->
 <div class="offcanvas-overlay"></div>
 <!-- Offcanval Overlay -->
@@ -69,125 +78,139 @@
           id="login-form">
         @csrf
         <div class="login-wrap">
-            <div class="login-left d-flex justify-content-center align-items-center bg-center bg-img"
-                 data-bg-img="{{dynamicAsset('public/assets/admin-module/img/media/login-new-bg.png')}}">
-                <div
-                    class="tf-box max-w-100 h-100 rounded-0 d-flex flex-column gap-3 align-items-center justify-content-center p-4 py-5 p-md-5">
-                    <img class="login-logo" src="{{ onErrorImage(
-                                        $logo,
-                                        dynamicStorage('storage/app/public/business') . '/' . $logo,
-                                        dynamicAsset('public/assets/admin-module/img/logo.png'),
-                                        'business/',
-                                    ) }}" alt="Logo">
-                    <h2 class="text-center absolute-white fs-30 fs-20-mobile">{{translate("Share the")}}
-                        <strong>{{translate("Ride")}}</strong> {{translate("Share the")}} <br>
-                        <strong>{{translate("Journey")}}</strong></h2>
+
+            {{--
+                Left: the brand panel. The uploaded header_logo is drawn for a light
+                background, so it would disappear against this dark wash. We use the
+                same wordmark lockup the landing-page header uses instead.
+            --}}
+            <div class="login-left d-flex bg-center bg-img"
+                 data-bg-img="{{ dynamicAsset('public/assets/admin-module/img/media/login-new-bg.png') }}">
+                <div class="d-flex flex-column justify-content-between gap-5 p-4 p-md-5 w-100">
+
+                    <div class="er-brand">
+                        <svg width="52" height="52" viewBox="0 0 48 48" aria-hidden="true" class="er-brand-mark">
+                            <circle cx="24" cy="24" r="21" fill="none" stroke="currentColor" stroke-width="5"></circle>
+                            <path d="M34 15H21a7 7 0 0 0-7 7v4a7 7 0 0 0 7 7h13" fill="none" stroke="currentColor"
+                                  stroke-width="5" stroke-linecap="round"></path>
+                            <path d="M20 24h11" fill="none" stroke="currentColor" stroke-width="5"
+                                  stroke-linecap="round"></path>
+                        </svg>
+                        <span class="er-brand-text">
+                            <span class="er-brand-name">{{ $businessName ?? 'E-Ride' }}</span>
+                            @if($locality)
+                                <span class="er-brand-sub">{{ $locality }}</span>
+                            @endif
+                        </span>
+                    </div>
+
+                    <div class="d-flex flex-column gap-4">
+                        <h1 class="er-tagline">
+                            {{ translate('Share the') }} <strong>{{ translate('Ride') }}</strong>,
+                            {{ translate('share the') }} <strong>{{ translate('Journey') }}</strong>
+                        </h1>
+                        <ul class="er-points">
+                            <li>
+                                <svg width="19" height="19" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+                                    <path d="M20 6 9 17l-5-5" stroke="currentColor" stroke-width="3"
+                                          stroke-linecap="round" stroke-linejoin="round"/>
+                                </svg>
+                                {{ translate('Rides, parcels and scheduled trips in one place') }}
+                            </li>
+                            <li>
+                                <svg width="19" height="19" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+                                    <path d="M20 6 9 17l-5-5" stroke="currentColor" stroke-width="3"
+                                          stroke-linecap="round" stroke-linejoin="round"/>
+                                </svg>
+                                {{ translate('Live trips, drivers and earnings at a glance') }}
+                            </li>
+                            <li>
+                                <svg width="19" height="19" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+                                    <path d="M20 6 9 17l-5-5" stroke="currentColor" stroke-width="3"
+                                          stroke-linecap="round" stroke-linejoin="round"/>
+                                </svg>
+                                {{ translate('Zones, fares and promotions you control') }}
+                            </li>
+                        </ul>
+                    </div>
+
+                    <p class="mb-0 small text-white-50">
+                        &copy; {{ date('Y') }} {{ $businessName ?? 'E-Ride' }}. {{ translate('All rights reserved') }}.
+                    </p>
                 </div>
             </div>
+
+            {{-- Right: the form --}}
             <div class="login-right-wrap">
-                <div class="d-flex justify-content-end mt-2 me-2">
-                        <span class="badge badge-success fz-12 opacity-75">
-                            {{ translate('Software_Version') }} : {{ env('SOFTWARE_VERSION') }}
-                        </span>
+                <div class="d-flex justify-content-end mt-3 me-3">
+                    <span class="er-version">
+                        {{ translate('Software_Version') }} : {{ env('SOFTWARE_VERSION') }}
+                    </span>
                 </div>
-                <div class="login-right w-100 m-auto px-0 pb-{{ env('APP_MODE') == 'demo' ? '3' : '5' }}">
+                <div class="login-right w-100 m-auto px-0 py-4">
                     <div class="inner-div px-4">
-                        <div class="text-center mb-30">
-                            <h2 class="text-uppercase mb-3">{{ businessConfig('business_name')->value ?? null }}</h2>
-                            <h3 class="mb-2">{{ translate('Sign_In') }}</h3>
-                            <p class="opacity-75">{{ translate('sign_in_to_stay_connected') }}
-                            </p>
-                        </div>
-                        <div class="mb-4">
-                            <div class="mb-4">
-                                <div class="">
-                                    <label for="email" class="mb-2">{{ translate('email') }}</label>
-                                    <input type="email" name="email" class="form-control"
-                                           placeholder="{{ translate('email') }}" required=""
-                                           id="email"
-                                           value="{{ request()->cookie('remember_email') }}"
-                                    >
-                                </div>
-                            </div>
-                            <div class="mb-4 input-group_tooltip">
-                                <label for="password"
-                                       class="mb-2">{{ translate('password') }}</label>
-                                <input type="password" name="password" id="password"
-                                       class="form-control"
-                                       placeholder="{{ translate('ex') }}: ********"
-                                       autocomplete="current-password"
-                                       required>
-                                <i id="password-eye"
-                                   class="mt-3 bi bi-eye-slash-fill text-primary tooltip-icon"></i>
-                            </div>
-                            <div class="d-flex justify-content-between">
-                                <div class="d-flex gap-1 align-items-center">
-                                    <input type="checkbox" name="remember" id="remember" {{ request()->cookie('remember_checked') ? 'checked' : '' }}>
-                                    <label class="lh-1"
-                                           for="remember">{{ translate('remember_me') }}</label>
-                                </div>
-                            </div>
-                        </div>
 
-                        <div class="mb-4">
-                            <div>
-                                @php($recaptcha = businessConfig('recaptcha')?->value)
-                                @if(isset($recaptcha) && $recaptcha['status'] == 1)
-                                    <input type="hidden" name="g-recaptcha-response" id="g-recaptcha-response">
-
-                                    <input type="hidden" name="set_default_captcha" id="set_default_captcha_value"
-                                           value="0">
-
-                                    <div class="row d-none" id="reload-captcha">
-                                        <div class="col-6 pr-0">
-                                            <input type="text" class="form-control form-control-lg border-none"
-                                                   name="default_captcha_value" value=""
-                                                   placeholder="{{translate('Enter captcha')}}" autocomplete="off">
-                                        </div>
-                                        <div class="col-6 input-icons bg-white rounded cursor-pointer"
-                                             data-toggle="tooltip" data-placement="right"
-                                             title="{{translate('Click to refresh')}}">
-                                            <a class="refresh-recaptcha">
-                                                <img src="{{ URL('/admin/auth/code/captcha/1') }}"
-                                                     class="input-field h-75 rounded-10 border-bottom-0 width-90-percent"
-                                                     id="default_recaptcha_id" alt="{{ translate('recaptcha') }}">
-                                                <i class="tio-refresh icon"></i>
-                                            </a>
-                                        </div>
-                                    </div>
-                                @else
-                                    <div class="row p-2">
-                                        <div class="col-6 pr-0">
-                                            <input type="text" class="form-control form-control-lg border-none"
-                                                   name="default_captcha_value" value=""
-                                                   placeholder="{{translate('Enter captcha')}}" autocomplete="off">
-                                        </div>
-                                        <div class="col-6 input-icons bg-white rounded cursor-pointer"
-                                             data-toggle="tooltip" data-placement="right"
-                                             title="{{translate('Click to refresh')}}">
-                                            <a class="refresh-recaptcha">
-                                                <img src="{{ URL('/admin/auth/code/captcha/1') }}"
-                                                     class="input-field h-75 rounded-10 border-bottom-0 width-90-percent"
-                                                     id="default_recaptcha_id" alt="{{ translate('recaptcha') }}">
-                                                <i class="tio-refresh icon"></i>
-                                            </a>
-                                        </div>
-                                    </div>
+                        {{-- style.css hides .login-left below 576px, so phones get the lockup here instead --}}
+                        <div class="er-brand er-brand-sm d-sm-none mb-4">
+                            <svg width="40" height="40" viewBox="0 0 48 48" aria-hidden="true" class="er-brand-mark">
+                                <circle cx="24" cy="24" r="21" fill="none" stroke="currentColor" stroke-width="5"></circle>
+                                <path d="M34 15H21a7 7 0 0 0-7 7v4a7 7 0 0 0 7 7h13" fill="none" stroke="currentColor"
+                                      stroke-width="5" stroke-linecap="round"></path>
+                                <path d="M20 24h11" fill="none" stroke="currentColor" stroke-width="5"
+                                      stroke-linecap="round"></path>
+                            </svg>
+                            <span class="er-brand-text">
+                                <span class="er-brand-name">{{ $businessName ?? 'E-Ride' }}</span>
+                                @if($locality)
+                                    <span class="er-brand-sub">{{ $locality }}</span>
                                 @endif
-                            </div>
+                            </span>
                         </div>
+
+                        <span class="er-eyebrow">{{ translate('Admin panel') }}</span>
+                        <h2 class="er-title">{{ translate('Sign_In') }}</h2>
+                        <p class="er-sub mb-4">{{ translate('sign_in_to_stay_connected') }}</p>
+
+                        <div class="er-field">
+                            <label for="email">{{ translate('email') }}</label>
+                            <input type="email" name="email" class="form-control"
+                                   placeholder="{{ translate('email') }}" required
+                                   id="email" autocomplete="username"
+                                   value="{{ request()->cookie('remember_email') }}">
+                        </div>
+
+                        <div class="er-field input-group_tooltip">
+                            <label for="password">{{ translate('password') }}</label>
+                            <input type="password" name="password" id="password"
+                                   class="form-control"
+                                   placeholder="{{ translate('ex') }}: ********"
+                                   autocomplete="current-password" required>
+                            <i id="password-eye" class="bi bi-eye-slash-fill tooltip-icon"></i>
+                        </div>
+
+                        <div class="d-flex justify-content-between align-items-center mb-4">
+                            <label class="er-remember" for="remember">
+                                <input type="checkbox" name="remember" id="remember"
+                                       {{ request()->cookie('remember_checked') ? 'checked' : '' }}>
+                                {{ translate('remember_me') }}
+                            </label>
+                        </div>
+
                         <button
-                            class="btn btn-primary radius-50 text-capitalize fw-semibold w-100 justify-content-center h-45 align-items-center"
+                            class="btn btn-primary text-capitalize fw-semibold w-100 d-inline-flex justify-content-center align-items-center"
                             id="signInBtn"
                             type="submit">{{ translate('sign_in') }}</button>
 
-                    </div>
+                        <p class="er-note">
+                            {{ translate('This is a restricted area. All sign-in attempts are recorded.') }}
+                        </p>
 
+                    </div>
                 </div>
 
                 @if (env('APP_MODE') == 'demo')
                     <div
-                        class="login-footer mt-auto d-flex align-items-center justify-content-between mt-3 px-xxl-5 py-xl-3">
+                        class="login-footer mt-auto d-flex align-items-center justify-content-between px-xxl-5 py-xl-3">
                         <div>
                             <div>{{ translate('email') }} : admin@admin.com</div>
                             <div>{{ translate('password') }} : 12345678</div>
@@ -214,7 +237,6 @@
 <script src="{{ dynamicAsset('public/assets/admin-module/js/main.js') }}"></script>
 <script src="{{ dynamicAsset('public/assets/admin-module/js/toastr.js') }}"></script>
 <script src="{{ dynamicAsset('public/assets/admin-module/js/login.js') }}"></script>
-<script src="https://www.google.com/recaptcha/api.js" async defer></script>
 
 <!-- ======= BEGIN GLOBAL MANDATORY SCRIPTS ======= -->
 
@@ -239,68 +261,13 @@
     <script>
         "use strict";
         @foreach ($errors->all() as $error)
-        toastr.error('{{ $error }}', Error, {
+        toastr.error('{{ $error }}', '{{ translate('Error') }}', {
             CloseButton: true,
             ProgressBar: true
         });
         @endforeach
     </script>
 @endif
-@if(isset($recaptcha) && $recaptcha['status'] == 1)
-    <script src="https://www.google.com/recaptcha/api.js?render={{$recaptcha['site_key']}}"></script>
-    <script>
-        $(document).ready(function () {
-            $('#signInBtn').click(function (e) {
-
-                if ($('#set_default_captcha_value').val() == 1) {
-                    $('#login-form').submit();
-                    return true;
-                }
-
-                e.preventDefault();
-
-                if (typeof grecaptcha === 'undefined') {
-                    toastr.error('Invalid recaptcha key provided. Please check the recaptcha configuration.');
-
-                    $('#reload-captcha').removeClass('d-none');
-                    $('#set_default_captcha_value').val('1');
-
-                    return;
-                }
-
-                grecaptcha.ready(function () {
-                    grecaptcha.execute('{{$recaptcha['site_key']}}', {action: 'submit'}).then(function (token) {
-                        $('#g-recaptcha-response').value = token;
-                        $('#login-form').submit();
-                    });
-                });
-
-                window.onerror = function (message) {
-                    var errorMessage = 'An unexpected error occurred. Please check the recaptcha configuration';
-                    if (message.includes('Invalid site key')) {
-                        errorMessage = 'Invalid site key provided. Please check the recaptcha configuration.';
-                    } else if (message.includes('not loaded in api.js')) {
-                        errorMessage = 'reCAPTCHA API could not be loaded. Please check the recaptcha API configuration.';
-                    }
-
-                    $('#reload-captcha').removeClass('d-none');
-                    $('#set_default_captcha_value').val('1');
-
-                    toastr.error(errorMessage)
-                    return true;
-                };
-            });
-        });
-
-    </script>
-
-@endif
-<script type="text/javascript">
-    $('.refresh-recaptcha').on('click', function () {
-        let url = "{{ route('admin.auth.default-captcha',':tmp') }}";
-        document.getElementById('default_recaptcha_id').src = url.replace(':tmp', Math.random());
-    });
-</script>
 
 </body>
 
