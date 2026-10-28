@@ -17,13 +17,19 @@
     <link rel="stylesheet" href="{{ dynamicAsset(path: 'public/landing-page/assets/css/owl.min.css') }}"/>
     <link rel="stylesheet" href="{{ dynamicAsset(path: 'public/landing-page/assets/css/main.css') }}"/>
     <link rel="stylesheet" href="{{ dynamicAsset('public/assets/admin-module/css/toastr.css') }}"/>
+    <link rel="preconnect" href="https://fonts.googleapis.com"/>
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin/>
+    <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap"
+          rel="stylesheet"/>
+    {{-- E-Ride landing redesign. Loaded after main.css so it can override; scoped to body.eride-dark --}}
+    <link rel="stylesheet" href="{{ dynamicAsset(path: 'public/landing-page/assets/css/eride.css') }}"/>
     @include('landing-page.layouts.css')
     <link rel="shortcut icon"
           href="{{ $favicon ? dynamicStorage(path: "storage/app/public/business/".$favicon) : dynamicAsset(path: 'public/landing-page/assets/img/favicon.png') }}"
           type="image/x-icon"/>
 </head>
 
-<body>
+<body class="@yield('body_class')">
 
 <div class="preloader" id="preloader">
     @if ($preloader)
@@ -36,7 +42,12 @@
     @endif
 </div>
 
-@include('landing-page.partials._header')
+{{-- A page may supply its own header (the landing page does); otherwise the shared one is used --}}
+@hasSection('header')
+    @yield('header')
+@else
+    @include('landing-page.partials._header')
+@endif
 
 @yield('content')
 

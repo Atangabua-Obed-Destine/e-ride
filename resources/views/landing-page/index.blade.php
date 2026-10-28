@@ -1,533 +1,499 @@
-@php
-    use Jenssegers\Agent\Agent;
-     $userAgent = new Agent();
-     $solutionCount = $activeOurSolutions->count() ?? 0;
-@endphp
 @extends('landing-page.layouts.master')
-@section('title', 'Home')
+
+@section('title', $businessName ?? translate('E-Ride'))
+@section('body_class', 'eride-dark')
+
+@php
+    /* Contact details, editable in Business Management > Business Setup > Business Information */
+    $contactNumber = getSession('business_contact_phone');
+    $businessAddr  = getSession('business_address');
+
+    /* wa.me needs digits only */
+    $waNumber = preg_replace('/\D+/', '', (string) $contactNumber);
+
+    /* The controller passes $businessStatistics but not the filtered collection, so build it here
+       with the same rule it uses (non-empty value + status on). */
+    $activeBusinessStatistics = collect($businessStatistics)->filter(
+        fn($item) => !empty($item?->value) && ($item?->value['status'] ?? false)
+    );
+
+    /* Newsletter is not passed by the controller; read it straight from the CMS,
+       the same way partials/_footer.blade.php does. */
+    $newsEnabled = landingPageConfig(key: 'is_newsletter_enabled', settingsType: NEWSLETTER)?->value == 1;
+    $newsContent = landingPageConfig(key: INTRO_CONTENTS, settingsType: NEWSLETTER)?->value ?? null;
+
+    $storage = 'storage/app/public/business/landing-pages/';
+
+    /* Hero background, uploaded under Landing Page Setup > Intro Section */
+    $heroBg = $introSection && ($introSection['background_image'] ?? null)
+        ? dynamicStorage(path: $storage . 'intro-section/' . $introSection['background_image'])
+        : null;
+
+    /* Typewriter words come from Our Solutions, so the admin controls them */
+    $typeWords = collect($activeOurSolutions)
+        ->map(fn($s) => $s?->value['title'] ?? null)
+        ->filter()
+        ->values();
+@endphp
+
+{{-- landing page uses its own header; other pages keep partials/_header.blade.php --}}
+@section('header')
+    @include('landing-page.partials._header-landing')
+@endsection
+
+@push('seo')
+    <meta name="description"
+          content="{{ \Illuminate\Support\Str::limit(strip_tags($introSection['sub_title'] ?? translate('Reliable rides, rapid delivery.')), 155) }}">
+@endpush
 
 @section('content')
-    <!-- Intro Section Start -->
-    <section class="banner-section">
-        <div class="container">
-            <div class="banner-wrapper justify-content-between bg__img wow animate__fadeInDown"
-                 data-img="{{ $introSection && $introSection['background_image'] ? dynamicStorage(path: 'storage/app/public/business/landing-pages/intro-section/'.$introSection['background_image']) : dynamicAsset(path: 'public/landing-page/assets/img/banner/banner-bg.png') }}">
-                <div class="banner-content text-center text-sm-start">
-                    <h1 class="title fs-20-mobile max-w-100 text-uppercase">PUT YOUR CAR TO WORK WITH <span class="text-primary">E-RIDE</span></h1>
-                    <p class="txt fs-12-mobile">
-                        Earn Over <strong class="text-primary">200,000 FCFA</strong> Per Month<br><br>
-                        <span class="d-block mb-1"><i class="bi bi-check-circle-fill text-primary me-2"></i> Flexible driving schedule</span>
-                        <span class="d-block mb-1"><i class="bi bi-check-circle-fill text-primary me-2"></i> Safe and reliable ride requests</span>
-                        <span class="d-block mb-1"><i class="bi bi-check-circle-fill text-primary me-2"></i> Work with your own car</span>
-                        <span class="d-block mb-1"><i class="bi bi-check-circle-fill text-primary me-2"></i> Start earning immediately</span><br>
-                        <span class="d-block mt-2 h5"><i class="bi bi-whatsapp text-success me-2"></i> <strong>+237 672 694 672</strong></span>
+
+    {{-- ========================================================= HERO ===== --}}
+    <section class="er-hero"
+             @if($heroBg) style="background-image: linear-gradient(rgba(11,11,13,.82), rgba(11,11,13,.93)), url('{{ $heroBg }}')" @endif>
+        <div class="er-wrap er-hero-inner">
+
+            <div class="er-hero-copy">
+                <h1 class="er-h1">
+                    {!! $introSection && ($introSection['title'] ?? null)
+                        ? change_text_color_or_bg($introSection['title'])
+                        : translate('Your ride,').'<br>'.change_text_color_or_bg('**'.translate('your way.').'**') !!}
+                </h1>
+
+                @if($typeWords->isNotEmpty())
+                    <p class="er-type">
+                        <span class="er-sr">{{ translate('We bring you') }} {{ $typeWords->implode(', ') }}</span>
+                        <span aria-hidden="true">{{ translate('We bring you') }}
+                            <span class="er-type-word" data-er-typewriter data-words='{{ $typeWords->toJson() }}'></span><span class="er-caret"></span>
+                        </span>
                     </p>
-                    @if($driverAppVersionControlForAndroid || $driverAppVersionControlForIos || $customerAppVersionControlForAndroid || $customerAppVersionControlForIos)
-                        <div class="app--btns d-flex flex-wrap flex-column flex-sm-row">
+                @endif
 
-                            @if($customerAppVersionControlForAndroid && $customerAppVersionControlForIos)
-                                <div class="dropdown py-0">
-                                    <a href="#" class="cmn--btn h-50 d-flex gap-2 lh-1"
-                                       data-bs-toggle="dropdown">{{translate('Download User App')}} <i
-                                            class="bi bi-chevron-down"></i></a>
-                                    <div class="dropdown-menu dropdown-button-menu">
-                                        <ul>
-                                            <li class="border-bottom">
-                                                <a href="{{$customerAppVersionControlForAndroid['app_url']}}"
-                                                   target="_blank">
-                                                    <img width="20" class="w-20px"
-                                                         src="{{ dynamicAsset(path: 'public/landing-page/assets/img/play-fav.png') }}"
-                                                         alt="">
-                                                    <span>{{translate('Play Store')}}</span>
-                                                </a>
-                                            </li>
-                                            <li>
-                                                <a href="{{$customerAppVersionControlForIos['app_url']}}"
-                                                   target="_blank">
-                                                    <img width="20" class="w-20px"
-                                                         src="{{ dynamicAsset(path: 'public/landing-page/assets/img/apple.png') }}"
-                                                         alt="">
-                                                    <span>{{translate('App Store')}}</span>
-                                                </a>
-                                            </li>
-                                        </ul>
-                                    </div>
-                                </div>
-                            @elseif($customerAppVersionControlForAndroid)
-                                <a href="{{$customerAppVersionControlForAndroid['app_url']}}" target="_blank"
-                                   class="cmn--btn h-50 d-flex gap-2 lh-1">
-                                    {{translate('Download User App')}}
-                                </a>
-                            @elseif($customerAppVersionControlForIos)
-                                <a href="{{$customerAppVersionControlForIos['app_url']}}" target="_blank"
-                                   class="cmn--btn h-50 d-flex gap-2 lh-1">
-                                    {{translate('Download User App')}}
-                                </a>
-                            @endif
+                <p class="er-sub" style="margin-top: 14px; max-width: 520px">
+                    {!! $introSection && ($introSection['sub_title'] ?? null)
+                        ? change_text_color_or_bg($introSection['sub_title'])
+                        : translate('Smooth, reliable movement across town, booked in a single message.') !!}
+                </p>
 
+                @if($waNumber)
+                    <div style="display: flex; flex-wrap: wrap; gap: 14px; margin-top: 34px">
+                        <a href="https://wa.me/{{ $waNumber }}" target="_blank" rel="noopener" class="er-btn er-btn-primary">
+                            @include('landing-page.partials._whatsapp-icon', ['size' => 20])
+                            {{ translate('Book on WhatsApp') }}
+                        </a>
+                        <a href="tel:{{ $contactNumber }}" class="er-btn er-btn-outline">
+                            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M22 16.9v3a2 2 0 0 1-2.2 2 19.8 19.8 0 0 1-8.6-3.1 19.5 19.5 0 0 1-6-6A19.8 19.8 0 0 1 2.1 4.2 2 2 0 0 1 4.1 2h3a2 2 0 0 1 2 1.7c.1 1 .4 1.9.7 2.8a2 2 0 0 1-.5 2.1L8.1 9.9a16 16 0 0 0 6 6l1.3-1.2a2 2 0 0 1 2.1-.5c.9.3 1.8.6 2.8.7a2 2 0 0 1 1.7 2Z"></path></svg>
+                            {{ $contactNumber }}
+                        </a>
+                    </div>
+                @endif
 
-
-                            @if($driverAppVersionControlForAndroid && $driverAppVersionControlForIos)
-                                <div class="dropdown py-0">
-                                    <a href="#"
-                                       class="cmn--btn btn-white text-nowrap overflow-hidden text-truncate h-50 d-flex gap-2 lh-1"
-                                       data-bs-toggle="dropdown">Become an E-RIDE Driver Today
-                                        <i
-                                            class="bi bi-chevron-down"></i></a>
-                                    <div class="dropdown-menu dropdown-button-menu">
-                                        <ul>
-                                            <li class="border-bottom">
-                                                <a href="{{$driverAppVersionControlForAndroid['app_url']}}"
-                                                   target="_blank">
-                                                    <img width="20" class="w-20px"
-                                                         src="{{ dynamicAsset(path: 'public/landing-page/assets/img/play-fav.png') }}"
-                                                         alt="">
-                                                    <span>{{translate('Play Store')}}</span>
-                                                </a>
-                                            </li>
-                                            <li>
-                                                <a href="{{$driverAppVersionControlForIos['app_url']}}"
-                                                   target="_blank">
-                                                    <img width="20" class="w-20px"
-                                                         src="{{ dynamicAsset(path: 'public/landing-page/assets/img/apple.png') }}"
-                                                         alt="">
-                                                    <span>{{translate('App Store')}}</span>
-                                                </a>
-                                            </li>
-                                        </ul>
-                                    </div>
-                                </div>
-                            @elseif($driverAppVersionControlForAndroid)
-                                <a href="{{$driverAppVersionControlForAndroid['app_url']}}" target="_blank"
-                                   class="cmn--btn btn-white text-nowrap overflow-hidden text-truncate h-50">
-                                    Become an E-RIDE Driver Today
-                                </a>
-                            @elseif($driverAppVersionControlForIos)
-                                <a href="{{$driverAppVersionControlForIos['app_url']}}" target="_blank"
-                                   class="cmn--btn btn-white text-nowrap overflow-hidden text-truncate h-50">
-                                    Become an E-RIDE Driver Today
-                                </a>
-                            @endif
-                        </div>
-                    @endif
+                <div class="er-pills">
+                    <span>{{ translate('Safe') }}</span><span class="er-dot">&bull;</span>
+                    <span>{{ translate('Reliable') }}</span><span class="er-dot">&bull;</span>
+                    <span>{{ translate('Affordable') }}</span>
                 </div>
             </div>
+
+            <div class="er-hero-art">
+                @if($heroBg)
+                    <img src="{{ $heroBg }}" alt="{{ $businessName }}">
+                @else
+                    @include('landing-page.partials._hero-art')
+                @endif
+            </div>
+
         </div>
     </section>
-    <!-- Intro Section End -->
 
-    <!-- Business Statistics Section Removed -->
+    {{-- ================================== SERVICE STRIP (Our Solutions) ===== --}}
+    @if($showOurSolutionsSection && $activeOurSolutions->isNotEmpty())
+        <section class="er-strip">
+            <div class="er-wrap er-strip-inner">
+                @foreach($activeOurSolutions as $key => $solution)
+                    @if($key > 0)<span class="er-dot">&bull;</span>@endif
+                    <span>{{ $solution?->value['title'] ?? '' }}</span>
+                @endforeach
+            </div>
+        </section>
 
-    <!-- Our Solution Section Start -->
-    @if($showOurSolutionsSection)
-        <section class="platform-section p-0 mt-4 mt-sm-60">
-            <img src="{{ dynamicAsset(path: 'public/landing-page/assets/img/platform/platform-bg.png') }}"
-                 class="shape d-none d-lg-block" alt="">
-            <div class="container">
-                <div class="mb-3 mb-sm-4 text-center">
-                    <h2 class="section-title mb-2 mb-sm-3 fs-16-mobile wow animate__fadeInUp">Safe • Reliable • Affordable</h2>
-                    <p class="fs-18 mb-0 fs-12-mobile">Going out on a date? Need a comfortable ride? We bring you smooth, reliable movement.</p>
+        {{-- ======================================= WHAT WE DO (Our Solutions) ===== --}}
+        <section id="services" class="er-pad">
+            <div class="er-wrap">
+                <div style="max-width: 640px">
+                    <span class="er-eyebrow">{{ translate('What we do') }}</span>
+                    <h2 class="er-title" style="margin-top: 18px">
+                        {!! $ourSolutionsSectionContent && ($ourSolutionsSectionContent['title'] ?? null)
+                            ? change_text_color_or_bg($ourSolutionsSectionContent['title'])
+                            : translate('Our ').change_text_color_or_bg('**'.translate('Solutions').'**') !!}
+                    </h2>
+                    <p class="er-sub" style="margin-top: 14px">
+                        {!! $ourSolutionsSectionContent && ($ourSolutionsSectionContent['sub_title'] ?? null)
+                            ? change_text_color_or_bg($ourSolutionsSectionContent['sub_title'])
+                            : translate('Explore our dynamic day-to-day solution for everyday life') !!}
+                    </p>
+                    <div class="er-rule" style="margin-top: 20px"></div>
                 </div>
-                <div class="position-relative wow animate__fadeInDown">
-                    <div class="ourSolution-slider owl-theme owl-carousel sliderItem-sameHeight">
-                        <!-- Rides -->
-                        <div class="ourSolution__item sliderItem">
-                            <div class="w-200 w-150-mobile aspect-1 mx-auto mb-3">
-                                <img class="object-cover h-100 rounded"
-                                     src="{{dynamicAsset(path: 'public/landing-page/assets/img/platform/1.png')}}"
-                                     alt="client">
-                            </div>
-                            <div>
-                                <h4 class="fs-20 fs-16-mobile mb-3">Rides</h4>
-                                <p class="fs-12-mobile">Comfortable and reliable rides.</p>
-                            </div>
+
+                <div class="er-grid-3" style="margin-top: 44px">
+                    @foreach($activeOurSolutions as $solution)
+                        <div class="er-surface er-pad-box" style="padding: 34px">
+                            <span class="er-icon">
+                                @if($solution?->value['image'] ?? null)
+                                    <img src="{{ dynamicStorage(path: $storage.'our-solutions/'.$solution->value['image']) }}"
+                                         alt="" width="30" height="30" style="object-fit: contain">
+                                @else
+                                    <svg width="29" height="29" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 17h14M6.5 17l-1.2-5.2A3 3 0 0 1 8.2 8h7.6a3 3 0 0 1 2.9 3.8L17.5 17"></path><circle cx="7.5" cy="18.5" r="1.6"></circle><circle cx="16.5" cy="18.5" r="1.6"></circle></svg>
+                                @endif
+                            </span>
+                            <h3 style="font-size: 23px; font-weight: 700; margin-top: 24px">{{ $solution?->value['title'] ?? '' }}</h3>
+                            <p class="er-muted" style="line-height: 1.65; margin-top: 11px; font-size: 16px">
+                                {{ $solution?->value['description'] ?? '' }}
+                            </p>
                         </div>
-                        <!-- Food Delivery -->
-                        <div class="ourSolution__item sliderItem">
-                            <div class="w-200 w-150-mobile aspect-1 mx-auto mb-3">
-                                <img class="object-cover h-100 rounded"
-                                     src="{{dynamicAsset(path: 'public/landing-page/assets/img/platform/2.png')}}"
-                                     alt="client">
-                            </div>
-                            <div>
-                                <h4 class="fs-20 fs-16-mobile mb-3">Food Delivery</h4>
-                                <p class="fs-12-mobile">Food delivery from your favorite spots.</p>
-                            </div>
+                    @endforeach
+                </div>
+            </div>
+        </section>
+    @endif
+
+    {{-- ========================================== HOW TO BOOK ON WHATSAPP ===== --}}
+    @if($waNumber)
+        <section id="how" class="er-pad er-band">
+            <div class="er-wrap">
+                <div style="text-align: center; max-width: 640px; margin: 0 auto">
+                    <span class="er-eyebrow">{{ translate('Book your ride on WhatsApp') }}</span>
+                    <h2 class="er-title" style="margin-top: 18px">{{ translate('Four steps, one message') }}</h2>
+                    <p class="er-sub" style="margin-top: 14px">{{ translate('No app to install. Save our number and chat with us now.') }}</p>
+                </div>
+
+                @php
+                    $steps = [
+                        ['t' => translate('Quick and easy'),      'd' => translate('Message us in a click.'),                         'i' => 'chat'],
+                        ['t' => translate('Share your location'), 'd' => translate('Tell us where you are and where you are going.'), 'i' => 'pin'],
+                        ['t' => translate('Get a driver'),        'd' => translate('We confirm your driver and arrival time.'),       'i' => 'clock'],
+                        ['t' => translate('Ride and enjoy'),      'd' => translate('Sit back and enjoy a smooth ride.'),              'i' => 'check'],
+                    ];
+                @endphp
+
+                <div class="er-grid-4" style="margin-top: 48px">
+                    @foreach($steps as $i => $step)
+                        <div class="er-surface-2 er-pad-box" style="padding: 30px">
+                            <span class="er-icon-round">
+                                @if($step['i'] === 'chat')
+                                    <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 11.5a8.4 8.4 0 0 1-9 8.4 8.6 8.6 0 0 1-3.8-.9L3 20.5l1.6-4.8A8.4 8.4 0 0 1 12 3.1a8.4 8.4 0 0 1 9 8.4Z"></path></svg>
+                                @elseif($step['i'] === 'pin')
+                                    <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 10c0 7-9 12-9 12s-9-5-9-12a9 9 0 0 1 18 0Z"></path><circle cx="12" cy="10" r="3"></circle></svg>
+                                @elseif($step['i'] === 'clock')
+                                    <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="9"></circle><path d="M12 7v5l3.5 2"></path></svg>
+                                @else
+                                    <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m20 6-11 11-5-5"></path></svg>
+                                @endif
+                            </span>
+                            <div class="er-step">{{ translate('STEP') }} {{ $i + 1 }}</div>
+                            <h3 style="font-size: 19px; font-weight: 700; margin-top: 8px">{{ $step['t'] }}</h3>
+                            <p class="er-muted" style="line-height: 1.6; margin-top: 9px; font-size: 15px">{{ $step['d'] }}</p>
                         </div>
-                        <!-- Errands -->
-                        <div class="ourSolution__item sliderItem">
-                            <div class="w-200 w-150-mobile aspect-1 mx-auto mb-3">
-                                <img class="object-cover h-100 rounded"
-                                     src="{{dynamicAsset(path: 'public/landing-page/assets/img/platform/1.png')}}"
-                                     alt="client">
+                    @endforeach
+                </div>
+
+                <div style="display: flex; justify-content: center; margin-top: 40px">
+                    <a href="https://wa.me/{{ $waNumber }}" target="_blank" rel="noopener" class="er-btn er-btn-primary">
+                        {{ translate('Start a chat now') }}
+                    </a>
+                </div>
+            </div>
+        </section>
+    @endif
+
+    {{-- ========================================= CHOOSE YOUR RIDE (Gallery) ===== --}}
+    @if($isGalleryEnabled && ($cardOneGallery || $cardTwoGallery))
+        <section id="rides" class="er-pad">
+            <div class="er-wrap">
+                <div style="text-align: center; max-width: 640px; margin: 0 auto">
+                    <h2 class="er-title">
+                        {!! translate('Choose the ride that ').change_text_color_or_bg('**'.translate('fits your needs').'**') !!}
+                    </h2>
+                </div>
+
+                <div class="er-grid-2" style="margin-top: 46px">
+                    {{-- the controller already unwraps ->value, so these are plain arrays --}}
+                    @foreach([['card' => $cardOneGallery, 'primary' => false], ['card' => $cardTwoGallery, 'primary' => true]] as $tier)
+                        @php($card = $tier['card'] ?? null)
+                        @if($card)
+                            <div class="er-surface er-tier">
+                                <div class="er-tier-head">{{ strip_tags(change_text_color_or_bg($card['title'] ?? '')) }}</div>
+                                <div class="er-pad-box" style="padding: 32px">
+                                    <div class="er-tier-img">
+                                        @if($card['image'] ?? null)
+                                            <img src="{{ dynamicStorage(path: $storage.'gallery/'.$card['image']) }}" alt="">
+                                        @else
+                                            <span class="er-dim">[ {{ translate('RIDE PHOTO') }} ]</span>
+                                        @endif
+                                    </div>
+                                    <p class="er-muted" style="line-height: 1.65; margin-top: 22px; font-size: 16px">
+                                        {!! change_text_color_or_bg($card['subtitle'] ?? '') !!}
+                                    </p>
+                                    @if($waNumber)
+                                        <a href="https://wa.me/{{ $waNumber }}" target="_blank" rel="noopener"
+                                           class="er-btn er-btn-block {{ $tier['primary'] ? 'er-btn-primary' : 'er-btn-outline' }}"
+                                           style="margin-top: 26px">{{ translate('Book this ride') }}</a>
+                                    @endif
+                                </div>
                             </div>
-                            <div>
-                                <h4 class="fs-20 fs-16-mobile mb-3">Errands</h4>
-                                <p class="fs-12-mobile">Fast errands anywhere in town.</p>
+                        @endif
+                    @endforeach
+                </div>
+            </div>
+        </section>
+    @endif
+
+    {{-- ==================================== WHY E-RIDE (Business Statistics) ===== --}}
+    @if($showBusinessStatisticsSection && $activeBusinessStatistics->isNotEmpty())
+        <section class="er-pad er-band">
+            <div class="er-wrap">
+                <div class="er-grid-4">
+                    @foreach($activeBusinessStatistics as $stat)
+                        <div>
+                            <span class="er-icon-soft">
+                                @if($stat?->value['image'] ?? null)
+                                    <img src="{{ dynamicStorage(path: $storage.'business-statistics/'.$stat->value['image']) }}"
+                                         alt="" width="26" height="26" style="object-fit: contain">
+                                @else
+                                    <svg width="25" height="25" viewBox="0 0 24 24" fill="none" stroke="#ff6b6b" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10Z"></path><path d="m9 12 2 2 4-4"></path></svg>
+                                @endif
+                            </span>
+                            <h3 style="font-size: 17px; font-weight: 800; margin-top: 18px; text-transform: uppercase; letter-spacing: .04em">
+                                {{ $stat?->value['title'] ?? '' }}
+                            </h3>
+                            <p class="er-muted" style="line-height: 1.6; margin-top: 9px; font-size: 15px">
+                                {{ $stat?->value['content'] ?? '' }}
+                            </p>
+                        </div>
+                    @endforeach
+                </div>
+            </div>
+        </section>
+    @endif
+
+    {{-- ========================================================= TESTIMONIALS ===== --}}
+    @if($showTestimonialSection && $activeTestimonials->isNotEmpty())
+        <section id="reviews" class="er-pad">
+            <div class="er-wrap">
+                <div style="text-align: center; max-width: 640px; margin: 0 auto">
+                    <h2 class="er-title">
+                        {!! $testimonialSectionContent && ($testimonialSectionContent['title'] ?? null)
+                            ? change_text_color_or_bg($testimonialSectionContent['title'])
+                            : translate('People share their love') !!}
+                    </h2>
+                </div>
+
+                <div class="er-grid-3" style="margin-top: 44px">
+                    @foreach($activeTestimonials as $testimonial)
+                        @php($review = $testimonial?->value ?? [])
+                        @php($rating = (int) round((float) ($review['rating'] ?? 0)))
+                        <figure class="er-surface er-pad-box" style="padding: 30px; margin: 0">
+                            <div style="display: flex; gap: 3px" role="img"
+                                 aria-label="{{ $rating }} {{ translate('out of 5 stars') }}">
+                                @for($i = 1; $i <= 5; $i++)
+                                    <svg width="18" height="18" viewBox="0 0 24 24" fill="{{ $i <= $rating ? '#f5a623' : '#3a3a44' }}" aria-hidden="true"><path d="m12 2 3.1 6.3 6.9 1-5 4.9 1.2 6.8L12 17.8 5.8 21l1.2-6.8-5-4.9 6.9-1L12 2Z"></path></svg>
+                                @endfor
                             </div>
+                            <blockquote style="margin: 18px 0 0; font-size: 17px; line-height: 1.65; color: #e3e3ea">
+                                {{ $review['review'] ?? '' }}
+                            </blockquote>
+                            <figcaption style="display: flex; align-items: center; gap: 12px; margin-top: 22px; padding-top: 20px; border-top: 1px solid #27272e">
+                                @if($review['reviewer_image'] ?? null)
+                                    <img src="{{ dynamicStorage(path: $storage.'testimonial/'.$review['reviewer_image']) }}"
+                                         alt="" width="44" height="44" style="border-radius: 50%; object-fit: cover; flex: none">
+                                @else
+                                    <span style="width: 44px; height: 44px; border-radius: 50%; background: #1f1f25; display: inline-flex; align-items: center; justify-content: center; font-weight: 800; color: #ff6b6b; flex: none">
+                                        {{ mb_substr($review['reviewer_name'] ?? 'E', 0, 1) }}
+                                    </span>
+                                @endif
+                                <span>
+                                    <span style="display: block; font-weight: 700; font-size: 15px; color: #fff">{{ $review['reviewer_name'] ?? '' }}</span>
+                                    <span style="display: block; font-size: 14px; color: #8b8b96">{{ $review['designation'] ?? '' }}</span>
+                                </span>
+                            </figcaption>
+                        </figure>
+                    @endforeach
+                </div>
+            </div>
+        </section>
+    @endif
+
+    {{-- ========================================= DRIVE AND EARN (Earn Money) ===== --}}
+    @if($isEarnMoneyEnabled)
+        <section id="drive" class="er-pad er-band">
+            <div class="er-wrap" style="display: flex; flex-wrap: wrap; gap: 52px; align-items: center">
+
+                <div style="flex: 999 1 480px; min-width: 0">
+                    <span class="er-eyebrow">{{ translate('For drivers') }}</span>
+                    <h2 class="er-title" style="margin-top: 18px">
+                        {!! $earnMoneySectionContent && ($earnMoneySectionContent['title'] ?? null)
+                            ? change_text_color_or_bg($earnMoneySectionContent['title'])
+                            : translate('Earn Money with ').change_text_color_or_bg('**'.translate('E-Ride').'**') !!}
+                    </h2>
+                    <p class="er-sub" style="margin-top: 18px; max-width: 520px">
+                        {!! $earnMoneySectionContent && ($earnMoneySectionContent['subtitle'] ?? null)
+                            ? change_text_color_or_bg($earnMoneySectionContent['subtitle'])
+                            : translate('Drive when it suits you, accept the trips you want, and get paid for every ride you complete.') !!}
+                    </p>
+
+                    <div style="display: flex; flex-wrap: wrap; gap: 14px; margin-top: 32px">
+                        @include('landing-page.partials._app-buttons', [
+                            'android' => $driverAppVersionControlForAndroid,
+                            'ios'     => $driverAppVersionControlForIos,
+                        ])
+                        @if($waNumber)
+                            <a href="https://wa.me/{{ $waNumber }}" target="_blank" rel="noopener" class="er-btn er-btn-primary">
+                                {{ translate('Sign up to drive') }}
+                            </a>
+                            <a href="tel:{{ $contactNumber }}" class="er-btn er-btn-outline">{{ $contactNumber }}</a>
+                        @endif
+                    </div>
+                </div>
+
+                <div style="flex: 1 1 320px; min-width: 0">
+                    @php($earnImg = $earnMoneySectionContent['image'] ?? null)
+                    @if($earnImg)
+                        <img src="{{ dynamicStorage(path: $storage.'earn-money/'.$earnImg) }}" alt=""
+                             style="width: 100%; border-radius: 20px; display: block">
+                    @else
+                        <div class="er-ph" style="aspect-ratio: 4 / 3">
+                            <span>[ {{ translate('DRIVER IMAGE') }} ]</span>
+                            <span style="font-weight: 400; font-size: 13px">{{ translate('Landing Page Setup > Earn Money') }}</span>
+                        </div>
+                    @endif
+                </div>
+
+            </div>
+        </section>
+    @endif
+
+    {{-- ==================================================== BIG WHATSAPP CTA ===== --}}
+    @if($waNumber)
+        <section style="padding: 92px 0">
+            <div class="er-wrap">
+                <div class="er-cta er-pad-box">
+                    <div style="flex: 1 1 320px; min-width: 0; display: flex; align-items: center; gap: 20px">
+                        <span style="width: 68px; height: 68px; border-radius: 50%; background: rgba(255,255,255,.16); display: inline-flex; align-items: center; justify-content: center; flex: none">
+                            @include('landing-page.partials._whatsapp-icon', ['size' => 36])
+                        </span>
+                        <div>
+                            <div style="font-size: 25px; font-weight: 800; color: #fff; line-height: 1.25">{{ translate('Book your ride on WhatsApp') }}</div>
+                            <div style="font-size: 15px; color: #ffd9d9; margin-top: 6px">{{ translate('Save this number and chat with us now') }}</div>
                         </div>
                     </div>
-                    @if($solutionCount > 3 ||  ($userAgent?->isMobile() && $solutionCount > 1) || ( $userAgent?->isTablet() && $solutionCount > 2))
-                        <!-- ourSolution Slider Middle Nav Icons -->
-                        <div class="slider-middle d-flex justify-content-center">
-                            <div
-                                class="owl-btn prev-btn ourSolution-owl-prev btn btn-circle btn-light text-dark border">
-                                <i class="bi bi-chevron-left"></i>
-                            </div>
-                            <div class="mx-2 mx-sm-3"></div>
-                            <div
-                                class="owl-btn next-btn ourSolution-owl-next btn btn-circle btn-light text-dark border">
-                                <i class="bi bi-chevron-right"></i>
-                            </div>
-                        </div>
+                    <a href="https://wa.me/{{ $waNumber }}" target="_blank" rel="noopener" class="er-cta-num">{{ $contactNumber }}</a>
+                </div>
+            </div>
+        </section>
+    @endif
+
+    {{-- ================================= GET THE APP (Customer App Download) ===== --}}
+    @if($isCustomerAppDownloadEnabled && ($customerAppVersionControlForAndroid || $customerAppVersionControlForIos))
+        <section class="er-pad er-band">
+            <div class="er-wrap" style="display: flex; flex-wrap: wrap; gap: 40px; align-items: center; justify-content: space-between">
+                <div style="flex: 999 1 420px; min-width: 0">
+                    <h2 class="er-title">
+                        {!! $customerAppDownloadSectionContent && ($customerAppDownloadSectionContent['title'] ?? null)
+                            ? change_text_color_or_bg($customerAppDownloadSectionContent['title'])
+                            : translate('Get the ').change_text_color_or_bg('**'.translate('E-Ride').'**').' '.translate('app') !!}
+                    </h2>
+                    <p class="er-sub" style="margin-top: 14px; max-width: 480px">
+                        {!! $customerAppDownloadSectionContent && ($customerAppDownloadSectionContent['subtitle'] ?? null)
+                            ? change_text_color_or_bg($customerAppDownloadSectionContent['subtitle'])
+                            : translate('Reliable rides anytime, anywhere.') !!}
+                    </p>
+                    <div style="display: flex; flex-wrap: wrap; gap: 14px; margin-top: 30px">
+                        @include('landing-page.partials._app-buttons', [
+                            'android' => $customerAppVersionControlForAndroid,
+                            'ios'     => $customerAppVersionControlForIos,
+                        ])
+                    </div>
+                </div>
+                <div style="flex: 1 1 300px; min-width: 0">
+                    @php($appImg = $customerAppDownloadSectionContent['image'] ?? null)
+                    @if($appImg)
+                        <img src="{{ dynamicStorage(path: $storage.'customer-app-download/'.$appImg) }}" alt=""
+                             style="width: 100%; border-radius: 20px; display: block">
                     @endif
                 </div>
             </div>
         </section>
     @endif
-    <!-- Our Solution Section End -->
 
-
-    <!-- Our Services Section Start -->
-    @if($showOurServicesSection)
-        <section class="service-section bg-light py-4 py-sm-60 mt-4 mt-sm-60">
-            <div class="container">
-                <div class="mb-3 mb-sm-5 text-center">
-                    <h3 class="section-title mb-2 mb-sm-3 fs-16-mobile wow animate__fadeInUp">
-                        {!! $ourServicesSectionContent && $ourServicesSectionContent['title'] ? change_text_color_or_bg($ourServicesSectionContent['title']) :  translate('Our ') .change_text_color_or_bg(('**'. translate('Services') .'**')) !!}
-                    </h3>
-                    <p class="fs-18 mb-0 fs-12-mobile">{!! $ourServicesSectionContent && $ourServicesSectionContent['subtitle'] ? change_text_color_or_bg($ourServicesSectionContent['subtitle']) :  translate('Discover our innovative solutions designed to enhance daily operations.') !!}</p>
+    {{-- ========================================================== NEWSLETTER ===== --}}
+    @if($newsEnabled)
+        <section class="er-pad er-band">
+            <div class="er-wrap" style="display: flex; flex-wrap: wrap; gap: 40px; align-items: center; justify-content: space-between">
+                <div style="flex: 999 1 420px; min-width: 0">
+                    <h2 style="font-size: 32px; font-weight: 800">
+                        {!! $newsContent && ($newsContent['title'] ?? null)
+                            ? change_text_color_or_bg($newsContent['title'])
+                            : translate('GET ALL UPDATES & EXCITING NEWS') !!}
+                    </h2>
+                    <p class="er-sub" style="margin-top: 12px; max-width: 460px">
+                        {!! $newsContent && ($newsContent['subtitle'] ?? null)
+                            ? change_text_color_or_bg($newsContent['subtitle'])
+                            : translate('Subscribe to our newsletter to receive all the latest activity we provide for you') !!}
+                    </p>
                 </div>
-                <ul class="nav nav-tabs nav--tabs" id="myTab" role="tablist">
-                    @foreach($activeOurServices as $key => $ourService)
-                        <li class="nav-item" role="presentation">
-                            <button class="nav-link {{$key == 0 ? "active" : ""}}" id="areaTab{{$key}}"
-                                    data-bs-toggle="tab" data-bs-target="#tab{{$key}}" type="button" role="tab"
-                                    aria-controls="tab{{$key}}" aria-selected="true">
-                                {!! change_text_color_or_bg($ourService?->value['tab_name']) !!}
-                            </button>
-                        </li>
-                    @endforeach
-                </ul>
-                <div class="tab-content" id="myTabContent">
-                    @foreach($activeOurServices as $key => $ourService)
-                        @if($ourService?->value['status']??0)
-                            <div class="tab-pane fade {{$key == 0 ? "show active" : ""}}" id="tab{{$key}}"
-                                 role="tabpanel" aria-labelledby="areaTab{{$key}}">
-                                <div class="row g-4">
-                                    <div class="col-lg-6">
-                                        <div class="mt-3 mt-sm-5">
-                                            <h4 class="mb-3 fs-16-mobile">
-                                                {!! change_text_color_or_bg($ourService?->value['title']) !!}
-                                            </h4>
-                                            <div class="editor-content">
-                                                {!! change_text_color_or_bg($ourService?->value['description']) !!}
-                                            </div>
-                                        </div>
-                                    </div>
-                                    <div class="col-lg-6">
-                                        <div class="w-475 w-220-mobile aspect-1 mx-auto overflow-hidden rounded">
-                                            <img
-                                                class="img-fluid w-100 h-100 object-cover"
-                                                src="{{ $ourService?->value['image'] ? dynamicStorage(path: 'storage/app/public/business/landing-pages/our-services/' .$ourService?->value['image']) : dynamicAsset(path: 'public/landing-page/assets/img/service/demo.png') }}"
-                                                alt=""
-                                            >
-                                        </div>
-                                    </div>
-                                </div>
-                            </div>
-                        @endif
-                    @endforeach
-
-                </div>
-            </div>
-        </section>
-
-    @endif
-    <!-- Our Services Section End -->
-
-    <!-- Gallery Section Start -->
-    @if($isGalleryEnabled)
-        <section class="gallery-section p-0 mt-4 mt-sm-60">
-            <div class="container">
-                <div class="row g-4 pb-50">
-                    <div class="col-lg-6">
-                        <div class="h-100">
-                            <div
-                                class="w-100 h-345 h-200-mobile mx-auto overflow-hidden rounded-20 wow animate__fadeInDown">
-                                <img
-                                    class="img-fluid w-100 h-100 object-cover"
-                                    src="{{$cardOneGallery['image'] ? dynamicStorage('storage/app/public/business/landing-pages/gallery/' .$cardOneGallery['image']) : dynamicAsset(path: 'public/landing-page/assets/img/gallery/card-1.png') }}"
-                                    alt=""
-                                >
-                            </div>
-                            <div class="mt-4 mt-sm-30">
-                                <h3 class="mb-3 mb-sm-4 fs-16-mobile wow animate__fadeInUp">
-                                    {!! $cardOneGallery['title'] ?  change_text_color_or_bg($cardOneGallery['title']) : translate('Ride Completed ') .change_text_color_or_bg(('**'. translate('Hassle-Free') .'**'))  !!}
-                                </h3>
-                                <p class="fs-16 mb-0 fs-12-mobile wow animate__fadeInUp">
-                                    {!! $cardOneGallery['subtitle'] ? change_text_color_or_bg($cardOneGallery['subtitle']) : translate('Experience comfort, safety, and satisfaction with every trip. End your journey with a smile — every time with E-Ride.') !!}
-                                </p>
-                            </div>
-                        </div>
-                    </div>
-                    <div class="col-lg-6">
-                        <div class="h-100">
-                            <div class="mb-4 mb-sm-30">
-                                <h3 class="mb-3 mb-sm-4 fs-16-mobile wow animate__fadeInUp">
-                                    {!! $cardTwoGallery['title'] ? change_text_color_or_bg($cardTwoGallery['title'])  : translate("Share Your Ride") !!}
-                                </h3>
-                                <p class="fs-16 mb-0 fs-12-mobile wow animate__fadeInUp">
-                                    {!!$cardTwoGallery['subtitle'] ? change_text_color_or_bg($cardTwoGallery['subtitle']) : translate('With every turn of the wheel, discover something new — because each ride opens the door to infinite possibilities.') !!}
-                                </p>
-                            </div>
-                            <div
-                                class="w-100 h-345 h-200-mobile mx-auto overflow-hidden rounded-20 wow animate__fadeInDown">
-                                <img
-                                    class="img-fluid w-100 h-100 object-cover"
-                                    src="{{ $cardTwoGallery['image'] ?  dynamicStorage('storage/app/public/business/landing-pages/gallery/' .$cardTwoGallery['image']) : dynamicAsset(path: 'public/landing-page/assets/img/gallery/card-2.png') }}"
-                                    alt=""
-                                >
-                            </div>
-                        </div>
-                    </div>
-                </div>
+                <form action="{{ route('newsletter-subscription.store') }}" method="POST"
+                      style="flex: 1 1 360px; min-width: 0; display: flex; flex-wrap: wrap; gap: 12px">
+                    @csrf
+                    <label for="er-newsletter-email" class="er-sr">{{ translate('Email address') }}</label>
+                    <input id="er-newsletter-email" class="er-input" type="email" name="email"
+                           placeholder="{{ translate('Type email...') }}" autocomplete="email" required>
+                    <button type="submit" class="er-btn er-btn-primary" style="flex: 1 1 140px">{{ translate('Subscribe') }}</button>
+                </form>
             </div>
         </section>
     @endif
-    <!-- Gallery Section End -->
 
-    <!-- App Download Section Start -->
-    @if($isCustomerAppDownloadEnabled)
-        <section class="app-download-section p-0 mt-4 mt-sm-60">
-            <div class="container">
-                <div class="row g-4 align-items-center">
-                    <div class="col-lg-6">
-                        <div class="wow animate__fadeInDown">
-                            <div class="mb-4 mb-sm-30">
-                                <h3 class="mb-3 mb-sm-4 fs-16-mobile">
-                                    {!! change_text_color_or_bg($customerAppDownloadSectionContent['title'])  !!}
-                                </h3>
-                                <p class="fs-16 mb-0 fs-12-mobile">
-                                    {!! change_text_color_or_bg($customerAppDownloadSectionContent['subtitle']) !!}
-                                </p>
-                            </div>
-                            <div
-                                class="bg-fafafa border rounded-20 p-3 p-sm-4 d-flex justify-content-between align-items-center gap-3 gap-sm-4 w-auto">
-                                <div>
-                                    <h5 class="mb-2 fs-16-mobile">{!! change_text_color_or_bg($customerAppDownloadButtonContent['title']) !!}</h5>
-                                    <p class="mb-0">{!! change_text_color_or_bg($customerAppDownloadButtonContent['subtitle']) !!}</p>
-                                    <div class="d-flex gap-3 mt-3">
-                                        @if($customerAppVersionControlForAndroid)
-                                            <a target="_blank" class="no-gutter" type="button"
-                                               href="{{ $customerAppVersionControlForAndroid['app_url'] }}">
-                                                <img
-                                                    src="{{ dynamicAsset(path: 'public/landing-page/assets/img/play-store.png') }}"
-                                                    class="w-125px" alt="">
-                                            </a>
-                                        @endif
-                                        @if($customerAppVersionControlForIos)
-                                            <a target="_blank" class="no-gutter" type="button"
-                                               href="{{ $customerAppVersionControlForIos['app_url'] }}">
-                                                <img
-                                                    src="{{ dynamicAsset(path: 'public/landing-page/assets/img/app-store.png') }}"
-                                                    class="w-125px" alt="">
-                                            </a>
-                                        @endif
-                                    </div>
-                                </div>
-                                <div
-                                    class="bg-white rounded-10 p-3 d-flex justify-content-center align-items-center flex-column gap-2 h-100">
-                                    <div class="border rounded-10 p-2">
-                                        {!! \QrCode::size(64)->generate(route('blog.customer-app-download')) !!}
-                                    </div>
-                                    <p class="fs-12-mobile mb-0">{{ translate('Scan to DownLoad') }}</p>
-                                </div>
-                            </div>
-                        </div>
-                    </div>
-                    <div class="col-lg-6">
-                        <div class="w-475 w-220-mobile aspect-1 mx-auto overflow-hidden rounded wow animate__fadeInUp">
-                            <img
-                                class="img-fluid w-100 h-100 object-cover"
-                                src="{{ $customerAppDownloadSectionContent['image'] ? dynamicStorage('storage/app/public/business/landing-pages/customer-app-download/' .$customerAppDownloadSectionContent['image']) : dynamicAsset(path: 'public/landing-page/assets/img/service/demo.png') }}"
-                                alt=""
-                            >
-                        </div>
-                    </div>
-                </div>
-            </div>
-        </section>
+    {{-- ================================================= FLOATING WHATSAPP ===== --}}
+    @if($waNumber)
+        <a href="https://wa.me/{{ $waNumber }}" target="_blank" rel="noopener" class="er-float"
+           aria-label="{{ translate('Chat with us on WhatsApp') }}">
+            @include('landing-page.partials._whatsapp-icon', ['size' => 31])
+        </a>
     @endif
-    <!-- App Download Section End -->
-
-    <!-- Earn Money Section Start -->
-    @if($isEarnMoneyEnabled)
-        <section class="earn-money-section bg-light py-4 py-sm-60 mt-4 mt-sm-60">
-            <div class="container">
-                <div class="row g-4 align-items-center">
-                    <div class="col-lg-6">
-                        <div class="w-475 w-220-mobile aspect-1 mx-auto overflow-hidden rounded wow animate__fadeInUp">
-                            <img
-                                class="img-fluid w-100 h-100 object-cover"
-                                src="{{ isset($earnMoneySectionContent) && $earnMoneySectionContent['image'] ? dynamicStorage('storage/app/public/business/landing-pages/earn-money/'.$earnMoneySectionContent['image']) : dynamicAsset(path: 'public/landing-page/assets/img/service/demo.png') }}"
-                                alt=""
-                            >
-                        </div>
-                    </div>
-                    <div class="col-lg-6">
-                        <div class="h-100 wow animate__fadeInDown">
-                            <div class="mb-4 mb-sm-30">
-                                <h3 class="mb-3 mb-sm-4 fs-16-mobile">
-                                    {!! change_text_color_or_bg(isset($earnMoneySectionContent) && $earnMoneySectionContent['title'] ? $earnMoneySectionContent['title'] : translate('Earn Money with **' . businessConfig(key: 'business_name', settingsType: BUSINESS_INFORMATION)?->value) . '**')  !!}
-                                </h3>
-                                <p class="fs-16 mb-0 fs-12-mobile">
-                                    {!! change_text_color_or_bg(isset($earnMoneySectionContent) && $earnMoneySectionContent['subtitle'] ? $earnMoneySectionContent['subtitle'] : translate('Explore limitless possibilities with our platform — turning your skills, time, and passion into a rewarding source of income.'))  !!}
-                                </p>
-                            </div>
-                            <div
-                                class="bg-fafafa border rounded-20 p-3 p-sm-4 d-flex justify-content-between align-items-center gap-3 gap-sm-4 w-auto">
-                                <div>
-                                    <h5 class="mb-2 fs-16-mobile">{!! change_text_color_or_bg($earnMoneyButtonContent['title']) !!}</h5>
-                                    <p class="mb-0">{!! $earnMoneyButtonContent['subtitle'] !!}</p>
-                                    <div class="d-flex gap-3 mt-3">
-                                        @if($driverAppVersionControlForAndroid)
-                                            <a target="_blank" class="no-gutter" type="button"
-                                               href="{{ $driverAppVersionControlForAndroid['app_url'] }}">
-                                                <img
-                                                    src="{{ dynamicAsset(path: 'public/landing-page/assets/img/app-store.png') }}"
-                                                    class="w-125px" alt="">
-                                            </a>
-                                        @endif
-                                        @if($driverAppVersionControlForIos)
-                                            <a target="_blank" class="no-gutter" type="button"
-                                               href="{{ $driverAppVersionControlForIos['app_url'] }}">
-                                                <img
-                                                    src="{{ dynamicAsset(path: 'public/landing-page/assets/img/play-store.png') }}"
-                                                    class="w-125px" alt="">
-                                            </a>
-                                        @endif
-                                    </div>
-                                </div>
-                                <div
-                                    class="bg-white rounded-10 p-3 d-flex justify-content-center align-items-center flex-column gap-2 h-100">
-                                    <div class="border rounded-10 p-2">
-                                        {!! \QrCode::size(64)->generate(route('blog.driver-app-download')) !!}
-                                    </div>
-                                    <p class="fs-12-mobile mb-0">{{ translate('Scan to DownLoad') }}</p>
-                                </div>
-                            </div>
-                        </div>
-                    </div>
-                </div>
-            </div>
-        </section>
-    @endif
-    <!-- Earn Money Section End -->
-
-
-    <!-- Testimonial Section Start -->
-    @if($showTestimonialSection)
-        <section class="testimonial-section p-0 mt-4 mt-sm-60">
-            <div class="container">
-                <h2 class="section-title mb-0 mb-sm-3 fs-16-mobile wow animate__fadeInUp">
-                    {!! change_text_color_or_bg($testimonialSectionContent['title'])  !!}
-                </h2>
-                <div class="wow animate__fadeInDown">
-                    <div class="testimonial-slider owl-theme owl-carousel sliderItem-sameHeight">
-                        @if($activeTestimonials->isNotEmpty())
-                            @foreach($activeTestimonials as $testimonial)
-                                @if($testimonial?->value['status'] == 1)
-                                    <!-- Testimonial Slider Single Slide -->
-                                    <div class="testimonial__item sliderItem p-3 p-sm-4">
-                                        <div class="position-absolute left-0 top-0 mt-4">
-                                            <img width="40"
-                                                 src="{{dynamicAsset(path: 'public/landing-page/assets/img/quatation.svg')}}"
-                                                 alt="" class="svg">
-                                        </div>
-                                        <div class="testimonial__item-img">
-                                            <img src="{{ onErrorImage(
-                                            $testimonial?->value && $testimonial?->value['reviewer_image'] ? $testimonial?->value['reviewer_image'] : '',
-                                            $testimonial?->value && $testimonial?->value['reviewer_image'] ? dynamicStorage(path: 'storage/app/public/business/landing-pages/testimonial/'.$testimonial?->value['reviewer_image']) : '',
-                                            dynamicAsset(path: 'public/landing-page/assets/img/client/user.png'),
-                                            'business/landing-pages/testimonial/',
-                                        ) }}" alt="client">
-
-                                        </div>
-                                        <div class="testimonial__item-cont">
-                                            <p class="mb-2 name text-dark fs-14">
-                                                <span>{!! $testimonial?->value && $testimonial?->value['reviewer_name'] ? change_text_color_or_bg($testimonial?->value['reviewer_name']): "" !!}</span>
-                                            </p>
-                                            <p class="text--base mb-2 fs-12">{!!  $testimonial?->value && $testimonial?->value['designation'] ? change_text_color_or_bg($testimonial?->value['designation']): "" !!}</p>
-                                            <div class="rating mb-2">
-                                                @php($count = $testimonial?->value && $testimonial?->value['rating'] ? $testimonial?->value['rating'] : 0)
-
-                                                @for($inc=1;$inc<=5;$inc++)
-                                                    @if ($inc <= (int)$count)
-                                                        <i class="bi bi-star-fill text-warning"></i>
-                                                    @elseif ($count != 0 && $inc <= (int)$count + 1.1 && $count > ((int)$count))
-                                                        <i class="bi bi-star-half text-warning"></i>
-                                                    @else
-                                                        <i class="bi bi-star text-warning"></i>
-                                                    @endif
-                                                @endfor
-                                            </div>
-                                            <p class="text-dark">
-                                            <blockquote>
-                                                {{ $testimonial?->value && $testimonial?->value['review'] ? $testimonial?->value['review'] : "" }}
-                                            </blockquote>
-                                            </p>
-                                        </div>
-                                    </div>
-                                @endif
-                            @endforeach
-                        @else
-                            <div class="testimonial__item sliderItem">
-                                <div class="testimonial__item-img">
-                                    <img src="{{dynamicAsset(path: 'public/landing-page/assets/img/client/user.png')}}"
-                                         alt="client">
-                                </div>
-                                <div class="testimonial__item-cont">
-                                    <p class="mb-2 name text-dark"><strong>{{ "Roofus K." }}</strong>
-                                    <p>
-                                    <p class="text--base mb-0">{{ "Customer" }}</p>
-                                    <div class="rating mb-2">
-                                        @php($count = 5)
-
-                                        @for($inc=1;$inc<=5;$inc++)
-                                            @if ($inc <= (int)$count)
-                                                <i class="bi bi-star-fill text-warning"></i>
-                                            @elseif ($count != 0 && $inc <= (int)$count + 1.1 && $count > ((int)$count))
-                                                <i class="bi bi-star-half text-warning"></i>
-                                            @else
-                                                <i class="bi bi-star text-warning"></i>
-                                            @endif
-                                        @endfor
-                                    </div>
-                                    <p>
-                                    <blockquote>
-                                        {{ "Exceeded my expectations! Customer support is responsive and helpful. Fantastic experience!" }}
-                                    </blockquote>
-                                    </p>
-                                </div>
-                            </div>
-                        @endif
-                    </div>
-
-                    <!-- Testimonial Slider Bottom Counter and Nav Icons -->
-                    <div class="slider-bottom d-flex justify-content-center">
-                        <div class="owl-btn testimonial-owl-prev btn btn-circle bg--base text-white">
-                            <i class="bi bi-arrow-left"></i>
-                        </div>
-                        <div class="slider-counter mx-4 d-flex justify-content-center align-items-center"></div>
-                        <div class="owl-btn testimonial-owl-next btn btn-circle bg--base text-white">
-                            <i class="bi bi-arrow-right"></i>
-                        </div>
-                    </div>
-                </div>
-            </div>
-        </section>
-    @endif
-    <!-- Testimonial Section End -->
 
 @endsection
+
+@push('script')
+    <script>
+        "use strict";
+        (function () {
+            var el = document.querySelector('[data-er-typewriter]');
+            if (!el) { return; }
+
+            var words;
+            try { words = JSON.parse(el.getAttribute('data-words')) || []; } catch (e) { words = []; }
+            if (!words.length) { return; }
+
+            if (window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches) {
+                el.textContent = words[0];
+                return;
+            }
+
+            var i = 0, pos = 0, phase = 'typing', hold = 0;
+
+            setInterval(function () {
+                var word = String(words[i]);
+
+                if (phase === 'typing') {
+                    if (pos < word.length) { pos++; el.textContent = word.slice(0, pos); }
+                    else { hold = 0; phase = 'holding'; }
+                } else if (phase === 'holding') {
+                    if (++hold > 16) { phase = 'deleting'; }
+                } else {
+                    if (pos > 0) { pos--; el.textContent = word.slice(0, pos); }
+                    else { phase = 'typing'; i = (i + 1) % words.length; }
+                }
+            }, 95);
+        })();
+    </script>
+@endpush

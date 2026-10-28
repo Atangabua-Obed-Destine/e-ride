@@ -1,0 +1,327 @@
+/* ==========================================================================
+   E-Ride landing page redesign
+   --------------------------------------------------------------------------
+   Everything here is scoped under `body.eride-dark`, which only the landing
+   page sets (see resources/views/landing-page/index.blade.php). The shared
+   header and footer partials are restyled for dark here WITHOUT touching
+   their markup, so about / contact / privacy / terms / blog / parcel-tracking
+   keep the original look from main.css.
+
+   Brand colours come from the admin panel via the variables set in
+   resources/views/landing-page/layouts/css.blade.php, with the current
+   E-Ride values as fallbacks. Do not hardcode brand colours below.
+   ========================================================================== */
+
+body.eride-dark {
+  --er-red: var(--bs-primary, #e02020);
+  --er-red-soft: #ff6b6b;
+  --er-bg: #0b0b0d;
+  --er-bg-2: #101013;
+  --er-surface: #141417;
+  --er-surface-2: #18181c;
+  --er-line: #27272e;
+  --er-line-2: #2c2c34;
+  --er-text: #ffffff;
+  --er-muted: #a7a7b2;
+  --er-dim: #7c7c88;
+
+  background: var(--er-bg);
+  color: var(--er-text);
+  font-family: 'Plus Jakarta Sans', 'SFProText', system-ui, sans-serif;
+  overflow-x: hidden;
+}
+
+body.eride-dark * { box-sizing: border-box; }
+body.eride-dark h1,
+body.eride-dark h2,
+body.eride-dark h3,
+body.eride-dark h4 { color: var(--er-text); line-height: 1.15; letter-spacing: -0.02em; margin: 0; }
+body.eride-dark p { margin: 0; }
+body.eride-dark a { text-decoration: none; }
+
+/* change_text_color_or_bg() wraps **text** in .text--base */
+body.eride-dark .text--base { color: var(--er-red); }
+body.eride-dark .bg-primary { background: var(--er-red) !important; }
+
+/* --------------------------------------------------------- layout helpers */
+.er-wrap { width: 100%; max-width: 1180px; margin: 0 auto; padding-inline: 24px; }
+.er-pad { padding: 92px 0; }
+.er-surface { background: var(--er-surface); border: 1px solid var(--er-line); border-radius: 20px; }
+.er-surface-2 { background: var(--er-surface-2); border: 1px solid var(--er-line-2); border-radius: 20px; }
+.er-muted { color: var(--er-muted); }
+.er-dim { color: var(--er-dim); font-weight: 700; }
+.er-rule { height: 3px; width: 64px; background: var(--er-red); border-radius: 3px; }
+.er-band { background: var(--er-bg-2); border-top: 1px solid #1f1f25; border-bottom: 1px solid #1f1f25; }
+
+.er-grid-2 { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 24px; }
+.er-grid-3 { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 24px; }
+.er-grid-4 { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 24px; }
+
+.er-title { font-size: 44px; font-weight: 800; }
+.er-sub { font-size: 18px; color: var(--er-muted); line-height: 1.6; }
+.er-h1 { font-size: 72px; font-weight: 800; line-height: 1.02; }
+
+.er-eyebrow {
+  display: inline-flex; align-items: center; gap: 8px;
+  font-size: 13px; font-weight: 700; letter-spacing: .1em; text-transform: uppercase;
+  color: var(--er-red-soft); background: rgba(224, 32, 32, .12);
+  border: 1px solid rgba(224, 32, 32, .32); border-radius: 999px; padding: 8px 16px;
+}
+
+.er-sr { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; border: 0; }
+
+/* ---------------------------------------------------------------- buttons */
+.er-btn {
+  display: inline-flex; align-items: center; justify-content: center; gap: 10px;
+  min-height: 54px; padding: 0 28px; border-radius: 999px;
+  font-size: 16px; font-weight: 700; border: 2px solid transparent;
+  cursor: pointer; font-family: inherit; text-align: center;
+}
+.er-btn-primary { background: var(--er-red); color: #fff; }
+.er-btn-primary:hover { background: #ff3030; color: #fff; }
+.er-btn-outline { background: transparent; color: #fff; border-color: #3a3a44; }
+.er-btn-outline:hover { border-color: #fff; color: #fff; }
+.er-btn-sm { min-height: 46px; padding: 0 22px; font-size: 15px; }
+.er-btn-block { width: 100%; }
+
+/* ------------------------------------------------------------------- hero */
+.er-hero {
+  position: relative;
+  background:
+    radial-gradient(900px 500px at 78% 18%, rgba(224, 32, 32, .22), transparent 62%),
+    var(--er-bg);
+  padding: 86px 0 92px;
+  overflow: hidden;
+  background-size: cover;
+  background-position: center;
+}
+
+/* faint street-grid texture behind the hero, echoing the map graphic */
+.er-hero::before {
+  content: '';
+  position: absolute; inset: 0;
+  background-image:
+    linear-gradient(rgba(255, 255, 255, .028) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(255, 255, 255, .028) 1px, transparent 1px);
+  background-size: 64px 64px;
+  pointer-events: none;
+}
+.er-hero > * { position: relative; }
+.er-hero-inner { display: flex; flex-wrap: wrap; align-items: center; gap: 52px; position: relative; }
+.er-hero-copy { flex: 999 1 520px; min-width: 0; }
+.er-hero-art { flex: 1 1 360px; min-width: 0; display: flex; justify-content: center; }
+.er-hero-art img { width: 100%; max-width: 440px; border-radius: 24px; display: block; }
+
+/* ---------------------------------------------- hero ride-sharing graphic */
+.er-art { width: 100%; max-width: 440px; }
+.er-art svg { width: 100%; height: auto; display: block; border-radius: 26px; }
+
+/* route draws itself in */
+.er-route { animation: er-draw 2.2s ease-out .25s forwards; }
+@keyframes er-draw { to { stroke-dashoffset: 0 } }
+
+/* car creeps along the route */
+.er-car { animation: er-drive 4.5s ease-in-out 1.6s infinite; transform-origin: center; }
+@keyframes er-drive {
+  0%, 100% { transform: translate(0, 0) }
+  50%      { transform: translate(12px, -26px) }
+}
+
+/* destination pin lands, then pulses */
+.er-pin { animation: er-drop .6s cubic-bezier(.34, 1.56, .64, 1) 2.2s both; transform-origin: 300px 92px; }
+@keyframes er-drop {
+  from { transform: translateY(-22px) scale(.8); opacity: 0 }
+  to   { transform: translateY(0) scale(1); opacity: 1 }
+}
+
+/* status chip slides up */
+.er-chip { animation: er-rise .55s ease-out 2.5s both; }
+@keyframes er-rise {
+  from { transform: translateY(14px); opacity: 0 }
+  to   { transform: translateY(0); opacity: 1 }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .er-route { animation: none; stroke-dashoffset: 0 }
+  .er-car, .er-pin, .er-chip { animation: none }
+}
+
+.er-type { font-size: 23px; font-weight: 700; color: #fff; margin-top: 24px; min-height: 1.6em; }
+.er-type-word { color: var(--er-red-soft); }
+.er-caret {
+  display: inline-block; width: 4px; height: .9em; background: var(--er-red);
+  margin-left: 5px; vertical-align: -.07em; animation: er-blink 1s step-end infinite;
+}
+@keyframes er-blink { 0%, 100% { opacity: 1 } 50% { opacity: 0 } }
+@media (prefers-reduced-motion: reduce) { .er-caret { animation: none } }
+
+.er-pills { display: flex; align-items: center; gap: 10px; margin-top: 26px; flex-wrap: wrap; }
+.er-pills span { font-size: 15px; font-weight: 700; color: #fff; }
+.er-pills .er-dot { color: var(--er-red); }
+
+/* ------------------------------------------------------- service strip bar */
+.er-strip { background: var(--er-red); padding: 26px 0; }
+.er-strip-inner { display: flex; flex-wrap: wrap; justify-content: center; align-items: center; gap: 14px 34px; }
+.er-strip-inner span { font-size: 18px; font-weight: 800; color: #fff; }
+.er-strip-inner .er-dot { color: rgba(255, 255, 255, .55); }
+
+/* --------------------------------------------------------- card behaviour */
+/* Cards lift and warm toward the brand colour on hover, so the page feels
+   alive rather than a flat list of boxes. Transform only, so it stays smooth. */
+.er-surface,
+.er-surface-2 { transition: transform .22s ease, border-color .22s ease, background .22s ease; }
+.er-surface:hover,
+.er-surface-2:hover { transform: translateY(-4px); border-color: rgba(224, 32, 32, .45); }
+
+/* the service strip scrolls its wording on narrow screens instead of wrapping ugly */
+.er-strip-inner { overflow: hidden; }
+
+/* numbered step cards get a faint index behind them */
+.er-surface-2 { position: relative; overflow: hidden; }
+
+/* section headings get a short brand rule that grows in */
+.er-rule { transition: width .4s ease; }
+
+/* ------------------------------------------------------------ icon badges */
+.er-icon {
+  display: inline-flex; width: 58px; height: 58px; border-radius: 16px;
+  background: var(--er-red); align-items: center; justify-content: center; flex: none;
+}
+.er-icon-round {
+  display: inline-flex; width: 50px; height: 50px; border-radius: 50%;
+  background: var(--er-red); align-items: center; justify-content: center; flex: none;
+}
+.er-icon-soft {
+  display: inline-flex; width: 52px; height: 52px; border-radius: 14px;
+  background: rgba(224, 32, 32, .14); border: 1px solid rgba(224, 32, 32, .3);
+  align-items: center; justify-content: center; flex: none;
+}
+.er-step { font-size: 13px; font-weight: 800; color: var(--er-red-soft); letter-spacing: .12em; margin-top: 22px; }
+
+/* ----------------------------------------------------------- ride tiers */
+.er-tier { overflow: hidden; }
+.er-tier-head { background: var(--er-red); padding: 15px 28px; font-size: 15px; font-weight: 800; letter-spacing: .14em; color: #fff; }
+.er-tier-img { width: 100%; aspect-ratio: 16 / 9; border-radius: 14px; background: #1c1c21; border: 1px dashed #3a3a44; display: flex; align-items: center; justify-content: center; overflow: hidden; }
+.er-tier-img img { width: 100%; height: 100%; object-fit: cover; }
+.er-check-list { display: flex; flex-direction: column; gap: 14px; margin: 26px 0 0; padding: 0; list-style: none; }
+.er-check-list li { display: flex; gap: 12px; align-items: flex-start; font-size: 16px; color: #e3e3ea; }
+.er-check-list svg { flex: none; }
+
+/* ------------------------------------------------------------ placeholder */
+.er-ph {
+  width: 100%; border-radius: 18px; background: var(--er-surface);
+  border: 1px dashed #3a3a44; display: flex; flex-direction: column;
+  align-items: center; justify-content: center; gap: 12px; text-align: center; padding: 28px;
+  color: var(--er-dim); font-weight: 700; font-size: 14px;
+}
+
+/* ------------------------------------------------------- big whatsapp CTA */
+.er-cta {
+  background: linear-gradient(135deg, var(--er-red), #a01414);
+  border-radius: 26px; padding: 52px 48px;
+  display: flex; flex-wrap: wrap; gap: 36px; align-items: center; justify-content: space-between;
+}
+.er-cta-num {
+  flex: none; background: #fff; color: #c41b1b;
+  font-size: 34px; font-weight: 800; border-radius: 16px; padding: 16px 30px;
+}
+.er-cta-num:hover { color: #8f1414; }
+
+/* ------------------------------------------------------------- newsletter */
+.er-input {
+  flex: 999 1 200px; min-width: 0; min-height: 54px; border-radius: 999px;
+  border: 1px solid #3a3a44; background: var(--er-surface-2);
+  padding: 0 22px; font-size: 16px; font-family: inherit; color: #fff;
+}
+.er-input::placeholder { color: #6f6f7c; }
+
+/* ------------------------------------------------- floating whatsapp button */
+.er-float {
+  position: fixed; right: 22px; bottom: 22px; width: 60px; height: 60px;
+  border-radius: 50%; background: #25D366; display: flex; align-items: center;
+  justify-content: center; box-shadow: 0 10px 28px rgba(0, 0, 0, .45); z-index: 70;
+}
+
+/* ==========================================================================
+   Shared header / footer, restyled for dark. Markup untouched.
+   ========================================================================== */
+body.eride-dark .navbar-bottom,
+body.eride-dark header { background: rgba(11, 11, 13, .94); border-bottom: 1px solid #1f1f25; }
+body.eride-dark .navbar-bottom-wrapper { min-height: 78px; }
+
+/* landing header: ERIDE / BAMENDA wordmark lockup */
+/* flex:none so the lockup is never squeezed by the nav; nowrap so the hyphen
+   in "E-Ride" is not treated as a line-break opportunity */
+body.eride-dark .er-logo { display: flex; align-items: center; gap: 11px; color: #fff; flex: none; }
+body.eride-dark .er-logo img { max-height: 46px; width: auto; }
+body.eride-dark .er-logo-mark { color: var(--er-red); flex: none; }
+body.eride-dark .er-logo-text { display: flex; flex-direction: column; line-height: 1; white-space: nowrap; }
+body.eride-dark .er-logo-name {
+  font-size: 24px; font-weight: 800; letter-spacing: -.01em;
+  text-transform: uppercase; color: #fff;
+  white-space: nowrap;
+}
+body.eride-dark .er-logo-sub {
+  font-size: 11px; font-weight: 700; letter-spacing: .24em;
+  text-transform: uppercase; color: var(--er-red-soft); margin-top: 4px;
+}
+
+@media (max-width: 420px) {
+  body.eride-dark .er-logo-mark { width: 34px; height: 34px; }
+  body.eride-dark .er-logo-name { font-size: 20px; }
+  body.eride-dark .er-logo-sub { font-size: 10px; letter-spacing: .2em; }
+}
+
+/* the in-page nav */
+body.eride-dark .er-menu > li > a > span { font-weight: 600; font-size: 15px; }
+body.eride-dark .er-header-cta { align-items: center; gap: 8px; }
+body.eride-dark .menu > li > a,
+body.eride-dark .menu > li > a span { color: #c8c8d2; }
+body.eride-dark .menu > li > a:hover span,
+body.eride-dark .menu > li > a.active span { color: var(--er-red); }
+body.eride-dark .cmn--btn { background: var(--er-red); color: #fff; border-color: var(--er-red); }
+body.eride-dark .cmn--btn:hover { background: #ff3030; color: #fff; }
+
+body.eride-dark .footer-top,
+body.eride-dark footer { background: #08080a; color: var(--er-muted); border-top: 1px solid #1f1f25; }
+body.eride-dark .footer__wrapper-widget p,
+body.eride-dark .footer__wrapper-widget li a { color: var(--er-muted); }
+body.eride-dark .footer__wrapper-widget li a:hover { color: #fff; }
+body.eride-dark .footer__wrapper-widget h4,
+body.eride-dark .footer__wrapper-widget h5 { color: #fff; }
+body.eride-dark .footer-bottom { background: #08080a; color: var(--er-dim); border-top: 1px solid #1f1f25; }
+
+/* the vendor newsletter block in _footer is replaced by our own section */
+body.eride-dark .newsletter-section { display: none; }
+
+body.eride-dark .preloader { background: var(--er-bg); }
+
+/* =============================================================== responsive */
+@media (max-width: 1000px) {
+  .er-h1 { font-size: 52px; }
+  .er-grid-4 { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .er-grid-3 { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}
+@media (max-width: 700px) {
+  .er-title { font-size: 30px; }
+  .er-sub { font-size: 16px; }
+  .er-h1 { font-size: 38px; }
+  .er-type { font-size: 19px; }
+  .er-grid-2,
+  .er-grid-3,
+  .er-grid-4 { grid-template-columns: 1fr; }
+  .er-pad { padding: 56px 0; }
+  .er-wrap { padding-inline: 16px; }
+  .er-hero { padding: 40px 0 56px; }
+  .er-pad-box { padding: 30px 20px !important; }
+
+  /* On a phone the graphic leads, so the first thing seen is the product,
+     then the headline. Order is flipped with flex, not markup, so the
+     heading stays first in the document for screen readers and SEO. */
+  .er-hero-inner { gap: 28px; }
+  .er-hero-art { order: -1; }
+  .er-art { max-width: 340px; }
+  .er-hero-copy .er-btn { flex: 1 1 100%; }
+  .er-cta { padding: 34px 22px; }
+  .er-cta-num { font-size: 26px; padding: 14px 22px; }
+}
