@@ -228,6 +228,25 @@ function buildDeviceNotificationPayload($fcm_token, $title, $description, $statu
         ]
     ];
 
+    // Extra string fields for the apps (chat: message id, sender, preview).
+    foreach (($notificationData['extra'] ?? []) as $key => $value) {
+        $payload['message']['data'][(string)$key] = (string)$value;
+    }
+
+    // Chat messages also go to Android as data-only messages: the apps show a
+    // conversation notification (sender, the actual text, earlier lines, a
+    // Reply action) and skip it when that chat is already open on screen.
+    // iOS gets a visible alert grouped per conversation.
+    if ($action === 'new_message' && !empty($notificationData['extra']['channel_id'])) {
+        $extra = $notificationData['extra'];
+        unset($payload['message']['notification'], $payload['message']['android']['notification']);
+        $payload['message']['apns']['payload']['aps']['alert'] = [
+            'title' => (string)(($extra['sender_name'] ?? '') !== '' ? $extra['sender_name'] : $title),
+            'body' => (string)(($extra['chat_body'] ?? '') !== '' ? $extra['chat_body'] : $description),
+        ];
+        $payload['message']['apns']['payload']['aps']['thread-id'] = (string)$extra['channel_id'];
+    }
+
     // New ride / parcel requests go to Android as data-only messages so the
     // driver app can show its own call-style alert (looping ringtone, lock
     // screen, View / Dismiss). With a `notification` block Android would show

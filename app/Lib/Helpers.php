@@ -49,11 +49,17 @@ if (!function_exists('translate')) {
                     ? $translatedValue
                     : autoTranslator(q: $defaultValue, sl: 'en', tl: $locale);
 
-                $exported = "<?php return " . var_export($translations, true) . ";";
-                file_put_contents($langFilePath, $exported);
+                // Caching the new key is best effort. When the web server cannot
+                // write the language file, the failed write used to throw, and
+                // the catch below returned the raw "lang.<key>" text that users
+                // then saw in push notifications.
+                if (is_writable($langFilePath)) {
+                    $exported = "<?php return " . var_export($translations, true) . ";";
+                    @file_put_contents($langFilePath, $exported);
+                }
                 $translation = $translations[$normalizedKey];
                 foreach ($replace as $k => $v) {
-                    $translation = str_replace(":$k", $v, $translation);
+                    $translation = str_replace([":$k", "{" . $k . "}"], (string)$v, $translation);
                 }
                 return $translation;
             }

@@ -12,6 +12,9 @@ Route::group(['prefix' => 'customer'], function () {
             Route::put('send-message', 'sendMessage');
             Route::get('conversation', 'conversation');
             Route::get('channel-list', 'channelList');
+            Route::put('mark-read', 'markRead');
+            Route::put('typing', 'typing');
+            Route::get('unread-summary', 'unreadSummary');
         });
     });
 });
@@ -24,6 +27,9 @@ Route::group(['prefix' => 'driver'], function () {
             Route::put('send-message', 'sendMessage');
             Route::get('conversation', 'conversation');
             Route::get('channel-list', 'channelList');
+            Route::put('mark-read', 'markRead');
+            Route::put('typing', 'typing');
+            Route::get('unread-summary', 'unreadSummary');
             Route::put('create-channel-with-admin', 'createChannelWithAdmin');
             Route::put('send-message-to-admin', 'sendMessageToAdminFromDriver');
             Route::put('send-predefined-question-to-admin', 'sendPredefinedQuestionToAdminFromDriver');

@@ -18,6 +18,8 @@ class ChannelConversationResource extends JsonResource
         return [
             'id' => $this->id,
             'message' => $this->message,
+            'user_id' => $this->user_id,
+            'is_read' => (bool)$this->is_read,
             'trip_id' => $this->convable ? $this->convable->ref_id : null,
             'created_at' => $this->created_at,
             'updated_at' => $this->updated_at,

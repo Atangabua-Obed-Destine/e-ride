@@ -2,6 +2,7 @@
 
 namespace Modules\ChattingManagement\Http\Controllers\Api;
 
+use App\Events\RideChatSignalEvent;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Routing\Controller;
@@ -131,7 +132,10 @@ class ChattingController extends Controller
         $whereHasRelations = [
             'channel.channel_users' => ['user_id' => $user->id]
         ];
-        $this->channelConversationService->updatedBy(criteria: ['channel_id' => $request['channel_id'], 'user_id' => $channelUser->user_id], data: ['is_read' => 1]);
+        if ($channelUser) {
+            // Marks the other party's messages read and sends them a read receipt.
+            $this->channelConversationService->markChannelRead((string)$request['channel_id'], $user);
+        }
         $conversations = $this->channelConversationService->getBy(
             criteria: $attributes,
             whereHasRelations: $whereHasRelations,
@@ -142,6 +146,37 @@ class ChattingController extends Controller
         );
         $conversations = ChannelConversationResource::collection($conversations);
         return response()->json(responseFormatter(constant: DEFAULT_200, content: $conversations, limit: $request['limit'], offset: $request['offset']));
+    }
+
+    /**
+     * Marks a ride chat as read (used while the chat is open and a new message
+     * arrives over the websocket). Sends a read receipt to the other party.
+     */
+    public function markRead(Request $request): JsonResponse
+    {
+        $request->validate(['channel_id' => 'required|string']);
+        $marked = $this->channelConversationService->markChannelRead((string)$request['channel_id'], $request->user());
+        return response()->json(responseFormatter(DEFAULT_200, ['marked' => $marked]));
+    }
+
+    /**
+     * "Typing" signal for a ride chat. Not stored; the app throttles it.
+     */
+    public function typing(Request $request): JsonResponse
+    {
+        $request->validate(['channel_id' => 'required|string']);
+        $sent = $this->channelConversationService->sendRideChatSignal((string)$request['channel_id'], $request->user(), RideChatSignalEvent::TYPING, [
+            'typing' => $request->boolean('typing', true),
+        ]);
+        return response()->json(responseFormatter(DEFAULT_200, ['sent' => $sent]));
+    }
+
+    /**
+     * Unread ride-chat messages for the signed-in user, for badges.
+     */
+    public function unreadSummary(Request $request): JsonResponse
+    {
+        return response()->json(responseFormatter(DEFAULT_200, $this->channelConversationService->unreadSummary($request->user())));
     }
 
     public function createOrFindChannel(Request $request): JsonResponse
