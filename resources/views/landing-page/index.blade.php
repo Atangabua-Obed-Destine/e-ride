@@ -70,8 +70,21 @@
 
             <div class="er-hero-copy">
                 <span class="er-hero-eyebrow">
-                    <span class="er-live"><span></span></span>
-                    {{ translate('Rides & parcels, on demand') }}
+                    {{-- E-Ride's route mark: pickup ring, the route, the pin; a car runs it now and then --}}
+                    <svg class="er-glyph" width="58" height="18" viewBox="0 0 58 18" aria-hidden="true">
+                        <path id="erGlyphRoute" d="M6 12 C 16 12, 18 5, 28 6 S 40 13, 50 6" fill="none"
+                              stroke="currentColor" stroke-width="2" stroke-linecap="round" class="er-glyph-route"/>
+                        <circle cx="6" cy="12" r="3.4" fill="#0b0b0d" stroke="#ffffff" stroke-width="1.8"/>
+                        <path d="M50 0.5c2.6 0 4.6 2 4.6 4.5 0 3.3-4.6 7.2-4.6 7.2S45.4 8.3 45.4 5c0-2.5 2-4.5 4.6-4.5Z" fill="currentColor"/>
+                        <circle cx="50" cy="5" r="1.6" fill="#ffffff"/>
+                        <circle r="2.2" fill="#ffffff" class="er-glyph-car">
+                            <animateMotion dur="4.5s" begin="1.2s" repeatCount="indefinite"
+                                           keyPoints="0;1;1" keyTimes="0;0.45;1" calcMode="spline" keySplines=".5 0 .5 1; 0 0 1 1">
+                                <mpath href="#erGlyphRoute"/>
+                            </animateMotion>
+                        </circle>
+                    </svg>
+                    <span>{{ translate('Rides & parcels, on demand') }}</span>
                 </span>
 
                 <h1 class="er-h1 er-hero-title{{ $heroTitleLong ? ' er-hero-title--long' : '' }}">
