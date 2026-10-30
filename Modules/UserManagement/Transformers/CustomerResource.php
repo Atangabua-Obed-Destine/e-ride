@@ -30,7 +30,6 @@ class CustomerResource extends JsonResource
             'other_documents' => $this->other_documents,
             'date_of_birth' => $this->date_of_birth,
             'profile_image' => $this->profile_image,
-            'fcm_token' => $this->fcm_token,
             'phone_verified_at' => $this->phone_verified_at,
             'email_verified_at' => $this->email_verified_at,
             'user_type' => $this->user_type,

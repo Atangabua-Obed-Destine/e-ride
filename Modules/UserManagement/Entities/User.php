@@ -23,6 +23,18 @@ class User extends Authenticatable
 {
     use HasFactory, HasUuid, Notifiable, SoftDeletes, HasApiTokens, HasFactory;
 
+    /**
+     * Never serialized into API responses or broadcasts. Code that needs them
+     * reads the attribute directly ($user->fcm_token), which this does not
+     * affect.
+     */
+    protected $hidden = [
+        'password',
+        'remember_token',
+        'fcm_token',
+        'social_refresh_token',
+    ];
+
     protected $fillable = [
         'user_level_id',
         'full_name',

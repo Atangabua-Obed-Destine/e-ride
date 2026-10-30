@@ -841,8 +841,14 @@ class TripRequestController extends Controller
             }
         }
 
-
-        return response()->json(responseFormatter(DEFAULT_UPDATE_200, $data));
+        // Only what identifies the update: the full trip model drags in the
+        // customer's other trips (with their OTP codes) and account fields.
+        return response()->json(responseFormatter(DEFAULT_UPDATE_200, [
+            'id' => $data->id ?? $request['trip_request_id'],
+            'ref_id' => $data->ref_id ?? null,
+            'current_status' => $data->current_status ?? $request->status,
+            'type' => $data->type ?? null,
+        ]));
     }
 
     public function requestAction(Request $request): JsonResponse
