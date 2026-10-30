@@ -96,6 +96,11 @@ class ProcessPushNotifications implements ShouldQueue
                             'notification_type' => $notification['notification_type'] ?? null,
                             'action' => $notification['action'] ?? null,
                             'user_id' => $data->user->id ?? null,
+                            // Shown on the driver's ringing request alert.
+                            'notificationData' => [
+                                'pickup_address' => (string)($notification['replace']['pickUpLocation'] ?? ''),
+                                'estimated_fare' => (string)($notification['replace']['approximateAmount'] ?? ''),
+                            ],
                         ];
                     }
                     $data?->user && $reverbConnected && CustomerTripRequestEvent::broadcast($data->user, $this->trip);
