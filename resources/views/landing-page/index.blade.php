@@ -49,34 +49,51 @@
 @section('content')
 
     {{-- ========================================================= HERO ===== --}}
-    <section class="er-hero"
-             @if($heroBg) style="background-image: linear-gradient(rgba(11,11,13,.82), rgba(11,11,13,.93)), url('{{ $heroBg }}')" @endif>
-        <div class="er-wrap er-hero-inner">
+    @php
+        $heroTitle = $introSection && ($introSection['title'] ?? null)
+            ? $introSection['title']
+            : translate('Your ride,') . ' **' . translate('your way.') . '**';
+        /* Long admin titles get a smaller size so they never fill the screen */
+        $heroTitleLong = mb_strlen(strip_tags(str_replace('**', '', $heroTitle))) > 48;
+    @endphp
+    <section class="er-hero{{ $heroBg ? ' er-hero--photo' : '' }}"
+             @if($heroBg) style="--er-hero-photo: url('{{ $heroBg }}')" @endif>
+        @include('landing-page.partials._hero-backdrop')
+
+        <div class="er-wrap er-hero-grid">
 
             <div class="er-hero-copy">
-                <h1 class="er-h1">
-                    {!! $introSection && ($introSection['title'] ?? null)
-                        ? change_text_color_or_bg($introSection['title'])
-                        : translate('Your ride,').'<br>'.change_text_color_or_bg('**'.translate('your way.').'**') !!}
+                <span class="er-hero-eyebrow">
+                    <span class="er-live"><span></span></span>
+                    {{ translate('Rides & parcels, on demand') }}
+                </span>
+
+                <h1 class="er-h1 er-hero-title{{ $heroTitleLong ? ' er-hero-title--long' : '' }}">
+                    {!! change_text_color_or_bg($heroTitle) !!}
                 </h1>
 
                 @if($typeWords->isNotEmpty())
-                    <p class="er-type">
+                    <p class="er-rotator">
                         <span class="er-sr">{{ translate('We bring you') }} {{ $typeWords->implode(', ') }}</span>
-                        <span aria-hidden="true">{{ translate('We bring you') }}
-                            <span class="er-type-word" data-er-typewriter data-words='{{ $typeWords->toJson() }}'></span><span class="er-caret"></span>
+                        <span aria-hidden="true">{{ translate('We bring you') }}</span>
+                        <span class="er-rotator-window" aria-hidden="true">
+                            <span class="er-rotator-track" data-er-rotator>
+                                @foreach($typeWords as $word)
+                                    <span>{{ $word }}</span>
+                                @endforeach
+                            </span>
                         </span>
                     </p>
                 @endif
 
-                <p class="er-sub" style="margin-top: 14px; max-width: 520px">
+                <p class="er-sub er-hero-sub">
                     {!! $introSection && ($introSection['sub_title'] ?? null)
                         ? change_text_color_or_bg($introSection['sub_title'])
                         : translate('Smooth, reliable movement across town, booked in a single message.') !!}
                 </p>
 
                 @if($waNumber)
-                    <div style="display: flex; flex-wrap: wrap; gap: 14px; margin-top: 34px">
+                    <div class="er-hero-actions">
                         <a href="https://wa.me/{{ $waNumber }}" target="_blank" rel="noopener" class="er-btn er-btn-primary">
                             @include('landing-page.partials._whatsapp-icon', ['size' => 20])
                             {{ translate('Book on WhatsApp') }}
@@ -88,18 +105,27 @@
                     </div>
                 @endif
 
-                <div class="er-pills">
-                    <span>{{ translate('Safe') }}</span><span class="er-dot">&bull;</span>
-                    <span>{{ translate('Reliable') }}</span><span class="er-dot">&bull;</span>
-                    <span>{{ translate('Affordable') }}</span>
-                </div>
+                <ul class="er-trust">
+                    <li>
+                        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3 4 6v6c0 4.5 3.4 8.3 8 9 4.6-.7 8-4.5 8-9V6l-8-3Z"/><path d="m9 12 2 2 4-4"/></svg>
+                        {{ translate('Vetted drivers') }}
+                    </li>
+                    <li>
+                        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 21s-7-6.2-7-11.5A7 7 0 0 1 19 9.5C19 14.8 12 21 12 21Z"/><circle cx="12" cy="9.5" r="2.5"/></svg>
+                        {{ translate('Live trip tracking') }}
+                    </li>
+                    <li>
+                        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="6" width="18" height="12" rx="2"/><circle cx="12" cy="12" r="2.5"/><path d="M7 9.5v.01M17 14.5v.01"/></svg>
+                        {{ translate('Upfront fares') }}
+                    </li>
+                </ul>
             </div>
 
-            <div class="er-hero-art">
+            <div class="er-hero-visual">
                 @if($heroBg)
-                    <img src="{{ $heroBg }}" alt="{{ $businessName }}">
+                    <img class="er-hero-photo" src="{{ $heroBg }}" alt="{{ $businessName }}">
                 @else
-                    @include('landing-page.partials._hero-art')
+                    @include('landing-page.partials._hero-device')
                 @endif
             </div>
 
@@ -467,33 +493,49 @@
     <script>
         "use strict";
         (function () {
-            var el = document.querySelector('[data-er-typewriter]');
-            if (!el) { return; }
+            var reduce = window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
 
-            var words;
-            try { words = JSON.parse(el.getAttribute('data-words')) || []; } catch (e) { words = []; }
-            if (!words.length) { return; }
-
-            if (window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches) {
-                el.textContent = words[0];
-                return;
+            /* "We bring you <word>": one word at a time, sliding up. */
+            var track = document.querySelector('[data-er-rotator]');
+            if (track && !reduce) {
+                var items = track.children, i = 0;
+                var size = function () {
+                    var w = items[i].getBoundingClientRect().width;
+                    track.parentNode.style.width = Math.ceil(w) + 'px';
+                };
+                size();
+                window.addEventListener('resize', size);
+                if (items.length > 1) {
+                    setInterval(function () {
+                        i = (i + 1) % items.length;
+                        track.style.transform = 'translateY(' + (-i * 100 / items.length) + '%)';
+                        size();
+                    }, 2600);
+                }
             }
 
-            var i = 0, pos = 0, phase = 'typing', hold = 0;
-
-            setInterval(function () {
-                var word = String(words[i]);
-
-                if (phase === 'typing') {
-                    if (pos < word.length) { pos++; el.textContent = word.slice(0, pos); }
-                    else { hold = 0; phase = 'holding'; }
-                } else if (phase === 'holding') {
-                    if (++hold > 16) { phase = 'deleting'; }
-                } else {
-                    if (pos > 0) { pos--; el.textContent = word.slice(0, pos); }
-                    else { phase = 'typing'; i = (i + 1) % words.length; }
-                }
-            }, 95);
+            /* The phone in the hero: distance and minutes follow the car,
+               which loops along the route every 16 s (see _hero-device). */
+            var trip = document.querySelector('[data-er-trip]');
+            if (!trip) { return; }
+            var km = trip.querySelector('[data-er-km]'),
+                min = trip.querySelector('[data-er-min]'),
+                eta = trip.querySelector('[data-er-eta]'),
+                bar = trip.querySelector('[data-er-progress]');
+            var total = 2.4, minutes = 6, loop = 16000, drive = 0.88, start = performance.now();
+            var ease = function (t) { return t < .5 ? 2 * t * t : 1 - Math.pow(-2 * t + 2, 2) / 2; };
+            var tick = function () {
+                var t = ((performance.now() - start) % loop) / loop;
+                var p = reduce ? 0.35 : ease(Math.min(t / drive, 1));
+                var left = total * (1 - p);
+                km.textContent = left < 1 ? Math.max(Math.round(left * 1000 / 10) * 10, 0) + ' m' : left.toFixed(1) + ' km';
+                min.textContent = Math.max(Math.ceil(minutes * (1 - p)), 1);
+                eta.textContent = Math.max(Math.ceil(3 * (1 - p)), 1);
+                bar.style.width = (p * 100).toFixed(1) + '%';
+                trip.classList.toggle('is-arriving', p > .92);
+            };
+            tick();
+            if (!reduce) { setInterval(tick, 250); }
         })();
     </script>
 @endpush

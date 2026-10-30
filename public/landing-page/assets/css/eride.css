@@ -85,75 +85,198 @@ body.eride-dark .bg-primary { background: var(--er-red) !important; }
 .er-btn-block { width: 100%; }
 
 /* ------------------------------------------------------------------- hero */
+/* A real E-Ride trip instead of an illustration: the app on a phone, a route
+   sweeping across the page over the city's hills, and slow, purposeful
+   motion. All motion stops for visitors who ask for reduced motion. */
 .er-hero {
   position: relative;
-  background:
-    radial-gradient(900px 500px at 78% 18%, rgba(224, 32, 32, .22), transparent 62%),
-    var(--er-bg);
-  padding: 86px 0 92px;
+  isolation: isolate;
   overflow: hidden;
-  background-size: cover;
-  background-position: center;
+  background:
+    radial-gradient(760px 520px at 82% 30%, rgba(224, 32, 32, .20), transparent 65%),
+    radial-gradient(600px 400px at 8% 100%, rgba(224, 32, 32, .08), transparent 70%),
+    var(--er-bg);
+  padding: clamp(48px, 7vw, 96px) 0 clamp(56px, 7vw, 104px);
+}
+/* an uploaded Intro Section photo sits behind a dark veil */
+.er-hero--photo {
+  background:
+    linear-gradient(90deg, rgba(11, 11, 13, .94) 0%, rgba(11, 11, 13, .82) 55%, rgba(11, 11, 13, .7) 100%),
+    var(--er-hero-photo) center / cover no-repeat,
+    var(--er-bg);
 }
 
-/* faint street-grid texture behind the hero, echoing the map graphic */
-.er-hero::before {
-  content: '';
-  position: absolute; inset: 0;
-  background-image:
-    linear-gradient(rgba(255, 255, 255, .028) 1px, transparent 1px),
-    linear-gradient(90deg, rgba(255, 255, 255, .028) 1px, transparent 1px);
-  background-size: 64px 64px;
-  pointer-events: none;
+.er-backdrop { position: absolute; inset: 0; z-index: -1; pointer-events: none; }
+.er-backdrop-svg { width: 100%; height: 100%; display: block; }
+.er-contours { animation: er-drift 40s ease-in-out infinite alternate; }
+@keyframes er-drift { from { transform: translateX(0) } to { transform: translateX(-40px) } }
+.er-sweep { stroke-dasharray: 2200; stroke-dashoffset: 2200; animation: er-trace 2.6s cubic-bezier(.65, 0, .35, 1) .3s forwards; }
+@keyframes er-trace { to { stroke-dashoffset: 0 } }
+.er-comet { opacity: 0; animation: er-fade-in .1s linear 2.4s forwards; }
+@keyframes er-fade-in { to { opacity: 1 } }
+
+.er-hero-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 1.08fr) minmax(0, .92fr);
+  align-items: center;
+  gap: clamp(32px, 5vw, 72px);
 }
-.er-hero > * { position: relative; }
-.er-hero-inner { display: flex; flex-wrap: wrap; align-items: center; gap: 52px; position: relative; }
-.er-hero-copy { flex: 999 1 520px; min-width: 0; }
-.er-hero-art { flex: 1 1 360px; min-width: 0; display: flex; justify-content: center; }
-.er-hero-art img { width: 100%; max-width: 440px; border-radius: 24px; display: block; }
+.er-hero-copy { min-width: 0; }
 
-/* ---------------------------------------------- hero ride-sharing graphic */
-.er-art { width: 100%; max-width: 440px; }
-.er-art svg { width: 100%; height: auto; display: block; border-radius: 26px; }
-
-/* route draws itself in */
-.er-route { animation: er-draw 2.2s ease-out .25s forwards; }
-@keyframes er-draw { to { stroke-dashoffset: 0 } }
-
-/* car creeps along the route */
-.er-car { animation: er-drive 4.5s ease-in-out 1.6s infinite; transform-origin: center; }
-@keyframes er-drive {
-  0%, 100% { transform: translate(0, 0) }
-  50%      { transform: translate(12px, -26px) }
+.er-hero-eyebrow {
+  display: inline-flex; align-items: center; gap: 10px;
+  padding: 7px 14px 7px 10px; border-radius: 999px;
+  background: rgba(255, 255, 255, .05); border: 1px solid rgba(255, 255, 255, .1);
+  color: #d9d9e0; font-size: 13px; font-weight: 600; letter-spacing: .02em;
+  backdrop-filter: blur(6px);
+  animation: er-up .7s cubic-bezier(.2, .7, .2, 1) both;
 }
 
-/* destination pin lands, then pulses */
-.er-pin { animation: er-drop .6s cubic-bezier(.34, 1.56, .64, 1) 2.2s both; transform-origin: 300px 92px; }
-@keyframes er-drop {
-  from { transform: translateY(-22px) scale(.8); opacity: 0 }
-  to   { transform: translateY(0) scale(1); opacity: 1 }
-}
+/* live dot: a calm radar ping, not a blink */
+.er-live { position: relative; width: 10px; height: 10px; display: inline-block; flex: none; }
+.er-live > span, .er-live::after { position: absolute; inset: 0; border-radius: 50%; content: ''; }
+.er-live > span { background: #22c55e; }
+.er-live::after { background: #22c55e; animation: er-ping 2.4s cubic-bezier(0, 0, .2, 1) infinite; }
+@keyframes er-ping { 0% { transform: scale(1); opacity: .55 } 80%, 100% { transform: scale(2.6); opacity: 0 } }
 
-/* status chip slides up */
-.er-chip { animation: er-rise .55s ease-out 2.5s both; }
-@keyframes er-rise {
-  from { transform: translateY(14px); opacity: 0 }
-  to   { transform: translateY(0); opacity: 1 }
+.er-h1.er-hero-title {
+  margin-top: 22px;
+  font-size: clamp(38px, 5.4vw, 68px);
+  line-height: 1.04;
+  letter-spacing: -0.035em;
+  text-wrap: balance;
+  overflow-wrap: break-word;
+  animation: er-up .8s cubic-bezier(.2, .7, .2, 1) .08s both;
 }
+.er-h1.er-hero-title--long { font-size: clamp(32px, 3.9vw, 52px); line-height: 1.08; }
+
+/* "We bring you <word>": one word slides up at a time */
+.er-hero .er-rotator {
+  display: flex; align-items: baseline; flex-wrap: wrap; gap: .35em;
+  margin-top: 26px; font-size: clamp(18px, 1.7vw, 22px); font-weight: 700; color: #fff;
+  animation: er-up .8s cubic-bezier(.2, .7, .2, 1) .16s both;
+}
+.er-rotator-window {
+  position: relative; display: inline-block; height: 1.3em; overflow: hidden;
+  vertical-align: bottom; transition: width .45s cubic-bezier(.2, .7, .2, 1);
+}
+.er-rotator-window::after {
+  content: ''; position: absolute; left: 0; right: 0; bottom: 0; height: 2px;
+  background: linear-gradient(90deg, var(--er-red), transparent);
+}
+.er-rotator-track {
+  display: flex; flex-direction: column; align-items: flex-start;
+  transition: transform .55s cubic-bezier(.65, 0, .35, 1);
+}
+.er-rotator-track > span { display: block; height: 1.3em; line-height: 1.3em; width: max-content; white-space: nowrap; color: var(--er-red-soft); }
+
+.er-hero .er-hero-sub { margin-top: 18px; max-width: 540px; animation: er-up .8s cubic-bezier(.2, .7, .2, 1) .22s both; }
+.er-hero-actions { display: flex; flex-wrap: wrap; gap: 14px; margin-top: 32px; animation: er-up .8s cubic-bezier(.2, .7, .2, 1) .3s both; }
+.er-hero-actions .er-btn-primary { box-shadow: 0 10px 30px -10px rgba(224, 32, 32, .7); transition: transform .2s ease, box-shadow .2s ease, background .2s ease; }
+.er-hero-actions .er-btn-primary:hover { transform: translateY(-2px); box-shadow: 0 16px 36px -12px rgba(224, 32, 32, .85); }
+
+.er-trust {
+  list-style: none; padding: 0; margin: 30px 0 0;
+  display: flex; flex-wrap: wrap; gap: 10px 22px;
+  animation: er-up .8s cubic-bezier(.2, .7, .2, 1) .38s both;
+}
+.er-trust li { display: inline-flex; align-items: center; gap: 8px; color: #cfcfd8; font-size: 14px; font-weight: 600; }
+.er-trust svg { color: var(--er-red-soft); flex: none; }
+
+@keyframes er-up { from { opacity: 0; transform: translateY(18px) } to { opacity: 1; transform: none } }
+
+/* ------------------------------------------------- hero visual: the phone */
+.er-hero-visual { min-width: 0; display: flex; justify-content: center; }
+.er-hero-photo { width: 100%; max-width: 460px; border-radius: 28px; display: block; box-shadow: 0 40px 80px -30px rgba(0, 0, 0, .8); }
+
+.er-stage {
+  position: relative; width: 100%; max-width: 430px;
+  display: flex; justify-content: center; padding: 36px 0;
+  animation: er-stage-in 1s cubic-bezier(.2, .7, .2, 1) .2s both;
+}
+@keyframes er-stage-in { from { opacity: 0; transform: translateY(28px) scale(.98) } to { opacity: 1; transform: none } }
+
+.er-phone {
+  position: relative; width: 286px; aspect-ratio: 286 / 590;
+  border-radius: 46px; padding: 10px;
+  background: linear-gradient(160deg, #3a3a42, #17171b 40%, #26262c);
+  box-shadow:
+    0 0 0 1px rgba(255, 255, 255, .06) inset,
+    0 50px 90px -30px rgba(0, 0, 0, .9),
+    0 30px 60px -40px rgba(224, 32, 32, .55);
+}
+.er-phone-notch {
+  position: absolute; top: 20px; left: 50%; transform: translateX(-50%);
+  width: 92px; height: 26px; border-radius: 20px; background: #050506; z-index: 3;
+}
+.er-phone-screen { position: relative; width: 100%; height: 100%; border-radius: 37px; overflow: hidden; background: #141418; }
+.er-phone-map { position: absolute; inset: 0; width: 100%; height: 72%; }
+.er-trip-route { stroke-dasharray: 520; stroke-dashoffset: 520; animation: er-trace 1.6s cubic-bezier(.65, 0, .35, 1) .9s forwards; }
+.er-dest-ring { transform-box: fill-box; transform-origin: center; animation: er-ring 2.6s ease-out infinite; }
+@keyframes er-ring { 0% { transform: scale(.6); opacity: .5 } 100% { transform: scale(2.2); opacity: 0 } }
+
+.er-app-top { position: absolute; top: 56px; left: 0; right: 0; display: flex; justify-content: center; }
+.er-app-chip {
+  display: inline-flex; align-items: center; gap: 7px;
+  padding: 6px 12px; border-radius: 999px; font-size: 11px; font-weight: 700; color: #fff;
+  background: rgba(20, 20, 24, .78); border: 1px solid rgba(255, 255, 255, .08); backdrop-filter: blur(6px);
+}
+.er-app-chip-dot { width: 6px; height: 6px; border-radius: 50%; background: #22c55e; }
+
+.er-app-sheet {
+  position: absolute; left: 0; right: 0; bottom: 0;
+  padding: 10px 14px 18px; border-radius: 24px 24px 0 0;
+  background: #ffffff; color: #1c1c1e;
+}
+.er-app-handle { width: 34px; height: 4px; border-radius: 2px; background: #d9d9de; margin: 0 auto 12px; }
+.er-app-arrive { display: flex; align-items: center; gap: 10px; }
+.er-app-flag {
+  width: 30px; height: 30px; flex: none; border-radius: 50%;
+  display: inline-flex; align-items: center; justify-content: center;
+  background: rgba(224, 32, 32, .12); color: var(--er-red); transition: background .4s, color .4s;
+}
+.er-app-arrive-text { display: flex; flex-direction: column; min-width: 0; }
+.er-app-arrive-text small { order: -1; }
+.er-app-arrive-text strong { font-size: 14px; font-weight: 800; color: #1c1c1e; font-variant-numeric: tabular-nums; }
+.er-app-arrive-text small { font-size: 11px; color: #8a8a94; font-variant-numeric: tabular-nums; }
+.er-app-bar { height: 4px; border-radius: 2px; background: rgba(224, 32, 32, .14); margin: 10px 0 14px; overflow: hidden; }
+.er-app-bar > span { display: block; height: 100%; width: 0; background: var(--er-red); border-radius: 2px; transition: width .25s linear, background .4s; }
+.er-stage.is-arriving .er-app-flag { background: rgba(34, 197, 94, .14); color: #16a34a; }
+.er-stage.is-arriving .er-app-bar > span { background: #22c55e; }
+
+.er-app-driver { display: flex; align-items: center; gap: 10px; padding-top: 12px; border-top: 1px solid #efeff2; }
+.er-app-avatar {
+  width: 34px; height: 34px; flex: none; border-radius: 50%;
+  display: inline-flex; align-items: center; justify-content: center;
+  background: var(--er-red); color: #fff; font-size: 12px; font-weight: 800;
+}
+.er-app-driver-text { display: flex; flex-direction: column; min-width: 0; flex: 1; }
+.er-app-driver-text strong { font-size: 12.5px; font-weight: 800; color: #1c1c1e; white-space: nowrap; }
+.er-app-driver-text small { font-size: 10.5px; color: #8a8a94; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.er-app-plate { flex: none; padding: 4px 7px; border-radius: 5px; background: #ffd60a; color: #111; font-size: 10px; font-weight: 800; letter-spacing: .06em; }
+
+/* floating glass cards beside the phone */
+.er-glass {
+  position: absolute; z-index: 4;
+  padding: 12px 14px; border-radius: 16px;
+  background: rgba(24, 24, 28, .72); border: 1px solid rgba(255, 255, 255, .1);
+  backdrop-filter: blur(14px); -webkit-backdrop-filter: blur(14px);
+  box-shadow: 0 20px 40px -20px rgba(0, 0, 0, .9);
+  color: #fff;
+}
+.er-glass strong { display: block; font-size: 14px; font-weight: 800; font-variant-numeric: tabular-nums; }
+.er-glass small { display: block; font-size: 11.5px; color: #a7a7b2; }
+.er-glass--eta { top: 132px; left: -34px; display: flex; align-items: center; gap: 12px; animation: er-bob 7s ease-in-out 1.4s infinite; }
+.er-glass--fare { top: 300px; right: -40px; max-width: 190px; animation: er-bob 8s ease-in-out 2.4s infinite reverse; }
+.er-glass--fare strong { font-size: 20px; margin: 2px 0; }
+.er-glass--fare span { display: block; font-size: 11px; color: #a7a7b2; line-height: 1.35; }
+@keyframes er-bob { 0%, 100% { transform: translateY(0) } 50% { transform: translateY(-9px) } }
 
 @media (prefers-reduced-motion: reduce) {
-  .er-route { animation: none; stroke-dashoffset: 0 }
-  .er-car, .er-pin, .er-chip { animation: none }
+  .er-hero *, .er-hero *::after { animation: none !important; transition: none !important; }
+  .er-sweep, .er-trip-route { stroke-dashoffset: 0; }
+  .er-comet, .er-trip-car { display: none; }
 }
-
-.er-type { font-size: 23px; font-weight: 700; color: #fff; margin-top: 24px; min-height: 1.6em; }
-.er-type-word { color: var(--er-red-soft); }
-.er-caret {
-  display: inline-block; width: 4px; height: .9em; background: var(--er-red);
-  margin-left: 5px; vertical-align: -.07em; animation: er-blink 1s step-end infinite;
-}
-@keyframes er-blink { 0%, 100% { opacity: 1 } 50% { opacity: 0 } }
-@media (prefers-reduced-motion: reduce) { .er-caret { animation: none } }
 
 .er-pills { display: flex; align-items: center; gap: 10px; margin-top: 26px; flex-wrap: wrap; }
 .er-pills span { font-size: 15px; font-weight: 700; color: #fff; }
@@ -299,6 +422,8 @@ body.eride-dark .preloader { background: var(--er-bg); }
 /* =============================================================== responsive */
 @media (max-width: 1000px) {
   .er-h1 { font-size: 52px; }
+  .er-hero-grid { grid-template-columns: minmax(0, 1fr); }
+  .er-hero-visual { margin-top: 8px; }
   .er-grid-4 { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .er-grid-3 { grid-template-columns: repeat(2, minmax(0, 1fr)); }
 }
@@ -315,13 +440,14 @@ body.eride-dark .preloader { background: var(--er-bg); }
   .er-hero { padding: 40px 0 56px; }
   .er-pad-box { padding: 30px 20px !important; }
 
-  /* On a phone the graphic leads, so the first thing seen is the product,
-     then the headline. Order is flipped with flex, not markup, so the
-     heading stays first in the document for screen readers and SEO. */
-  .er-hero-inner { gap: 28px; }
-  .er-hero-art { order: -1; }
-  .er-art { max-width: 340px; }
-  .er-hero-copy .er-btn { flex: 1 1 100%; }
+  /* On a phone: headline and buttons first, then the app. */
+  .er-hero-actions .er-btn { flex: 1 1 100%; }
+  .er-phone { width: 240px; border-radius: 40px; }
+  .er-phone-screen { border-radius: 31px; }
+  .er-stage { padding: 58px 0 72px; }
+  .er-glass--eta { left: 0; top: 0; }
+  .er-glass--fare { right: 0; top: auto; bottom: 0; max-width: 170px; }
+  .er-trust { gap: 10px 16px; }
   .er-cta { padding: 34px 22px; }
   .er-cta-num { font-size: 26px; padding: 14px 22px; }
 }
