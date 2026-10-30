@@ -22,6 +22,7 @@ class LastLocationResource extends JsonResource
             'longitude' => $this->longitude,
             'zone_id' => $this->zone_id,
             'category' => $this->user?->vehicle?->category?->type,
+            'vehicle_category_id' => $this->user?->vehicle?->category_id,
         ];
     }
 }
