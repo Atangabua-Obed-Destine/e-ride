@@ -290,6 +290,17 @@ class ConfigController extends Controller
             'X-Goog-FieldMask' => '*'
         ];
 
+        // Nearby places first: the app sends where the user is. A bias, not a
+        // restriction, so places further away can still be found.
+        if (is_numeric($request->input('lat')) && is_numeric($request->input('lng'))) {
+            $data['locationBias'] = [
+                'circle' => [
+                    'center' => ['latitude' => (float)$request->input('lat'), 'longitude' => (float)$request->input('lng')],
+                    'radius' => 50000.0,
+                ],
+            ];
+        }
+
         // Send POST request
         $response = Http::withHeaders($headers)->post($url, $data);
         return response()->json(responseFormatter(DEFAULT_200, $response->json()), 200);

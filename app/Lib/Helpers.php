@@ -57,17 +57,34 @@ if (!function_exists('translate')) {
                     $exported = "<?php return " . var_export($translations, true) . ";";
                     @file_put_contents($langFilePath, $exported);
                 }
-                $translation = $translations[$normalizedKey];
-                foreach ($replace as $k => $v) {
-                    $translation = str_replace([":$k", "{" . $k . "}"], (string)$v, $translation);
-                }
-                return $translation;
+                return translateReplace($translations[$normalizedKey], $replace);
             }
 
+            // Read the value straight from the file. trans("lang.<key>") treats
+            // every "." in the key as nesting, so a sentence key ending in a
+            // full stop was never found and came back as "lang.<key>".
+            $value = $translations[$normalizedKey];
+            if (is_string($value)) {
+                return translateReplace($value, $replace);
+            }
             return trans("lang.$normalizedKey", $replace, $locale);
         } catch (Exception) {
-            return trans("lang.$normalizedKey", $replace, $locale);
+            return translateReplace(str_replace(['{', '}'], [':', ''], ucfirst(str_replace('_', ' ', $normalizedKey))), $replace);
         }
+    }
+}
+if (!function_exists('translateReplace')) {
+    /**
+     * Fills ":name" and "{name}" placeholders, longest names first so
+     * ":tripIdText" is not clobbered by ":tripId".
+     */
+    function translateReplace(string $text, array $replace = []): string
+    {
+        uksort($replace, fn($a, $b) => strlen((string)$b) <=> strlen((string)$a));
+        foreach ($replace as $k => $v) {
+            $text = str_replace([":$k", "{" . $k . "}"], (string)$v, $text);
+        }
+        return $text;
     }
 }
 if (!function_exists('defaultLang')) {
