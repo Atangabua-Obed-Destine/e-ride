@@ -6,6 +6,7 @@ use App\Http\Controllers\LandingPageController;
 use App\Http\Controllers\ParcelTrackingController;
 use App\Http\Controllers\PaymentRecordController;
 use App\Http\Controllers\RealTimeLocationSharingController;
+use App\Http\Controllers\WhatsAppBookingController;
 use Illuminate\Support\Facades\Broadcast;
 use Illuminate\Support\Facades\Route;
 use Modules\TripManagement\Entities\TripRequest;
@@ -48,6 +49,18 @@ Route::controller(LandingPageController::class)->group(function () {
         Route::post('/', 'storeNewsletterSubscription')->name('store');
     });
 });
+/* Landing page "Book on WhatsApp" sheet: place search, current location,
+   fare quote. Public, so rate-limited (each call hits paid Google APIs). */
+Route::controller(WhatsAppBookingController::class)
+    ->prefix('whatsapp-booking')->as('whatsapp-booking.')
+    ->middleware('throttle:40,1')
+    ->group(function () {
+        Route::get('places', 'places')->name('places');
+        Route::get('place', 'place')->name('place');
+        Route::get('reverse', 'reverse')->name('reverse');
+        Route::get('quote', 'quote')->name('quote');
+    });
+
 Route::controller(BlogController::class)->group(function () {
     Route::group(['prefix' => 'blog', 'as' => 'blog.'], function (){
         Route::get('/', 'index')->name('index');

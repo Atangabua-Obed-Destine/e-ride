@@ -11,6 +11,12 @@
     /* wa.me needs digits only */
     $waNumber = preg_replace('/\D+/', '', (string) $contactNumber);
 
+    /* Automated WhatsApp booking (Landing Page Setup > WhatsApp Booking):
+       booking buttons open the booking sheet and send to this number. */
+    $erBooking = \App\Http\Controllers\WhatsAppBookingController::settings();
+    $erBookingOn = $erBooking['status'] && $erBooking['number'] !== '';
+    if ($erBooking['number'] !== '') { $waNumber = $erBooking['number']; }
+
     /* The controller passes $businessStatistics but not the filtered collection, so build it here
        with the same rule it uses (non-empty value + status on). */
     $activeBusinessStatistics = collect($businessStatistics)->filter(
@@ -94,7 +100,7 @@
 
                 @if($waNumber)
                     <div class="er-hero-actions">
-                        <a href="https://wa.me/{{ $waNumber }}" target="_blank" rel="noopener" class="er-btn er-btn-primary">
+                        <a href="https://wa.me/{{ $waNumber }}" target="_blank" rel="noopener" class="er-btn er-btn-primary" @if($erBookingOn) data-er-book @endif>
                             @include('landing-page.partials._whatsapp-icon', ['size' => 20])
                             {{ translate('Book on WhatsApp') }}
                         </a>
@@ -224,8 +230,8 @@
                 </div>
 
                 <div style="display: flex; justify-content: center; margin-top: 40px">
-                    <a href="https://wa.me/{{ $waNumber }}" target="_blank" rel="noopener" class="er-btn er-btn-primary">
-                        {{ translate('Start a chat now') }}
+                    <a href="https://wa.me/{{ $waNumber }}" target="_blank" rel="noopener" class="er-btn er-btn-primary" @if($erBookingOn) data-er-book @endif>
+                        {{ $erBookingOn ? translate('Book a ride now') : translate('Start a chat now') }}
                     </a>
                 </div>
             </div>
@@ -261,7 +267,7 @@
                                         {!! change_text_color_or_bg($card['subtitle'] ?? '') !!}
                                     </p>
                                     @if($waNumber)
-                                        <a href="https://wa.me/{{ $waNumber }}" target="_blank" rel="noopener"
+                                        <a href="https://wa.me/{{ $waNumber }}" target="_blank" rel="noopener" @if($erBookingOn) data-er-book @endif
                                            class="er-btn er-btn-block {{ $tier['primary'] ? 'er-btn-primary' : 'er-btn-outline' }}"
                                            style="margin-top: 26px">{{ translate('Book this ride') }}</a>
                                     @endif
@@ -412,7 +418,7 @@
                             <div style="font-size: 15px; color: #ffd9d9; margin-top: 6px">{{ translate('Save this number and chat with us now') }}</div>
                         </div>
                     </div>
-                    <a href="https://wa.me/{{ $waNumber }}" target="_blank" rel="noopener" class="er-cta-num">{{ $contactNumber }}</a>
+                    <a href="https://wa.me/{{ $waNumber }}" target="_blank" rel="noopener" class="er-cta-num" @if($erBookingOn) data-er-book @endif>{{ $contactNumber }}</a>
                 </div>
             </div>
         </section>
@@ -477,6 +483,11 @@
                 </form>
             </div>
         </section>
+    @endif
+
+    {{-- ============================================ WHATSAPP BOOKING SHEET ===== --}}
+    @if($erBookingOn)
+        @include('landing-page.partials._whatsapp-booking', ['booking' => $erBooking])
     @endif
 
     {{-- ================================================= FLOATING WHATSAPP ===== --}}

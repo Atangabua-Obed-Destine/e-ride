@@ -26,6 +26,9 @@ const OUR_SERVICES = "our_services";
 const GALLERY = "gallery";
 const CUSTOMER_APP_DOWNLOAD = "customer_app_download";
 const NEWSLETTER = "newsletter";
+/* Landing page "Book on WhatsApp" flow: on/off, receiving number, opening line */
+const WHATSAPP_BOOKING = "whatsapp_booking";
+const WHATSAPP_BOOKING_KEY = "whatsapp_booking";
 const BUTTON_CONTENTS = "button_contents";
 const DRIVER_APP_CONTENTS = "driver_app_contents";
 const CUSTOMER_APP_CONTENTS = "customer_app_contents";

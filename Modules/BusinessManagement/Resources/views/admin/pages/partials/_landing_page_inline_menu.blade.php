@@ -46,6 +46,11 @@
             ">{{ translate('Newsletter') }}</a>
         </li>
         <li class="nav-item">
+            <a href="{{ route('admin.business.pages-media.landing-page.whatsapp-booking.index') }}" class="text-capitalize nav-link active-rounded-20
+            {{ Request::is('admin/business/pages-media/landing-page/whatsapp-booking') ? 'active' : '' }}
+            ">{{ translate('WhatsApp_Booking') }}</a>
+        </li>
+        <li class="nav-item">
             <a href="{{ route('admin.business.pages-media.landing-page.footer.index') }}" class="text-capitalize nav-link active-rounded-20
             {{ Request::is('admin/business/pages-media/landing-page/footer') ? 'active' : '' }}
             ">{{ translate('Footer') }}</a>

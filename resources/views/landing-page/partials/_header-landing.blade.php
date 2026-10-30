@@ -64,7 +64,7 @@
                     {{-- shown inside the mobile drawer only --}}
                     @if($waNumber)
                         <li class="d-sm-none">
-                            <a href="https://wa.me/{{ $waNumber }}" target="_blank" rel="noopener"
+                            <a href="https://wa.me/{{ $waNumber }}" target="_blank" rel="noopener" @if(!empty($erBookingOn)) data-er-book @endif
                                class="cmn--btn px-4 w-unset text-white d-inline-flex">
                                 <span>{{ translate('Book a ride') }}</span>
                             </a>
@@ -77,7 +77,7 @@
                 </div>
 
                 @if($waNumber)
-                    <a href="https://wa.me/{{ $waNumber }}" target="_blank" rel="noopener"
+                    <a href="https://wa.me/{{ $waNumber }}" target="_blank" rel="noopener" @if(!empty($erBookingOn)) data-er-book @endif
                        class="cmn--btn d-none d-sm-flex er-header-cta">
                         @include('landing-page.partials._whatsapp-icon', ['size' => 17])
                         {{ translate('Book a ride') }}

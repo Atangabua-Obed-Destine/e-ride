@@ -376,6 +376,39 @@ class LandingPageController extends BaseController
         return back();
     }
 
+    /** Landing page "Book on WhatsApp" flow: on/off, receiving number, opening line. */
+    public function whatsappBooking()
+    {
+        $this->authorize('business_view');
+        $stored = $this->landingPageSectionService->findOneBy(criteria: ['key_name' => WHATSAPP_BOOKING_KEY, 'settings_type' => WHATSAPP_BOOKING])?->value ?? [];
+        $settings = \App\Http\Controllers\WhatsAppBookingController::settings();
+        $businessPhone = businessConfig('business_contact_phone', BUSINESS_INFORMATION)?->value;
+
+        return view('businessmanagement::admin.pages.whatsapp-booking', compact('stored', 'settings', 'businessPhone'));
+    }
+
+    public function updateWhatsappBooking(Request $request): RedirectResponse
+    {
+        $this->authorize('business_edit');
+        $request->validate([
+            'number' => ['nullable', 'string', 'max:20', 'regex:/^[+\d\s()\-]*$/'],
+            'greeting' => 'nullable|string|max:120',
+        ]);
+        $value = [
+            'status' => $request->boolean('status') ? 1 : 0,
+            'number' => trim((string)$request->input('number')),
+            'greeting' => trim((string)$request->input('greeting')),
+        ];
+        $existing = $this->landingPageSectionService->findOneBy(criteria: ['key_name' => WHATSAPP_BOOKING_KEY, 'settings_type' => WHATSAPP_BOOKING]);
+        $data = ['key_name' => WHATSAPP_BOOKING_KEY, 'settings_type' => WHATSAPP_BOOKING, 'value' => $value];
+        $existing
+            ? $this->landingPageSectionService->update(id: $existing->id, data: $data)
+            : $this->landingPageSectionService->create(data: $data);
+
+        Toastr::success(translate('WhatsApp booking settings updated'));
+        return back();
+    }
+
     public function updateLandingPageSetting(Request $request): JsonResponse
     {
         $this->authorize('business_edit');
