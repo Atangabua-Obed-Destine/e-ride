@@ -177,7 +177,7 @@ function buildDeviceNotificationPayload($fcm_token, $title, $description, $statu
 {
     $imageUrl = $image ? asset("storage/app/public/push-notification/$image") : null;
 
-    return [
+    $payload = [
         'message' => [
             'token' => $fcm_token,
             'data' => [
@@ -199,6 +199,8 @@ function buildDeviceNotificationPayload($fcm_token, $title, $description, $statu
                 "new_trip_id" => (string)($notificationData['new_trip_id'] ?? null),
                 "trip_readable_id" => (string)($notificationData['readable_id'] ?? null),
                 "trip_cancellation_time" => (string)($notificationData['cancellation_time'] ?? null),
+                "pickup_address" => (string)($notificationData['pickup_address'] ?? null),
+                "estimated_fare" => (string)($notificationData['estimated_fare'] ?? null),
             ],
             'notification' => [
                 'title' => (string)$title,
@@ -225,6 +227,22 @@ function buildDeviceNotificationPayload($fcm_token, $title, $description, $statu
             ],
         ]
     ];
+
+    // New ride / parcel requests go to Android as data-only messages so the
+    // driver app can show its own call-style alert (looping ringtone, lock
+    // screen, View / Dismiss). With a `notification` block Android would show
+    // a plain notification itself and the app could not make it ring. iOS
+    // keeps a visible alert through APNs. Every other push is unchanged.
+    if (in_array($action, ['new_ride_request', 'new_parcel_request'], true)) {
+        unset($payload['message']['notification'], $payload['message']['android']['notification']);
+        $payload['message']['android']['ttl'] = '30s';
+        $payload['message']['apns']['payload']['aps']['alert'] = [
+            'title' => (string)$title,
+            'body' => (string)$description,
+        ];
+    }
+
+    return $payload;
 }
 
 function sendNotificationToHttp(array|null $data): bool|string|null

@@ -883,7 +883,10 @@ class TripRequestService extends BaseService implements TripRequestServiceInterf
                 'status' => $push['status'],
                 'ride_request_id' => $save_trip->id,
                 'type' => $save_trip->type,
-                'action' => $push['action']
+                'action' => $push['action'],
+                // Shown on the driver's ringing request alert.
+                'pickup_address' => (string)($save_trip->coordinate?->pickup_address ?? ''),
+                'estimated_fare' => getCurrencyFormat((float)($save_trip->estimated_fare ?? 0)),
             ];
             $notify = [];
             foreach ($find_drivers as $key => $value) {

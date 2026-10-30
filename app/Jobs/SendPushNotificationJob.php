@@ -46,6 +46,10 @@ class SendPushNotificationJob implements ShouldQueue
                         notification_type: $this->notification['notification_type'] ?? null,
                         action: $this->notification['action']?? null,
                         user_id: $user->user->id ?? null,
+                        notificationData: [
+                            'pickup_address' => $this->notification['pickup_address'] ?? null,
+                            'estimated_fare' => $this->notification['estimated_fare'] ?? null,
+                        ],
                     );
                 }
             }
