@@ -124,10 +124,17 @@ class TripRequestController extends Controller
 
         $time = $this->tripRequestTimeService->findOneBy(criteria: ['trip_request_id' => $request->trip_request_id]);
         $trip = $this->tripRequestService->findOneBy(criteria: ['id' => $request->trip_request_id], relations: ['customer']);
-        if (!$time) {
+        if (!$time || !$trip) {
             return response()->json(responseFormatter(TRIP_REQUEST_404), 403);
         }
-        $this->tripRequestService->rideWaiting($trip, $time);
+        // Only the trip's own driver, and only while the trip is running.
+        if ($trip->driver_id != auth('api')->id() || $trip->current_status != ONGOING) {
+            return response()->json(responseFormatter(DEFAULT_400), 403);
+        }
+        // Explicit pause / resume: repeating the current state is a no-op.
+        if (!$this->tripRequestService->setRidePaused($trip, $time, $request->waiting_status == 'pause')) {
+            return response()->json(responseFormatter(DEFAULT_UPDATE_200));
+        }
         $rideRequestType = $trip->ride_request_type == SCHEDULED ? 'schedule_ride_' : 'trip_';
         $waitingStatus = $request->waiting_status == 'resume' ? 'resumed' : 'paused';
         $push = getNotification($rideRequestType . $waitingStatus);
@@ -736,8 +743,12 @@ class TripRequestController extends Controller
             return response()->json(responseFormatter(TRIP_STATUS_RETURNING_403), 403);
         }
         if ($trip->is_paused) {
-
-            return response()->json(responseFormatter(TRIP_REQUEST_PAUSED_404), 403);
+            if (in_array($request->status, [COMPLETED, CANCELLED])) {
+                // Completing or cancelling ends the waiting; it is charged.
+                $this->tripRequestService->closeOpenPause($trip);
+            } else {
+                return response()->json(responseFormatter(TRIP_REQUEST_PAUSED_404), 403);
+            }
         }
 
         $uploadedDeliveryImages = [];

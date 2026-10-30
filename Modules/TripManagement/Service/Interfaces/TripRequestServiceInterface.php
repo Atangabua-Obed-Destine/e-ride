@@ -84,6 +84,10 @@ interface TripRequestServiceInterface extends BaseServiceInterface
 
     public function rideWaiting(Model $trip, Model $time): void;
 
+    public function setRidePaused(Model $trip, Model $time, bool $pause): bool;
+
+    public function closeOpenPause(Model $trip): void;
+
     public function getPendingParcel(array $data = []): mixed;
 
     public function getPendingRide(array $data = []): mixed;

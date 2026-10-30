@@ -74,6 +74,9 @@ class TripRequestResource extends JsonResource
             'driver_avg_rating' => $this->driver_received_reviews_avg_rating,
             'current_status' => $this->current_status,
             'is_paused' => (bool)$this->is_paused,
+            // Paid waiting while the trip runs, so both apps can show a live
+            // timer and the charge so far.
+            'waiting' => $this->current_status == ONGOING ? $this->waitingInfo() : null,
             'fare_biddings' => FareBiddingResource::collection($this->whenLoaded('fare_biddings')),
             'parcel_information' => InformationResource::make($this->whenLoaded('parcel')),
             'parcel_user_info' => UserResource::collection($this->whenLoaded('parcelUserInfo')),
@@ -145,5 +148,23 @@ class TripRequestResource extends JsonResource
             ];
         }
         return array_merge($trip_request, $coordinate, $fee, $time);
+    }
+
+    private function waitingInfo(): array
+    {
+        $time = $this->relationLoaded('time') ? $this->time : $this->time()->first();
+        $fare = $this->type == RIDE_REQUEST
+            ? $this->vehicleCategory?->tripFares?->where('zone_id', $this->zone_id)->first()
+            : null;
+        return [
+            'is_paused' => (bool)$this->is_paused,
+            'paused_since' => ($this->is_paused && $time?->idle_timestamp)
+                ? \Carbon\Carbon::parse($time->idle_timestamp)->toIso8601String()
+                : null,
+            'idle_minutes' => round((double)($time?->idle_time ?? 0), 2),
+            'fee_per_min' => (double)($fare?->idle_fee_per_min ?? 0),
+            'free_minutes' => (double)(get_cache('idle_fee') ?? 0),
+            'server_time' => now()->toIso8601String(),
+        ];
     }
 }

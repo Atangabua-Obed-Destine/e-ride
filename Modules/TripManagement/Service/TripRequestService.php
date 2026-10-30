@@ -1524,18 +1524,57 @@ class TripRequestService extends BaseService implements TripRequestServiceInterf
 
     public function rideWaiting(Model $trip, Model $time): void
     {
+        $this->setRidePaused($trip, $time, !$trip->is_paused);
+    }
+
+    /**
+     * Pauses or resumes a running trip (paid waiting). Idempotent: asking for
+     * the state the trip is already in changes nothing and returns false, so
+     * a double tap or a retried request can no longer flip it the wrong way.
+     * Resuming adds the paused minutes to the trip's idle time, which the
+     * final fare charges at the zone's idle fee per minute.
+     */
+    public function setRidePaused(Model $trip, Model $time, bool $pause): bool
+    {
+        if ((bool)$trip->is_paused === $pause) {
+            return false;
+        }
         $now = now();
-        $timeDifference = Carbon::parse($time->idle_timestamp)->diffInMinutes($now);
-
-        $updateTrip = ['is_paused' => !$trip->is_paused];
         $updateTime = ['idle_timestamp' => $now];
-
-        if ($trip->is_paused) {
-            $updateTime['idle_time'] = $time->idle_time + $timeDifference;
+        if (!$pause) {
+            $updateTime['idle_time'] = (double)$time->idle_time + $this->openPauseMinutes($time, $now);
         }
 
-        $this->tripRequestRepository->update(id: $trip->id, data: $updateTrip);
+        $this->tripRequestRepository->update(id: $trip->id, data: ['is_paused' => $pause]);
         $this->tripRequestTimeRepository->update(id: $time->id, data: $updateTime);
+        $trip->is_paused = $pause;
+        return true;
+    }
+
+    /**
+     * Ends a pause that is still running (the driver completes or cancels
+     * the trip without tapping Resume), so those minutes are charged too.
+     */
+    public function closeOpenPause(Model $trip): void
+    {
+        if (!$trip->is_paused) {
+            return;
+        }
+        $time = $this->tripRequestTimeRepository->findOneBy(criteria: ['trip_request_id' => $trip->id]);
+        if ($time) {
+            $this->setRidePaused($trip, $time, false);
+        } else {
+            $this->tripRequestRepository->update(id: $trip->id, data: ['is_paused' => false]);
+            $trip->is_paused = false;
+        }
+    }
+
+    private function openPauseMinutes(Model $time, $now): float
+    {
+        if (!$time->idle_timestamp) {
+            return 0;
+        }
+        return max(0, (float)Carbon::parse($time->idle_timestamp)->diffInMinutes($now));
     }
 
     public function rideList(array $data = [])
