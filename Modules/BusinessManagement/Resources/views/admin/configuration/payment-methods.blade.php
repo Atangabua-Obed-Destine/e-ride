@@ -24,7 +24,11 @@
                         <div class="col-md-6 mb-30">
                             <div class="card">
                                 <div class="card-header">
-                                    <h4 class="page-title">{{ ucwords(str_replace('_', ' ', $gateway->key_name)) }}</h4>
+                                    <h4 class="page-title">{{ ucwords(str_replace('_', ' ', $gateway->key_name)) }}
+                                        @if ($gateway->key_name === 'fapshi')
+                                            <span class="fs-12 fw-normal text-muted ms-1">{{ translate('MTN MoMo and Orange Money') }}</span>
+                                        @endif
+                                    </h4>
                                 </div>
                                 <div class="card-body p-30">
                                     <form
@@ -84,6 +88,9 @@
                                             @endif
                                         </div>
 
+                                        @if ($gateway->key_name === 'fapshi')
+                                            @include('businessmanagement::admin.configuration.partials._fapshi-fields', ['values' => $gateway->live_values, 'mode' => $gateway->mode])
+                                        @else
                                         @php($skip = ['gateway', 'mode', 'status', 'supported_country','gateway_title'])
                                         @foreach ($dataValues->where('key_name', $gateway->key_name)->first()->live_values as $key => $value)
                                             @if (!in_array($key, $skip))
@@ -98,6 +105,7 @@
                                                 </div>
                                             @endif
                                         @endforeach
+                                        @endif
                                         @php($additionalData = $gateway['additional_data'] != null ? json_decode($gateway['additional_data']) : null)
                                         <div class="  mb-30 mt-30">
                                             <label for="exampleFormControlInput1" class="form-label">Gateway

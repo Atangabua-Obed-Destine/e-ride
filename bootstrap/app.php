@@ -119,6 +119,7 @@ $app = Application::configure(basePath: dirname(__DIR__))
         $schedule->command('driver:resume-paused')->everyMinute()->withoutOverlapping();
         $schedule->command('driver:sync-availability')->everyMinute()->withoutOverlapping();
         $schedule->command('app:process-late-return-penalty-notifications')->everyMinute()->withoutOverlapping();
+        $schedule->command('fapshi:reconcile')->everyTwoMinutes()->withoutOverlapping();
     })
     ->create();
 

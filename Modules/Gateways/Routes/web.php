@@ -15,6 +15,7 @@ use App\Http\Middleware\VerifyCsrfToken;
 use Illuminate\Support\Facades\Route;
 use Modules\BusinessManagement\Http\Controllers\Web\Admin\Configuration\PaymentConfigController;
 use Modules\Gateways\Http\Controllers\BkashPaymentController;
+use Modules\Gateways\Http\Controllers\FapshiController;
 use Modules\Gateways\Http\Controllers\FlutterwaveV3Controller;
 use Modules\Gateways\Http\Controllers\LiqPayController;
 use Modules\Gateways\Http\Controllers\MercadoPagoController;
@@ -136,5 +137,17 @@ Route::group(['prefix' => 'payment'], function () {
         ->withoutMiddleware([VerifyCsrfToken::class]);
         Route::any('callback', [PvitController::class,'callBack'])->name('callBack')
         ->withoutMiddleware([VerifyCsrfToken::class]);
+    });
+
+    //FAPSHI (MTN MoMo, Orange Money). No "success"/"fail"/"cancel" in these
+    //paths: the apps' payment webview closes on the first URL that has one.
+    Route::group(['prefix' => 'fapshi', 'as' => 'fapshi.'], function () {
+        Route::get('pay', [FapshiController::class, 'pay'])->name('pay');
+        Route::get('return/{reference}', [FapshiController::class, 'return'])->name('return')
+            ->where('reference', '[A-Za-z0-9_-]{1,100}');
+        Route::get('check/{reference}', [FapshiController::class, 'check'])->name('check')
+            ->where('reference', '[A-Za-z0-9_-]{1,100}')->middleware('throttle:30,1');
+        Route::post('webhook', [FapshiController::class, 'webhook'])->name('webhook')
+            ->withoutMiddleware([VerifyCsrfToken::class])->middleware('throttle:120,1');
     });
 });

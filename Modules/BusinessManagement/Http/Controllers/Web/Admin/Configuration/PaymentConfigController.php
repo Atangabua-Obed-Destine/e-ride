@@ -5,13 +5,16 @@ namespace Modules\BusinessManagement\Http\Controllers\Web\Admin\Configuration;
 use App\Http\Controllers\BaseController;
 use Brian2694\Toastr\Facades\Toastr;
 use Illuminate\Database\Eloquent\Collection;
+use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Pagination\LengthAwarePaginator;
 use Illuminate\View\View;
 use Modules\BusinessManagement\Http\Requests\PaymentConfigSetupStoreOrUpdateRequest;
 use Modules\BusinessManagement\Service\Interfaces\SettingServiceInterface;
+use Modules\Gateways\Services\FapshiClient;
 use Modules\Gateways\Traits\Processor;
+use Throwable;
 
 class PaymentConfigController extends BaseController
 {
@@ -42,5 +45,44 @@ class PaymentConfigController extends BaseController
         $this->settingService->storeOrUpdatePaymentSetting($request->validated());
         Toastr::success(DEFAULT_UPDATE_200['message']);
         return back();
+    }
+
+    /**
+     * Checks the saved Fapshi credentials against the host the saved mode
+     * points at, with the read-only /balance call, and says what is wrong in
+     * words an admin can act on.
+     */
+    public function fapshiTest(): JsonResponse
+    {
+        $client = new FapshiClient();
+        $host = parse_url($client->baseUrl(), PHP_URL_HOST);
+        if (!$client->isConfigured()) {
+            return response()->json(['ok' => false, 'message' => translate('Save the API user and API key first.')]);
+        }
+        if ($looksLike = $client->credentialEnvironmentMismatch()) {
+            return response()->json(['ok' => false, 'message' => $looksLike === 'sandbox'
+                ? translate('The saved key is a sandbox key but the mode is Live.')
+                : translate('The saved key is a live key but the mode is Test.')]);
+        }
+        try {
+            $response = $client->balance();
+        } catch (Throwable $e) {
+            return response()->json(['ok' => false, 'message' => translate(key: 'Could not reach {host}. Check the server internet connection and try again.', replace: ['host' => $host])]);
+        }
+        $body = $response->json() ?? [];
+        if ($response->successful()) {
+            return response()->json(['ok' => true, 'message' => translate(key: 'Connected to {host}. Service: {service}. Balance: {balance}.', replace: [
+                'host' => $host,
+                'service' => $body['service'] ?? '-',
+                'balance' => number_format((float)($body['balance'] ?? 0)) . ' ' . ($body['currency'] ?? 'XAF'),
+            ])]);
+        }
+        if ($response->status() === 403) {
+            return response()->json(['ok' => false, 'message' => translate('Fapshi refused this server (403). Add the server IP address to the IP whitelist in the Fapshi dashboard.')]);
+        }
+        if ($response->status() === 400 || $response->status() === 401) {
+            return response()->json(['ok' => false, 'message' => translate(key: '{host} rejected the API user or API key. Check that both belong to this service and environment.', replace: ['host' => $host])]);
+        }
+        return response()->json(['ok' => false, 'message' => translate(key: 'Fapshi answered {code}: {message}', replace: ['code' => $response->status(), 'message' => (string)($body['message'] ?? '')])]);
     }
 }

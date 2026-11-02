@@ -194,6 +194,7 @@ Route::group(['prefix' => 'admin', 'as' => 'admin.', 'middleware' => 'admin'], f
                     Route::controller(PaymentConfigController::class)->group(function () {
                         Route::get('/', 'paymentConfigGet')->name('index');
                         Route::put('update', 'paymentConfigSet')->name('update');
+                        Route::post('fapshi-test', 'fapshiTest')->name('fapshi-test');
                     });
                 });
                 Route::group(['prefix' => 'sms-gateway', 'as' => 'sms-gateway.'], function () {

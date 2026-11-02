@@ -32,6 +32,7 @@ const PAYMENT_METHODS = [
     ['key' => 'esewa', 'value' => 'Esewa'],
     ['key' => 'swish', 'value' => 'Swish'],
     ['key' => 'momo', 'value' => 'Momo'],
+    ['key' => 'fapshi', 'value' => 'Fapshi (Mobile Money)'],
     ['key' => 'payfast', 'value' => 'Pay Fast'],
     ['key' => 'worldpay', 'value' => 'World Pay'],
     ['key' => 'sixcash', 'value' => 'Six Cash'],
