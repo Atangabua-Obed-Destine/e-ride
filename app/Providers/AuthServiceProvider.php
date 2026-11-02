@@ -53,6 +53,11 @@ class AuthServiceProvider extends ServiceProvider
         Gate::define('parcel_log', fn () => $this->checkAccess('parcel_management', 'log'));
         Gate::define('parcel_export', fn () => $this->checkAccess('parcel_management', 'export'));
 
+        Gate::define('store_view', fn () => $this->checkAccess('store_management', 'view'));
+        Gate::define('store_add', fn () => $this->checkAccess('store_management', 'add'));
+        Gate::define('store_edit', fn () => $this->checkAccess('store_management', 'update'));
+        Gate::define('store_delete', fn () => $this->checkAccess('store_management', 'delete'));
+
         Gate::define('promotion_view', fn () => $this->checkAccess('promotion_management', 'view'));
         Gate::define('promotion_add', fn () => $this->checkAccess('promotion_management', 'add'));
         Gate::define('promotion_edit', fn () => $this->checkAccess('promotion_management', 'update'));

@@ -67,6 +67,8 @@ const CUSTOMER_USER_TYPES = 'customer';
 const DRIVER_USER_TYPES = 'driver';
 const CUSTOMER = 'customer';
 const DRIVER = 'driver';
+// Food & Shops partner (store owner) logging into the /partner portal
+const PARTNER_USER_TYPE = 'partner';
 
 // genders
 const GENDER_MALE = 'male';
@@ -2738,6 +2740,7 @@ const MODULES = [
     'business_management' => ['view', 'update', 'delete'],
     'help_and_support' => ['view'],
     'blog_management' => ['view', 'add', 'update', 'delete', 'log', 'export'],
+    'store_management' => ['view', 'add', 'update', 'delete'],
 ];
 
 const TELEPHONE_CODES = [

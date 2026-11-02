@@ -202,6 +202,8 @@ class ConfigController extends Controller
 
             'safety_feature_emergency_govt_number' => $info->firstWhere('key_name', 'emergency_number_for_call_status')?->value == 1 ? $info->firstWhere('key_name', 'emergency_govt_number_for_call')?->value : null,
             'otp_confirmation_for_trip' => (bool)$info->firstWhere('key_name', 'driver_otp_confirmation_for_trip')?->value == 1,
+            'store_ordering_status' => \Modules\StoreManagement\Lib\StoreSettings::enabled(),
+            'store_service_label' => \Modules\StoreManagement\Lib\StoreSettings::all()['service_label'],
             'schedule_trip_status' => (bool)$info->firstWhere('key_name', 'schedule_trip_status')?->value == 1,
             'minimum_schedule_book_time' => $info->firstWhere('key_name', 'schedule_trip_status')?->value ? convertTimeToSecond(
                 (int)$info->firstWhere('key_name', 'minimum_schedule_book_time')?->value ?? 0,

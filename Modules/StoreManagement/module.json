@@ -1,0 +1,13 @@
+{
+    "name": "StoreManagement",
+    "alias": "storemanagement",
+    "description": "Food & Shops: partner stores, menus, customer orders delivered as parcel trips, partner portal.",
+    "keywords": [],
+    "priority": 0,
+    "providers": [
+        "Modules\\StoreManagement\\Providers\\StoreManagementServiceProvider"
+    ],
+    "aliases": {},
+    "files": [],
+    "requires": []
+}

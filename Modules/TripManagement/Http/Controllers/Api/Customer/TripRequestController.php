@@ -752,6 +752,15 @@ class TripRequestController extends Controller
             return response()->json(responseFormatter(constant: $response), 403);
         }
 
+        // A Food & Shops delivery is cancelled from its order, not the trip:
+        // the trip is prepaid and the store is already cooking.
+        if ($request->status == 'cancelled' && \Modules\StoreManagement\Entities\StoreOrder::where('trip_request_id', $trip->id)->exists()) {
+            return response()->json(responseFormatter(constant: DEFAULT_403, errors: [[
+                'error_code' => 'store_order',
+                'message' => translate('This delivery belongs to a food or shop order. Contact support if there is a problem with it.'),
+            ]]), 403);
+        }
+
         $identityMismatch = $this->tripRequestService->resolveIdentityMismatch($trip, $request->status, $request['identity_mismatch_reason'] ?? null);
 
         $attributes = [

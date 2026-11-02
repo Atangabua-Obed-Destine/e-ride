@@ -506,6 +506,32 @@
                     <!---------- End Parcel Management --------------->
                 @endif
 
+                @if(\Illuminate\Support\Facades\Gate::any(['store_view', 'store_add', 'store_edit', 'store_delete']))
+                    <!---------- Start Food & Shops --------------->
+                    <li class="nav-category" title="{{ translate('Food_&_Shops') }}">{{ translate('Food_&_Shops') }}</li>
+                    <li class="{{ Request::is('admin/store-orders*') ? 'active open' : '' }}">
+                        <a href="{{ route('admin.store-order.index') }}">
+                            <i class="bi bi-bag-check"></i>
+                            <span class="link-title">{{ translate('Orders') }}</span>
+                        </a>
+                    </li>
+                    <li class="{{ Request::is('admin/stores*') ? 'active open' : '' }}">
+                        <a href="{{ route('admin.store.index') }}">
+                            <i class="bi bi-shop"></i>
+                            <span class="link-title">{{ translate('Partner_Stores') }}</span>
+                        </a>
+                    </li>
+                    @can('store_edit')
+                        <li class="{{ Request::is('admin/store-settings*') ? 'active open' : '' }}">
+                            <a href="{{ route('admin.store-setting.edit') }}">
+                                <i class="bi bi-sliders"></i>
+                                <span class="link-title">{{ translate('Settings') }}</span>
+                            </a>
+                        </li>
+                    @endcan
+                    <!---------- End Food & Shops --------------->
+                @endif
+
                 @if(\Illuminate\Support\Facades\Gate::any(['vehicle_view', 'vehicle_add', 'vehicle_edit', 'vehicle_delete', 'vehicle_log', 'vehicle_export']))
                     <!---------- Start Vehicle Management --------------->
 

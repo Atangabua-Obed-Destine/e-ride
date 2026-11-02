@@ -14,5 +14,6 @@
     "Gateways": true,
     "TransactionManagement": true,
     "BlogManagement": true,
-    "AiModule": true
+    "AiModule": true,
+    "StoreManagement": true
 }
