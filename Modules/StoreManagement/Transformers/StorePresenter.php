@@ -93,6 +93,7 @@ class StorePresenter
             'trip_request_id' => $order->trip_request_id,
             'trip_status' => $trip?->current_status,
             'rider' => $driver && in_array($trip->current_status, [ACCEPTED, OUT_FOR_PICKUP, ONGOING], true) ? [
+                'id' => $driver->id,
                 'name' => trim($driver->first_name . ' ' . $driver->last_name),
                 'phone' => $driver->phone,
                 'image' => $driver->profile_image ? dynamicStorage('storage/app/public/driver/profile') . '/' . $driver->profile_image : null,

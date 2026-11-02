@@ -485,10 +485,15 @@ class StoreOrderService extends BaseService implements StoreOrderServiceInterfac
 
         $store = $order->store;
         $quote = $order->delivery_quote ?? [];
-        $summary = $order->load('items')->itemsSummary();
+        // Capped so the PREPAID warning and store phone survive the 255-char note limit.
+        $summary = mb_strimwidth($order->load('items')->itemsSummary(), 0, 140, '...');
         $pickupNote = translate(key: '{store} order #{ref}: {items}. PREPAID, do not collect money.', replace: [
             'store' => $store->name, 'ref' => $order->ref_id, 'items' => $summary,
         ]);
+        // The driver's call button reaches the customer; at pickup they need the store.
+        if ($store->phone) {
+            $pickupNote .= ' ' . translate(key: 'Store phone {phone}', replace: ['phone' => $store->phone]);
+        }
         $note = trim($pickupNote . ($order->note ? ' ' . translate('Customer note') . ': ' . $order->note : ''));
 
         $trip = app(TripRequestServiceInterface::class)->createRideRequest([
