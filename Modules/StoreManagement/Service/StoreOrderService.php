@@ -571,12 +571,18 @@ class StoreOrderService extends BaseService implements StoreOrderServiceInterfac
             }
 
             switch ($trip->current_status) {
+                case ACCEPTED:
+                    if ($order->status === StoreOrder::RIDER_REQUESTED) {
+                        DB::afterCommit(fn() => $this->notifyCustomer($order, 'rider_assigned'));
+                    }
+                    break;
                 case ONGOING:
                     if ($order->status === StoreOrder::RIDER_REQUESTED) {
                         $this->bookDriverShare($trip);
                         $order->status = StoreOrder::PICKED_UP;
                         $order->picked_up_at = now();
                         $order->save();
+                        DB::afterCommit(fn() => $this->notifyCustomer($order, 'picked_up'));
                     }
                     break;
                 case COMPLETED:
@@ -591,6 +597,7 @@ class StoreOrderService extends BaseService implements StoreOrderServiceInterfac
                         $order->delivered_at = now();
                         $order->partner_earning = $order->items_subtotal;
                         $order->save();
+                        DB::afterCommit(fn() => $this->notifyCustomer($order, 'delivered'));
                     }
                     break;
                 case RETURNING:
@@ -744,6 +751,7 @@ class StoreOrderService extends BaseService implements StoreOrderServiceInterfac
             $store = $order->store?->name ?? '';
             $locale = $customer->current_language_key;
             $amount = getCurrencyFormat($order->refunded_amount ?: $order->total);
+            $rider = trim((string)$order->trip?->driver?->first_name) ?: translate(key: 'Your rider', locale: $locale);
             [$title, $body] = match ($event) {
                 'placed' => [
                     translate(key: 'Order sent to {store}', replace: ['store' => $store], locale: $locale),
@@ -760,6 +768,18 @@ class StoreOrderService extends BaseService implements StoreOrderServiceInterfac
                 'cancelled' => [
                     translate(key: 'Your order was cancelled', locale: $locale),
                     translate(key: '{amount} has been refunded to your E-Ride wallet.', replace: ['amount' => $amount], locale: $locale),
+                ],
+                'rider_assigned' => [
+                    translate(key: '{rider} is collecting your order', replace: ['rider' => $rider], locale: $locale),
+                    translate(key: 'They will pick it up at {store} and bring it to you.', replace: ['store' => $store], locale: $locale),
+                ],
+                'picked_up' => [
+                    translate(key: 'Your {store} order is on the way', replace: ['store' => $store], locale: $locale),
+                    translate(key: '{rider} has picked it up and is heading to you.', replace: ['rider' => $rider], locale: $locale),
+                ],
+                'delivered' => [
+                    translate(key: 'Your {store} order was delivered', replace: ['store' => $store], locale: $locale),
+                    translate(key: 'Enjoy! Thank you for ordering with E-Ride.', locale: $locale),
                 ],
                 'delivery_failed' => [
                     translate(key: 'Your order could not be delivered', locale: $locale),

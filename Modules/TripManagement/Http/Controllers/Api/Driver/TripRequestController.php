@@ -442,7 +442,7 @@ class TripRequestController extends Controller
             return response()->json(responseFormatter(constant: DEFAULT_400), 403);
         }
 
-        if ($trip->customer->fcm_token) {
+        if ($trip->customer->fcm_token && !$this->isStoreOrderTrip($trip)) {
             $push = $trip->ride_request_type == SCHEDULED ? getNotification('schedule_ride_started') : getNotification('trip_started');
             sendDeviceNotification(
                 fcm_token: $trip->customer->fcm_token,
@@ -800,7 +800,11 @@ class TripRequestController extends Controller
 
         $tripType = $trip->type == PARCEL ? PARCEL : ($trip->ride_request_type == SCHEDULED ? 'schedule_ride' : 'trip');
         //Get status wise notification message
-        if ($request->status == 'cancelled' && $trip->type == PARCEL) {
+        if ($this->isStoreOrderTrip($trip)) {
+            // A Food & Shops delivery: StoreOrderService::syncFromTrip sends the
+            // customer food-specific pushes (delivered, delivery failed), and a
+            // rider dropping it before pickup is replaced without bothering them.
+        } elseif ($request->status == 'cancelled' && $trip->type == PARCEL) {
             $push = getNotification(key: 'parcel_canceled_after_trip_started', group: 'customer');
             sendDeviceNotification(fcm_token: $trip->customer->fcm_token,
                 title: translate(key: $push['title'], locale: $trip->customer->current_language_key),
@@ -1075,7 +1079,7 @@ class TripRequestController extends Controller
 
         $this->rejectedDriverRequestService->deleteBy(criteria: ['trip_request_id' => $request->trip_request_id]);
         $push = $trip->ride_request_type == SCHEDULED ? getNotification('schedule_trip_accepted_by_driver') : getNotification('driver_on_the_way');
-        sendDeviceNotification(fcm_token: $trip->customer->fcm_token,
+        $this->isStoreOrderTrip($trip) || sendDeviceNotification(fcm_token: $trip->customer->fcm_token,
             title: translate(key: $push['title'], locale: $trip->customer->current_language_key),
             description: textVariableDataFormat(value: $push['description'], tripId: $trip->ref_id, vehicleCategory: $trip->driver->vehicle->category->name, pickUpLocation: $trip->coordinate->pickup_address, locale: $trip->customer->current_language_key),
             status: $push['status'],
@@ -1221,7 +1225,7 @@ class TripRequestController extends Controller
             'out_for_pickup' => now()
         ]);
         DB::commit();
-        if ($trip->customer->fcm_token) {
+        if ($trip->customer->fcm_token && !$this->isStoreOrderTrip($trip)) {
             $push = getNotification('driver_on_the_way_to_pickup_location');
             sendDeviceNotification(
                 fcm_token: $trip->customer->fcm_token,
@@ -1237,5 +1241,15 @@ class TripRequestController extends Controller
         }
 
         return response()->json(responseFormatter(constant: DEFAULT_UPDATE_200));
+    }
+
+    /**
+     * A Food & Shops delivery. Its customer gets food-specific pushes from
+     * StoreOrderService (rider assigned, on the way, delivered) instead of the
+     * ride and parcel ones sent here.
+     */
+    private function isStoreOrderTrip($trip): bool
+    {
+        return \Modules\StoreManagement\Entities\StoreOrder::where('trip_request_id', $trip->id)->exists();
     }
 }
