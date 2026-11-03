@@ -5,6 +5,7 @@ namespace Modules\PlaceManagement\Http\Requests;
 use Illuminate\Foundation\Http\FormRequest;
 use Illuminate\Validation\Rule;
 use Modules\PlaceManagement\Entities\Place;
+use Modules\PlaceManagement\Entities\PlaceCategory;
 
 /** Admin: create or edit a verified place to stay. */
 class PlaceSaveRequest extends FormRequest
@@ -23,7 +24,8 @@ class PlaceSaveRequest extends FormRequest
 
         return [
             'name' => 'required|string|max:120',
-            'category' => ['required', Rule::in(Place::CATEGORIES)],
+            'explore_category' => ['required', 'string', Rule::exists('place_categories', 'key')],
+            'category' => ['required', Rule::in(PlaceCategory::allTypes())],
             'google_place_id' => ['nullable', 'string', 'max:255', 'regex:/^[A-Za-z0-9_-]+$/',
                 Rule::unique('places', 'google_place_id')->ignore($place?->id)->whereNull('deleted_at')],
             'description' => 'nullable|string|max:1500',
@@ -40,6 +42,8 @@ class PlaceSaveRequest extends FormRequest
             'check_in' => $time,
             'check_out' => $time,
             'reception_24h' => 'nullable|boolean',
+            'on_duty_from' => 'nullable|date|required_with:on_duty_until',
+            'on_duty_until' => 'nullable|date|required_with:on_duty_from|after_or_equal:on_duty_from',
             'is_featured' => 'nullable|boolean',
             'is_active' => 'nullable|boolean',
             'sort' => 'nullable|integer',

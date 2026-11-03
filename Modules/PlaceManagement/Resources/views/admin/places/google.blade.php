@@ -7,8 +7,8 @@
     <div class="main-content">
         <div class="container-fluid">
             <div class="mb-3">
-                <h2 class="fs-22 mb-1">{{ translate('Hotels_&_Stays') }}</h2>
-                <p class="fs-12 text-muted mb-0">{{ translate('What customers see from Google around a point. Hide results that are closed or are not places to stay, and turn the good ones into verified listings.') }}</p>
+                <h2 class="fs-22 mb-1">{{ translate('Explore_Bamenda') }}</h2>
+                <p class="fs-12 text-muted mb-0">{{ translate('What customers see from Google around a point, per category. Hide results that are closed or in the wrong category, and turn the good ones into verified listings.') }}</p>
             </div>
 
             @include('placemanagement::admin.places._nav', ['active' => 'google'])
@@ -17,6 +17,14 @@
                 <div class="card-body">
                     <form action="{{ route('admin.place.google') }}" method="GET" class="row g-3 align-items-end">
                         <input type="hidden" name="load" value="1">
+                        <div class="col-12">
+                            <label class="form-label">{{ translate('Category') }}</label>
+                            <select name="explore" class="form-select">
+                                @foreach($categories as $c)
+                                    <option value="{{ $c->key }}" {{ $explore === $c->key ? 'selected' : '' }}>{{ $c->name }}</option>
+                                @endforeach
+                            </select>
+                        </div>
                         @if($mapKey)
                             <div class="col-12">
                                 <div id="preview-map" class="rounded border" style="height: 260px"></div>
@@ -116,7 +124,7 @@
                                                     @if($r['status'] !== 'linked')
                                                         @can('place_add')
                                                             <a class="btn btn-sm btn-primary" href="{{ route('admin.place.create', [
-                                                                'google_place_id' => $r['google_place_id'], 'name' => $r['name'], 'category' => $r['category'],
+                                                                'google_place_id' => $r['google_place_id'], 'name' => $r['name'], 'category' => $r['category'], 'explore' => $explore,
                                                                 'address' => $r['address'], 'latitude' => $r['latitude'], 'longitude' => $r['longitude'],
                                                                 'phone' => $r['phone'], 'website' => $r['website'],
                                                             ]) }}">{{ translate('Make_a_verified_listing') }}</a>
@@ -130,7 +138,7 @@
                                                         <input type="hidden" name="label" value="{{ $r['name'] }}">
                                                         <div class="input-group input-group-sm">
                                                             <select name="reason" class="form-select">
-                                                                <option value="{{ translate('Not a place to stay') }}">{{ translate('Not a place to stay') }}</option>
+                                                                <option value="{{ translate('Wrong category') }}">{{ translate('Wrong category') }}</option>
                                                                 <option value="{{ translate('Closed') }}">{{ translate('Closed') }}</option>
                                                                 <option value="{{ translate('Wrong location') }}">{{ translate('Wrong location') }}</option>
                                                                 <option value="{{ translate('Duplicate') }}">{{ translate('Duplicate') }}</option>

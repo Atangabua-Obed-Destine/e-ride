@@ -8,6 +8,7 @@ use Illuminate\Http\Request;
 use Illuminate\Routing\Controller;
 use Illuminate\View\View;
 use Modules\PlaceManagement\Entities\Place;
+use Modules\PlaceManagement\Entities\PlaceCategory;
 use Modules\PlaceManagement\Http\Requests\PlaceSaveRequest;
 use Modules\PlaceManagement\Service\Interfaces\PlaceServiceInterface;
 
@@ -22,18 +23,22 @@ class PlaceController extends Controller
     {
         $filters = [
             'search' => (string)$request->query('search', ''),
-            'category' => (string)$request->query('category', 'all'),
+            'explore' => (string)$request->query('explore', 'all'),
             'status' => (string)$request->query('status', 'all'),
         ];
         $places = $this->places->list($filters);
-        return view('placemanagement::admin.places.index', compact('places', 'filters'));
+        $categories = PlaceCategory::orderBy('sort')->orderBy('name')->get();
+        return view('placemanagement::admin.places.index', compact('places', 'filters', 'categories'));
     }
 
     /** Prefilled when coming from the Google results page ("Make a verified listing"). */
     public function create(Request $request): View
     {
+        $explore = PlaceCategory::where('key', $request->query('explore', 'stay'))->value('key') ?? 'stay';
+        $types = PlaceCategory::typesFor($explore);
         $place = new Place([
-            'category' => in_array($request->query('category'), Place::CATEGORIES, true) ? $request->query('category') : 'hotel',
+            'explore_category' => $explore,
+            'category' => in_array($request->query('category'), $types, true) ? $request->query('category') : $types[0],
             'is_active' => true,
             'name' => $request->query('name'),
             'address' => $request->query('address'),
@@ -45,7 +50,7 @@ class PlaceController extends Controller
             'check_in' => '14:00',
             'check_out' => '11:00',
         ]);
-        return view('placemanagement::admin.places.form', compact('place'));
+        return $this->form($place);
     }
 
     public function store(PlaceSaveRequest $request): RedirectResponse
@@ -57,7 +62,13 @@ class PlaceController extends Controller
 
     public function edit(Place $place): View
     {
-        return view('placemanagement::admin.places.form', compact('place'));
+        return $this->form($place);
+    }
+
+    private function form(Place $place): View
+    {
+        $categories = PlaceCategory::orderBy('sort')->orderBy('name')->get();
+        return view('placemanagement::admin.places.form', compact('place', 'categories'));
     }
 
     public function update(PlaceSaveRequest $request, Place $place): RedirectResponse

@@ -32,6 +32,34 @@ class StayController extends Controller
         return response()->json(responseFormatter(DEFAULT_200, $this->places->stay($lat, $lng, $language)));
     }
 
+    /** Explore Bamenda home: the active categories. */
+    public function categories(Request $request): JsonResponse
+    {
+        $settings = PlaceSettings::all();
+        $language = substr((string)$request->header('X-Localization', 'en'), 0, 2);
+        return response()->json(responseFormatter(DEFAULT_200, [
+            'enabled' => $settings['status'],
+            'label' => $settings['explore_label'],
+            'categories' => $settings['status'] ? $this->places->categories($language) : [],
+        ]));
+    }
+
+    /** One Explore category near the customer. */
+    public function explore(Request $request, string $category): JsonResponse
+    {
+        $request->validate([
+            'latitude' => 'nullable|numeric|between:-90,90',
+            'longitude' => 'nullable|numeric|between:-180,180',
+        ]);
+        if (!PlaceSettings::enabled()) {
+            return response()->json(responseFormatter(DEFAULT_200, ['enabled' => false, 'verified' => [], 'top_rated' => [], 'nearby' => [], 'on_duty' => [], 'google_available' => false]));
+        }
+        $lat = $request->filled('latitude') ? (float)$request->query('latitude') : null;
+        $lng = $request->filled('longitude') ? (float)$request->query('longitude') : null;
+        $language = substr((string)$request->header('X-Localization', 'en'), 0, 2);
+        return response()->json(responseFormatter(DEFAULT_200, $this->places->explore($category, $lat, $lng, $language)));
+    }
+
     /**
      * Signed image link for a Google photo. Redirects to Google's own image URL,
      * which carries no key. Unsigned, expired or capped requests get 404 and the

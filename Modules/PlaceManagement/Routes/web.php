@@ -2,17 +2,21 @@
 
 use Illuminate\Support\Facades\Route;
 use Modules\PlaceManagement\Http\Controllers\Web\Admin\GooglePlaceController;
+use Modules\PlaceManagement\Http\Controllers\Web\Admin\OnDutyController;
+use Modules\PlaceManagement\Http\Controllers\Web\Admin\PlaceCategoryController;
 use Modules\PlaceManagement\Http\Controllers\Web\Admin\PlaceController;
 use Modules\PlaceManagement\Http\Controllers\Web\Admin\PlaceSettingController;
 
 /*
-| Places to stay, admin panel (sidebar "Hotels & Stays").
+| Explore Bamenda, admin panel (sidebar "Explore Bamenda").
 */
 Route::group(['prefix' => 'admin', 'as' => 'admin.', 'middleware' => 'admin'], function () {
     Route::group(['prefix' => 'places', 'as' => 'place.'], function () {
         Route::middleware('can:place_view')->group(function () {
             Route::get('/', [PlaceController::class, 'index'])->name('index');
             Route::get('google', [GooglePlaceController::class, 'index'])->name('google');
+            Route::get('categories', [PlaceCategoryController::class, 'index'])->name('categories');
+            Route::get('on-duty', [OnDutyController::class, 'index'])->name('on-duty');
         });
         Route::middleware('can:place_add')->group(function () {
             Route::get('create', [PlaceController::class, 'create'])->name('create');
@@ -21,6 +25,9 @@ Route::group(['prefix' => 'admin', 'as' => 'admin.', 'middleware' => 'admin'], f
         Route::middleware('can:place_edit')->group(function () {
             Route::post('google/hide', [GooglePlaceController::class, 'hide'])->name('google.hide');
             Route::post('google/unhide', [GooglePlaceController::class, 'unhide'])->name('google.unhide');
+            Route::post('categories', [PlaceCategoryController::class, 'store'])->name('categories.store');
+            Route::put('categories/{category}', [PlaceCategoryController::class, 'update'])->name('categories.update');
+            Route::post('on-duty', [OnDutyController::class, 'save'])->name('on-duty.save');
             Route::get('{place}/edit', [PlaceController::class, 'edit'])->name('edit');
             Route::put('{place}', [PlaceController::class, 'update'])->name('update');
             Route::post('{place}/status', [PlaceController::class, 'status'])->name('status');

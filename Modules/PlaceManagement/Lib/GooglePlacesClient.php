@@ -27,6 +27,7 @@ class GooglePlacesClient
         'places.userRatingCount', 'places.nationalPhoneNumber', 'places.internationalPhoneNumber',
         'places.formattedAddress', 'places.shortFormattedAddress', 'places.location', 'places.photos',
         'places.businessStatus', 'places.googleMapsUri', 'places.websiteUri',
+        'places.currentOpeningHours.openNow', 'places.regularOpeningHours.weekdayDescriptions',
     ];
 
     private function key(): ?string
@@ -35,21 +36,29 @@ class GooglePlacesClient
         return filled($key) ? $key : null;
     }
 
-    /**
-     * Lodging around a point, most prominent first, as Google returns it.
-     * Null when Google is unavailable: no key, monthly cap reached, or an error.
-     */
+    /** Places to stay around a point (the Explore "stay" category). */
     public function nearbyLodging(float $latitude, float $longitude, float $radiusKm, string $language = 'en'): ?array
     {
+        return $this->nearby(['lodging'], $latitude, $longitude, $radiusKm, $language);
+    }
+
+    /**
+     * Places of the given Google types around a point, most prominent first,
+     * as Google returns them. Null when Google is unavailable: no key, no
+     * types, monthly cap reached, or an error (e.g. a type Google rejects).
+     */
+    public function nearby(array $types, float $latitude, float $longitude, float $radiusKm, string $language = 'en'): ?array
+    {
+        $types = array_values(array_filter(array_map('trim', $types)));
         $key = $this->key();
-        if (!$key || !$this->spend(self::SEARCH, PlaceSettings::all()['search_cap'])) {
+        if (!$types || !$key || !$this->spend(self::SEARCH, PlaceSettings::all()['search_cap'])) {
             return null;
         }
         try {
             $response = Http::timeout(8)
                 ->withHeaders(['X-Goog-Api-Key' => $key, 'X-Goog-FieldMask' => implode(',', self::FIELDS)])
                 ->post('https://places.googleapis.com/v1/places:searchNearby', [
-                    'includedTypes' => ['lodging'],
+                    'includedTypes' => $types,
                     'maxResultCount' => self::MAX_RESULTS,
                     'languageCode' => in_array($language, ['en', 'fr'], true) ? $language : 'en',
                     'locationRestriction' => ['circle' => [

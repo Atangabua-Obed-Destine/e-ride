@@ -9,6 +9,9 @@ use Modules\PlaceManagement\Http\Controllers\Api\Customer\StayController;
 Route::group(['prefix' => 'customer', 'middleware' => ['auth:api', 'maintenance_mode']], function () {
     // Each call is one live Google search, so keep it modest per user.
     Route::get('stay', [StayController::class, 'index'])->middleware('throttle:20,1');
+    // Explore Bamenda. Each category opened is one live Google search.
+    Route::get('explore', [StayController::class, 'categories']);
+    Route::get('explore/{category}', [StayController::class, 'explore'])->where('category', '[a-z0-9_]+')->middleware('throttle:30,1');
 });
 
 // Used as a plain image URL by the app, so no token: a signature guards it instead.

@@ -206,6 +206,8 @@ class ConfigController extends Controller
             'store_service_label' => \Modules\StoreManagement\Lib\StoreSettings::all()['service_label'],
             'stay_status' => \Modules\PlaceManagement\Lib\PlaceSettings::enabled(),
             'stay_label' => \Modules\PlaceManagement\Lib\PlaceSettings::all()['label'],
+            'explore_status' => \Modules\PlaceManagement\Lib\PlaceSettings::enabled(),
+            'explore_label' => \Modules\PlaceManagement\Lib\PlaceSettings::all()['explore_label'],
             'schedule_trip_status' => (bool)$info->firstWhere('key_name', 'schedule_trip_status')?->value == 1,
             'minimum_schedule_book_time' => $info->firstWhere('key_name', 'schedule_trip_status')?->value ? convertTimeToSecond(
                 (int)$info->firstWhere('key_name', 'minimum_schedule_book_time')?->value ?? 0,

@@ -14,6 +14,14 @@ class PlacePresenter
     private const HOTEL_TYPES = ['hotel', 'resort_hotel', 'motel', 'extended_stay_hotel'];
     private const GUEST_HOUSE_TYPES = ['guest_house', 'bed_and_breakfast', 'hostel', 'inn', 'private_guest_room', 'cottage', 'farmstay'];
 
+    /** Google type -> our listing type, for the other Explore categories. */
+    private const GOOGLE_TO_TYPE = [
+        'pharmacy' => 'pharmacy', 'drugstore' => 'pharmacy',
+        'hospital' => 'hospital', 'doctor' => 'clinic', 'medical_lab' => 'laboratory', 'dental_clinic' => 'clinic',
+        'bank' => 'bank', 'atm' => 'atm',
+        'bus_station' => 'bus_agency', 'transit_station' => 'bus_agency', 'travel_agency' => 'bus_agency',
+    ];
+
     /** Signed links stay the same for a whole day, so the phone's image cache keeps working. */
     private const PHOTO_LINK_DAYS = 1;
 
@@ -24,6 +32,7 @@ class PlacePresenter
             'source' => 'eride',
             'google_place_id' => $place->google_place_id,
             'name' => $place->name,
+            'explore_category' => $place->explore_category,
             'category' => $place->category,
             'description' => $place->description,
             'address' => $place->address,
@@ -43,12 +52,17 @@ class PlacePresenter
             'check_in' => $place->check_in,
             'check_out' => $place->check_out,
             'reception_24h' => $place->reception_24h,
+            // Open around the clock counts as open now; otherwise unknown for our own listings.
+            'open_now' => $place->reception_24h ? true : null,
+            'hours' => [],
+            'on_duty' => $place->isOnDuty(),
+            'on_duty_until' => $place->isOnDuty() ? $place->on_duty_until?->toDateString() : null,
             'is_featured' => $place->is_featured,
         ];
     }
 
     /** A Places API (New) result. Its rating and reviews come straight from Google. */
-    public static function google(array $g, ?float $lat = null, ?float $lng = null, bool $withPhotos = true): array
+    public static function google(array $g, ?float $lat = null, ?float $lng = null, bool $withPhotos = true, string $exploreCategory = 'stay'): array
     {
         $location = $g['location'] ?? [];
         $photos = $withPhotos ? array_slice($g['photos'] ?? [], 0, 5) : [];
@@ -57,7 +71,8 @@ class PlacePresenter
             'source' => 'google',
             'google_place_id' => $g['id'],
             'name' => $g['displayName']['text'] ?? '',
-            'category' => self::category($g['primaryType'] ?? null, $g['types'] ?? []),
+            'explore_category' => $exploreCategory,
+            'category' => self::category($g['primaryType'] ?? null, $g['types'] ?? [], $exploreCategory),
             'description' => null,
             'address' => $g['shortFormattedAddress'] ?? ($g['formattedAddress'] ?? ''),
             'latitude' => $location['latitude'] ?? null,
@@ -90,12 +105,25 @@ class PlacePresenter
             'check_in' => null,
             'check_out' => null,
             'reception_24h' => false,
+            'open_now' => $g['currentOpeningHours']['openNow'] ?? null,
+            // "Monday: 8:00 AM - 6:00 PM", in the customer's language.
+            'hours' => array_values($g['regularOpeningHours']['weekdayDescriptions'] ?? []),
+            'on_duty' => false,
+            'on_duty_until' => null,
             'is_featured' => false,
         ];
     }
 
-    public static function category(?string $primaryType, array $types = []): string
+    public static function category(?string $primaryType, array $types = [], string $exploreCategory = 'stay'): string
     {
+        if ($exploreCategory !== 'stay') {
+            foreach (array_merge([$primaryType], $types) as $type) {
+                if (isset(self::GOOGLE_TO_TYPE[$type])) {
+                    return self::GOOGLE_TO_TYPE[$type];
+                }
+            }
+            return 'other';
+        }
         foreach (array_merge([$primaryType], $types) as $type) {
             if (in_array($type, self::HOTEL_TYPES, true)) {
                 return 'hotel';

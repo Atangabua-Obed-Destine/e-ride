@@ -19,8 +19,17 @@ interface PlaceServiceInterface extends BaseServiceInterface
      */
     public function stay(?float $latitude, ?float $longitude, string $language = 'en'): array;
 
+    /** Active Explore Bamenda categories, in display order. */
+    public function categories(string $language = 'en'): array;
+
+    /** One Explore category around a point: on duty, verified, top rated and nearest places. */
+    public function explore(string $categoryKey, ?float $latitude, ?float $longitude, string $language = 'en'): array;
+
+    /** Admin: mark the pharmacies on duty (garde) for a date range. */
+    public function setOnDuty(array $placeIds, string $from, string $until): int;
+
     /** Admin: what customers around a point see from Google, with each place's status. */
-    public function googlePreview(float $latitude, float $longitude): ?array;
+    public function googlePreview(float $latitude, float $longitude, string $categoryKey = 'stay'): ?array;
 
     public function hideGooglePlace(string $googlePlaceId, ?string $label, ?string $reason, ?string $adminId): void;
 

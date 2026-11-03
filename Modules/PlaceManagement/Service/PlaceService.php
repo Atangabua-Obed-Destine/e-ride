@@ -7,6 +7,7 @@ use Illuminate\Pagination\LengthAwarePaginator;
 use MatanYadaev\EloquentSpatial\Objects\Point;
 use Modules\PlaceManagement\Entities\GoogleHiddenPlace;
 use Modules\PlaceManagement\Entities\Place;
+use Modules\PlaceManagement\Entities\PlaceCategory;
 use Modules\PlaceManagement\Lib\GooglePlacesClient;
 use Modules\PlaceManagement\Lib\PlaceSettings;
 use Modules\PlaceManagement\Repository\PlaceRepositoryInterface;
@@ -38,7 +39,7 @@ class PlaceService extends BaseService implements PlaceServiceInterface
                     ->orWhere('phone', 'like', '%' . $filters['search'] . '%')
                     ->orWhere('address', 'like', '%' . $filters['search'] . '%'));
             })
-            ->when(in_array($filters['category'] ?? 'all', Place::CATEGORIES, true), fn($q) => $q->where('category', $filters['category']))
+            ->when(($filters['explore'] ?? 'all') !== 'all', fn($q) => $q->where('explore_category', $filters['explore']))
             ->when(in_array($filters['status'] ?? 'all', ['active', 'inactive'], true), fn($q) => $q->where('is_active', $filters['status'] === 'active'))
             ->orderByDesc('is_featured')->orderBy('sort')->orderBy('name')
             ->paginate($perPage)
@@ -49,6 +50,7 @@ class PlaceService extends BaseService implements PlaceServiceInterface
     {
         $place->fill([
             'name' => trim($data['name']),
+            'explore_category' => $data['explore_category'] ?? ($place->explore_category ?? 'stay'),
             'category' => $data['category'],
             'google_place_id' => filled($data['google_place_id'] ?? null) ? trim($data['google_place_id']) : null,
             'description' => $data['description'] ?? null,
@@ -64,6 +66,8 @@ class PlaceService extends BaseService implements PlaceServiceInterface
             'check_in' => $data['check_in'] ?? null,
             'check_out' => $data['check_out'] ?? null,
             'reception_24h' => (bool)($data['reception_24h'] ?? false),
+            'on_duty_from' => $data['on_duty_from'] ?? null,
+            'on_duty_until' => $data['on_duty_until'] ?? null,
             'is_featured' => (bool)($data['is_featured'] ?? false),
             'is_active' => (bool)($data['is_active'] ?? false),
             'sort' => (int)($data['sort'] ?? 0),
@@ -98,18 +102,37 @@ class PlaceService extends BaseService implements PlaceServiceInterface
         return $place;
     }
 
+    /** Active Explore categories, in display order. */
+    public function categories(string $language = 'en'): array
+    {
+        return PlaceCategory::where('is_active', 1)->orderBy('sort')->orderBy('name')->get()
+            ->map(fn(PlaceCategory $c) => [
+                'key' => $c->key,
+                'name' => $c->localName($language),
+                'icon' => $c->icon,
+                'has_price' => $c->has_price,
+            ])->values()->all();
+    }
+
+    /** The Hotels screen of app builds from before Explore. */
     public function stay(?float $latitude, ?float $longitude, string $language = 'en'): array
     {
+        return $this->explore('stay', $latitude, $longitude, $language);
+    }
+
+    public function explore(string $categoryKey, ?float $latitude, ?float $longitude, string $language = 'en'): array
+    {
         $settings = PlaceSettings::all();
-        $verified = Place::where('is_active', 1)->orderBy('sort')->orderBy('name')->get()
+        $category = PlaceCategory::where('key', $categoryKey)->where('is_active', 1)->first();
+        $verified = Place::where('is_active', 1)->where('explore_category', $categoryKey)->orderBy('sort')->orderBy('name')->get()
             ->map(fn(Place $p) => PlacePresenter::verified($p, $latitude, $longitude))
-            // Featured first, then nearest. Unknown distance goes last.
-            ->sortBy(fn($p) => [$p['is_featured'] ? 0 : 1, $p['distance_km'] ?? PHP_INT_MAX])
+            // On duty first (pharmacies), then featured, then nearest. Unknown distance goes last.
+            ->sortBy(fn($p) => [$p['on_duty'] ? 0 : 1, $p['is_featured'] ? 0 : 1, $p['distance_km'] ?? PHP_INT_MAX])
             ->values()->all();
 
         $google = null;
-        if ($settings['google_status'] && $latitude !== null && $longitude !== null) {
-            $google = $this->google->nearbyLodging($latitude, $longitude, $settings['radius_km'], $language);
+        if ($category && $settings['google_status'] && $latitude !== null && $longitude !== null) {
+            $google = $this->google->nearby($category->google_types ?? [], $latitude, $longitude, $settings['radius_km'], $language);
         }
 
         $topRated = [];
@@ -131,13 +154,15 @@ class PlaceService extends BaseService implements PlaceServiceInterface
                 if (($result['businessStatus'] ?? 'OPERATIONAL') !== 'OPERATIONAL') {
                     continue;
                 }
-                $card = PlacePresenter::google($result, $latitude, $longitude, $withPhotos);
+                $card = PlacePresenter::google($result, $latitude, $longitude, $withPhotos, $categoryKey);
                 if (isset($linked[$id])) {
-                    // Already listed by E-Ride: show it once, with Google's live rating.
+                    // Already listed by E-Ride: show it once, with Google's live rating and hours.
                     $i = $linked[$id];
                     $verified[$i]['rating'] = $card['rating'];
                     $verified[$i]['reviews'] = $card['reviews'];
                     $verified[$i]['maps_url'] = $card['maps_url'];
+                    $verified[$i]['hours'] = $card['hours'];
+                    $verified[$i]['open_now'] = $verified[$i]['open_now'] ?? $card['open_now'];
                     continue;
                 }
                 $nearby[] = $card;
@@ -147,8 +172,15 @@ class PlaceService extends BaseService implements PlaceServiceInterface
         }
 
         return [
-            'enabled' => $settings['status'],
+            'enabled' => $settings['status'] && $category !== null,
             'label' => $settings['label'],
+            'category' => $category ? [
+                'key' => $category->key, 'name' => $category->localName($language), 'icon' => $category->icon, 'has_price' => $category->has_price,
+            ] : null,
+            // Pharmacies on duty today (pharmacie de garde), from E-Ride's own listings.
+            'on_duty' => array_values(array_filter($verified, fn($p) => $p['on_duty'])),
+            // Shown on the health category when the admin set one, e.g. emergency numbers.
+            'notice' => $categoryKey === 'health' && filled($settings['emergency_note']) ? $settings['emergency_note'] : null,
             'verified' => $verified,
             'top_rated' => $topRated,
             'nearby' => $nearby,
@@ -156,6 +188,16 @@ class PlaceService extends BaseService implements PlaceServiceInterface
             'google_available' => $google !== null,
             'radius_km' => $settings['radius_km'],
         ];
+    }
+
+    /** Admin: the on-duty (garde) pharmacies for a date range. Pharmacies left out lose any current dates. */
+    public function setOnDuty(array $placeIds, string $from, string $until): int
+    {
+        Place::where('explore_category', 'pharmacy')->whereNotIn('id', $placeIds)
+            ->whereNotNull('on_duty_until')->where('on_duty_until', '>=', now()->toDateString())
+            ->update(['on_duty_from' => null, 'on_duty_until' => null]);
+        return Place::where('explore_category', 'pharmacy')->whereIn('id', $placeIds)
+            ->update(['on_duty_from' => $from, 'on_duty_until' => $until]);
     }
 
     /**
@@ -181,17 +223,18 @@ class PlaceService extends BaseService implements PlaceServiceInterface
         }, array_slice($rated, 0, self::TOP_RATED_COUNT));
     }
 
-    public function googlePreview(float $latitude, float $longitude): ?array
+    public function googlePreview(float $latitude, float $longitude, string $categoryKey = 'stay'): ?array
     {
         $settings = PlaceSettings::all();
-        $results = $this->google->nearbyLodging($latitude, $longitude, $settings['radius_km'], 'en');
+        $types = PlaceCategory::where('key', $categoryKey)->first()?->google_types ?? ['lodging'];
+        $results = $this->google->nearby($types, $latitude, $longitude, $settings['radius_km'], 'en');
         if ($results === null) {
             return null;
         }
         $hidden = GoogleHiddenPlace::pluck('reason', 'google_place_id');
         $linked = Place::whereNotNull('google_place_id')->get(['id', 'name', 'google_place_id'])->keyBy('google_place_id');
-        return collect($results)->map(function ($g) use ($latitude, $longitude, $hidden, $linked, $settings) {
-            $card = PlacePresenter::google($g, $latitude, $longitude, false);
+        return collect($results)->map(function ($g) use ($latitude, $longitude, $hidden, $linked, $settings, $categoryKey) {
+            $card = PlacePresenter::google($g, $latitude, $longitude, false, $categoryKey);
             $id = $g['id'] ?? '';
             $status = match (true) {
                 $linked->has($id) => 'linked',

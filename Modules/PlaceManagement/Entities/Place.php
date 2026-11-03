@@ -9,14 +9,18 @@ use Illuminate\Database\Eloquent\SoftDeletes;
 use Modules\ZoneManagement\Entities\Zone;
 
 /**
- * A place to stay that E-Ride has checked: real photos, a price range per
- * night, amenities and contacts. Shown above the Google results, and may be
- * linked to its Google listing (google_place_id) to borrow the live rating.
+ * A place E-Ride has checked, in one Explore Bamenda category
+ * (explore_category, e.g. "stay", "pharmacy"): real photos, contacts and,
+ * for places to stay, a price range per night and amenities. Shown above the
+ * Google results, and may be linked to its Google listing (google_place_id)
+ * to borrow the live rating. `category` is the place's type within its
+ * explore category (hotel, guest_house, pharmacy, hospital, atm...).
  */
 class Place extends Model
 {
     use HasUuid, SoftDeletes;
 
+    /** Types of a place to stay; see PlaceCategory::TYPES for every category. */
     public const CATEGORIES = ['hotel', 'guest_house', 'lodging'];
 
     /** Amenity keys, in display order. Labels and app icons are keyed by these. */
@@ -49,9 +53,9 @@ class Place extends Model
     }
 
     protected $fillable = [
-        'name', 'category', 'google_place_id', 'description', 'address', 'latitude', 'longitude', 'zone_id',
+        'name', 'category', 'explore_category', 'google_place_id', 'description', 'address', 'latitude', 'longitude', 'zone_id',
         'phone', 'whatsapp', 'website', 'price_min', 'price_max', 'amenities', 'photos', 'check_in', 'check_out',
-        'reception_24h', 'is_featured', 'is_active', 'sort',
+        'reception_24h', 'on_duty_from', 'on_duty_until', 'is_featured', 'is_active', 'sort',
     ];
 
     protected $casts = [
@@ -62,6 +66,8 @@ class Place extends Model
         'amenities' => 'array',
         'photos' => 'array',
         'reception_24h' => 'boolean',
+        'on_duty_from' => 'date',
+        'on_duty_until' => 'date',
         'is_featured' => 'boolean',
         'is_active' => 'boolean',
         'sort' => 'integer',
@@ -70,6 +76,14 @@ class Place extends Model
     public function zone(): BelongsTo
     {
         return $this->belongsTo(Zone::class);
+    }
+
+    /** A pharmacy on its duty (garde) dates. Ends on its own when the dates pass. */
+    public function isOnDuty(?\Illuminate\Support\Carbon $today = null): bool
+    {
+        $today = ($today ?? now())->startOfDay();
+        return $this->on_duty_from && $this->on_duty_until
+            && $this->on_duty_from->lte($today) && $this->on_duty_until->gte($today);
     }
 
     /** @return string[] */

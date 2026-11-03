@@ -8,6 +8,7 @@ use Illuminate\Http\Request;
 use Illuminate\Routing\Controller;
 use Illuminate\View\View;
 use Modules\PlaceManagement\Entities\GoogleHiddenPlace;
+use Modules\PlaceManagement\Entities\PlaceCategory;
 use Modules\PlaceManagement\Lib\GooglePlacesClient;
 use Modules\PlaceManagement\Lib\PlaceSettings;
 use Modules\PlaceManagement\Service\Interfaces\PlaceServiceInterface;
@@ -27,12 +28,14 @@ class GooglePlaceController extends Controller
         ]);
         $lat = (float)($data['latitude'] ?? 5.9597);
         $lng = (float)($data['longitude'] ?? 10.1460);
+        $categories = PlaceCategory::orderBy('sort')->orderBy('name')->get();
+        $explore = $categories->firstWhere('key', $request->query('explore'))?->key ?? 'stay';
         // A search costs money, so it only runs when the admin asks for it.
-        $results = $request->boolean('load') ? $this->places->googlePreview($lat, $lng) : false;
+        $results = $request->boolean('load') ? $this->places->googlePreview($lat, $lng, $explore) : false;
         $hidden = GoogleHiddenPlace::with('author')->latest()->get();
         $settings = PlaceSettings::all();
         $usage = self::usage();
-        return view('placemanagement::admin.places.google', compact('results', 'hidden', 'lat', 'lng', 'settings', 'usage'));
+        return view('placemanagement::admin.places.google', compact('results', 'hidden', 'lat', 'lng', 'settings', 'usage', 'categories', 'explore'));
     }
 
     public function hide(Request $request): RedirectResponse

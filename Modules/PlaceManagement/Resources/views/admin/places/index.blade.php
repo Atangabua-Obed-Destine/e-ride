@@ -1,17 +1,17 @@
 @extends('adminmodule::layouts.master')
 
-@section('title', translate('Hotels_&_Stays'))
+@section('title', translate('Explore_Bamenda'))
 
 @section('content')
     <div class="main-content">
         <div class="container-fluid">
             <div class="d-flex flex-wrap justify-content-between align-items-center gap-3 mb-3">
                 <div>
-                    <h2 class="fs-22 mb-1">{{ translate('Hotels_&_Stays') }}</h2>
-                    <p class="fs-12 text-muted mb-0">{{ translate('Places E-Ride has checked. They appear first in the app, with your photos, prices and a Verified badge. Nearby hotels from Google appear below them.') }}</p>
+                    <h2 class="fs-22 mb-1">{{ translate('Explore_Bamenda') }}</h2>
+                    <p class="fs-12 text-muted mb-0">{{ translate('Places E-Ride has checked. They appear first in their category in the app, with your photos, contacts and a Verified badge. Nearby places from Google appear below them.') }}</p>
                 </div>
                 @can('place_add')
-                    <a href="{{ route('admin.place.create') }}" class="btn btn-primary"><i class="bi bi-plus-lg"></i> {{ translate('Add_listing') }}</a>
+                    <a href="{{ route('admin.place.create', ['explore' => $filters['explore'] !== 'all' ? $filters['explore'] : 'stay']) }}" class="btn btn-primary"><i class="bi bi-plus-lg"></i> {{ translate('Add_listing') }}</a>
                 @endcan
             </div>
 
@@ -19,14 +19,14 @@
 
             <div class="d-flex flex-wrap justify-content-between align-items-center my-3 gap-3">
                 <ul class="nav nav--tabs p-1 rounded bg-white" role="tablist">
-                    @foreach(['all' => translate('all'), 'hotel' => translate('Hotels'), 'guest_house' => translate('Guest_houses'), 'lodging' => translate('Other_lodging')] as $key => $label)
+                    @foreach(['all' => translate('all')] + $categories->pluck('name', 'key')->all() as $key => $label)
                         <li class="nav-item">
-                            <a class="nav-link {{ $filters['category'] === $key ? 'active' : '' }}" href="{{ route('admin.place.index', ['category' => $key, 'status' => $filters['status'], 'search' => $filters['search']]) }}">{{ $label }}</a>
+                            <a class="nav-link {{ $filters['explore'] === $key ? 'active' : '' }}" href="{{ route('admin.place.index', ['explore' => $key, 'status' => $filters['status'], 'search' => $filters['search']]) }}">{{ $label }}</a>
                         </li>
                     @endforeach
                 </ul>
                 <form action="{{ route('admin.place.index') }}" method="GET" class="search-form search-form_style-two">
-                    <input type="hidden" name="category" value="{{ $filters['category'] }}">
+                    <input type="hidden" name="explore" value="{{ $filters['explore'] }}">
                     <input type="hidden" name="status" value="{{ $filters['status'] }}">
                     <div class="input-group search-form__input_group">
                         <span class="search-form__icon"><i class="bi bi-search"></i></span>
@@ -65,12 +65,15 @@
                                             @endif
                                             <div>
                                                 <div class="fw-semibold">{{ $place->name }}</div>
-                                                <div class="fs-12 text-muted">{{ translate($place->category) }}@if($place->phone) · {{ $place->phone }}@endif</div>
+                                                <div class="fs-12 text-muted">{{ $categories->firstWhere('key', $place->explore_category)?->name ?? $place->explore_category }} · {{ translate($place->category) }}@if($place->phone) · {{ $place->phone }}@endif</div>
+                                                @if($place->isOnDuty())<span class="badge bg-success">{{ translate('On_duty') }} {{ translate('until') }} {{ $place->on_duty_until->format('d M') }}</span>@endif
                                             </div>
                                         </div>
                                     </td>
                                     <td class="fs-12">
-                                        @if($place->price_min || $place->price_max)
+                                        @if(!($categories->firstWhere('key', $place->explore_category)?->has_price))
+                                            <span class="text-muted">-</span>
+                                        @elseif($place->price_min || $place->price_max)
                                             {{ $place->price_min ? getCurrencyFormat($place->price_min) : '' }}{{ $place->price_min && $place->price_max ? ' - ' : '' }}{{ $place->price_max ? getCurrencyFormat($place->price_max) : '' }}
                                         @else
                                             <span class="text-muted">{{ translate('Not_set') }}</span>

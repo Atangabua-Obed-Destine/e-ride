@@ -16,6 +16,8 @@ class PlaceSettings
             'min_reviews' => (int)$get('stay_min_reviews', 5),
             'search_cap' => (int)$get('stay_google_search_cap', 1000),
             'photo_cap' => (int)$get('stay_google_photo_cap', 1000),
+            'explore_label' => (string)$get('explore_label', 'Explore Bamenda'),
+            'emergency_note' => (string)$get('explore_emergency_note', ''),
         ];
     }
 

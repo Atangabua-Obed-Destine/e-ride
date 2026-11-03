@@ -533,12 +533,24 @@
                 @endif
 
                 @if(\Illuminate\Support\Facades\Gate::any(['place_view', 'place_add', 'place_edit', 'place_delete']))
-                    <!---------- Start Hotels & Stays --------------->
-                    <li class="nav-category" title="{{ translate('Hotels_&_Stays') }}">{{ translate('Hotels_&_Stays') }}</li>
+                    <!---------- Start Explore Bamenda --------------->
+                    <li class="nav-category" title="{{ translate('Explore_Bamenda') }}">{{ translate('Explore_Bamenda') }}</li>
                     <li class="{{ Request::is('admin/places') || Request::is('admin/places/create') || Request::is('admin/places/*/edit') ? 'active open' : '' }}">
                         <a href="{{ route('admin.place.index') }}">
-                            <i class="bi bi-building"></i>
+                            <i class="bi bi-geo-alt"></i>
                             <span class="link-title">{{ translate('Verified_listings') }}</span>
+                        </a>
+                    </li>
+                    <li class="{{ Request::is('admin/places/on-duty*') ? 'active open' : '' }}">
+                        <a href="{{ route('admin.place.on-duty') }}">
+                            <i class="bi bi-capsule"></i>
+                            <span class="link-title">{{ translate('On-duty_pharmacies') }}</span>
+                        </a>
+                    </li>
+                    <li class="{{ Request::is('admin/places/categories*') ? 'active open' : '' }}">
+                        <a href="{{ route('admin.place.categories') }}">
+                            <i class="bi bi-grid"></i>
+                            <span class="link-title">{{ translate('Categories') }}</span>
                         </a>
                     </li>
                     <li class="{{ Request::is('admin/places/google*') ? 'active open' : '' }}">
@@ -555,7 +567,7 @@
                             </a>
                         </li>
                     @endcan
-                    <!---------- End Hotels & Stays --------------->
+                    <!---------- End Explore Bamenda --------------->
                 @endif
 
                 @if(\Illuminate\Support\Facades\Gate::any(['vehicle_view', 'vehicle_add', 'vehicle_edit', 'vehicle_delete', 'vehicle_log', 'vehicle_export']))

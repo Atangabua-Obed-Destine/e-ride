@@ -43,9 +43,19 @@
                                     </div>
                                     <div class="col-sm-4">
                                         <label class="form-label">{{ translate('Type') }}</label>
-                                        <select name="category" class="form-select">
-                                            @foreach(['hotel' => translate('Hotel'), 'guest_house' => translate('Guest_house'), 'lodging' => translate('Other_lodging')] as $value => $label)
-                                                <option value="{{ $value }}" {{ old('category', $place->category) === $value ? 'selected' : '' }}>{{ $label }}</option>
+                                        <select name="category" id="place-type" class="form-select">
+                                            @foreach($categories as $c)
+                                                @foreach(\Modules\PlaceManagement\Entities\PlaceCategory::typesFor($c->key) as $type)
+                                                    <option value="{{ $type }}" data-group="{{ $c->key }}" {{ old('category', $place->category) === $type && old('explore_category', $place->explore_category) === $c->key ? 'selected' : '' }}>{{ translate($type) }}</option>
+                                                @endforeach
+                                            @endforeach
+                                        </select>
+                                    </div>
+                                    <div class="col-12">
+                                        <label class="form-label">{{ translate('Explore_category') }}</label>
+                                        <select name="explore_category" id="explore-category" class="form-select">
+                                            @foreach($categories as $c)
+                                                <option value="{{ $c->key }}" data-price="{{ $c->has_price ? 1 : 0 }}" {{ old('explore_category', $place->explore_category ?? 'stay') === $c->key ? 'selected' : '' }}>{{ $c->name }}{{ $c->is_active ? '' : ' (' . translate('inactive') . ')' }}</option>
                                             @endforeach
                                         </select>
                                     </div>
@@ -53,25 +63,25 @@
                                         <label class="form-label">{{ translate('Short_description') }}</label>
                                         <textarea name="description" class="form-control" rows="3" maxlength="1500" placeholder="{{ translate('Ex: Quiet rooms near Commercial Avenue, generator all night, secure parking.') }}">{{ old('description', $place->description) }}</textarea>
                                     </div>
-                                    <div class="col-sm-6">
+                                    <div class="col-sm-6 js-stay-only">
                                         <label class="form-label">{{ translate('Lowest_price_per_night_(FCFA)') }}</label>
                                         <input type="number" name="price_min" class="form-control" min="0" step="1" value="{{ old('price_min', $place->price_min) }}" placeholder="15000">
                                     </div>
-                                    <div class="col-sm-6">
+                                    <div class="col-sm-6 js-stay-only">
                                         <label class="form-label">{{ translate('Highest_price_per_night_(FCFA)') }}</label>
                                         <input type="number" name="price_max" class="form-control" min="0" step="1" value="{{ old('price_max', $place->price_max) }}" placeholder="40000">
                                     </div>
-                                    <div class="col-sm-4">
+                                    <div class="col-sm-4 js-stay-only">
                                         <label class="form-label">{{ translate('Check-in_from') }}</label>
                                         <input type="time" name="check_in" class="form-control" value="{{ old('check_in', $place->check_in) }}">
                                     </div>
-                                    <div class="col-sm-4">
+                                    <div class="col-sm-4 js-stay-only">
                                         <label class="form-label">{{ translate('Check-out_by') }}</label>
                                         <input type="time" name="check_out" class="form-control" value="{{ old('check_out', $place->check_out) }}">
                                     </div>
                                     <div class="col-sm-4 d-flex align-items-end">
                                         <label class="d-flex justify-content-between align-items-center form-control mb-0">
-                                            <span>{{ translate('24h_reception') }}</span>
+                                            <span>{{ translate('Open_24_hours') }}</span>
                                             <span class="switcher">
                                                 <input type="hidden" name="reception_24h" value="0">
                                                 <input class="switcher_input" type="checkbox" name="reception_24h" value="1" {{ old('reception_24h', $place->reception_24h) ? 'checked' : '' }}>
@@ -83,7 +93,24 @@
                             </div>
                         </div>
 
-                        <div class="card mb-3">
+                        <div class="card mb-3 js-pharmacy-only">
+                            <div class="card-body">
+                                <h5 class="mb-1">{{ translate('On_duty_(garde)') }}</h5>
+                                <p class="fs-12 text-muted">{{ translate('For this week only. It stops showing after the end date. You can also set the whole week at once under On-duty pharmacies.') }}</p>
+                                <div class="row g-3">
+                                    <div class="col-sm-6">
+                                        <label class="form-label">{{ translate('From') }}</label>
+                                        <input type="date" name="on_duty_from" class="form-control" value="{{ old('on_duty_from', $place->on_duty_from?->toDateString()) }}">
+                                    </div>
+                                    <div class="col-sm-6">
+                                        <label class="form-label">{{ translate('Until_(included)') }}</label>
+                                        <input type="date" name="on_duty_until" class="form-control" value="{{ old('on_duty_until', $place->on_duty_until?->toDateString()) }}">
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="card mb-3 js-stay-only">
                             <div class="card-body">
                                 <h5 class="mb-1">{{ translate('Amenities') }}</h5>
                                 <p class="fs-12 text-muted">{{ translate('Only tick what the hotel really has. Guests choose on these, especially power and hot water.') }}</p>
@@ -103,7 +130,7 @@
                         <div class="card mb-3">
                             <div class="card-body">
                                 <h5 class="mb-1">{{ translate('Photos') }}</h5>
-                                <p class="fs-12 text-muted">{{ translate('Up to 8 real photos: the entrance, a room, the bathroom. The first one is the cover.') }}</p>
+                                <p class="fs-12 text-muted">{{ translate('Up to 8 real photos: the entrance and the inside. The first one is the cover.') }}</p>
                                 @if(count($place->photos ?? []))
                                     <div class="d-flex flex-wrap gap-3 mb-3">
                                         @foreach($place->photos as $i => $file)
@@ -226,6 +253,31 @@
         </div>
     </div>
 @endsection
+
+@push('script')
+    <script>
+        // Show only what fits the category: prices and amenities for places to
+        // stay, on-duty dates for pharmacies, and that category's types.
+        (function () {
+            var explore = document.getElementById('explore-category'), type = document.getElementById('place-type');
+            function sync() {
+                var opt = explore.options[explore.selectedIndex], key = opt.value, price = opt.dataset.price === '1';
+                document.querySelectorAll('.js-stay-only').forEach(function (el) { el.style.display = price ? '' : 'none'; });
+                document.querySelectorAll('.js-pharmacy-only').forEach(function (el) { el.style.display = key === 'pharmacy' ? '' : 'none'; });
+                var firstVisible = null, selectedVisible = false;
+                Array.prototype.forEach.call(type.options, function (o) {
+                    var show = o.dataset.group === key;
+                    o.hidden = !show; o.disabled = !show;
+                    if (show && !firstVisible) firstVisible = o;
+                    if (show && o.selected) selectedVisible = true;
+                });
+                if (!selectedVisible && firstVisible) firstVisible.selected = true;
+            }
+            explore.addEventListener('change', sync);
+            sync();
+        })();
+    </script>
+@endpush
 
 @if($mapKey)
     @push('script')
