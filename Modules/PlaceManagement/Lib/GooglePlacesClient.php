@@ -78,25 +78,35 @@ class GooglePlacesClient
         return $response->json('places') ?? [];
     }
 
-    /** A short-lived image URL on Google's servers (no key in it) for a photo name from a search. */
-    public function photoUri(string $photoName, int $maxWidth): ?string
+    /**
+     * The image itself, fetched here and handed to the app. Some mobile
+     * networks in Cameroon cannot reach Google's image host
+     * (lh3.googleusercontent.com) while they reach our server fine, so the
+     * app never talks to Google directly. Nothing is stored.
+     *
+     * @return array{body: string, type: string}|null
+     */
+    public function photo(string $photoName, int $maxWidth): ?array
     {
         $key = $this->key();
         if (!$key || !$this->spend(self::PHOTO, PlaceSettings::all()['photo_cap'])) {
             return null;
         }
         try {
-            $response = Http::timeout(8)
+            // Follows Google's redirect to the image file.
+            $response = Http::timeout(12)
                 ->withHeaders(['X-Goog-Api-Key' => $key])
-                ->get('https://places.googleapis.com/v1/' . $photoName . '/media', [
-                    'maxWidthPx' => $maxWidth,
-                    'skipHttpRedirect' => 'true',
-                ]);
+                ->get('https://places.googleapis.com/v1/' . $photoName . '/media', ['maxWidthPx' => $maxWidth]);
         } catch (\Throwable $e) {
             Log::warning('Google Places photo failed', ['error' => $e->getMessage()]);
             return null;
         }
-        return $response->ok() ? $response->json('photoUri') : null;
+        $type = (string)$response->header('Content-Type');
+        if (!$response->ok() || !str_starts_with($type, 'image/')) {
+            Log::warning('Google Places photo refused', ['status' => $response->status(), 'type' => $type]);
+            return null;
+        }
+        return ['body' => $response->body(), 'type' => $type];
     }
 
     public static function usage(string $kind, ?string $month = null): int

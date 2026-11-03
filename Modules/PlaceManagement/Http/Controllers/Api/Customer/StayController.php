@@ -3,7 +3,7 @@
 namespace Modules\PlaceManagement\Http\Controllers\Api\Customer;
 
 use Illuminate\Http\JsonResponse;
-use Illuminate\Http\RedirectResponse;
+use Illuminate\Http\Response;
 use Illuminate\Http\Request;
 use Illuminate\Routing\Controller;
 use Modules\PlaceManagement\Lib\GooglePlacesClient;
@@ -61,18 +61,22 @@ class StayController extends Controller
     }
 
     /**
-     * Signed image link for a Google photo. Redirects to Google's own image URL,
-     * which carries no key. Unsigned, expired or capped requests get 404 and the
-     * app shows its placeholder.
+     * Signed image link for a Google photo: the image bytes, fetched by the
+     * server. Unsigned or tampered links get 403; expired, capped or failed
+     * ones 404, and the app shows its placeholder.
      */
-    public function photo(Request $request, GooglePlacesClient $google): RedirectResponse
+    public function photo(Request $request, GooglePlacesClient $google): Response
     {
         abort_unless($request->hasValidRelativeSignature(), 403);
         $name = (string)$request->query('name');
         abort_unless(preg_match('#^places/[A-Za-z0-9_-]+/photos/[A-Za-z0-9_-]+$#', $name) === 1, 404);
         $width = min(max((int)$request->query('w', 480), 100), 1600);
-        $uri = $google->photoUri($name, $width);
-        abort_unless($uri, 404);
-        return redirect()->away($uri)->header('Cache-Control', 'private, max-age=3600');
+        $photo = $google->photo($name, $width);
+        abort_unless($photo, 404);
+        // The phone keeps it for the day (the signed link changes daily).
+        return response($photo['body'], 200, [
+            'Content-Type' => $photo['type'],
+            'Cache-Control' => 'private, max-age=86400',
+        ]);
     }
 }
