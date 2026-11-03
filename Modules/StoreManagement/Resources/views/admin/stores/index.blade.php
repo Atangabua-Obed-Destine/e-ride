@@ -44,6 +44,7 @@
                                 <th>{{ translate('Partner_login') }}</th>
                                 <th class="text-center">{{ translate('Menu_items') }}</th>
                                 <th class="text-center">{{ translate('Delivered') }}</th>
+                                <th class="text-center">{{ translate('Rating') }}</th>
                                 <th class="text-center">{{ translate('Now') }}</th>
                                 <th class="text-center">{{ translate('Active') }}</th>
                                 <th class="text-center">{{ translate('action') }}</th>
@@ -71,6 +72,13 @@
                                     <td class="fs-12">{{ $store->owner?->email }}</td>
                                     <td class="text-center">{{ $store->items_count }}</td>
                                     <td class="text-center">{{ $store->delivered_orders_count }}</td>
+                                    <td class="text-center text-nowrap">
+                                        @if($store->reviews_count)
+                                            <i class="bi bi-star-fill text-warning"></i> {{ number_format($store->reviews_avg_rating, 1) }} <span class="fs-12 text-muted">({{ $store->reviews_count }})</span>
+                                        @else
+                                            <span class="text-muted">-</span>
+                                        @endif
+                                    </td>
                                     <td class="text-center">
                                         @if($store->isOpenNow())
                                             <span class="badge bg-success">{{ translate('Open') }}</span>
@@ -100,7 +108,7 @@
                                 </tr>
                             @empty
                                 <tr>
-                                    <td colspan="8">
+                                    <td colspan="9">
                                         <div class="d-flex flex-column justify-content-center align-items-center gap-2 py-5">
                                             <img src="{{ dynamicAsset('public/assets/admin-module/img/empty-icons/no-data-found.svg') }}" alt="" width="100">
                                             <p class="text-center mb-0">{{ translate('No stores yet. Add ROMZ or Candy Shop to start.') }}</p>

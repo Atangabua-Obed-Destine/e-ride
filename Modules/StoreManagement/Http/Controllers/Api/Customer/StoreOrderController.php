@@ -31,6 +31,7 @@ class StoreOrderController extends Controller
         }
         $zoneId = $request->header('zoneId');
         $stores = Store::where('is_active', 1)
+            ->withAvg('reviews', 'rating')->withCount('reviews')
             ->whereNotNull('zone_id')
             ->when($zoneId, fn($q) => $q->where('zone_id', $zoneId))
             ->orderBy('sort')->orderBy('name')
@@ -111,7 +112,7 @@ class StoreOrderController extends Controller
     {
         $limit = max(1, min(50, (int)$request->query('limit', 20)));
         $offset = max(1, (int)$request->query('offset', 1));
-        $orders = StoreOrder::with(['store', 'items'])
+        $orders = StoreOrder::with(['store', 'items', 'review'])
             ->where('customer_id', auth('api')->id())
             ->where('status', '!=', StoreOrder::AWAITING_PAYMENT)
             ->latest()
@@ -125,7 +126,7 @@ class StoreOrderController extends Controller
     public function show(StoreOrder $order): JsonResponse
     {
         abort_unless($order->customer_id === auth('api')->id(), 404);
-        $order->load(['store', 'items', 'trip.driver']);
+        $order->load(['store', 'items', 'trip.driver', 'review']);
         return response()->json(responseFormatter(DEFAULT_200, StorePresenter::order($order)));
     }
 
@@ -138,6 +139,23 @@ class StoreOrderController extends Controller
             return $this->problem(collect($e->errors())->flatten()->first());
         }
         return response()->json(responseFormatter(DEFAULT_200, StorePresenter::order($order->load(['store', 'items']))));
+    }
+
+    public function review(Request $request, StoreOrder $order): JsonResponse
+    {
+        abort_unless($order->customer_id === auth('api')->id(), 404);
+        $data = $request->validate([
+            'store_rating' => 'required|integer|between:1,5',
+            'store_comment' => 'nullable|string|max:500',
+            'rider_rating' => 'nullable|integer|between:1,5',
+            'rider_comment' => 'nullable|string|max:500',
+        ]);
+        try {
+            $this->orders->review($order, $data);
+        } catch (ValidationException $e) {
+            return $this->problem(collect($e->errors())->flatten()->first());
+        }
+        return response()->json(responseFormatter(DEFAULT_STORE_200, StorePresenter::order($order->fresh()->load(['store', 'items', 'trip.driver', 'review']))));
     }
 
     protected function validateCart(Request $request, array $extra = []): array

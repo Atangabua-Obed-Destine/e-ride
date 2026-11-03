@@ -30,6 +30,13 @@ interface StoreOrderServiceInterface extends BaseServiceInterface
 
     public function cancelByCustomer(StoreOrder $order): StoreOrder;
 
+    /**
+     * The customer rates a delivered order: the store (required) and the rider
+     * (optional, stored as a normal trip review so the driver's rating moves).
+     * Throws ValidationException when it is not ratable.
+     */
+    public function review(StoreOrder $order, array $data): \Modules\StoreManagement\Entities\StoreReview;
+
     public function cancelByAdmin(StoreOrder $order, string $reason, bool $refund = true): StoreOrder;
 
     /** Admin decision on a delivery that failed after pickup. */

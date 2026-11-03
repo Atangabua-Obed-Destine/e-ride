@@ -31,7 +31,8 @@ class StoreService extends BaseService implements StoreServiceInterface
     {
         return Store::query()
             ->with(['owner', 'zone'])
-            ->withCount(['items', 'orders as delivered_orders_count' => fn($q) => $q->where('status', 'delivered')])
+            ->withCount(['items', 'reviews', 'orders as delivered_orders_count' => fn($q) => $q->where('status', 'delivered')])
+            ->withAvg('reviews', 'rating')
             ->when(($filters['search'] ?? '') !== '', function ($q) use ($filters) {
                 $q->where(fn($w) => $w->where('name', 'like', '%' . $filters['search'] . '%')
                     ->orWhere('phone', 'like', '%' . $filters['search'] . '%'));

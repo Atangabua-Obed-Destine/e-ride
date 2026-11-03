@@ -44,6 +44,7 @@ Route::group(['prefix' => 'admin', 'as' => 'admin.', 'middleware' => 'admin'], f
         Route::get('{order}', [StoreOrderController::class, 'show'])->name('show');
         Route::post('{order}/cancel', [StoreOrderController::class, 'cancel'])->name('cancel')->middleware('can:store_edit');
         Route::post('{order}/resolve', [StoreOrderController::class, 'resolve'])->name('resolve')->middleware('can:store_edit');
+        Route::post('{order}/review-visibility', [StoreOrderController::class, 'reviewVisibility'])->name('review-visibility')->middleware('can:store_edit');
     });
 
     Route::group(['prefix' => 'store-settings', 'as' => 'store-setting.', 'middleware' => 'can:store_edit'], function () {

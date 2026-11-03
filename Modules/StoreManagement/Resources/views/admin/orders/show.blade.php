@@ -42,6 +42,26 @@
                         @if($order->rider_attempts > 1)<div class="fs-12 text-muted mt-2">{{ translate('Rider_requests') }}: {{ $order->rider_attempts }}</div>@endif
                         @if($order->cancel_reason)<div class="fs-12 mt-2">{{ translate('Reason') }}: {{ $order->cancel_reason }}</div>@endif
                     </div></div>
+
+                    @if($order->review)
+                        <div class="card mb-3"><div class="card-body">
+                            <div class="d-flex align-items-center gap-2 mb-2">
+                                <h5 class="mb-0">{{ translate('Customer_rating') }}</h5>
+                                @if($order->review->is_hidden)<span class="badge bg-secondary">{{ translate('Hidden') }}</span>@endif
+                            </div>
+                            <div class="fs-5 text-warning">@for($i = 1; $i <= 5; $i++)<i class="bi {{ $i <= $order->review->rating ? 'bi-star-fill' : 'bi-star' }}"></i>@endfor</div>
+                            @if($order->review->comment)<div class="mt-1">"{{ $order->review->comment }}"</div>@endif
+                            <div class="fs-12 text-muted mt-1">{{ $order->review->created_at?->format('d M Y, H:i') }}</div>
+                            @can('store_edit')
+                                <form action="{{ route('admin.store-order.review-visibility', $order) }}" method="POST" class="mt-2">
+                                    @csrf
+                                    <input type="hidden" name="hidden" value="{{ $order->review->is_hidden ? 0 : 1 }}">
+                                    <button class="btn btn-sm btn-outline-secondary">{{ $order->review->is_hidden ? translate('Show_rating_again') : translate('Hide_rating') }}</button>
+                                </form>
+                                <div class="fs-12 text-muted mt-1">{{ translate('Hidden ratings do not count in the store average.') }}</div>
+                            @endcan
+                        </div></div>
+                    @endif
                 </div>
 
                 <div class="col-lg-5">

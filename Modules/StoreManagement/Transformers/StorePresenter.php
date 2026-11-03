@@ -28,6 +28,7 @@ class StorePresenter
             'today_hours' => $hours ? ['open' => $hours[0], 'close' => $hours[1]] : null,
             'prep_minutes' => $store->default_prep_minutes,
             'min_order_amount' => $store->min_order_amount,
+            ...$store->ratingSummary(),
             'distance_km' => ($lat !== null && $lng !== null) ? round(self::distanceKm($lat, $lng, $store->latitude, $store->longitude), 1) : null,
         ];
     }
@@ -61,6 +62,10 @@ class StorePresenter
     {
         $trip = $order->relationLoaded('trip') ? $order->trip : null;
         $driver = $trip?->driver;
+        $review = $order->relationLoaded('review') ? $order->review : null;
+        $riderReview = $review && $withItems && $trip
+            ? \Modules\ReviewModule\Entities\Review::where('trip_request_id', $trip->id)->where('given_by', $order->customer_id)->first()
+            : null;
         return [
             'id' => $order->id,
             'ref' => $order->ref_id,
@@ -97,6 +102,15 @@ class StorePresenter
                 'name' => trim($driver->first_name . ' ' . $driver->last_name),
                 'phone' => $driver->phone,
                 'image' => $driver->profile_image ? dynamicStorage('storage/app/public/driver/profile') . '/' . $driver->profile_image : null,
+            ] : null,
+            // First name only, kept after delivery so the customer can rate the rider.
+            'rider_first_name' => $driver?->first_name,
+            'can_review' => $order->relationLoaded('review') && !$review && $order->status === StoreOrder::DELIVERED
+                && $order->delivered_at?->gt(now()->subDays(\Modules\StoreManagement\Entities\StoreReview::MAX_DAYS_TO_REVIEW)),
+            'review' => $review ? [
+                'store_rating' => $review->rating,
+                'store_comment' => $review->comment,
+                'rider_rating' => $riderReview?->rating,
             ] : null,
             'cancel_reason' => $order->cancel_reason,
             'can_cancel' => in_array($order->status, [StoreOrder::AWAITING_PAYMENT, StoreOrder::PLACED], true),

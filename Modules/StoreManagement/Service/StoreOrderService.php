@@ -17,9 +17,11 @@ use Modules\Gateways\Library\Receiver;
 use Modules\Gateways\Traits\Payment;
 use Modules\Gateways\Traits\SmsGatewayForMessage;
 use Modules\ParcelManagement\Entities\ParcelWeight;
+use Modules\ReviewModule\Entities\Review;
 use Modules\StoreManagement\Entities\Store;
 use Modules\StoreManagement\Entities\StoreItem;
 use Modules\StoreManagement\Entities\StoreOrder;
+use Modules\StoreManagement\Entities\StoreReview;
 use Modules\StoreManagement\Lib\StoreSettings;
 use Modules\StoreManagement\Repository\StoreOrderRepositoryInterface;
 use Modules\StoreManagement\Service\Interfaces\StoreOrderServiceInterface;
@@ -559,6 +561,43 @@ class StoreOrderService extends BaseService implements StoreOrderServiceInterfac
         return $order;
     }
 
+    public function review(StoreOrder $order, array $data): StoreReview
+    {
+        $review = null;
+        $this->locked($order, function (StoreOrder $order) use ($data, &$review) {
+            if (!$order->canBeReviewed()) {
+                throw ValidationException::withMessages(['order' => translate('This order cannot be rated.')]);
+            }
+            $review = StoreReview::create([
+                'store_order_id' => $order->id,
+                'store_id' => $order->store_id,
+                'customer_id' => $order->customer_id,
+                'rating' => (int)$data['store_rating'],
+                'comment' => filled($data['store_comment'] ?? null) ? trim($data['store_comment']) : null,
+            ]);
+
+            // The rider: a normal trip review, so it counts toward the driver's
+            // rating and level like any ride. Skipped when customer reviews are
+            // switched off or this trip was already rated.
+            $trip = $order->trip_request_id ? TripRequest::find($order->trip_request_id) : null;
+            if ($trip?->driver_id && !empty($data['rider_rating']) && (businessConfig('customer_review')?->value ?? 0)
+                && !Review::where('trip_request_id', $trip->id)->where('given_by', $order->customer_id)->exists()) {
+                Review::create([
+                    'trip_request_id' => $trip->id,
+                    'given_by' => $order->customer_id,
+                    'received_by' => $trip->driver_id,
+                    'trip_type' => $trip->type,
+                    'rating' => (int)$data['rider_rating'],
+                    'feedback' => filled($data['rider_comment'] ?? null) ? trim($data['rider_comment']) : null,
+                ]);
+                $tripId = $trip->id;
+                DB::afterCommit(fn() => $this->notifyRiderOfReview($tripId));
+            }
+            return $order;
+        });
+        return $review;
+    }
+
     public function syncFromTrip(StoreOrder $order): StoreOrder
     {
         return $this->locked($order, function (StoreOrder $order) {
@@ -808,6 +847,31 @@ class StoreOrderService extends BaseService implements StoreOrderServiceInterfac
             );
         } catch (Throwable $e) {
             Log::warning('Food & Shops customer push failed', ['order' => $order->id, 'error' => $e->getMessage()]);
+        }
+    }
+
+    /** "{customer} rated you", as after a ride. */
+    protected function notifyRiderOfReview(string $tripId): void
+    {
+        try {
+            $trip = TripRequest::with(['driver', 'customer'])->find($tripId);
+            $push = getNotification('review_from_customer');
+            if (!$trip?->driver?->fcm_token || !$push) {
+                return;
+            }
+            sendDeviceNotification(
+                fcm_token: $trip->driver->fcm_token,
+                title: translate(key: $push['title'], locale: $trip->driver->current_language_key),
+                description: textVariableDataFormat(value: $push['description'], customerName: trim($trip->customer?->first_name . ' ' . $trip->customer?->last_name), locale: $trip->driver->current_language_key),
+                status: $push['status'],
+                ride_request_id: $trip->id,
+                type: $trip->type,
+                notification_type: 'review',
+                action: $push['action'],
+                user_id: $trip->driver->id,
+            );
+        } catch (Throwable $e) {
+            Log::warning('Food & Shops rider review push failed', ['trip' => $tripId, 'error' => $e->getMessage()]);
         }
     }
 

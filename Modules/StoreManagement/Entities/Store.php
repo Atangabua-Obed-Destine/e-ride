@@ -69,6 +69,20 @@ class Store extends Model
         return $this->hasMany(StorePayout::class);
     }
 
+    /** Ratings customers can see: hidden ones (abuse, mistakes) are left out. */
+    public function reviews(): HasMany
+    {
+        return $this->hasMany(StoreReview::class)->where('is_hidden', false);
+    }
+
+    /** Average rating (one decimal) and count, from withAvg/withCount when loaded. */
+    public function ratingSummary(): array
+    {
+        $count = (int)($this->reviews_count ?? $this->reviews()->count());
+        $avg = $this->reviews_avg_rating ?? ($count ? $this->reviews()->avg('rating') : null);
+        return ['rating' => $avg !== null ? round((float)$avg, 1) : null, 'rating_count' => $count];
+    }
+
     public function logoUrl(): ?string
     {
         return $this->logo ? dynamicStorage('storage/app/public/store/logo') . '/' . $this->logo : null;

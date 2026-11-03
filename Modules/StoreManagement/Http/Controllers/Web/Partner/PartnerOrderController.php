@@ -65,12 +65,14 @@ class PartnerOrderController extends Controller
 
     public function history(Request $request): View
     {
-        $orders = StoreOrder::with('items')
-            ->where('store_id', $this->store($request)->id)
+        $store = $this->store($request);
+        $orders = StoreOrder::with(['items', 'review'])
+            ->where('store_id', $store->id)
             ->where('status', '!=', StoreOrder::AWAITING_PAYMENT)
             ->latest('placed_at')
             ->paginate(25);
-        return view('storemanagement::partner.history', compact('orders'));
+        $rating = $store->ratingSummary();
+        return view('storemanagement::partner.history', compact('orders', 'rating'));
     }
 
     public function accept(Request $request, StoreOrder $order): JsonResponse

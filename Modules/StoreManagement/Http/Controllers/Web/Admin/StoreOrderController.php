@@ -45,7 +45,7 @@ class StoreOrderController extends Controller
 
     public function show(StoreOrder $order): View
     {
-        $order->load(['store', 'customer', 'items', 'trip.driver', 'trip.tripStatus']);
+        $order->load(['store', 'customer', 'items', 'trip.driver', 'trip.tripStatus', 'review']);
         return view('storemanagement::admin.orders.show', compact('order'));
     }
 
@@ -58,6 +58,14 @@ class StoreOrderController extends Controller
         } catch (ValidationException $e) {
             Toastr::error(collect($e->errors())->flatten()->first());
         }
+        return back();
+    }
+
+    /** Hide or show a store rating (abuse, a mistake). Hidden ones leave the store average. */
+    public function reviewVisibility(Request $request, StoreOrder $order): RedirectResponse
+    {
+        $order->review?->update(['is_hidden' => $request->boolean('hidden')]);
+        Toastr::success($request->boolean('hidden') ? translate('Rating hidden') : translate('Rating shown again'));
         return back();
     }
 

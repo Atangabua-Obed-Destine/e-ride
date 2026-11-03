@@ -99,6 +99,19 @@ class StoreOrder extends Model
         return $this->belongsTo(TripRequest::class, 'trip_request_id');
     }
 
+    public function review(): \Illuminate\Database\Eloquent\Relations\HasOne
+    {
+        return $this->hasOne(StoreReview::class);
+    }
+
+    /** Delivered, not rated yet, and recent enough to still ask. */
+    public function canBeReviewed(): bool
+    {
+        return $this->status === self::DELIVERED
+            && $this->delivered_at?->gt(now()->subDays(StoreReview::MAX_DAYS_TO_REVIEW))
+            && !$this->review()->exists();
+    }
+
     public function isActive(): bool
     {
         return in_array($this->status, self::ACTIVE, true);
