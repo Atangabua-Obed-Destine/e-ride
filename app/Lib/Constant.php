@@ -2741,6 +2741,7 @@ const MODULES = [
     'help_and_support' => ['view'],
     'blog_management' => ['view', 'add', 'update', 'delete', 'log', 'export'],
     'store_management' => ['view', 'add', 'update', 'delete'],
+    'place_management' => ['view', 'add', 'update', 'delete'],
 ];
 
 const TELEPHONE_CODES = [

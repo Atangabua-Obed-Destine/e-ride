@@ -532,6 +532,32 @@
                     <!---------- End Food & Shops --------------->
                 @endif
 
+                @if(\Illuminate\Support\Facades\Gate::any(['place_view', 'place_add', 'place_edit', 'place_delete']))
+                    <!---------- Start Hotels & Stays --------------->
+                    <li class="nav-category" title="{{ translate('Hotels_&_Stays') }}">{{ translate('Hotels_&_Stays') }}</li>
+                    <li class="{{ Request::is('admin/places') || Request::is('admin/places/create') || Request::is('admin/places/*/edit') ? 'active open' : '' }}">
+                        <a href="{{ route('admin.place.index') }}">
+                            <i class="bi bi-building"></i>
+                            <span class="link-title">{{ translate('Verified_listings') }}</span>
+                        </a>
+                    </li>
+                    <li class="{{ Request::is('admin/places/google*') ? 'active open' : '' }}">
+                        <a href="{{ route('admin.place.google') }}">
+                            <i class="bi bi-google"></i>
+                            <span class="link-title">{{ translate('Google_results') }}</span>
+                        </a>
+                    </li>
+                    @can('place_edit')
+                        <li class="{{ Request::is('admin/place-settings*') ? 'active open' : '' }}">
+                            <a href="{{ route('admin.place-setting.edit') }}">
+                                <i class="bi bi-sliders"></i>
+                                <span class="link-title">{{ translate('Settings') }}</span>
+                            </a>
+                        </li>
+                    @endcan
+                    <!---------- End Hotels & Stays --------------->
+                @endif
+
                 @if(\Illuminate\Support\Facades\Gate::any(['vehicle_view', 'vehicle_add', 'vehicle_edit', 'vehicle_delete', 'vehicle_log', 'vehicle_export']))
                     <!---------- Start Vehicle Management --------------->
 

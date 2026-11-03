@@ -30,6 +30,7 @@ const NEWSLETTER = "newsletter";
 const WHATSAPP_BOOKING = "whatsapp_booking";
 const WHATSAPP_BOOKING_KEY = "whatsapp_booking";
 const STORE_SETTINGS = "store_settings";
+const PLACE_SETTINGS = "place_settings";
 const BUTTON_CONTENTS = "button_contents";
 const DRIVER_APP_CONTENTS = "driver_app_contents";
 const CUSTOMER_APP_CONTENTS = "customer_app_contents";

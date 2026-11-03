@@ -1,0 +1,13 @@
+{
+    "name": "PlaceManagement",
+    "alias": "placemanagement",
+    "description": "Places to stay: E-Ride verified hotel and guest-house listings, plus nearby lodging from Google Places, with Ride there.",
+    "keywords": [],
+    "priority": 0,
+    "providers": [
+        "Modules\\PlaceManagement\\Providers\\PlaceManagementServiceProvider"
+    ],
+    "aliases": {},
+    "files": [],
+    "requires": []
+}

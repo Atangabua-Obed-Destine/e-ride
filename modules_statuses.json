@@ -15,5 +15,6 @@
     "TransactionManagement": true,
     "BlogManagement": true,
     "AiModule": true,
-    "StoreManagement": true
+    "StoreManagement": true,
+    "PlaceManagement": true
 }

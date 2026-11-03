@@ -30,6 +30,7 @@ return [
     \Modules\ZoneManagement\Providers\RepositoryServiceProvider::class,
     \Modules\VehicleManagement\Providers\RepositoryServiceProvider::class,
     \Modules\StoreManagement\Providers\RepositoryServiceProvider::class,
+    \Modules\PlaceManagement\Providers\RepositoryServiceProvider::class,
     \Modules\AdminModule\Providers\FirebaseServiceProvider::class,
 
     /*
