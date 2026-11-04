@@ -48,6 +48,9 @@
                                                             selected>{{translate('select_category_type')}}</option>
                                                     <option value="car">{{translate('car')}}</option>
                                                     <option value="motor_bike">{{translate('Motor_Bike')}}</option>
+                                                    @foreach(MOVE_VEHICLE_TYPES as $moveType)
+                                                        <option value="{{ $moveType }}">{{ translate('move_type_' . $moveType) }} ({{ translate('E-Ride Move') }})</option>
+                                                    @endforeach
                                                 </select>
                                             </div>
                                             <div class="mb-4">

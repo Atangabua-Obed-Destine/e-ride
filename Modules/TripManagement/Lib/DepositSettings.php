@@ -2,9 +2,12 @@
 
 namespace Modules\TripManagement\Lib;
 
+use Modules\TripManagement\Entities\TripRequest;
+
 /**
  * Booking deposit settings (Trip management > Booking deposit), with defaults.
  * The amount itself is per zone and vehicle category, in the fare setup.
+ * Moves have their own values (MoveSettings); forTrip() picks the right ones.
  */
 class DepositSettings
 {
@@ -25,6 +28,28 @@ class DepositSettings
             // E-Ride's share of a forfeited deposit; the driver gets the rest.
             'admin_share_percent' => min(100, max(0, (float)$get('booking_deposit_admin_share_percent', $commission))),
         ];
+    }
+
+    /** The same keys, with the E-Ride Move values. */
+    public static function move(): array
+    {
+        $move = MoveSettings::all();
+        return array_merge(self::all(), [
+            'status' => $move['status'] && $move['deposit_status'],
+            'window_minutes' => $move['deposit_window_minutes'],
+            'scheduled_window_minutes' => $move['deposit_window_minutes'],
+            'free_cancel_seconds' => $move['deposit_free_cancel_seconds'],
+            'admin_share_percent' => 100 - $move['deposit_driver_share_percent'],
+        ]);
+    }
+
+    /** The settings that apply to this trip (a model or an id). */
+    public static function forTrip(TripRequest|string|null $trip): array
+    {
+        $isMove = $trip instanceof TripRequest
+            ? (bool)$trip->is_move
+            : ($trip && (bool)TripRequest::whereKey($trip)->value('is_move'));
+        return $isMove ? self::move() : self::all();
     }
 
     public static function enabled(): bool

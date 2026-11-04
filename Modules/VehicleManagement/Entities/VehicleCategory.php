@@ -64,6 +64,22 @@ class VehicleCategory extends Model
         $query->where('is_active', $status);
     }
 
+    /** E-Ride Move vehicles (goods): tricycle, pickup, dyna, truck. */
+    public function isMove(): bool
+    {
+        return in_array($this->type, MOVE_VEHICLE_TYPES, true);
+    }
+
+    protected function scopeMove($query)
+    {
+        $query->whereIn('type', MOVE_VEHICLE_TYPES);
+    }
+
+    protected function scopeNotMove($query)
+    {
+        $query->whereNotIn('type', MOVE_VEHICLE_TYPES);
+    }
+
     protected static function newFactory()
     {
         return \Modules\VehicleManagement\Database\factories\VehicleCategoryFactory::new();

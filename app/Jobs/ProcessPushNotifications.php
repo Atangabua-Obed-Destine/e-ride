@@ -55,6 +55,11 @@ class ProcessPushNotifications implements ShouldQueue
             $this->trip->ride_request_type == SCHEDULED ? 'schedule_trip_request' : 'ride_request'
             );
             $push = getNotification('new_' . $requestType);
+            if ($this->trip->is_move) {
+                // Same action (every driver app rings for it), move wording, no fare.
+                $push['title'] = 'New move request';
+                $push['description'] = 'A customer needs a truck from {pickUpLocation}. You agree the price together at the pickup.';
+            }
             $notification = [
                 'title' => $push['title'],
                 'description' => $push['description'],
@@ -99,7 +104,8 @@ class ProcessPushNotifications implements ShouldQueue
                             // Shown on the driver's ringing request alert.
                             'notificationData' => [
                                 'pickup_address' => (string)($notification['replace']['pickUpLocation'] ?? ''),
-                                'estimated_fare' => (string)($notification['replace']['approximateAmount'] ?? ''),
+                                'estimated_fare' => $this->trip->is_move ? '' : (string)($notification['replace']['approximateAmount'] ?? ''),
+                                'is_move' => $this->trip->is_move ? '1' : '0',
                             ],
                         ];
                     }

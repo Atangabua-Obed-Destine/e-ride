@@ -39,7 +39,7 @@ class TripFareController extends BaseController
         $vehicleCategoryCriteria = [
             'is_active' => 1,
         ];
-        $vehicleCategories = $this->vehicleCategoryService->getBy(criteria: $vehicleCategoryCriteria);
+        $vehicleCategories = $this->vehicleCategoryService->getBy(criteria: $vehicleCategoryCriteria)->reject(fn($category) => $category->isMove())->values();
         $zoneCriteria = array_merge($request?->all(),[
             'is_active' => 1
         ]);
@@ -63,7 +63,7 @@ class TripFareController extends BaseController
         $vehicleCategoryCriteria = [
             'is_active' => 1,
         ];
-        $vehicleCategories = $this->vehicleCategoryService->getBy(criteria: $vehicleCategoryCriteria);
+        $vehicleCategories = $this->vehicleCategoryService->getBy(criteria: $vehicleCategoryCriteria)->reject(fn($category) => $category->isMove())->values();
         if ( $vehicleCategories->count() < 1) {
 
             Toastr::warning(VEHICLE_CATEGORY_404['message']);
@@ -83,7 +83,7 @@ class TripFareController extends BaseController
             Toastr::error('Please select vehicle category');
             return back();
         }
-        $vehicleCategories = $this->vehicleCategoryService->getAll();
+        $vehicleCategories = $this->vehicleCategoryService->getAll()->reject(fn($category) => $category->isMove())->values();
         $request->merge(['vehicleCategories' => $vehicleCategories]);
 
         $this->tripFareService->create($request->all());

@@ -59,13 +59,15 @@ class TripDepositService
     public const MOMO_GRACE_SECONDS = 120;
     /** A driver this close to the pickup has arrived. */
     public const ARRIVED_METERS = 200;
+    /** "We couldn't agree" needs the driver at the pickup (a little looser: trucks park further away). */
+    public const NO_AGREEMENT_METERS = 300;
 
     // ---------------------------------------------------------------- amounts
 
     /** The deposit for a trip, from its zone and vehicle category. 0 means none. */
     public function amountFor(TripRequest $trip): float
     {
-        if (!DepositSettings::enabled() || $this->isStoreOrderTrip($trip) || !$trip->zone_id) {
+        if (!DepositSettings::forTrip($trip)['status'] || $this->isStoreOrderTrip($trip) || !$trip->zone_id) {
             return 0;
         }
         return $this->amountForCategory($trip->zone_id, $trip->vehicle_category_id);
@@ -121,7 +123,7 @@ class TripDepositService
         if ($amount <= 0) {
             return null;
         }
-        $settings = DepositSettings::all();
+        $settings = DepositSettings::forTrip($trip);
         $minutes = $trip->ride_request_type == SCHEDULED ? $settings['scheduled_window_minutes'] : $settings['window_minutes'];
         return DB::transaction(function () use ($trip, $amount, $minutes) {
             $existing = TripDeposit::where('trip_request_id', $trip->id)->lockForUpdate()->first();
@@ -146,6 +148,15 @@ class TripDepositService
     {
         $locale = $trip->customer?->current_language_key;
         $minutes = max(1, (int)ceil(now()->diffInSeconds($deposit->due_at, false) / 60));
+        if ($trip->is_move) {
+            return [
+                translate(key: 'Truck found: confirm with the booking fee', locale: $locale),
+                translate(key: 'Pay {amount} within {minutes} min so your driver sets off. You agree the price of the move with the driver.', replace: [
+                    'amount' => getCurrencyFormat($deposit->amount),
+                    'minutes' => $minutes,
+                ], locale: $locale),
+            ];
+        }
         return [
             translate(key: 'Driver found: confirm with your deposit', locale: $locale),
             translate(key: 'Pay {amount} within {minutes} min so your driver sets off. It counts toward your fare.', replace: [
@@ -313,7 +324,7 @@ class TripDepositService
         if ($deposit->status !== TripDeposit::PAID) {
             return ['free' => true, 'reason' => null, 'free_until' => null];
         }
-        $freeUntil = $deposit->paid_at?->copy()->addSeconds(DepositSettings::all()['free_cancel_seconds']);
+        $freeUntil = $deposit->paid_at?->copy()->addSeconds(DepositSettings::forTrip($trip ?? $deposit->trip_request_id)['free_cancel_seconds']);
         if ($freeUntil && $freeUntil->isFuture()) {
             return ['free' => true, 'reason' => 'free_window', 'free_until' => $freeUntil];
         }
@@ -395,9 +406,10 @@ class TripDepositService
     }
 
     /** A late customer cancel: the driver and E-Ride share the deposit. */
-    protected function forfeit(TripDeposit $deposit): TripDeposit
+    protected function forfeit(TripDeposit $deposit, string $note = 'Customer cancelled after the free window'): TripDeposit
     {
-        $adminShare = round($deposit->amount * DepositSettings::all()['admin_share_percent'] / 100, 2);
+        $isMove = (bool)TripRequest::whereKey($deposit->trip_request_id)->value('is_move');
+        $adminShare = round($deposit->amount * DepositSettings::forTrip($deposit->trip_request_id)['admin_share_percent'] / 100, 2);
         $driverShare = round($deposit->amount - $adminShare, 2);
         $adminId = $this->adminUserId();
 
@@ -450,10 +462,10 @@ class TripDepositService
         $deposit->driver_share = $driverShare;
         $deposit->admin_share = $adminShare;
         $deposit->settled_at = now();
-        $deposit->note = 'Customer cancelled after the free window';
+        $deposit->note = $note;
         $deposit->save();
 
-        DB::afterCommit(function () use ($deposit, $driverShare) {
+        DB::afterCommit(function () use ($deposit, $driverShare, $isMove) {
             $trip = TripRequest::find($deposit->trip_request_id);
             $driver = $deposit->driver_id ? User::find($deposit->driver_id) : null;
             if ($trip && $driver && $driverShare > 0) {
@@ -462,9 +474,122 @@ class TripDepositService
                     'The customer cancelled after paying the deposit. {amount} was added to your wallet.',
                     ['amount' => getCurrencyFormat($driverShare)]);
             }
-            $this->pushCustomer($deposit, 'forfeited');
+            $this->pushCustomer($deposit, $isMove ? 'forfeited_move' : 'forfeited');
         });
         return $deposit;
+    }
+
+    // ------------------------------------------------------------------ move
+
+    /**
+     * A move ended (completed, or cancelled once it started): the paid
+     * deposit is E-Ride's booking fee. The customer pays the driver the price
+     * they agreed, outside the app. Safe to call more than once.
+     */
+    public function keepAsBookingFee(TripRequest $trip): ?TripDeposit
+    {
+        return DB::transaction(function () use ($trip) {
+            $deposit = TripDeposit::where('trip_request_id', $trip->id)->lockForUpdate()->first();
+            if (!$deposit || $deposit->status !== TripDeposit::PAID) {
+                return $deposit;
+            }
+            $adminId = $this->adminUserId();
+            $adminAccount = $this->lockedAccount($adminId);
+            $adminAccount->received_balance += $deposit->amount;
+            $adminAccount->save();
+            Transaction::create([
+                'attribute' => 'move_booking_fee',
+                'attribute_id' => $trip->id,
+                'credit' => $deposit->amount,
+                'balance' => $adminAccount->received_balance,
+                'user_id' => $adminId,
+                'account' => 'received_balance',
+                'trx_type' => 'E-Ride Move booking fee added to admin received balance',
+            ]);
+            $deposit->status = TripDeposit::APPLIED;
+            $deposit->applied_amount = $deposit->amount;
+            $deposit->admin_share = $deposit->amount;
+            $deposit->settled_at = now();
+            $deposit->note = 'Kept as the E-Ride Move booking fee';
+            $deposit->save();
+            return $deposit;
+        });
+    }
+
+    /**
+     * "We couldn't agree": customer and driver met at the pickup but did not
+     * agree on the price. Treated as a customer cancel after the driver
+     * arrived: the trip is cancelled, the driver released and the deposit
+     * forfeited with the move share. $by: customer or driver.
+     */
+    public function noAgreement(TripRequest $trip, string $by): void
+    {
+        if (!$trip->is_move) {
+            throw ValidationException::withMessages(['trip' => translate('This is not a move.')]);
+        }
+        $released = DB::transaction(function () use ($trip, $by) {
+            $trip = TripRequest::whereKey($trip->id)->lockForUpdate()->first();
+            if (!$trip || !in_array($trip->current_status, [ACCEPTED, OUT_FOR_PICKUP])) {
+                throw ValidationException::withMessages(['trip' => translate('This move is no longer waiting at the pickup.')]);
+            }
+            $deposit = TripDeposit::where('trip_request_id', $trip->id)->lockForUpdate()->first();
+            if (!$deposit || $deposit->status !== TripDeposit::PAID) {
+                throw ValidationException::withMessages(['trip' => translate('The booking fee has not been paid. You can simply cancel.')]);
+            }
+            if (!$this->driverAtPickup($trip)) {
+                throw ValidationException::withMessages(['trip' => translate('This is available once the driver has arrived at the pickup.')]);
+            }
+            $driverId = $trip->driver_id;
+            $trip->current_status = CANCELLED;
+            $trip->trip_cancellation_reason = 'No agreement on the price';
+            $trip->driver_id = null;
+            $trip->save();
+            $trip->tripStatus()->update([CANCELLED => now()]);
+            $trip->fee()->update(['cancelled_by' => $by]);
+            $trip->tripNavigation()->delete();
+            if ($driverId) {
+                app(DriverDetailServiceInterface::class)->updateAvailability(data: [
+                    'user_id' => $driverId,
+                    'trip_type' => RIDE_REQUEST,
+                ]);
+            }
+            $this->forfeit($deposit, 'No agreement on the price (' . $by . ')');
+            return $driverId;
+        });
+
+        $trip = TripRequest::with('customer')->find($trip->id);
+        $driver = $released ? User::find($released) : null;
+        try {
+            if (checkReverbConnection()) {
+                if ($by === 'customer' && $driver) {
+                    CustomerTripCancelledEvent::broadcast($driver, $trip);
+                } elseif ($by === 'driver') {
+                    \App\Events\DriverTripCancelledEvent::broadcast($trip);
+                }
+            }
+        } catch (Throwable) {
+        }
+        if ($by === 'customer' && $driver) {
+            $this->push($driver, $trip, 'customer_canceled_trip',
+                'No agreement: move cancelled',
+                'The customer and you did not agree on the price, so the move was cancelled. You are free for new requests.');
+        } elseif ($by === 'driver') {
+            $this->push($trip->customer, $trip, 'move_no_agreement',
+                'No agreement: move cancelled',
+                'You and the driver did not agree on the price, so the move was cancelled. You can book another truck.');
+        }
+    }
+
+    /** The driver's last location is at the pickup. */
+    protected function driverAtPickup(TripRequest $trip): bool
+    {
+        $trip->loadMissing('coordinate');
+        $pickup = $trip->coordinate?->pickup_coordinates;
+        $location = $trip->driver_id ? UserLastLocation::where('user_id', $trip->driver_id)->first() : null;
+        if (!$pickup || !$location) {
+            return false;
+        }
+        return haversineDistance((float)$pickup->latitude, (float)$pickup->longitude, (float)$location->latitude, (float)$location->longitude) <= self::NO_AGREEMENT_METERS;
     }
 
     // --------------------------------------------------------------- payment
@@ -726,6 +851,8 @@ class TripDepositService
                 'Deposit refunded', 'Your {amount} deposit is back in your E-Ride wallet.', $amount),
             'forfeited' => $this->push($trip->customer, $trip, 'deposit_forfeited',
                 'Trip cancelled', 'You cancelled after confirming, so the {amount} deposit went to your driver.', $amount),
+            'forfeited_move' => $this->push($trip->customer, $trip, 'deposit_forfeited',
+                'Move cancelled', 'The move was cancelled after the driver came, so the {amount} booking fee is not refunded.', $amount),
             'late_payment' => $this->push($trip->customer, $trip, 'deposit_refunded',
                 'Payment added to your wallet', 'Your deposit payment arrived after the trip closed, so it was added to your E-Ride wallet.'),
             default => null,

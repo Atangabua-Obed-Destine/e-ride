@@ -3,6 +3,7 @@
 use Illuminate\Support\Facades\Route;
 use Modules\TripManagement\Http\Controllers\Web\BookingDepositController;
 use Modules\TripManagement\Http\Controllers\Web\DriverReportController;
+use Modules\TripManagement\Http\Controllers\Web\MoveAdminController;
 use Modules\TripManagement\Http\Controllers\Web\RefundController;
 use Modules\TripManagement\Http\Controllers\Web\SafetyAlertController;
 
@@ -44,6 +45,20 @@ Route::group(['prefix' => 'admin', 'as' => 'admin.', 'middleware' => 'admin'], f
         Route::get('/', [BookingDepositController::class, 'index'])->name('index');
         Route::get('settings', [BookingDepositController::class, 'settings'])->name('settings');
         Route::put('settings', [BookingDepositController::class, 'updateSettings'])->name('settings.update');
+    });
+
+    Route::group(['prefix' => 'move', 'as' => 'move.'], function () {
+        Route::get('/', [MoveAdminController::class, 'index'])->name('index');
+        Route::get('settings', [MoveAdminController::class, 'settings'])->name('settings');
+        Route::put('settings', [MoveAdminController::class, 'updateSettings'])->name('settings.update');
+        Route::get('deposits', [MoveAdminController::class, 'deposits'])->name('deposits');
+        Route::put('deposits', [MoveAdminController::class, 'updateDeposits'])->name('deposits.update');
+        Route::get('directory', [MoveAdminController::class, 'directory'])->name('directory');
+        Route::get('directory/create', [MoveAdminController::class, 'createListing'])->name('directory.create');
+        Route::post('directory', [MoveAdminController::class, 'storeListing'])->name('directory.store');
+        Route::get('directory/{id}/edit', [MoveAdminController::class, 'editListing'])->name('directory.edit');
+        Route::put('directory/{id}', [MoveAdminController::class, 'updateListing'])->name('directory.update');
+        Route::put('directory/{id}/toggle', [MoveAdminController::class, 'toggleListing'])->name('directory.toggle');
     });
 
     Route::group(['prefix' => 'driver-report', 'as' => 'driver-report.'], function () {

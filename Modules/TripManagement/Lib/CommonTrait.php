@@ -269,6 +269,15 @@ trait CommonTrait
                 $baseFarePerKm = $trip->base_fare_per_km;
                 $baseFare = $trip->base_fare;
                 $extraDiscount = null;
+                // Every type but motor_bike drives (cars, and the E-Ride Move trucks).
+                $isDrive = resolveDrivingMode($trip->vehicleCategory->type)[0] === 'DRIVE';
+                // E-Ride Move: the price is agreed in person, only the deposit is charged.
+                $isMove = $trip->vehicleCategory->isMove();
+                if ($isMove) {
+                    $baseFarePerKm = $baseFare = 0;
+                    $surgePrice = null;
+                    $extraFare = null;
+                }
                 if ($tripRequest['ride_request_type'] == 'scheduled') {
                     $baseFarePerKm = $trip->base_fare_per_km + ($trip->base_fare_per_km * $scheduleTripPercentage / 100);
                     $baseFare = $trip->base_fare + ($trip->base_fare * $scheduleTripPercentage / 100);
@@ -289,7 +298,7 @@ trait CommonTrait
                     }
                 }
 
-                $est_fare = $trip->vehicleCategory->type === 'car' ? round(($baseFare + $drive_fare), $points) : round(($baseFare + $bike_fare), $points);
+                $est_fare = $isDrive ? round(($baseFare + $drive_fare), $points) : round(($baseFare + $bike_fare), $points);
                 $extraEstFareAmount = $surgePriceAmount = 0;
                 if (!empty($extraFare))
                 {
@@ -337,17 +346,19 @@ trait CommonTrait
                     "vehicle_category_id" => $trip->vehicle_category_id,
                     'base_fare' => $baseFare,
                     'base_fare_per_km' => $baseFarePerKm,
-                    'fare' => $trip->VehicleCategory->type === 'car' ? round($drive_fare, 2) : round($bike_fare, 2),
-                    'estimated_distance' => $trip->VehicleCategory->type === 'car' ? $drive_est_distance : $bike_est_distance,
-                    'estimated_duration' => $trip->VehicleCategory->type === 'car' ? $drive_est_duration : $bike_est_duration,
-                    'vehicle_category_type' => $trip->VehicleCategory->type === 'car' ? 'Car' : 'Motorbike',
+                    'fare' => $isMove ? 0 : ($isDrive ? round($drive_fare, 2) : round($bike_fare, 2)),
+                    'estimated_distance' => $isDrive ? $drive_est_distance : $bike_est_distance,
+                    'estimated_duration' => $isDrive ? $drive_est_duration : $bike_est_duration,
+                    'vehicle_category_type' => $isDrive ? 'Car' : 'Motorbike',
+                    'vehicle_type' => $trip->vehicleCategory->type,
+                    'is_move' => $isMove,
                     'estimated_fare' => round($est_fare, $points),
                     'discount_fare' => round($discountEstFare, $points),
                     'discount_amount' => round(($discount ? $discount['discount_amount'] : 0), $points),
                     'coupon_applicable' => $coupon,
                     'request_type' => $tripRequest['type'],
                     'ride_request_type' => $tripRequest['ride_request_type'] ?? null,
-                    'encoded_polyline' => $trip->VehicleCategory->type === 'car' ? $drive_polyline : $bike_polyline,
+                    'encoded_polyline' => $isDrive ? $drive_polyline : $bike_polyline,
                     'return_fee' => 0,
                     // Paid after a driver accepts; it counts toward the fare.
                     'booking_deposit' => app(TripDepositService::class)->amountForCategory($zone->id, $trip->vehicle_category_id),

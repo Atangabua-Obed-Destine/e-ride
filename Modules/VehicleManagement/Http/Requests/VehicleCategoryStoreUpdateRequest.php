@@ -18,7 +18,7 @@ class VehicleCategoryStoreUpdateRequest extends FormRequest
         return [
             'category_name' => 'required|string|min:3|max:255|unique:vehicle_categories,name,' . $id,
             'short_desc' => 'required|max:900',
-            'type' => 'required|in:car,motor_bike',
+            'type' => 'required|in:car,motor_bike,' . implode(',', MOVE_VEHICLE_TYPES),
             'category_image' => [
                 Rule::requiredIf(empty($id)),
                 'image',

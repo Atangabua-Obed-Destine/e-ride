@@ -35,7 +35,9 @@ class VehicleCategoryController extends Controller
         $whereHasRelations = [
             'tripFares' => ['zone_id' => $request->header('zoneId')]
         ];
-        $categories = $this->vehicleCategoryService->getBy(criteria: ['is_active'=>1], whereHasRelations: $whereHasRelations, relations: $relations, limit: $request['limit'], offset: $request['offset']);
+        // E-Ride Move (service=move) lists only the move vehicles; rides never do.
+        $types = $request->query('service') === 'move' ? MOVE_VEHICLE_TYPES : ['car', 'motor_bike'];
+        $categories = $this->vehicleCategoryService->getBy(criteria: ['is_active'=>1], whereInCriteria: ['type' => $types], whereHasRelations: $whereHasRelations, relations: $relations, limit: $request['limit'], offset: $request['offset']);
 
         $data = VehicleCategoryResource::collection($categories);
 

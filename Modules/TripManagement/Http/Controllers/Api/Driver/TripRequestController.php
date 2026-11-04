@@ -806,6 +806,10 @@ class TripRequestController extends Controller
         if ($request->status == CANCELLED) {
             app(TripDepositService::class)->onTripCancelled($trip->id, 'driver', $statusBeforeUpdate);
         }
+        // E-Ride Move: nothing is paid in the app; the deposit is the booking fee.
+        if ($trip->is_move && ($request->status == COMPLETED || ($request->status == CANCELLED && $statusBeforeUpdate == ONGOING))) {
+            app(\Modules\TripManagement\Service\MoveTripService::class)->settle($trip);
+        }
 
         $rebookedTrip = $shouldRebook ? $this->tripRequestService->rebookCancelledTrip($trip, auth('api')->id()) : null;
 
@@ -1136,6 +1140,9 @@ class TripRequestController extends Controller
         $trip = $this->tripRequestService->findOneBy(criteria: ['id' => $request->trip_request_id], relations: ['customer']);
         if (!$trip) {
             return response()->json(responseFormatter(constant: TRIP_REQUEST_404), 403);
+        }
+        if ($trip->is_move) {
+            return response()->json(responseFormatter(DEFAULT_400, errors: [['error_code' => 'move', 'message' => translate('The price of a move is agreed with the customer in person.')]]), 403);
         }
 
         if (!$this->driverAvailabilityScheduleService->isDriverAvailableForTrip($user->id, $trip)) {

@@ -8,6 +8,8 @@ use Modules\TripManagement\Http\Controllers\Api\Customer\TripReportController;
 use Modules\TripManagement\Http\Controllers\Api\Customer\TripRequestController as NewCustomerTripController;
 use Modules\TripManagement\Http\Controllers\Api\Driver\TripRequestController as NewDriverTripController;
 use Modules\TripManagement\Http\Controllers\Api\PaymentController;
+use Modules\TripManagement\Http\Controllers\Api\Customer\MoveController as CustomerMoveController;
+use Modules\TripManagement\Http\Controllers\Api\Driver\MoveController as DriverMoveController;
 
 /**
  * CUSTOMER API LIST
@@ -52,6 +54,13 @@ Route::group(['prefix' => 'customer', 'middleware' => ['auth:api', 'maintenance_
             ->withoutMiddleware('auth:api')
             ->middleware('signed:relative');
     });
+    // E-Ride Move: the trip itself is booked through ride/create.
+    Route::group(['prefix' => 'move'], function () {
+        Route::post('photos', [CustomerMoveController::class, 'photos'])->middleware('throttle:20,1');
+        Route::get('directory', [CustomerMoveController::class, 'directory']);
+        Route::post('directory/{listingId}/contact', [CustomerMoveController::class, 'contact'])->middleware('throttle:30,1');
+        Route::put('{tripId}/no-agreement', [CustomerMoveController::class, 'noAgreement']);
+    });
     Route::get('trip-report/reasons', [TripReportController::class, 'reasons']);
     Route::post('trip-report', [TripReportController::class, 'store'])->middleware('throttle:5,1');
     Route::group(['prefix' => 'parcel'], function () {
@@ -78,6 +87,7 @@ Route::group(['prefix' => 'customer', 'middleware' => ['auth:api', 'maintenance_
  */
 Route::group(['prefix' => 'driver', 'middleware' => ['auth:api', 'maintenance_mode']], function () {
     Route::get('last-ride-details', [NewDriverTripController::class, 'lastRideDetails']);
+    Route::put('move/{tripId}/no-agreement', [DriverMoveController::class, 'noAgreement']);
     Route::group(['prefix' => 'ride', 'middleware' => ['auth:api', 'maintenance_mode']], function () {
         Route::get('final-fare', [NewCustomerTripController::class, 'finalFareCalculation']);
         Route::get('payment', [PaymentController::class, 'payment']);

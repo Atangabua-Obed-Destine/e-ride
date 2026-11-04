@@ -52,6 +52,10 @@ class PaymentController extends Controller
         if (!$trip) {
             return response()->json(responseFormatter(TRIP_REQUEST_404), 403);
         }
+        // E-Ride Move: the price is paid to the driver in person.
+        if ($trip->is_move) {
+            return response()->json(responseFormatter(DEFAULT_400, errors: [['error_code' => 'move', 'message' => translate('A move is paid to the driver in person.')]]), 403);
+        }
         if ($trip->payment_status == PAID) {
 
             return response()->json(responseFormatter(DEFAULT_PAID_200));
@@ -151,6 +155,10 @@ class PaymentController extends Controller
         $trip = $this->tripRequestservice->findOne(id: $request->trip_request_id, relations: ['customer.userAccount', 'fee', 'time', 'driver']);
         if (!$trip) {
             return response()->json(responseFormatter(TRIP_REQUEST_404), 403);
+        }
+        // E-Ride Move: the price is paid to the driver in person.
+        if ($trip->is_move) {
+            return response()->json(responseFormatter(DEFAULT_400, errors: [['error_code' => 'move', 'message' => translate('A move is paid to the driver in person.')]]), 403);
         }
         if ($trip->payment_status == PAID) {
 

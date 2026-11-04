@@ -75,6 +75,9 @@ class TripRequestResource extends JsonResource
             'deposit' => app(TripDepositService::class)->present($this->deposit, $this->resource),
             'amount_due' => $this->amountDueAfterDeposit(),
             'driver_reported' => $this->driverReport()->exists(),
+            // E-Ride Move: no price in the app (agreed in person), photos of the load.
+            'is_move' => (bool)$this->is_move,
+            'move_photos' => app(\Modules\TripManagement\Service\MoveTripService::class)->photoUrls($this->move_photos),
             'coupon_amount' => round((double)$this->coupon_amount, 2),
             'discount' => $this->discount_id === null ? null : DiscountResource::make($this->discount),
             'discount_amount' => $this->discount_amount === null ? null : round((double)$this->discount_amount, 2),

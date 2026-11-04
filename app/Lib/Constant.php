@@ -39,6 +39,8 @@ const ALL = 'all';
 const CUSTOM = 'custom';
 const PARCEL = 'parcel';
 const RIDE_REQUEST = 'ride_request';
+// Vehicle category types for E-Ride Move (goods), besides car and motor_bike.
+const MOVE_VEHICLE_TYPES = ['tricycle', 'pickup', 'dyna', 'truck'];
 const AMOUNT = 'amount';
 const PERCENTAGE = 'percentage';
 

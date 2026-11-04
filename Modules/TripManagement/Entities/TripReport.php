@@ -27,6 +27,10 @@ class TripReport extends Model
         'wrong_driver_or_vehicle' => 'Different driver or vehicle',
         'rude' => 'Rude or disrespectful',
         'unsafe_driving' => 'Unsafe driving',
+        // E-Ride Move
+        'unreasonable_price' => 'Asked an unreasonable price',
+        'damaged_items' => 'Items were damaged',
+        'items_missing' => 'Items are missing',
         'other' => 'Something else',
     ];
 

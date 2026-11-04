@@ -217,6 +217,12 @@
                             <span class="link-title">{{ translate('Booking_Deposits') }}</span>
                         </a>
                     </li>
+                    <li class="{{ Request::is('admin/move*') ? 'active open' : '' }}">
+                        <a href="{{ route('admin.move.index') }}">
+                            <i class="bi bi-truck"></i>
+                            <span class="link-title">{{ translate('E-Ride_Move') }}</span>
+                        </a>
+                    </li>
                     <li class="{{ Request::is('admin/driver-report*') ? 'active open' : '' }}">
                         <a href="{{ route('admin.driver-report.index') }}">
                             <i class="bi bi-flag"></i>

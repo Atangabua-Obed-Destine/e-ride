@@ -66,6 +66,8 @@ class TripRequest extends Model
         'is_parcel_delivery_proof_enabled',
         'ride_request_type',
         'is_female_driver_requested',
+        'is_move',
+        'move_photos',
         'scheduled_at',
         'current_status',
         'is_notification_sent',
@@ -111,6 +113,8 @@ class TripRequest extends Model
         "is_identity_mismatched" => 'boolean',
         "is_female_driver_requested" => 'boolean',
         "is_parcel_delivery_proof_enabled" => 'boolean',
+        "is_move" => 'boolean',
+        "move_photos" => 'array',
     ];
 
     protected static function newFactory()

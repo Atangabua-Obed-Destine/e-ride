@@ -134,8 +134,27 @@ class TripRequestController extends Controller
             return response()->json(responseFormatter(ZONE_404), 403);
         }
 
-        $extraFare = $this->checkZoneExtraFare($zone);
-        $surgePrice = $this->surgePricingService->checkSurgePricing(zoneId: $zone->id, tripType: $request->type, vehicleCategoryId: $request->vehicle_category_id, scheduledAt: $request['scheduled_at']);
+        // E-Ride Move: booked on a move vehicle. E-Ride sets no price, only the deposit is charged.
+        $isMove = $request->type == RIDE_REQUEST && app(\Modules\TripManagement\Service\MoveTripService::class)->isMoveCategory($request->vehicle_category_id);
+        if ($isMove) {
+            $problem = match (true) {
+                !\Modules\TripManagement\Lib\MoveSettings::enabled() => translate('Moves are not available right now.'),
+                $request->ride_request_type == SCHEDULED => translate('Moves can only be booked for now.'),
+                (bool)$request['bid'] || (bool)$request->trip_request_id => translate('The price of a move is agreed with the driver.'),
+                default => null,
+            };
+            if ($problem) {
+                return response()->json(responseFormatter(DEFAULT_400, errors: [['error_code' => 'move', 'message' => $problem]]), 403);
+            }
+            $request->merge([
+                'bid' => 0, 'estimated_fare' => 0, 'actual_fare' => 0, 'extra_estimated_fare' => 0,
+                'extra_fare_fee' => 0, 'extra_fare_amount' => 0, 'surge_multiplier' => 0,
+                'payment_method' => $request->payment_method ?: 'cash',
+            ]);
+        }
+
+        $extraFare = $isMove ? null : $this->checkZoneExtraFare($zone);
+        $surgePrice = $isMove ? null : $this->surgePricingService->checkSurgePricing(zoneId: $zone->id, tripType: $request->type, vehicleCategoryId: $request->vehicle_category_id, scheduledAt: $request['scheduled_at']);
         if (array_key_exists('bid', $request->all()) && $request['bid']) {
             $estimatedFare = $request['actual_fare'];
             $actualFare = $request['actual_fare'];
@@ -180,7 +199,9 @@ class TripRequestController extends Controller
                     'return_fee' => $returnFee,
                     'cancellation_fee' => $cancellationFee,
                     'customer_request_coordinates' => $customer_point,
-                    'rise_request_count' => $riseRequestCount
+                    'rise_request_count' => $riseRequestCount,
+                    'is_move' => $isMove,
+                    'move_photos' => $isMove ? app(\Modules\TripManagement\Service\MoveTripService::class)->validPhotoNames($request->input('move_photos')) : null,
                 ]);
                 $save_trip = $this->tripRequestService->createRideRequest(attributes: $request->all());
             }
@@ -261,9 +282,15 @@ class TripRequestController extends Controller
         }
 
         if ($request->type == 'ride_request') {
+            // E-Ride Move (service=move) lists only the move vehicles; rides never do.
+            $isMove = $request->input('service') === 'move';
+            if ($isMove && !\Modules\TripManagement\Lib\MoveSettings::enabled()) {
+                return response()->json(responseFormatter(NO_ACTIVE_CATEGORY_IN_ZONE_404), 403);
+            }
             $tripFare = $this->tripFareService->getBy(criteria: ['zone_id' => $zone->id], relations: ['vehicleCategory']);
-            $tripFare = $tripFare->filter(function ($item) {
-                return $item->vehicleCategory !== null && $item->vehicleCategory->is_active != 0;
+            $tripFare = $tripFare->filter(function ($item) use ($isMove) {
+                return $item->vehicleCategory !== null && $item->vehicleCategory->is_active != 0
+                    && $item->vehicleCategory->isMove() === $isMove;
             })->values();
             $availableCategories = $tripFare->pluck('vehicleCategory.type')->unique()->toArray();
             if (empty($availableCategories)) {
@@ -301,7 +328,9 @@ class TripRequestController extends Controller
             originCoordinates: $pickupCoordinates,
             destinationCoordinates: $destinationCoordinates,
             intermediateCoordinates: $intermediateCoordinates,
-            drivingMode: $request->type == 'ride_request' ? (count($availableCategories) == 2 ? ["DRIVE", 'TWO_WHEELER'] : ($availableCategories[0] == 'car' ? ['DRIVE'] : ['TWO_WHEELER'])) : ['TWO_WHEELER'],
+            drivingMode: $request->type == 'ride_request'
+                ? collect($availableCategories)->flatMap(fn($type) => resolveDrivingMode($type))->unique()->values()->all()
+                : ['TWO_WHEELER'],
         );
 
         if (array_key_exists('error', $getRoutes)) {
@@ -456,6 +485,14 @@ class TripRequestController extends Controller
         }
         if ($trip->customer_id != auth('api')->id() && $trip->driver_id != auth('api')->id()) {
             return response()->json(responseFormatter(constant: DEFAULT_404), 403);
+        }
+        // E-Ride Move: the price is settled in person; nothing is owed in the app.
+        if ($trip->is_move) {
+            if ($trip->current_status == COMPLETED || ($trip->current_status == CANCELLED && $trip->tripStatus?->ongoing)) {
+                app(\Modules\TripManagement\Service\MoveTripService::class)->settle($trip);
+                $trip->refresh();
+            }
+            return response()->json(responseFormatter(constant: DEFAULT_200, content: new TripRequestResource($trip->append('distance_wise_fare'))));
         }
         if (($trip->discount_amount != null && $trip->discount_amount > 0 && $trip->actual_fare == $trip->discount_amount) || $trip->paid_fare != 0) {
             $tripData = new TripRequestResource($trip->append('distance_wise_fare'));
@@ -1006,6 +1043,11 @@ class TripRequestController extends Controller
         if ($request->status == CANCELLED) {
             // A wrong driver or vehicle is never the customer's fault.
             app(TripDepositService::class)->onTripCancelled($trip->id, 'customer', $statusBeforeUpdate, forceFree: (bool)($attributes['is_identity_mismatched'] ?? false));
+            $trip->unsetRelation('deposit');
+        }
+        if ($trip->is_move && $statusBeforeUpdate == ONGOING && in_array($request->status, [COMPLETED, CANCELLED])) {
+            app(\Modules\TripManagement\Service\MoveTripService::class)->settle($trip);
+            $trip->refresh();
             $trip->unsetRelation('deposit');
         }
 

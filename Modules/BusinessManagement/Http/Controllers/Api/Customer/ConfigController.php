@@ -151,6 +151,12 @@ class ConfigController extends Controller
             'booking_deposit_status' => \Modules\TripManagement\Lib\DepositSettings::enabled(),
             'booking_deposit_window_minutes' => \Modules\TripManagement\Lib\DepositSettings::all()['window_minutes'],
             'booking_deposit_free_cancel_seconds' => \Modules\TripManagement\Lib\DepositSettings::all()['free_cancel_seconds'],
+            // E-Ride Move: trucks booked like rides, price agreed in person.
+            'move_status' => \Modules\TripManagement\Lib\MoveSettings::enabled(),
+            'move_deposit_status' => \Modules\TripManagement\Lib\DepositSettings::move()['status'],
+            'move_deposit_window_minutes' => \Modules\TripManagement\Lib\DepositSettings::move()['window_minutes'],
+            'move_deposit_free_cancel_seconds' => \Modules\TripManagement\Lib\DepositSettings::move()['free_cancel_seconds'],
+            'move_directory_status' => \Modules\TripManagement\Lib\MoveSettings::all()['directory_status'],
             'currency_code' => $info->firstWhere('key_name', 'currency_code')?->value ?? null,
             'currency_symbol' => $info->firstWhere('key_name', 'currency_symbol')?->value ?? '$',
             'currency_symbol_position' => $info->firstWhere('key_name', 'currency_symbol_position')?->value ?? null,
