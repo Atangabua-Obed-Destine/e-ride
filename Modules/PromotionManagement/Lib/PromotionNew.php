@@ -261,6 +261,18 @@ function buildDeviceNotificationPayload($fcm_token, $title, $description, $statu
         ];
     }
 
+    // "The customer paid the booking deposit": the driver app rings briefly
+    // (same call-style alert) so a driver waiting with the phone away knows to
+    // set off. Data-only on Android for the same reason as new requests.
+    if ($action === 'deposit_paid') {
+        unset($payload['message']['notification'], $payload['message']['android']['notification']);
+        $payload['message']['android']['ttl'] = '120s';
+        $payload['message']['apns']['payload']['aps']['alert'] = [
+            'title' => (string)$title,
+            'body' => (string)$description,
+        ];
+    }
+
     return $payload;
 }
 

@@ -286,10 +286,13 @@ class TripDepositService
                 checkReverbConnection() && CustomerDepositPaidEvent::broadcast($trip);
             } catch (Throwable) {
             }
+            // Rings on the driver's phone (data-only push), with a button.
+            $locale = $trip->driver?->current_language_key;
             $this->push($trip->driver, $trip, 'deposit_paid',
                 'Deposit received: go to the pickup',
                 '{customer} paid the {amount} deposit. You can set off now.',
-                ['customer' => trim((string)$trip->customer?->first_name) ?: translate('The customer'), 'amount' => getCurrencyFormat($deposit->amount)]);
+                ['customer' => trim((string)$trip->customer?->first_name) ?: translate('The customer'), 'amount' => getCurrencyFormat($deposit->amount)],
+                ['button' => translate(key: 'Go to pickup', locale: $locale)]);
         });
         return $deposit;
     }
@@ -729,7 +732,7 @@ class TripDepositService
         };
     }
 
-    protected function push(?User $user, TripRequest $trip, string $action, string $title, string $body, array $replace = []): void
+    protected function push(?User $user, TripRequest $trip, string $action, string $title, string $body, array $replace = [], array $extra = []): void
     {
         if (!$user?->fcm_token) {
             return;
@@ -746,6 +749,7 @@ class TripDepositService
                 notification_type: $trip->type == PARCEL ? 'parcel' : 'trip',
                 action: $action,
                 user_id: $user->id,
+                notificationData: $extra ? ['extra' => $extra] : [],
             );
         } catch (Throwable $e) {
             Log::warning('Booking deposit push failed', ['trip' => $trip->id, 'action' => $action, 'error' => $e->getMessage()]);
