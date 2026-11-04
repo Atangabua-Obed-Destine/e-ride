@@ -5142,4 +5142,5 @@
   'Open_driver_reports' => 'Open driver reports',
   'Price_agreed_in_person' => 'Price agreed in person',
   'E-Ride charges only the booking fee. The customer pays the driver the price they agreed.' => 'E-Ride charges only the booking fee. The customer pays the driver the price they agreed.',
+  'Kept_as_booking_fee' => 'Kept as booking fee',
 );

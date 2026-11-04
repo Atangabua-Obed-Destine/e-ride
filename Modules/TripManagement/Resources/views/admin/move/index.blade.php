@@ -82,7 +82,11 @@
                                     <td>
                                         @if ($move->deposit)
                                             <div class="fw-semibold">{{ getCurrencyFormat($move->deposit->amount) }}</div>
-                                            @include('tripmanagement::admin.booking-deposit._status', ['status' => $move->deposit->status])
+                                            @if ($move->deposit->status === 'applied')
+                                                <span class="badge badge-success">{{ translate('Kept_as_booking_fee') }}</span>
+                                            @else
+                                                @include('tripmanagement::admin.booking-deposit._status', ['status' => $move->deposit->status])
+                                            @endif
                                         @else
                                             -
                                         @endif
