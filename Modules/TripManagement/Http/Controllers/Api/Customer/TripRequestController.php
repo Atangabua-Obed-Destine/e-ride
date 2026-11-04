@@ -38,6 +38,7 @@ use Modules\TripManagement\Service\Interfaces\TripRequestServiceInterface;
 use Modules\TripManagement\Service\Interfaces\TripRequestTimeServiceInterface;
 use Modules\TripManagement\Transformers\FareBiddingResource;
 use Modules\TripManagement\Transformers\TripRequestResource;
+use Modules\TripManagement\Service\TripDepositService;
 use Modules\UserManagement\Lib\LevelHistoryManagerTrait;
 use Modules\UserManagement\Service\Interfaces\DriverDetailServiceInterface;
 use Modules\UserManagement\Service\Interfaces\UserServiceInterface;
@@ -667,6 +668,7 @@ class TripRequestController extends Controller
                     $this->fareBiddingService->deleteBy(criteria: ['trip_request_id' => $request['trip_request_id'], ['id' => $all_bidding->id]]);
                 }
             }
+            app(TripDepositService::class)->open($trip->refresh());
             $push = getNotification('bid_accepted');
             sendDeviceNotification(fcm_token: $driver->fcm_token,
                 title: translate(key: $push['title'], locale: $driver?->current_language_key),
@@ -762,6 +764,7 @@ class TripRequestController extends Controller
         }
 
         $identityMismatch = $this->tripRequestService->resolveIdentityMismatch($trip, $request->status, $request['identity_mismatch_reason'] ?? null);
+        $statusBeforeUpdate = $trip->current_status;
 
         $attributes = [
             'trip_status' => $request['status'],
@@ -999,6 +1002,11 @@ class TripRequestController extends Controller
 
         if ($attributes['is_identity_mismatched'] ?? null) {
             $this->tripRequestService->sendIdentityMismatchCancellationPush($trip, $request['identity_mismatch_reason'] ?? []);
+        }
+        if ($request->status == CANCELLED) {
+            // A wrong driver or vehicle is never the customer's fault.
+            app(TripDepositService::class)->onTripCancelled($trip->id, 'customer', $statusBeforeUpdate, forceFree: (bool)($attributes['is_identity_mismatched'] ?? false));
+            $trip->unsetRelation('deposit');
         }
 
         return response()->json(responseFormatter(DEFAULT_UPDATE_200, TripRequestResource::make($trip)));

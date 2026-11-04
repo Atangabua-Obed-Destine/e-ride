@@ -7,6 +7,7 @@ use Modules\FareManagement\Service\SurgePricingService;
 use Modules\TripManagement\Entities\FareBidding;
 use Modules\TripManagement\Entities\TripRequestFee;
 use Modules\TripManagement\Entities\TripRequestTime;
+use Modules\TripManagement\Service\TripDepositService;
 use Modules\TripManagement\Service\TripRequestService;
 
 trait CommonTrait
@@ -93,7 +94,8 @@ trait CommonTrait
                 $actual_fare += $surgeAmount;
             }
 
-            if ($trip->fee->cancelled_by === 'customer') {
+            // With booking deposits on, the deposit replaces the cancellation fee.
+            if ($trip->fee->cancelled_by === 'customer' && !DepositSettings::enabled()) {
                 $cancellation_percent = $fare->cancellation_fee_percent;
                 $cancellation_fee = max((($cancellation_percent * $distance_wise_fare_cancelled) / 100), $fare->min_cancellation_fee);
             }
@@ -347,6 +349,8 @@ trait CommonTrait
                     'ride_request_type' => $tripRequest['ride_request_type'] ?? null,
                     'encoded_polyline' => $trip->VehicleCategory->type === 'car' ? $drive_polyline : $bike_polyline,
                     'return_fee' => 0,
+                    // Paid after a driver accepts; it counts toward the fare.
+                    'booking_deposit' => app(TripDepositService::class)->amountForCategory($zone->id, $trip->vehicle_category_id),
                     'extra_estimated_fare' => round($extraEstFare ?? 0, $points),
                     'extra_discount_fare' => round($extraDiscountEstFare ?? 0, $points),
                     'extra_discount_amount' => round(($extraDiscount ? $extraDiscount['discount_amount'] : 0), $points),

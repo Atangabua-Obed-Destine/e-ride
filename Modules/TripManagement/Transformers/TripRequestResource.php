@@ -8,6 +8,8 @@ use Modules\ParcelManagement\Transformers\InformationResource;
 use Modules\ParcelManagement\Transformers\UserResource;
 use Modules\PromotionManagement\Transformers\CouponResource;
 use Modules\PromotionManagement\Transformers\DiscountResource;
+use Modules\TripManagement\Entities\TripDeposit;
+use Modules\TripManagement\Service\TripDepositService;
 use Modules\UserManagement\Transformers\CustomerResource;
 use Modules\UserManagement\Transformers\DriverResource;
 use Modules\VehicleManagement\Transformers\VehicleModelResource;
@@ -18,6 +20,19 @@ use Modules\ZoneManagement\Transformers\ZoneResource;
 class TripRequestResource extends JsonResource
 {
     public static $key = false;
+
+    /** paid_fare minus the part of the booking deposit that counts toward it. */
+    protected function amountDueAfterDeposit(): float
+    {
+        $fare = (float)$this->paid_fare;
+        $deposit = $this->deposit;
+        $applied = match ($deposit?->status) {
+            TripDeposit::PAID => min($deposit->amount, max(0, $fare)),
+            TripDeposit::APPLIED => $deposit->applied_amount,
+            default => 0,
+        };
+        return round(max(0, $fare - $applied), 2);
+    }
 
     public static function setData($key)
     {
@@ -55,6 +70,11 @@ class TripRequestResource extends JsonResource
             'accepted_by' => $this->accepted_by,
             'payment_status' => $this->payment_status,
             'payment_method' => $this->payment_method,
+            // Booking deposit (null when none), and what is left to pay once
+            // it counts toward the fare.
+            'deposit' => app(TripDepositService::class)->present($this->deposit, $this->resource),
+            'amount_due' => $this->amountDueAfterDeposit(),
+            'driver_reported' => $this->driverReport()->exists(),
             'coupon_amount' => round((double)$this->coupon_amount, 2),
             'discount' => $this->discount_id === null ? null : DiscountResource::make($this->discount),
             'discount_amount' => $this->discount_amount === null ? null : round((double)$this->discount_amount, 2),

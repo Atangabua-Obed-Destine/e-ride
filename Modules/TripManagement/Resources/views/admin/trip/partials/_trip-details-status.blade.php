@@ -8,6 +8,7 @@
 
 @endpush
 <div class="col-lg-4">
+    @include('tripmanagement::admin.booking-deposit._trip-card', ['deposit' => $trip->deposit, 'report' => $trip->driverReport])
     @if(count($safetyAlerts) > 0)
         <div class="max-h-340px overflow-auto mb-3">
             @foreach($safetyAlerts as $safetyAlert)

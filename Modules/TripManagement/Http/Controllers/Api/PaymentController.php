@@ -15,6 +15,7 @@ use Modules\Gateways\Library\Receiver;
 use Modules\Gateways\Traits\Payment;
 use Modules\TransactionManagement\Traits\TransactionTrait;
 use Modules\TripManagement\Service\Interfaces\TripRequestServiceInterface;
+use Modules\TripManagement\Service\TripDepositService;
 use Modules\UserManagement\Service\Interfaces\DriverDetailServiceInterface;
 use Modules\UserManagement\Lib\LevelHistoryManagerTrait;
 use Modules\UserManagement\Lib\LevelUpdateCheckerTrait;
@@ -57,10 +58,18 @@ class PaymentController extends Controller
         }
 
         $tips = 0;
-        DB::beginTransaction();
         if (!is_null($request->tips) && $request->payment_method == 'wallet') {
             $tips = $request->tips;
         }
+        $deposits = app(TripDepositService::class);
+        if ($request->payment_method == 'wallet') {
+            // The paid booking deposit goes back into the wallet for this payment.
+            $due = $deposits->amountDue($trip, $trip->paid_fare + $tips);
+            if (($trip->customer->userAccount->wallet_balance ?? 0) + $due['deposit'] + 0.00001 < $trip->paid_fare + $tips) {
+                return response()->json(responseFormatter(INSUFFICIENT_FUND_403), 403);
+            }
+        }
+        DB::beginTransaction();
         $feeAttributes['tips'] = $tips;
 
         $data = [
@@ -72,16 +81,15 @@ class PaymentController extends Controller
         $trip->fee()->update($feeAttributes);
         $trip = $this->tripRequestservice->update(id: $request->trip_request_id, data: $data);
         if ($request->payment_method == 'wallet') {
-            if ($trip->customer->userAccount->wallet_balance < ($trip->paid_fare)) {
-
-                return response()->json(responseFormatter(INSUFFICIENT_FUND_403), 403);
-            }
             $method = '_wallet_balance';
+            $deposits->applyOnPayment($trip, 'wallet');
             $this->walletTransaction($trip);
         } // driver only make cash payment
         elseif ($request->payment_method == 'cash') {
             $method = '_cash';
             $this->cashTransaction($trip);
+            // The driver collected the fare minus the deposit paid in the app.
+            $deposits->applyOnPayment($trip, 'cash');
         }
 
         $this->customerLevelUpdateChecker($trip->customer);
@@ -160,7 +168,12 @@ class PaymentController extends Controller
 
 
         $trip = $this->tripRequestservice->update(id: $request->trip_request_id, data: $data);
-        $paymentAmount = $trip->paid_fare + $tips;
+        $due = app(TripDepositService::class)->amountDue($trip, $trip->paid_fare + $tips);
+        if ($due['applied'] > 0 && $due['due'] <= 0) {
+            // The deposit covers the whole fare: nothing to charge.
+            return $this->payWithDepositOnly($trip, (float)$tips);
+        }
+        $paymentAmount = $due['due'];
         $customer = $trip->customer;
         $payer = new Payer(
             name: $customer?->first_name,
@@ -195,5 +208,32 @@ class PaymentController extends Controller
         $redirectLink = $this->generate_link($payer, $paymentInfo, $receiverInfo);
 
         return redirect($redirectLink);
+    }
+
+    /**
+     * The booking deposit covers the fare (a coupon, a short trip): settle it
+     * like a wallet payment, with the deposit credited back first, so any
+     * unused part simply stays in the customer's wallet.
+     */
+    protected function payWithDepositOnly($trip, float $tips)
+    {
+        DB::transaction(function () use (&$trip, $tips) {
+            $trip = $this->tripRequestservice->update(id: $trip->id, data: [
+                'payment_method' => 'wallet',
+                'paid_fare' => $trip->paid_fare + $tips,
+                'payment_status' => PAID,
+            ]);
+            $trip->load(['customer.userAccount', 'driver.userAccount', 'fee']);
+            app(TripDepositService::class)->applyOnPayment($trip, 'wallet');
+            $this->walletTransaction($trip);
+        });
+        if (checkReverbConnection()) {
+            try {
+                DriverPaymentReceivedEvent::broadcast($trip);
+                CustomerTripPaymentSuccessfulEvent::broadcast($trip);
+            } catch (Exception $exception) {
+            }
+        }
+        return redirect()->route('payment-success');
     }
 }

@@ -43,6 +43,7 @@ class TripManagementServiceProvider extends ServiceProvider
      */
     public function register()
     {
+        require_once module_path($this->moduleName, 'Lib/deposit_helpers.php');
         $this->app->register(RouteServiceProvider::class);
     }
 

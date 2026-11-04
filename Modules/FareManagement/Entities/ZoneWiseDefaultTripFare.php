@@ -24,6 +24,7 @@ class ZoneWiseDefaultTripFare extends Model
         'penalty_fee_for_cancel',
         'fee_add_to_next',
         'category_wise_different_fare',
+        'booking_deposit',
         'deleted_at',
         'created_at',
         'updated_at',
@@ -38,6 +39,7 @@ class ZoneWiseDefaultTripFare extends Model
         'idle_fee_per_min'=>'double',
         'trip_delay_fee_per_min'=>'double',
         'penalty_fee_for_cancel'=>'double',
+        'booking_deposit'=>'double',
         'fee_add_to_next'=>'double',
         'category_wise_different_fare'=>'integer'
     ];

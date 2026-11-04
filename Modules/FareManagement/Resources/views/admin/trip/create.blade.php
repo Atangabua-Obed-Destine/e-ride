@@ -54,29 +54,20 @@
                                 </div>
                             </div>
                             <div class="col-sm-6 col-lg-4">
-                                <label for="cancellation_fee"
-                                       class="form-label">{{ translate('Cancellation_Fee_(%)') }}</label>
+                                <label for="booking_deposit"
+                                       class="form-label">{{ translate('Booking_Deposit') }} ({{ session()->get('currency_symbol') ?? '$' }})</label>
                                 <div class="input-group_tooltip">
-                                    <input type="number" name="cancellation_fee" min="0" max="100"
-                                           step=".01" class="form-control part-1-input copy-value"
-                                           placeholder="{{ translate('Cancellation_Fee_(%)') }}" id="cancellation_fee"
-                                           value="{{ $defaultTripFare->cancellation_fee_percent ?? 0 }}" required tabindex="4">
-                                    <i class="bi bi-info-circle-fill text-primary tooltip-icon" data-bs-toggle="tooltip"
-                                       data-bs-title="{{ translate('set_the_trip_cancellation_fee_in_percentage_from_the_total_fee_for_the_users_which_will_be_counted_after_exceeding_the_minimum_cancellation_fee') }}"></i>
-                                </div>
-                            </div>
-                            <div class="col-sm-6 col-lg-4">
-                                <label for="min_cancellation_fee"
-                                       class="form-label">{{ translate('Minimum_Cancellation_Fee_($)') }}</label>
-                                <div class="input-group_tooltip">
-                                    <input type="number" name="min_cancellation_fee" step=".01" min="0"
+                                    <input type="number" name="booking_deposit" step=".01" min="0"
                                            max="99999999" class="form-control part-1-input copy-value"
-                                           placeholder="{{ translate('Minimum_Cancellation_Fee_($)') }}"
-                                           id="min_cancellation_fee" value="{{ $defaultTripFare->min_cancellation_fee ?? 0 }}"
-                                           required tabindex="5">
+                                           placeholder="{{ translate('Booking_Deposit') }}"
+                                           id="booking_deposit" value="{{ $defaultTripFare->booking_deposit ?? 500 }}"
+                                           required tabindex="4">
                                     <i class="bi bi-info-circle-fill text-primary tooltip-icon" data-bs-toggle="tooltip"
-                                       data-bs-title="{{ translate('set_the_minimum_cancellation_fee_for_the_users_to_cancel_the_trip') }}"></i>
+                                       data-bs-title="{{ translate('paid_by_the_customer_after_a_driver_accepts_and_before_the_driver_sets_off._it_counts_toward_the_fare._a_customer_who_cancels_late_loses_it._it_replaces_the_cancellation_fee._0_means_no_deposit.') }}"></i>
                                 </div>
+                                {{-- Kept as they were: the deposit replaces the cancellation fee. --}}
+                                <input type="hidden" name="cancellation_fee" value="{{ $defaultTripFare->cancellation_fee_percent ?? 0 }}">
+                                <input type="hidden" name="min_cancellation_fee" value="{{ $defaultTripFare->min_cancellation_fee ?? 0 }}">
                             </div>
                             <div class="col-sm-6 col-lg-4">
                                 <label for="idle_fee" class="form-label">
@@ -211,59 +202,32 @@
                                         <tr>
                                             <td>
                                                 <div class="d-flex align-items-center gap-2 text-primary fw-semibold">
-                                                    <div class="text-capitalize">{{ translate('cancellation_fee') }}
-                                                        (%)
+                                                    <div class="text-capitalize">
+                                                        {{ translate('booking_deposit') }}
+                                                        ({{ session()->get('currency_symbol') ?? '$' }})
                                                     </div>
                                                     <i class="bi bi-info-circle-fill fs-14" data-bs-toggle="tooltip"
-                                                       data-bs-title="{{ translate('set_the_trip_cancellation_fee_(in_percentage_of_the_total_trip_fee)_here._') .
-                                                                translate('if_the_user_cancels_the_trip_they_must_pay_this_fee.') }}">
+                                                       data-bs-title="{{ translate('paid_by_the_customer_after_a_driver_accepts._it_counts_toward_the_fare._0_means_no_deposit_for_this_category.') }}">
                                                     </i>
                                                 </div>
                                             </td>
                                             <td>
                                                 <input readonly type="number"
-                                                       value="{{ $defaultTripFare->cancellation_fee_percent ?? 0 }}"
-                                                       class="form-control cancellation_fee_default" tabindex="13">
+                                                       value="{{ $defaultTripFare->booking_deposit ?? 500 }}"
+                                                       class="form-control booking_deposit_default" tabindex="13">
                                             </td>
                                             @forelse($vehicleCategories as $vehicleCategory)
                                                 @php($trip = $tripFares?->firstWhere('vehicle_category_id', $vehicleCategory->id))
                                                 <td
                                                     class="{{ $vehicleCategory->id }} {{ $vehicleCategory->id == $trip?->vehicle_category_id ? '' : 'd-none' }}">
-                                                    <input type="number" step=".01" min="0"
-                                                           max="100"
-                                                           name="cancellation_fee_{{ $vehicleCategory->id }}"
-                                                           value="{{ $trip?->cancellation_fee_percent ? round($trip->cancellation_fee_percent, 2) : $defaultTripFare->cancellation_fee_percent ?? 0  }}"
-                                                           class="form-control cancellation_fee_default part-2-input {{ $vehicleCategory->id }}"
-                                                         tabindex="14">
-                                                </td>
-                                            @empty
-                                            @endforelse
-                                        </tr>
-                                        <tr>
-                                            <td>
-                                                <div class="d-flex align-items-center gap-2 text-primary fw-semibold">
-                                                    <div class="text-capitalize">
-                                                        {{ translate('minimum_cancellation_fee') }}
-                                                        ({{ session()->get('currency_symbol') ?? '$' }})
-                                                    </div>
-                                                    <i class="bi bi-info-circle-fill fs-14" data-bs-toggle="tooltip"
-                                                       data-bs-title="{{ translate('set_the_minimum_trip_cancellation_fee_here._') .
-                                                                translate('if_the_user_cancels_the_trip_they_must_pay_this_fee.') }}">
-                                                    </i>
-                                                </div>
-                                            </td>
-                                            <td><input readonly type="number"
-                                                       value="{{ $defaultTripFare->min_cancellation_fee ?? 0 }}"
-                                                       class="form-control min_cancellation_fee_default" tabindex="15">
-                                            @forelse($vehicleCategories as $vehicleCategory)
-                                                @php($trip = $tripFares?->where('vehicle_category_id', $vehicleCategory->id)->first())
-                                                <td
-                                                    class="{{ $vehicleCategory->id }} {{ $vehicleCategory->id == $trip?->vehicle_category_id ? '' : 'd-none' }}">
                                                     <input type="number" step=".01" min="0" max="99999999"
-                                                           name="min_cancellation_fee_{{ $vehicleCategory->id }}"
-                                                           value="{{ $trip?->min_cancellation_fee ? round($trip->min_cancellation_fee, 2) : $defaultTripFare->min_cancellation_fee ?? 0 }}"
-                                                           class="form-control min_cancellation_fee_default part-2-input {{ $vehicleCategory->id }}"
-                                                         tabindex="16">
+                                                           name="booking_deposit_{{ $vehicleCategory->id }}"
+                                                           value="{{ $trip ? round($trip->booking_deposit, 2) : $defaultTripFare->booking_deposit ?? 500 }}"
+                                                           class="form-control booking_deposit_default part-2-input {{ $vehicleCategory->id }}"
+                                                         tabindex="14">
+                                                    {{-- Kept as they were: the deposit replaces the cancellation fee. --}}
+                                                    <input type="hidden" name="cancellation_fee_{{ $vehicleCategory->id }}" value="{{ $trip?->cancellation_fee_percent ?? $defaultTripFare->cancellation_fee_percent ?? 0 }}">
+                                                    <input type="hidden" name="min_cancellation_fee_{{ $vehicleCategory->id }}" value="{{ $trip?->min_cancellation_fee ?? $defaultTripFare->min_cancellation_fee ?? 0 }}">
                                                 </td>
                                             @empty
                                             @endforelse

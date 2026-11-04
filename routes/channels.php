@@ -43,6 +43,8 @@ Broadcast::channel('customer-coupon-applied.{id}', \App\Broadcasting\CustomerCou
 Broadcast::channel('customer-coupon-removed.{id}', \App\Broadcasting\CustomerCouponRemovedChannel::class);
 Broadcast::channel('customer-trip-request.{id}', \App\Broadcasting\CustomerTripRequestChannel::class);
 Broadcast::channel('customer-trip-payment-successful.{id}', \App\Broadcasting\CustomerTripPaymentSuccessfulChannel::class);
+Broadcast::channel('customer-deposit-paid.{id}', \App\Broadcasting\CustomerDepositPaidChannel::class);
+Broadcast::channel('trip-deposit-expired.{id}', \App\Broadcasting\TripDepositExpiredChannel::class);
 Broadcast::channel('driver-pending-trips-cancelled.{tripId}.{userId}', \App\Broadcasting\DriverPendingTripsCancelledChannel::class);
 Broadcast::channel('store-driver-last-location', function ($user) {
     info("data");

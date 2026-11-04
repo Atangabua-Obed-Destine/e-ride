@@ -54,6 +54,9 @@ if (!function_exists('tripRequestUpdate'))
             }
         }
 
+        // The gateway charged the fare minus the booking deposit; the ledger
+        // books the whole fare, since E-Ride holds both.
+        app(\Modules\TripManagement\Service\TripDepositService::class)->applyOnPayment($trip, 'digital');
         (new class {
             use TransactionTrait;
         })->digitalPaymentTransaction($trip);

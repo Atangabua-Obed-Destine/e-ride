@@ -27,6 +27,7 @@ class TripFare extends Model
         'trip_delay_fee_per_min',
         'penalty_fee_for_cancel',
         'fee_add_to_next',
+        'booking_deposit',
         'created_at',
         'updated_at',
     ];
@@ -41,6 +42,7 @@ class TripFare extends Model
         'trip_delay_fee_per_min' => 'float',
         'penalty_fee_for_cancel' => 'float',
         'fee_add_to_next' => 'float',
+        'booking_deposit' => 'float',
     ];
 
     public function zone()

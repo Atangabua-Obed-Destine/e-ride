@@ -218,6 +218,16 @@ class TripRequest extends Model
         return $this->hasOne(ParcelRefund::class, 'trip_request_id');
     }
 
+    public function deposit()
+    {
+        return $this->hasOne(TripDeposit::class, 'trip_request_id');
+    }
+
+    public function driverReport()
+    {
+        return $this->hasOne(TripReport::class, 'trip_request_id');
+    }
+
     public function time()
     {
         return $this->hasOne(TripRequestTime::class, 'trip_request_id');

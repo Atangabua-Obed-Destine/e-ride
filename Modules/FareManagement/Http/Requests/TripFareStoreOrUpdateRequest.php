@@ -22,6 +22,7 @@ class TripFareStoreOrUpdateRequest extends FormRequest
             'trip_delay_fee' => 'nullable|gte:0',
             'penalty_fee_for_cancel' => 'nullable|gte:0',
             'fee_add_to_next' => 'nullable|gte:0',
+            'booking_deposit' => 'nullable|gte:0',
         ];
     }
 

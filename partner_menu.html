@@ -1,0 +1,310 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+    <meta name="csrf-token" content="iUcajOj6wy0Ra5PNw3gBp0ZmQZXNS0tPJValuiFQ">
+    <meta name="robots" content="noindex">
+    <meta name="theme-color" content="#111114">
+    <title>Menu · E-Ride Partner</title>
+    <link rel="icon" href="http://localhost/public/assets/admin-module/img/favicon.png">
+    <link rel="stylesheet" href="http://localhost/public/assets/admin-module/css/bootstrap.min.css">
+    <link rel="stylesheet" href="http://localhost/public/assets/admin-module/css/bootstrap-icons.min.css">
+    <style>
+        :root { --red: #e02020; --red-soft: rgba(224, 32, 32, .08); --ink: #141416; --muted: #6b6b76; --line: #e7e7ec; --bg: #f4f4f6; --ok: #12a150; --warn: #c27a00; }
+        * { -webkit-tap-highlight-color: transparent; }
+        html, body { background: var(--bg); color: var(--ink); }
+        body { font: 15px/1.45 -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; padding-bottom: calc(76px + env(safe-area-inset-bottom)); }
+        .p-top { position: sticky; top: 0; z-index: 30; background: #111114; color: #fff; padding: 10px 16px; padding-top: calc(10px + env(safe-area-inset-top)); display: flex; align-items: center; gap: 12px; }
+        .p-top__logo { width: 36px; height: 36px; border-radius: 10px; object-fit: cover; background: #26262c; flex: none; }
+        .p-top__name { font-weight: 800; font-size: 16px; line-height: 1.15; min-width: 0; }
+        .p-top__name small { display: block; font-weight: 500; font-size: 12px; color: #a3a3ad; }
+        .p-open { margin-left: auto; display: inline-flex; align-items: center; gap: 8px; border: 0; border-radius: 999px; padding: 8px 14px; font-weight: 800; font-size: 14px; cursor: pointer; }
+        .p-open.is-open { background: var(--ok); color: #fff; }
+        .p-open.is-closed { background: #3a3a42; color: #d5d5dc; }
+        .p-open i { font-size: 10px; }
+        .p-main { max-width: 1100px; margin: 0 auto; padding: 16px; }
+        .p-nav { position: fixed; left: 0; right: 0; bottom: 0; z-index: 30; background: #fff; border-top: 1px solid var(--line); display: flex; padding-bottom: env(safe-area-inset-bottom); }
+        .p-nav a { flex: 1; display: flex; flex-direction: column; align-items: center; gap: 2px; padding: 9px 4px 10px; font-size: 12px; font-weight: 600; color: var(--muted); text-decoration: none; position: relative; }
+        .p-nav a i { font-size: 20px; }
+        .p-nav a.active { color: var(--red); }
+        .p-nav .p-badge { position: absolute; top: 4px; left: calc(50% + 6px); background: var(--red); color: #fff; border-radius: 999px; font-size: 11px; min-width: 18px; height: 18px; padding: 0 5px; display: none; align-items: center; justify-content: center; font-weight: 800; }
+        .p-card { background: #fff; border: 1px solid var(--line); border-radius: 16px; }
+        .btn { border-radius: 12px; font-weight: 700; }
+        .btn-primary { background: var(--red); border-color: var(--red); }
+        .btn-primary:hover, .btn-primary:focus { background: #c41a1a; border-color: #c41a1a; }
+        .btn-outline-primary { color: var(--red); border-color: var(--red); }
+        .btn-outline-primary:hover { background: var(--red); border-color: var(--red); }
+        .form-control, .form-select { border-radius: 12px; min-height: 44px; }
+        .text-primary { color: var(--red) !important; }
+        .switcher { position: relative; display: inline-block; width: 46px; height: 26px; }
+        .switcher_input { opacity: 0; width: 0; height: 0; position: absolute; }
+        .switcher_control { position: absolute; inset: 0; background: #cfcfd6; border-radius: 999px; transition: .2s; cursor: pointer; }
+        .switcher_control::after { content: ''; position: absolute; width: 20px; height: 20px; left: 3px; top: 3px; background: #fff; border-radius: 50%; transition: .2s; }
+        .switcher_input:checked + .switcher_control { background: var(--ok); }
+        .switcher_input:checked + .switcher_control::after { transform: translateX(20px); }
+        .p-toast { position: fixed; left: 50%; bottom: calc(90px + env(safe-area-inset-bottom)); transform: translateX(-50%); background: #111114; color: #fff; padding: 10px 16px; border-radius: 12px; font-weight: 600; z-index: 60; max-width: calc(100% - 32px); box-shadow: 0 10px 30px rgba(0,0,0,.25); }
+        @media (min-width: 900px) {
+            body { padding-bottom: 0; }
+            .p-nav { position: sticky; top: 56px; bottom: auto; border-top: 0; border-bottom: 1px solid var(--line); justify-content: center; gap: 8px; }
+            .p-nav a { flex: none; flex-direction: row; gap: 8px; padding: 12px 18px; font-size: 14px; }
+            .p-nav a i { font-size: 17px; }
+            .p-nav .p-badge { position: static; }
+            .p-toast { bottom: 24px; }
+        }
+    </style>
+    </head>
+<body>
+<header class="p-top">
+    <img class="p-top__logo" src="http://localhost/public/assets/admin-module/img/favicon.png" alt="">
+    <div class="p-top__name text-truncate">
+        ROMZ (test)
+        <small>E-Ride Partner</small>
+    </div>
+    <button type="button" class="p-open is-open" data-open-toggle data-url="http://localhost/partner/store/open" data-open="1" aria-pressed="true">
+        <i class="bi bi-circle-fill"></i><span data-open-label>Open</span>
+    </button>
+    <form action="http://localhost/partner/logout" method="POST" class="m-0">
+        <input type="hidden" name="_token" value="iUcajOj6wy0Ra5PNw3gBp0ZmQZXNS0tPJValuiFQ" autocomplete="off">        <button type="submit" class="btn btn-sm text-white-50 px-1" title="Sign out" aria-label="Sign out"><i class="bi bi-box-arrow-right fs-5"></i></button>
+    </form>
+</header>
+
+<nav class="p-nav" aria-label="Partner menu">
+    <a href="http://localhost/partner" class=""><i class="bi bi-receipt"></i>Orders<span class="p-badge" data-new-badge></span></a>
+    <a href="http://localhost/partner/menu" class="active"><i class="bi bi-card-list"></i>Menu</a>
+    <a href="http://localhost/partner/store" class=""><i class="bi bi-shop"></i>Store</a>
+    <a href="http://localhost/partner/earnings" class=""><i class="bi bi-wallet2"></i>Earnings</a>
+</nav>
+
+<main class="p-main">
+            <div class="d-flex align-items-center justify-content-between mb-1">
+        <h1 class="fs-4 fw-bold m-0">Menu</h1>
+    </div>
+    <p class="text-muted fs-14 mb-3">Switch an item off when it runs out. Customers see the change immediately.</p>
+        <div class="store-menu">
+    <div class="d-flex flex-wrap gap-2 align-items-center justify-content-between mb-3">
+        <form action="http://localhost/partner/menu/category" method="POST" class="d-flex gap-2 flex-grow-1" style="max-width: 420px">
+            <input type="hidden" name="_token" value="iUcajOj6wy0Ra5PNw3gBp0ZmQZXNS0tPJValuiFQ" autocomplete="off">            <input type="text" name="name" class="form-control" required maxlength="80" placeholder="New section, e.g. Rice dishes">
+            <button type="submit" class="btn btn-outline-primary text-nowrap">Add section</button>
+        </form>
+        <button type="button" class="btn btn-primary" data-menu-item-new><i class="bi bi-plus-lg"></i> Add item</button>
+    </div>
+
+    
+                    <div class="card mb-3">
+            <div class="card-header d-flex align-items-center justify-content-between gap-2 py-2">
+                                    <span class="fw-semibold">Menu</span>
+                            </div>
+            <div class="list-group list-group-flush">
+                                    <div class="list-group-item d-flex align-items-center gap-3 py-3 ">
+                                                    <span class="rounded bg-light d-inline-flex align-items-center justify-content-center flex-shrink-0 text-muted" style="width:56px;height:56px"><i class="bi bi-image fs-4"></i></span>
+                                                <div class="flex-grow-1" style="min-width: 0">
+                            <div class="fw-semibold text-truncate">Chapman</div>
+                                                        <div class="fw-bold mt-1">FCFA 700</div>
+                        </div>
+                        <div class="d-flex flex-column align-items-end gap-2 flex-shrink-0">
+                            <label class="d-flex align-items-center gap-2 fs-12 text-muted mb-0" title="Available">
+                                <span data-availability-label>Available</span>
+                                <span class="switcher">
+                                    <input class="switcher_input" type="checkbox" data-menu-availability="http://localhost/partner/menu/item/0e76cf64-0d15-4e02-acbd-7ec64af53128/availability" checked>
+                                    <span class="switcher_control"></span>
+                                </span>
+                            </label>
+                            <div class="d-flex gap-1">
+                                <button type="button" class="btn btn-sm btn-light" title="Edit" aria-label="Edit Chapman"
+                                        data-menu-item-edit
+                                        data-action="http://localhost/partner/menu/item/0e76cf64-0d15-4e02-acbd-7ec64af53128"
+                                        data-item="{&quot;name&quot;:&quot;Chapman&quot;,&quot;description&quot;:null,&quot;price&quot;:700,&quot;store_menu_category_id&quot;:null,&quot;is_available&quot;:true}">
+                                    <i class="bi bi-pencil"></i>
+                                </button>
+                                <form action="http://localhost/partner/menu/item/0e76cf64-0d15-4e02-acbd-7ec64af53128" method="POST" class="m-0" onsubmit='return confirm("Remove this item from the menu ")'>
+                                    <input type="hidden" name="_token" value="iUcajOj6wy0Ra5PNw3gBp0ZmQZXNS0tPJValuiFQ" autocomplete="off"> <input type="hidden" name="_method" value="DELETE">                                    <button type="submit" class="btn btn-sm btn-light text-danger" title="Delete" aria-label="Delete Chapman"><i class="bi bi-trash"></i></button>
+                                </form>
+                            </div>
+                        </div>
+                    </div>
+                                    <div class="list-group-item d-flex align-items-center gap-3 py-3 ">
+                                                    <span class="rounded bg-light d-inline-flex align-items-center justify-content-center flex-shrink-0 text-muted" style="width:56px;height:56px"><i class="bi bi-image fs-4"></i></span>
+                                                <div class="flex-grow-1" style="min-width: 0">
+                            <div class="fw-semibold text-truncate">Jollof rice</div>
+                                                        <div class="fw-bold mt-1">FCFA 1,500</div>
+                        </div>
+                        <div class="d-flex flex-column align-items-end gap-2 flex-shrink-0">
+                            <label class="d-flex align-items-center gap-2 fs-12 text-muted mb-0" title="Available">
+                                <span data-availability-label>Available</span>
+                                <span class="switcher">
+                                    <input class="switcher_input" type="checkbox" data-menu-availability="http://localhost/partner/menu/item/5ce0d90f-56d2-4d02-8eb5-535880734105/availability" checked>
+                                    <span class="switcher_control"></span>
+                                </span>
+                            </label>
+                            <div class="d-flex gap-1">
+                                <button type="button" class="btn btn-sm btn-light" title="Edit" aria-label="Edit Jollof rice"
+                                        data-menu-item-edit
+                                        data-action="http://localhost/partner/menu/item/5ce0d90f-56d2-4d02-8eb5-535880734105"
+                                        data-item="{&quot;name&quot;:&quot;Jollof rice&quot;,&quot;description&quot;:null,&quot;price&quot;:1500,&quot;store_menu_category_id&quot;:null,&quot;is_available&quot;:true}">
+                                    <i class="bi bi-pencil"></i>
+                                </button>
+                                <form action="http://localhost/partner/menu/item/5ce0d90f-56d2-4d02-8eb5-535880734105" method="POST" class="m-0" onsubmit='return confirm("Remove this item from the menu ")'>
+                                    <input type="hidden" name="_token" value="iUcajOj6wy0Ra5PNw3gBp0ZmQZXNS0tPJValuiFQ" autocomplete="off"> <input type="hidden" name="_method" value="DELETE">                                    <button type="submit" class="btn btn-sm btn-light text-danger" title="Delete" aria-label="Delete Jollof rice"><i class="bi bi-trash"></i></button>
+                                </form>
+                            </div>
+                        </div>
+                    </div>
+                                    <div class="list-group-item d-flex align-items-center gap-3 py-3 opacity-75">
+                                                    <span class="rounded bg-light d-inline-flex align-items-center justify-content-center flex-shrink-0 text-muted" style="width:56px;height:56px"><i class="bi bi-image fs-4"></i></span>
+                                                <div class="flex-grow-1" style="min-width: 0">
+                            <div class="fw-semibold text-truncate">Ndole</div>
+                                                        <div class="fw-bold mt-1">FCFA 2,500</div>
+                        </div>
+                        <div class="d-flex flex-column align-items-end gap-2 flex-shrink-0">
+                            <label class="d-flex align-items-center gap-2 fs-12 text-muted mb-0" title="Available">
+                                <span data-availability-label>Sold out</span>
+                                <span class="switcher">
+                                    <input class="switcher_input" type="checkbox" data-menu-availability="http://localhost/partner/menu/item/2d07b5cd-d9cc-41fd-9c15-30284694b4c5/availability" >
+                                    <span class="switcher_control"></span>
+                                </span>
+                            </label>
+                            <div class="d-flex gap-1">
+                                <button type="button" class="btn btn-sm btn-light" title="Edit" aria-label="Edit Ndole"
+                                        data-menu-item-edit
+                                        data-action="http://localhost/partner/menu/item/2d07b5cd-d9cc-41fd-9c15-30284694b4c5"
+                                        data-item="{&quot;name&quot;:&quot;Ndole&quot;,&quot;description&quot;:null,&quot;price&quot;:2500,&quot;store_menu_category_id&quot;:null,&quot;is_available&quot;:false}">
+                                    <i class="bi bi-pencil"></i>
+                                </button>
+                                <form action="http://localhost/partner/menu/item/2d07b5cd-d9cc-41fd-9c15-30284694b4c5" method="POST" class="m-0" onsubmit='return confirm("Remove this item from the menu ")'>
+                                    <input type="hidden" name="_token" value="iUcajOj6wy0Ra5PNw3gBp0ZmQZXNS0tPJValuiFQ" autocomplete="off"> <input type="hidden" name="_method" value="DELETE">                                    <button type="submit" class="btn btn-sm btn-light text-danger" title="Delete" aria-label="Delete Ndole"><i class="bi bi-trash"></i></button>
+                                </form>
+                            </div>
+                        </div>
+                    </div>
+                            </div>
+        </div>
+    </div>
+
+<div class="modal fade" id="menu-item-modal" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered">
+        <form class="modal-content" method="POST" enctype="multipart/form-data" data-new-action="http://localhost/partner/menu/item">
+            <input type="hidden" name="_token" value="iUcajOj6wy0Ra5PNw3gBp0ZmQZXNS0tPJValuiFQ" autocomplete="off">            <div class="modal-header">
+                <h5 class="modal-title" data-modal-title data-new="Add item" data-edit="Edit item">Add item</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body">
+                <div class="mb-3">
+                    <label class="form-label">Name *</label>
+                    <input type="text" name="name" class="form-control" required maxlength="120">
+                </div>
+                <div class="row g-3 mb-3">
+                    <div class="col-6">
+                        <label class="form-label">Price (FCFA) *</label>
+                        <input type="number" name="price" class="form-control" required min="1" step="1">
+                    </div>
+                    <div class="col-6">
+                        <label class="form-label">Section</label>
+                        <select name="store_menu_category_id" class="form-select">
+                            <option value="">Other</option>
+                                                    </select>
+                    </div>
+                </div>
+                <div class="mb-3">
+                    <label class="form-label">Description</label>
+                    <textarea name="description" class="form-control" rows="2" maxlength="500" placeholder="What is in it, portion size"></textarea>
+                </div>
+                <div class="mb-3">
+                    <label class="form-label">Photo</label>
+                    <input type="file" name="image" class="form-control" accept="image/*">
+                </div>
+                <label class="d-flex align-items-center gap-2">
+                    <input type="hidden" name="is_available" value="0">
+                    <input type="checkbox" name="is_available" value="1" checked>
+                    Available now
+                </label>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-light" data-bs-dismiss="modal">Cancel</button>
+                <button type="submit" class="btn btn-primary">Save</button>
+            </div>
+        </form>
+    </div>
+</div>
+
+</main>
+
+<script src="http://localhost/public/assets/admin-module/js/bootstrap.bundle.min.js"></script>
+<script>
+    window.partnerToast = function (text) {
+        var el = document.createElement('div');
+        el.className = 'p-toast'; el.setAttribute('role', 'status'); el.textContent = text;
+        document.body.appendChild(el);
+        setTimeout(function () { el.remove(); }, 3200);
+    };
+    window.partnerPost = function (url, body) {
+        return fetch(url, {
+            method: 'POST',
+            headers: {'X-CSRF-TOKEN': document.querySelector('meta[name=csrf-token]').content, 'Accept': 'application/json', 'Content-Type': 'application/json'},
+            body: JSON.stringify(body || {})
+        }).then(function (r) {
+            if (r.status === 401 || r.status === 419) { window.location.reload(); throw new Error('session'); }
+            return r.json().then(function (d) { d._status = r.status; return d; });
+        });
+    };
+    (function () {
+        var btn = document.querySelector('[data-open-toggle]');
+        btn.addEventListener('click', function () {
+            var next = btn.dataset.open === '1' ? 0 : 1;
+            if (!next && !confirm("Close the store  Customers will not be able to order until you open it again.")) return;
+            partnerPost(btn.dataset.url, {is_open: next}).then(function (d) {
+                btn.dataset.open = d.is_open ? '1' : '0';
+                btn.classList.toggle('is-open', !!d.is_open);
+                btn.classList.toggle('is-closed', !d.is_open);
+                btn.setAttribute('aria-pressed', d.is_open ? 'true' : 'false');
+                btn.querySelector('[data-open-label]').textContent = d.is_open ? "Open" : "Closed";
+                partnerToast(d.is_open
+                    ? (d.open_now ? "Open: customers can order now." : "Switched open, but outside your opening hours.")
+                    : "Closed: no new orders.");
+            }).catch(function () { partnerToast("Could not save. Check your connection."); });
+        });
+    })();
+</script>
+<script>
+(function () {
+    var modalEl = document.getElementById('menu-item-modal');
+    var form = modalEl.querySelector('form');
+    var title = modalEl.querySelector('[data-modal-title]');
+    var modal = new bootstrap.Modal(modalEl);
+    function open(action, item) {
+        form.reset();
+        form.action = action;
+        title.textContent = item ? title.dataset.edit : title.dataset.new;
+        if (item) {
+            form.name.value = item.name || '';
+            form.price.value = Math.round(item.price || 0);
+            form.description.value = item.description || '';
+            form.store_menu_category_id.value = item.store_menu_category_id || '';
+            form.querySelector('input[type=checkbox][name=is_available]').checked = !!item.is_available;
+        }
+        modal.show();
+    }
+    document.querySelector('[data-menu-item-new]').addEventListener('click', function () { open(form.dataset.newAction, null); });
+    document.querySelectorAll('[data-menu-item-edit]').forEach(function (b) {
+        b.addEventListener('click', function () { open(b.dataset.action, JSON.parse(b.dataset.item)); });
+    });
+    var token = form.querySelector('input[name=_token]').value;
+    document.querySelectorAll('[data-menu-availability]').forEach(function (input) {
+        input.addEventListener('change', function () {
+            var label = input.closest('label').querySelector('[data-availability-label]');
+            fetch(input.dataset.menuAvailability, {
+                method: 'POST',
+                headers: {'X-CSRF-TOKEN': token, 'Accept': 'application/json', 'Content-Type': 'application/json'},
+                body: JSON.stringify({is_available: input.checked ? 1 : 0})
+            }).then(function (r) { if (!r.ok) throw r; return r.json(); })
+              .then(function (d) {
+                  label.textContent = d.is_available ? "Available" : "Sold out";
+                  input.closest('.list-group-item').classList.toggle('opacity-75', !d.is_available);
+              })
+              .catch(function () { input.checked = !input.checked; alert("Could not save. Check your connection and try again."); });
+        });
+    });
+})();
+</script>
+</body>
+</html>

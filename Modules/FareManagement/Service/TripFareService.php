@@ -37,6 +37,7 @@ class TripFareService extends BaseService implements TripFareServiceInterface
             "trip_delay_fee_per_min" => $data['trip_delay_fee'] ?? 0,
             "penalty_fee_for_cancel" => 0,
             "fee_add_to_next" => 0,
+            "booking_deposit" => $data['booking_deposit'] ?? 0,
             "category_wise_different_fare" => array_key_exists('category_wise_different_fare', $data) ? 1 : 0,
         ];
         if ($data['default_fare_id']) {
@@ -69,6 +70,7 @@ class TripFareService extends BaseService implements TripFareServiceInterface
                         "trip_delay_fee_per_min" => $data['trip_delay_fee'] ?? 0,
                         "penalty_fee_for_cancel" => $data['trip_delay_fee'] ?? 0,
                         "fee_add_to_next" => $data['trip_delay_fee'] ?? 0,
+                        "booking_deposit" => $data['booking_deposit'] ?? 0,
                     ];
 
                 } else {
@@ -85,6 +87,7 @@ class TripFareService extends BaseService implements TripFareServiceInterface
                         "trip_delay_fee_per_min" => $data['trip_delay_fee_' . $vehicleCategories->id] ?? 0,
                         "penalty_fee_for_cancel" => $data['penalty_fee_for_cancel_' . $vehicleCategories->id] ?? 0,
                         "fee_add_to_next" => $data['fee_add_to_next_' . $vehicleCategories->id] ?? 0,
+                        "booking_deposit" => $data['booking_deposit_' . $vehicleCategories->id] ?? ($data['booking_deposit'] ?? 0),
                     ];
                 }
                 $last_query = $this->tripFareRepository->create($tripFareData);

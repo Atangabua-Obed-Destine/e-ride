@@ -3,6 +3,8 @@
 use Illuminate\Support\Facades\Route;
 use Modules\TripManagement\Http\Controllers\Api\Customer\ParcelRefundController;
 use Modules\TripManagement\Http\Controllers\Api\Customer\SafetyAlertController;
+use Modules\TripManagement\Http\Controllers\Api\Customer\TripDepositController;
+use Modules\TripManagement\Http\Controllers\Api\Customer\TripReportController;
 use Modules\TripManagement\Http\Controllers\Api\Customer\TripRequestController as NewCustomerTripController;
 use Modules\TripManagement\Http\Controllers\Api\Driver\TripRequestController as NewDriverTripController;
 use Modules\TripManagement\Http\Controllers\Api\PaymentController;
@@ -40,7 +42,18 @@ Route::group(['prefix' => 'customer', 'middleware' => ['auth:api', 'maintenance_
         Route::post('track-location', [NewDriverTripController::class, 'trackLocation']);
         Route::get('payment', [PaymentController::class, 'payment']);
         Route::get('digital-payment', [PaymentController::class, 'digitalPayment'])->withoutMiddleware('auth:api');
+
+        // Booking deposit, paid after a driver accepts.
+        Route::get('deposit/{tripId}', [TripDepositController::class, 'show']);
+        Route::post('deposit/{tripId}/wallet', [TripDepositController::class, 'payWithWallet'])->middleware('throttle:10,1');
+        Route::get('deposit/{tripId}/pay-url', [TripDepositController::class, 'payUrl'])->middleware('throttle:10,1');
+        Route::get('deposit-pay/{deposit}', [TripDepositController::class, 'pay'])
+            ->name('trip-deposit.pay')
+            ->withoutMiddleware('auth:api')
+            ->middleware('signed:relative');
     });
+    Route::get('trip-report/reasons', [TripReportController::class, 'reasons']);
+    Route::post('trip-report', [TripReportController::class, 'store'])->middleware('throttle:5,1');
     Route::group(['prefix' => 'parcel'], function () {
         Route::controller(ParcelRefundController::class)->group(function () {
             Route::group(['prefix' => 'refund'], function () {

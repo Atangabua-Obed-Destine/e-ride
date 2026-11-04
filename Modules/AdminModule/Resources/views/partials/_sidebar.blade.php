@@ -211,6 +211,22 @@
 
                         </a>
                     </li>
+                    <li class="{{ Request::is('admin/booking-deposit*') ? 'active open' : '' }}">
+                        <a href="{{ route('admin.booking-deposit.index') }}">
+                            <i class="bi bi-wallet2"></i>
+                            <span class="link-title">{{ translate('Booking_Deposits') }}</span>
+                        </a>
+                    </li>
+                    <li class="{{ Request::is('admin/driver-report*') ? 'active open' : '' }}">
+                        <a href="{{ route('admin.driver-report.index') }}">
+                            <i class="bi bi-flag"></i>
+                            <span class="link-title">{{ translate('Driver_Reports') }}</span>
+                            @php($openDriverReports = \Modules\TripManagement\Entities\TripReport::where('status', 'open')->count())
+                            @if($openDriverReports > 0)
+                                <span class="badge badge-danger float-end">{{ $openDriverReports }}</span>
+                            @endif
+                        </a>
+                    </li>
                     <!----------------- End Trip Management ------------------------>
                 @endif
 

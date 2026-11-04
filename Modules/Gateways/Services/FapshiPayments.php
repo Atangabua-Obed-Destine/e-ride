@@ -303,11 +303,16 @@ class FapshiPayments
     protected function describe(PaymentRequest $paymentRequest): string
     {
         $business = businessConfig('business_name')?->value ?: 'E-Ride';
-        $ref = $paymentRequest->hook === 'tripRequestUpdate'
-            ? TripRequest::whereKey($paymentRequest->attribute_id)->value('ref_id')
-            : null;
+        $ref = match ($paymentRequest->hook) {
+            'tripRequestUpdate' => TripRequest::whereKey($paymentRequest->attribute_id)->value('ref_id'),
+            'tripDepositPaymentUpdate' => TripRequest::whereKey(
+                \Modules\TripManagement\Entities\TripDeposit::whereKey($paymentRequest->attribute_id)->value('trip_request_id')
+            )->value('ref_id'),
+            default => null,
+        };
         $text = match ($paymentRequest->hook) {
             'tripRequestUpdate' => $business . ' trip' . ($ref ? ' #' . $ref : ''),
+            'tripDepositPaymentUpdate' => $business . ' deposit' . ($ref ? ' trip #' . $ref : ''),
             'customerWalletUpdate' => $business . ' wallet top-up',
             'driverDigitalPay' => $business . ' driver payment',
             default => $business . ' payment',

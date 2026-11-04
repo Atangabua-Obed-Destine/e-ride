@@ -29,6 +29,7 @@ use Modules\TripManagement\Service\Interfaces\TempTripNotificationServiceInterfa
 use Modules\TripManagement\Service\Interfaces\TripRequestCoordinateServiceInterface;
 use Modules\TripManagement\Service\Interfaces\TripRequestServiceInterface;
 use Modules\TripManagement\Service\Interfaces\TripRequestTimeServiceInterface;
+use Modules\TripManagement\Service\TripDepositService;
 use Modules\TripManagement\Transformers\TripRequestResource;
 use Modules\UserManagement\Lib\LevelHistoryManagerTrait;
 use Modules\UserManagement\Service\Interfaces\DriverAvailabilityScheduleServiceInterface;
@@ -386,6 +387,9 @@ class TripRequestController extends Controller
         if (array_key_exists('otp', $request->all()) && $request['otp'] && $trip->otp !== $request['otp']) {
 
             return response()->json(responseFormatter(OTP_MISMATCH_404, errors: [['error_code' => translate('invalid_otp'), 'message' => translate('OTP_did_not_match')]]), 403);
+        }
+        if (app(TripDepositService::class)->blocksStart($trip)) {
+            return $this->depositPendingResponse();
         }
 
         $driverOngoingTrip = $this->tripRequestService->findOneBy(criteria: ['driver_id' => auth('api')->id(), 'type' => RIDE_REQUEST, 'current_status' => ONGOING]);
@@ -779,6 +783,7 @@ class TripRequestController extends Controller
         }
 
         $shouldRebook = $this->tripRequestService->isSmartRebookingEligible(trip: $trip, status: $request->status);
+        $statusBeforeUpdate = $trip->current_status;
 
         try {
             $data = $this->tripRequestService->updateRideStatus(data: array_merge($validator->validated(), $dataToBeMerged));
@@ -794,6 +799,12 @@ class TripRequestController extends Controller
             }
             return response()->json(responseFormatter(constant: [ 'response_code' => 'drop_off_location_not_found_404',
                 'message' => translate('Drop off location not found')]), 403);
+        }
+
+        // A paid booking deposit goes back to the customer's wallet (a rebooked
+        // trip asks for a new one when its new driver accepts).
+        if ($request->status == CANCELLED) {
+            app(TripDepositService::class)->onTripCancelled($trip->id, 'driver', $statusBeforeUpdate);
         }
 
         $rebookedTrip = $shouldRebook ? $this->tripRequestService->rebookCancelledTrip($trip, auth('api')->id()) : null;
@@ -1078,10 +1089,12 @@ class TripRequestController extends Controller
         }
 
         $this->rejectedDriverRequestService->deleteBy(criteria: ['trip_request_id' => $request->trip_request_id]);
+        $deposit = app(TripDepositService::class)->open($trip);
         $push = $trip->ride_request_type == SCHEDULED ? getNotification('schedule_trip_accepted_by_driver') : getNotification('driver_on_the_way');
+        [$depositTitle, $depositBody] = $deposit ? app(TripDepositService::class)->acceptPush($trip, $deposit) : [null, null];
         $this->isStoreOrderTrip($trip) || sendDeviceNotification(fcm_token: $trip->customer->fcm_token,
-            title: translate(key: $push['title'], locale: $trip->customer->current_language_key),
-            description: textVariableDataFormat(value: $push['description'], tripId: $trip->ref_id, vehicleCategory: $trip->driver->vehicle->category->name, pickUpLocation: $trip->coordinate->pickup_address, locale: $trip->customer->current_language_key),
+            title: $depositTitle ?? translate(key: $push['title'], locale: $trip->customer->current_language_key),
+            description: $depositBody ?? textVariableDataFormat(value: $push['description'], tripId: $trip->ref_id, vehicleCategory: $trip->driver->vehicle->category->name, pickUpLocation: $trip->coordinate->pickup_address, locale: $trip->customer->current_language_key),
             status: $push['status'],
             ride_request_id: $request['trip_request_id'],
             type: $trip->type,
@@ -1216,6 +1229,9 @@ class TripRequestController extends Controller
         if ($driverOngoingTrip) {
             return response()->json(responseFormatter(constant: TRIP_STATUS_ONGOING_403), 403);
         }
+        if (app(TripDepositService::class)->blocksStart($trip)) {
+            return $this->depositPendingResponse();
+        }
         $attributes = [
             'current_status' => 'out_for_pickup',
         ];
@@ -1241,6 +1257,15 @@ class TripRequestController extends Controller
         }
 
         return response()->json(responseFormatter(constant: DEFAULT_UPDATE_200));
+    }
+
+    /** The driver waits for the customer's booking deposit before setting off. */
+    private function depositPendingResponse(): JsonResponse
+    {
+        return response()->json(responseFormatter(constant: [
+            'response_code' => 'deposit_pending_403',
+            'message' => translate('Wait for the customer to pay the deposit before you set off.'),
+        ]), 403);
     }
 
     /**
