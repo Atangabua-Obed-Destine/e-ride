@@ -391,7 +391,7 @@ class ConfigController extends Controller
             drivingMode: $drivingMode,
         );
 
-        if ((businessConfig('enable_real_time_location_sharing', TRIP_SETTINGS)?->value ?? 0) && $trip->type == RIDE_REQUEST && $trip->current_status == ONGOING ) {
+        if ((businessConfig('enable_real_time_location_sharing', TRIP_SETTINGS)?->value ?? 0) && $trip->current_status == ONGOING ) {
             $trip->tripNavigation()->firstOrCreate(
                 [],
                 ['encoded_polyline' => $getRoutes[0]['encoded_polyline'] ?? $trip->encoded_polyline]

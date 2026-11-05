@@ -10,6 +10,7 @@ use Modules\TripManagement\Http\Controllers\Api\Driver\TripRequestController as 
 use Modules\TripManagement\Http\Controllers\Api\PaymentController;
 use Modules\TripManagement\Http\Controllers\Api\Customer\MoveController as CustomerMoveController;
 use Modules\TripManagement\Http\Controllers\Api\Driver\MoveController as DriverMoveController;
+use Modules\TripManagement\Http\Controllers\Api\Customer\TripShareController;
 
 /**
  * CUSTOMER API LIST
@@ -42,6 +43,9 @@ Route::group(['prefix' => 'customer', 'middleware' => ['auth:api', 'maintenance_
             Route::get('pending-ride-list', 'pendingRideList');
         });
         Route::post('track-location', [NewDriverTripController::class, 'trackLocation']);
+        // Share trip: the live link, and stop sharing.
+        Route::post('{tripId}/share', [TripShareController::class, 'share'])->middleware('throttle:30,1');
+        Route::delete('{tripId}/share', [TripShareController::class, 'stop'])->middleware('throttle:10,1');
         Route::get('payment', [PaymentController::class, 'payment']);
         Route::get('digital-payment', [PaymentController::class, 'digitalPayment'])->withoutMiddleware('auth:api');
 
@@ -60,6 +64,12 @@ Route::group(['prefix' => 'customer', 'middleware' => ['auth:api', 'maintenance_
         Route::get('directory', [CustomerMoveController::class, 'directory']);
         Route::post('directory/{listingId}/contact', [CustomerMoveController::class, 'contact'])->middleware('throttle:30,1');
         Route::put('{tripId}/no-agreement', [CustomerMoveController::class, 'noAgreement']);
+    });
+    Route::group(['prefix' => 'trusted-contacts'], function () {
+        Route::get('/', [TripShareController::class, 'contacts']);
+        Route::post('/', [TripShareController::class, 'storeContact'])->middleware('throttle:20,1');
+        Route::put('{contactId}', [TripShareController::class, 'updateContact'])->middleware('throttle:20,1');
+        Route::delete('{contactId}', [TripShareController::class, 'destroyContact']);
     });
     Route::get('trip-report/reasons', [TripReportController::class, 'reasons']);
     Route::post('trip-report', [TripReportController::class, 'store'])->middleware('throttle:5,1');

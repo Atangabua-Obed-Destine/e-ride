@@ -116,7 +116,8 @@ class TripRequestResource extends JsonResource
             'driver_safety_alert' => SafetyAlertResource::make($this->driverSafetyAlert),
             'customer_safety_alert' => SafetyAlertResource::make($this->customerSafetyAlert),
             'cancellation_reason' => $this->trip_cancellation_reason,
-            'customer_location_url' => (businessConfig('enable_real_time_location_sharing', TRIP_SETTINGS)?->value ?? 0) && $this->tripNavigation ? route('locate-user', [$this->customer_id, $this->tripNavigation->id]) : null,
+            // Share trip: live from the driver's acceptance until the trip ends.
+            'customer_location_url' => app(\Modules\TripManagement\Service\TripShareService::class)->liveUrl($this->resource),
             'driver_location_url' => (businessConfig('enable_real_time_location_sharing', TRIP_SETTINGS)?->value ?? 0) && $this->tripNavigation ? route('locate-driver', [$this->driver_id, $this->tripNavigation->id]) : null,
         ];
 

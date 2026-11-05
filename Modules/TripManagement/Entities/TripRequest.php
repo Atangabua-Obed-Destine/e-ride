@@ -9,6 +9,7 @@ use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\MorphMany;
 use Illuminate\Database\Eloquent\Relations\MorphOne;
 use Illuminate\Database\Eloquent\SoftDeletes;
+use Illuminate\Support\Str;
 use Modules\AdminModule\Entities\ActivityLog;
 use Modules\AdminModule\Entities\AdminNotification;
 use Modules\ChattingManagement\Entities\ChannelConversation;
@@ -68,6 +69,8 @@ class TripRequest extends Model
         'is_female_driver_requested',
         'is_move',
         'move_photos',
+        'share_token',
+        'shared_at',
         'scheduled_at',
         'current_status',
         'is_notification_sent',
@@ -115,6 +118,7 @@ class TripRequest extends Model
         "is_parcel_delivery_proof_enabled" => 'boolean',
         "is_move" => 'boolean',
         "move_photos" => 'array',
+        "shared_at" => 'datetime',
     ];
 
     protected static function newFactory()
@@ -290,6 +294,8 @@ class TripRequest extends Model
 
         static::creating(function ($item) {
             $item->ref_id = (static::withTrashed()->max('ref_id') ?? 99999) + 1;
+            // Key of the trip's public Share trip link.
+            $item->share_token = $item->share_token ?: Str::random(32);
         });
 
         static::updated(function ($item) {

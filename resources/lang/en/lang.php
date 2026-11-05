@@ -5143,4 +5143,11 @@
   'Price_agreed_in_person' => 'Price agreed in person',
   'E-Ride charges only the booking fee. The customer pays the driver the price they agreed.' => 'E-Ride charges only the booking fee. The customer pays the driver the price they agreed.',
   'Kept_as_booking_fee' => 'Kept as booking fee',
+  'Action failed' => 'Action failed',
+  'Trip sharing is not available right now.' => 'Trip sharing is not available right now.',
+  'You can share the trip once a driver accepts it.' => 'You can share the trip once a driver accepts it.',
+  'Trip Finished' => 'Trip Finished',
+  'Live tracking for this trip has ended.' => 'Live tracking for this trip has ended.',
+  'You can save up to 3 trusted contacts.' => 'You can save up to 3 trusted contacts.',
+  'The phone format is invalid.' => 'The phone format is invalid.',
 );

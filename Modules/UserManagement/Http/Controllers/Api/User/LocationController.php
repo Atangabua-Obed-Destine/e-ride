@@ -52,7 +52,7 @@ class LocationController extends Controller
         }
         $ongoingTrip = $userLastLocation?->user?->getDriverOngoingTrip();
 
-        if ((businessConfig('enable_real_time_location_sharing', TRIP_SETTINGS)?->value ?? 0) && $request->type == DRIVER && $ongoingTrip && $ongoingTrip->type == RIDE_REQUEST) {
+        if ((businessConfig('enable_real_time_location_sharing', TRIP_SETTINGS)?->value ?? 0) && $request->type == DRIVER && $ongoingTrip) {
             DB::transaction(function () use ($userLastLocation, $attributes, $ongoingTrip) {
                     $tripNavigationId = $userLastLocation->user
                         ->getDriverOngoingTrip()

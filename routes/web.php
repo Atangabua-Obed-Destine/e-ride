@@ -100,5 +100,7 @@ Route::get('test', function () {
     return true;
 });
 
+// Share trip: the public page friends, family or a parcel's receiver open.
+Route::get('t/{token}', [\App\Http\Controllers\TripShareController::class, 'page'])->name('trip-share')->middleware('throttle:60,1');
 Route::get('locate-user/{userId}/{token}', [RealTimeLocationSharingController::class, 'index'])->name('locate-user');
 Route::get('locate-driver/{userId}/{token}', [RealTimeLocationSharingController::class, 'index'])->name('locate-driver');
