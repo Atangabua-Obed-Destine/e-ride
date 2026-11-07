@@ -55,7 +55,7 @@ Route::group(['prefix' => 'admin', 'as' => 'admin.', 'middleware' => 'admin'], f
 
 Route::group(['prefix' => 'partner', 'as' => 'partner.'], function () {
     Route::get('login', [AuthController::class, 'showLogin'])->name('login');
-    Route::post('login', [AuthController::class, 'login'])->name('login.submit')->middleware('throttle:10,1');
+    Route::post('login', [AuthController::class, 'login'])->name('login.submit')->middleware('throttle:10,1,store-login');
     Route::post('logout', [AuthController::class, 'logout'])->name('logout');
 
     Route::middleware(PartnerMiddleware::class)->group(function () {

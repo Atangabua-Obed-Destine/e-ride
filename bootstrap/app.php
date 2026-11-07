@@ -59,7 +59,9 @@ $app = Application::configure(basePath: dirname(__DIR__))
         ]);
         $middleware->group('api', [
 //           EnsureFrontendRequestsAreStateful::class,
-            'throttle:1000,1',
+            // Named limiter in RouteServiceProvider. Route-level throttles pass a key
+            // prefix (throttle:N,1,name) so each keeps its own counter.
+            'throttle:api',
             SubstituteBindings::class,
             LocalizationMiddleware::class
         ]);

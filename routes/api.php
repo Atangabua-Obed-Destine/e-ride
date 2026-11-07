@@ -19,5 +19,5 @@ Route::middleware('auth:sanctum')->get('/user', function (Request $request) {
     return $request->user();
 });
 
-Route::get('share/{token}', [\App\Http\Controllers\TripShareController::class, 'data'])->name('trip-share.data')->middleware('throttle:60,1');
+Route::get('share/{token}', [\App\Http\Controllers\TripShareController::class, 'data'])->name('trip-share.data')->middleware('throttle:60,1,share-data');
 Route::get('track/{token}/data', [RealTimeLocationSharingController::class, 'updatePolyline'])->name('track.data');

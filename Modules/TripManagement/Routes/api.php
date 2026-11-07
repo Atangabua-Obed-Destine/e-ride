@@ -44,15 +44,15 @@ Route::group(['prefix' => 'customer', 'middleware' => ['auth:api', 'maintenance_
         });
         Route::post('track-location', [NewDriverTripController::class, 'trackLocation']);
         // Share trip: the live link, and stop sharing.
-        Route::post('{tripId}/share', [TripShareController::class, 'share'])->middleware('throttle:30,1');
-        Route::delete('{tripId}/share', [TripShareController::class, 'stop'])->middleware('throttle:10,1');
+        Route::post('{tripId}/share', [TripShareController::class, 'share'])->middleware('throttle:30,1,trip-share');
+        Route::delete('{tripId}/share', [TripShareController::class, 'stop'])->middleware('throttle:10,1,trip-share-stop');
         Route::get('payment', [PaymentController::class, 'payment']);
         Route::get('digital-payment', [PaymentController::class, 'digitalPayment'])->withoutMiddleware('auth:api');
 
         // Booking deposit, paid after a driver accepts.
         Route::get('deposit/{tripId}', [TripDepositController::class, 'show']);
-        Route::post('deposit/{tripId}/wallet', [TripDepositController::class, 'payWithWallet'])->middleware('throttle:10,1');
-        Route::get('deposit/{tripId}/pay-url', [TripDepositController::class, 'payUrl'])->middleware('throttle:10,1');
+        Route::post('deposit/{tripId}/wallet', [TripDepositController::class, 'payWithWallet'])->middleware('throttle:10,1,deposit-wallet');
+        Route::get('deposit/{tripId}/pay-url', [TripDepositController::class, 'payUrl'])->middleware('throttle:10,1,deposit-pay-url');
         Route::get('deposit-pay/{deposit}', [TripDepositController::class, 'pay'])
             ->name('trip-deposit.pay')
             ->withoutMiddleware('auth:api')
@@ -60,19 +60,19 @@ Route::group(['prefix' => 'customer', 'middleware' => ['auth:api', 'maintenance_
     });
     // E-Ride Move: the trip itself is booked through ride/create.
     Route::group(['prefix' => 'move'], function () {
-        Route::post('photos', [CustomerMoveController::class, 'photos'])->middleware('throttle:20,1');
+        Route::post('photos', [CustomerMoveController::class, 'photos'])->middleware('throttle:20,1,move-photos');
         Route::get('directory', [CustomerMoveController::class, 'directory']);
-        Route::post('directory/{listingId}/contact', [CustomerMoveController::class, 'contact'])->middleware('throttle:30,1');
+        Route::post('directory/{listingId}/contact', [CustomerMoveController::class, 'contact'])->middleware('throttle:30,1,move-contact');
         Route::put('{tripId}/no-agreement', [CustomerMoveController::class, 'noAgreement']);
     });
     Route::group(['prefix' => 'trusted-contacts'], function () {
         Route::get('/', [TripShareController::class, 'contacts']);
-        Route::post('/', [TripShareController::class, 'storeContact'])->middleware('throttle:20,1');
-        Route::put('{contactId}', [TripShareController::class, 'updateContact'])->middleware('throttle:20,1');
+        Route::post('/', [TripShareController::class, 'storeContact'])->middleware('throttle:20,1,trusted-contacts');
+        Route::put('{contactId}', [TripShareController::class, 'updateContact'])->middleware('throttle:20,1,trusted-contacts');
         Route::delete('{contactId}', [TripShareController::class, 'destroyContact']);
     });
     Route::get('trip-report/reasons', [TripReportController::class, 'reasons']);
-    Route::post('trip-report', [TripReportController::class, 'store'])->middleware('throttle:5,1');
+    Route::post('trip-report', [TripReportController::class, 'store'])->middleware('throttle:5,1,trip-report');
     Route::group(['prefix' => 'parcel'], function () {
         Route::controller(ParcelRefundController::class)->group(function () {
             Route::group(['prefix' => 'refund'], function () {

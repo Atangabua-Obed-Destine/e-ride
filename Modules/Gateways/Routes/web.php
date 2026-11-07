@@ -146,8 +146,8 @@ Route::group(['prefix' => 'payment'], function () {
         Route::get('return/{reference}', [FapshiController::class, 'return'])->name('return')
             ->where('reference', '[A-Za-z0-9_-]{1,100}');
         Route::get('check/{reference}', [FapshiController::class, 'check'])->name('check')
-            ->where('reference', '[A-Za-z0-9_-]{1,100}')->middleware('throttle:30,1');
+            ->where('reference', '[A-Za-z0-9_-]{1,100}')->middleware('throttle:30,1,fapshi-check');
         Route::post('webhook', [FapshiController::class, 'webhook'])->name('webhook')
-            ->withoutMiddleware([VerifyCsrfToken::class])->middleware('throttle:120,1');
+            ->withoutMiddleware([VerifyCsrfToken::class])->middleware('throttle:120,1,fapshi-webhook');
     });
 });

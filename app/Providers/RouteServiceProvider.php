@@ -47,8 +47,15 @@ class RouteServiceProvider extends ServiceProvider
      */
     protected function configureRateLimiting()
     {
+        // The whole API, per caller. Keyed by the bearer token, not the IP: a Wi-Fi,
+        // an office or a mobile carrier (carrier-grade NAT) puts many phones behind
+        // one public IP. The per-IP limit is only a flood ceiling.
         RateLimiter::for('api', function (Request $request) {
-            return Limit::perMinute(60)->by(optional($request->user())->id ?: $request->ip());
+            $limits = [Limit::perMinute(6000)->by('ip:' . $request->ip())];
+            if ($token = $request->bearerToken()) {
+                $limits[] = Limit::perMinute(1000)->by('token:' . sha1($token));
+            }
+            return $limits;
         });
     }
 }

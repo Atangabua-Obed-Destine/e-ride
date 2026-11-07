@@ -8,10 +8,10 @@ use Modules\PlaceManagement\Http\Controllers\Api\Customer\StayController;
 */
 Route::group(['prefix' => 'customer', 'middleware' => ['auth:api', 'maintenance_mode']], function () {
     // Each call is one live Google search, so keep it modest per user.
-    Route::get('stay', [StayController::class, 'index'])->middleware('throttle:20,1');
+    Route::get('stay', [StayController::class, 'index'])->middleware('throttle:20,1,stay');
     // Explore Bamenda. Each category opened is one live Google search.
     Route::get('explore', [StayController::class, 'categories']);
-    Route::get('explore/{category}', [StayController::class, 'explore'])->where('category', '[a-z0-9_]+')->middleware('throttle:30,1');
+    Route::get('explore/{category}', [StayController::class, 'explore'])->where('category', '[a-z0-9_]+')->middleware('throttle:30,1,explore');
 });
 
 // Used as a plain image URL by the app, so no token: a signature guards it instead.
@@ -19,4 +19,4 @@ Route::group(['prefix' => 'customer', 'middleware' => ['auth:api', 'maintenance_
 // monthly photo cap is what protects the bill.
 Route::get('customer/stay/photo', [StayController::class, 'photo'])
     ->name('stay.photo')
-    ->middleware('throttle:600,1');
+    ->middleware('throttle:600,1,stay-photo');

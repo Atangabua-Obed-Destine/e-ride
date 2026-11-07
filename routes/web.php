@@ -53,7 +53,7 @@ Route::controller(LandingPageController::class)->group(function () {
    fare quote. Public, so rate-limited (each call hits paid Google APIs). */
 Route::controller(WhatsAppBookingController::class)
     ->prefix('whatsapp-booking')->as('whatsapp-booking.')
-    ->middleware('throttle:40,1')
+    ->middleware('throttle:40,1,whatsapp-booking')
     ->group(function () {
         Route::get('places', 'places')->name('places');
         Route::get('place', 'place')->name('place');
@@ -101,6 +101,6 @@ Route::get('test', function () {
 });
 
 // Share trip: the public page friends, family or a parcel's receiver open.
-Route::get('t/{token}', [\App\Http\Controllers\TripShareController::class, 'page'])->name('trip-share')->middleware('throttle:60,1');
+Route::get('t/{token}', [\App\Http\Controllers\TripShareController::class, 'page'])->name('trip-share')->middleware('throttle:60,1,share-page');
 Route::get('locate-user/{userId}/{token}', [RealTimeLocationSharingController::class, 'index'])->name('locate-user');
 Route::get('locate-driver/{userId}/{token}', [RealTimeLocationSharingController::class, 'index'])->name('locate-driver');
