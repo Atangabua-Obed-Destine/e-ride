@@ -391,6 +391,9 @@ class TripRequestController extends Controller
         if (app(TripDepositService::class)->blocksStart($trip)) {
             return $this->depositPendingResponse();
         }
+        if ($notAtPickup = $this->notAtPickupResponse($trip)) {
+            return $notAtPickup;
+        }
 
         $driverOngoingTrip = $this->tripRequestService->findOneBy(criteria: ['driver_id' => auth('api')->id(), 'type' => RIDE_REQUEST, 'current_status' => ONGOING]);
         if ($driverOngoingTrip) {
@@ -1267,6 +1270,36 @@ class TripRequestController extends Controller
     }
 
     /** The driver waits for the customer's booking deposit before setting off. */
+    /**
+     * A trip starts at its pickup: a driver starting it kilometres away charged the
+     * customer from wherever the driver was. Judged only on a recent position. The
+     * driver app does not report one while the phone stands still, and an old one
+     * must never stop a driver who is really there. The margin also covers a phone
+     * that reports only every few hundred metres while moving.
+     */
+    private function notAtPickupResponse($trip): ?JsonResponse
+    {
+        $pickup = $trip->coordinate?->pickup_coordinates;
+        $location = $this->userLastLocationService->findOneBy(criteria: ['user_id' => $trip->driver_id]);
+        if (!$pickup || !$location?->latitude || !$location->updated_at
+            || $location->updated_at->lt(now()->subMinutes(self::FRESH_POSITION_MINUTES))) {
+            return null;
+        }
+        $meters = haversineDistance((float)$location->latitude, (float)$location->longitude, (float)$pickup->latitude, (float)$pickup->longitude);
+        $allowed = max((float)(businessConfig('driver_completion_radius', BUSINESS_SETTINGS)?->value ?? 0), self::START_MARGIN_METERS);
+        if ($meters <= $allowed) {
+            return null;
+        }
+        $distance = $meters >= 1000 ? number_format($meters / 1000, 1) . ' km' : (int)round($meters) . ' m';
+        return response()->json(responseFormatter(constant: [
+            'response_code' => 'driver_not_at_pickup_403',
+            'message' => translate(key: 'You are {distance} from the pickup. Go to the pickup to start the trip.', replace: ['distance' => $distance]),
+        ]), 403);
+    }
+
+    private const FRESH_POSITION_MINUTES = 2;
+    private const START_MARGIN_METERS = 500;
+
     private function depositPendingResponse(): JsonResponse
     {
         return response()->json(responseFormatter(constant: [

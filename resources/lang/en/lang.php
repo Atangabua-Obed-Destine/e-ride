@@ -5150,4 +5150,6 @@
   'Live tracking for this trip has ended.' => 'Live tracking for this trip has ended.',
   'You can save up to 3 trusted contacts.' => 'You can save up to 3 trusted contacts.',
   'The phone format is invalid.' => 'The phone format is invalid.',
+  'You are {distance} from the pickup. Go to the pickup to start the trip.' => 'You are :distance from the pickup. Go to the pickup to start the trip.',
+  'You are 10.0 km from the pickup. Go to the pickup to start the trip.' => 'You are 10.0 km from the pickup. Go to the pickup to start the trip.',
 );
