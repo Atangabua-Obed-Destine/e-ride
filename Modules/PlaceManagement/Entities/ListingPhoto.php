@@ -20,7 +20,8 @@ class ListingPhoto extends Model
 
     public function url(): string
     {
-        return dynamicStorage('storage/app/public/' . self::DIR) . $this->file;
+        // asset() inside dynamicStorage drops a trailing slash, so add it here.
+        return rtrim(dynamicStorage('storage/app/public/' . self::DIR), '/') . '/' . $this->file;
     }
 
     public function byEride(): bool
