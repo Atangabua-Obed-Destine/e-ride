@@ -644,6 +644,24 @@ if (!function_exists('getSession')) {
         return Session::get($key);
     }
 }
+if (!function_exists('tripDropPoint')) {
+    /**
+     * Where a trip ended, for its final fare (road distance from the pickup to here).
+     * The driver's last reported position. When a trip is completed on a position
+     * that is missing or older than 3 minutes (driver app closed, GPS off), the
+     * booked destination is used: a stale point made a 5 km trip cost 0 km, or the
+     * reverse. A cancelled trip keeps the last position, as before.
+     */
+    function tripDropPoint($trip, bool $completed): \MatanYadaev\EloquentSpatial\Objects\Point
+    {
+        $last = $trip->driver?->lastLocations;
+        $fresh = $last && $last->latitude && $last->updated_at && $last->updated_at->gte(now()->subMinutes(3));
+        if ($completed && !$fresh && $trip->coordinate?->destination_coordinates) {
+            return $trip->coordinate->destination_coordinates;
+        }
+        return new \MatanYadaev\EloquentSpatial\Objects\Point($last->latitude, $last->longitude);
+    }
+}
 if (!function_exists('haversineDistance')) {
     function haversineDistance(float $latitudeFrom, float $longitudeFrom, float $latitudeTo, float $longitudeTo, int|float $earthRadius = 6371000): float
     {

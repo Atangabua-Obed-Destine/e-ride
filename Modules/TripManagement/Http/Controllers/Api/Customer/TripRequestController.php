@@ -904,7 +904,7 @@ class TripRequestController extends Controller
             if ($request->status == 'cancelled') {
                 $attributes['fee']['cancelled_by'] = 'customer';
             }
-            $attributes['coordinate']['drop_coordinates'] = new Point($trip->driver->lastLocations->latitude, $trip->driver->lastLocations->longitude);
+            $attributes['coordinate']['drop_coordinates'] = tripDropPoint($trip, $request->status == 'completed');
             $drivingMode = resolveDrivingMode($trip?->vehicleCategory?->type);
             $intermediate_coordinate = [];
             if ($trip->coordinate->is_reached_1) {
@@ -922,7 +922,7 @@ class TripRequestController extends Controller
             $getRoutes = getRoutes([
                 $trip->coordinate->pickup_coordinates->latitude,
                 $trip->coordinate->pickup_coordinates->longitude
-            ], [$trip->driver->lastLocations->latitude, $trip->driver->lastLocations->longitude], $intermediate_coordinate, $drivingMode);
+            ], [$attributes['coordinate']['drop_coordinates']->latitude, $attributes['coordinate']['drop_coordinates']->longitude], $intermediate_coordinate, $drivingMode);
             if (array_key_exists('error', $getRoutes)) {
                 return response()->json(responseFormatter(constant: [ 'response_code' => 'drop_off_location_not_found_404',
                     'message' => translate('Drop off location not found')]), 403);

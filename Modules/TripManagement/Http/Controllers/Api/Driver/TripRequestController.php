@@ -1291,10 +1291,16 @@ class TripRequestController extends Controller
             return null;
         }
         $distance = $meters >= 1000 ? number_format($meters / 1000, 1) . ' km' : (int)round($meters) . ' m';
-        return response()->json(responseFormatter(constant: [
+        $message = translate(key: 'You are {distance} from the pickup. Go to the pickup to start the trip.', replace: ['distance' => $distance]);
+        // Built here, not with responseFormatter: it translates the message again, and
+        // every distance would become a new key in the language files.
+        return response()->json([
             'response_code' => 'driver_not_at_pickup_403',
-            'message' => translate(key: 'You are {distance} from the pickup. Go to the pickup to start the trip.', replace: ['distance' => $distance]),
-        ]), 403);
+            'message' => $message,
+            'total_size' => null, 'limit' => null, 'offset' => null, 'data' => null,
+            // The driver app shows errors[0]; without one it was stuck on a spinner.
+            'errors' => [['error_code' => translate('Not at the pickup'), 'message' => $message]],
+        ], 403);
     }
 
     private const FRESH_POSITION_MINUTES = 2;
@@ -1302,10 +1308,14 @@ class TripRequestController extends Controller
 
     private function depositPendingResponse(): JsonResponse
     {
+        // The driver app shows errors[0]; without one it was stuck on a spinner.
         return response()->json(responseFormatter(constant: [
             'response_code' => 'deposit_pending_403',
+            'message' => 'Wait for the customer to pay the deposit before you set off.',
+        ], errors: [[
+            'error_code' => translate('Deposit not paid yet'),
             'message' => translate('Wait for the customer to pay the deposit before you set off.'),
-        ]), 403);
+        ]]), 403);
     }
 
     /**

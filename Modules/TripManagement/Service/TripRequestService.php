@@ -1017,7 +1017,7 @@ class TripRequestService extends BaseService implements TripRequestServiceInterf
         if ($request->status == 'cancelled') {
             $attributes['fee']['cancelled_by'] = 'customer';
         }
-        $attributes['coordinate']['drop_coordinates'] = new Point($trip->driver->lastLocations->latitude, $trip->driver->lastLocations->longitude);
+        $attributes['coordinate']['drop_coordinates'] = tripDropPoint($trip, $request->status == 'completed');
 
         $this->driverDetailService->updatedBy(criteria: ['user_id' => $trip->driver_id], data: ['availability_status' => 'available']);
         //Get status wise notification message
@@ -1152,7 +1152,7 @@ class TripRequestService extends BaseService implements TripRequestServiceInterf
             if ($request->status == 'cancelled') {
                 $attributes['fee']['cancelled_by'] = 'driver';
             }
-            $attributes['coordinate']['drop_coordinates'] = new Point($trip->driver->lastLocations->latitude, $trip->driver->lastLocations->longitude);
+            $attributes['coordinate']['drop_coordinates'] = tripDropPoint($trip, $request->status == 'completed');
 
             $this->driverDetailService->updatedBy(criteria: ['user_id' => auth('api')->id()], data: ['availability_status' => 'available']);
         }
@@ -1782,7 +1782,7 @@ class TripRequestService extends BaseService implements TripRequestServiceInterf
                     }
                 }
             }
-            $data['coordinate']['drop_coordinates'] = new Point($trip->driver->lastLocations->latitude, $trip->driver->lastLocations->longitude);
+            $data['coordinate']['drop_coordinates'] = tripDropPoint($trip, $data['status'] == 'completed');
             $drivingMode = resolveDrivingMode($trip?->vehicleCategory?->type);
             $intermediate_coordinate = [];
             if ($trip->coordinate->is_reached_1) {
@@ -1800,7 +1800,7 @@ class TripRequestService extends BaseService implements TripRequestServiceInterf
             $getRoutes = getRoutes([
                 $trip->coordinate->pickup_coordinates->latitude,
                 $trip->coordinate->pickup_coordinates->longitude
-            ], [$trip->driver->lastLocations->latitude, $trip->driver->lastLocations->longitude], $intermediate_coordinate, $drivingMode);
+            ], [$data['coordinate']['drop_coordinates']->latitude, $data['coordinate']['drop_coordinates']->longitude], $intermediate_coordinate, $drivingMode);
             if (array_key_exists('error', $getRoutes)) {
                 DB::rollBack();
                 return false;

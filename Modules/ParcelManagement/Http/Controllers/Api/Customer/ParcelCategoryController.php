@@ -7,6 +7,7 @@ use Illuminate\Http\Request;
 use Illuminate\Routing\Controller;
 use Modules\ParcelManagement\Service\Interfaces\ParcelCategoryServiceInterface;
 use Modules\ParcelManagement\Transformers\ParcelCategoryResource;
+use Modules\StoreManagement\Lib\StoreSettings;
 
 class ParcelCategoryController extends Controller
 {
@@ -26,8 +27,14 @@ class ParcelCategoryController extends Controller
         $zoneId = $request->header('zoneId');
 
         $criteria = [
-            'is_active' => 1,
+            ['is_active', 1],
         ];
+        // Food & Shops deliveries have their own category, whose drivers are told the
+        // order is prepaid and to collect nothing. A customer's own parcel must never
+        // be sent under it.
+        if ($storeCategoryId = StoreSettings::all()['parcel_category_id']) {
+            $criteria[] = ['id', '!=', $storeCategoryId];
+        }
         $whereHasRelation = [
             'weightFares' => [
                 'zone_id' => $zoneId,
