@@ -3,7 +3,9 @@
 namespace Modules\PlaceManagement\Transformers;
 
 use Modules\PlaceManagement\Entities\Listing;
+use Modules\PlaceManagement\Entities\ListingPayout;
 use Modules\PlaceManagement\Entities\ListingPhoto;
+use Modules\PlaceManagement\Entities\ListingReservation;
 use Modules\PlaceManagement\Entities\ListingVerification;
 use Modules\PlaceManagement\Entities\ListingVisit;
 use Modules\PlaceManagement\Lib\ListingSettings;
@@ -75,6 +77,12 @@ class ListingPresenter
             'landmark' => $landmark,
             'zone_served' => (bool)$listing->zone_id,
             'is_mine' => $mine,
+            // Reservation money: shown only while seekers can reserve this place now.
+            'reservation' => $listing->takesReservations() ? [
+                'amount' => (float)$listing->reservation_amount,
+                'fee_percent' => ListingSettings::reservations()['fee_percent'],
+                'move_in_days' => ListingSettings::reservations()['move_in_days'],
+            ] : null,
         ];
 
         if ($mine) {
@@ -90,6 +98,11 @@ class ListingPresenter
                 'visits_count' => $listing->visits()->count(),
                 'open_visits' => $listing->visits()->whereIn('status', [ListingVisit::REQUESTED])->count(),
                 'taking_requests' => $listing->visits()->where('taking', 1)->whereIn('status', [ListingVisit::ACCEPTED, ListingVisit::DONE])->count(),
+                'reservations_on' => $listing->reservations_on,
+                'reservation_amount' => $listing->reservation_amount !== null ? (float)$listing->reservation_amount : null,
+                'payout_phone' => $listing->payout_phone,
+                'payout_name' => $listing->payout_name,
+                'reservations_waiting' => $listing->reservations()->where('status', ListingReservation::HELD)->count(),
             ];
         }
         return $data;
@@ -124,8 +137,50 @@ class ListingPresenter
                 'longitude' => (float)$listing->longitude,
                 'address' => $listing->address,
                 'cover' => $cover?->url(),
+                // The amount while seekers can reserve it through E-Ride, else null.
+                'reservation_amount' => $listing->takesReservations() ? (float)$listing->reservation_amount : null,
             ] : null,
+            // The latest one still meaning something (a lapsed attempt shows nothing, so Reserve comes back).
+            'reservation' => self::reservation(
+                ListingReservation::where('visit_id', $visit->id)->whereNot('status', ListingReservation::LAPSED)->latest()->first(), $viewerId),
             'created_at' => $visit->created_at?->toIso8601String(),
+        ];
+    }
+
+    /** A reservation from one side's point of view: deadlines, the problem, and the payout or refund. */
+    public static function reservation(?ListingReservation $r, string $viewerId): ?array
+    {
+        if (!$r) {
+            return null;
+        }
+        $asOwner = $viewerId === $r->owner_id;
+        $payout = $r->payouts()->where('user_id', $viewerId)->latest()->first();
+        return [
+            'id' => $r->id,
+            'status' => $r->status,
+            'amount' => $r->amount,
+            'owner_amount' => $asOwner ? $r->owner_amount : null,
+            'fee' => $asOwner ? $r->fee : null,
+            'refunded_amount' => $r->refunded_amount,
+            'payment_method' => $r->payment_method,
+            'move_in_date' => $r->move_in_date?->toDateString(),
+            'pay_due_at' => $r->pay_due_at?->toIso8601String(),
+            'accept_due_at' => $r->accept_due_at?->toIso8601String(),
+            'release_due_at' => $r->release_due_at?->toIso8601String(),
+            'problem_by' => $r->problem_by,
+            'problem_reason' => $r->problem_reason,
+            'decision_note' => $r->decision_note,
+            'closed_reason' => $r->closed_reason,
+            'payout' => $payout ? [
+                'kind' => $payout->kind,
+                'amount' => $payout->amount,
+                'phone' => $payout->phone,
+                'status' => $payout->status,
+                'reference' => $payout->reference,
+                'paid_at' => $payout->paid_at?->toIso8601String(),
+            ] : null,
+            // A refund still in the wallet can be sent on mobile money once.
+            'can_refund_to_momo' => !$asOwner && $r->refunded_amount > 0 && !$r->payouts()->where('kind', ListingPayout::REFUND)->exists(),
         ];
     }
 }

@@ -30,7 +30,11 @@ class PlaceManagementServiceProvider extends ServiceProvider
         $this->loadMigrationsFrom(module_path($this->moduleName, 'Database/Migrations'));
 
         if ($this->app->runningInConsole()) {
-            $this->commands([\Modules\PlaceManagement\Console\ListingsSweep::class]);
+            $this->commands([
+                \Modules\PlaceManagement\Console\ListingsSweep::class,
+                \Modules\PlaceManagement\Console\ListingsVisitSoon::class,
+                \Modules\PlaceManagement\Console\ListingReservationsTick::class,
+            ]);
         }
     }
 
@@ -41,6 +45,8 @@ class PlaceManagementServiceProvider extends ServiceProvider
      */
     public function register()
     {
+        // The reservation payment hook (listingReservationPaid), called by name by the gateways.
+        require_once module_path($this->moduleName, 'Lib/reservation_helpers.php');
         $this->app->register(RouteServiceProvider::class);
     }
 

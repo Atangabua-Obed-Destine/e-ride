@@ -2,6 +2,7 @@
 
 use Illuminate\Support\Facades\Route;
 use Modules\PlaceManagement\Http\Controllers\Api\Customer\ListingController;
+use Modules\PlaceManagement\Http\Controllers\Api\Customer\ListingReservationController;
 use Modules\PlaceManagement\Http\Controllers\Api\Customer\ListingVisitController;
 use Modules\PlaceManagement\Http\Controllers\Api\Customer\StayController;
 
@@ -42,7 +43,23 @@ Route::group(['prefix' => 'customer', 'middleware' => ['auth:api', 'maintenance_
         Route::post('listing-visits/{visit}/outcome', [ListingVisitController::class, 'outcome']);
         Route::post('listing-visits/{visit}/taking', [ListingVisitController::class, 'taking']);
     });
+    // Reservation money: answers are the visit, with its reservation.
+    Route::middleware('throttle:20,1,listing-reservation')->group(function () {
+        Route::post('listing-visits/{visit}/reserve', [ListingReservationController::class, 'store']);
+        Route::post('listing-reservations/{reservation}/wallet', [ListingReservationController::class, 'payWithWallet']);
+        Route::get('listing-reservations/{reservation}/pay-url', [ListingReservationController::class, 'payUrl']);
+        Route::post('listing-reservations/{reservation}/cancel', [ListingReservationController::class, 'cancel']);
+        Route::post('listing-reservations/{reservation}/respond', [ListingReservationController::class, 'respond']);
+        Route::post('listing-reservations/{reservation}/moved-in', [ListingReservationController::class, 'movedIn']);
+        Route::post('listing-reservations/{reservation}/problem', [ListingReservationController::class, 'problem']);
+        Route::post('listing-reservations/{reservation}/refund-to-momo', [ListingReservationController::class, 'refundToMomo']);
+    });
 });
+
+// Opened in the app's payment webview, which sends no token: the signature guards it.
+Route::get('customer/listing-reservation-pay/{reservation}', [ListingReservationController::class, 'pay'])
+    ->name('listing-reservation.pay')
+    ->middleware(['signed:relative', 'throttle:30,1,listing-reservation-pay']);
 
 // Used as a plain image URL by the app, so no token: a signature guards it instead.
 // The limit is per IP and generous because mobile carriers share IPs; the

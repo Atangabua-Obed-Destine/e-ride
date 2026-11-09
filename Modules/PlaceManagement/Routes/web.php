@@ -3,6 +3,7 @@
 use Illuminate\Support\Facades\Route;
 use Modules\PlaceManagement\Http\Controllers\Web\Admin\GooglePlaceController;
 use Modules\PlaceManagement\Http\Controllers\Web\Admin\ListingAdminController;
+use Modules\PlaceManagement\Http\Controllers\Web\Admin\ListingReservationAdminController;
 use Modules\PlaceManagement\Http\Controllers\Web\Admin\OnDutyController;
 use Modules\PlaceManagement\Http\Controllers\Web\Admin\PlaceCategoryController;
 use Modules\PlaceManagement\Http\Controllers\Web\Admin\PlaceController;
@@ -43,6 +44,9 @@ Route::group(['prefix' => 'admin', 'as' => 'admin.', 'middleware' => 'admin'], f
             Route::get('visits', [ListingAdminController::class, 'visits'])->name('visits');
             Route::get('reports', [ListingAdminController::class, 'reports'])->name('reports');
             Route::get('{listing}', [ListingAdminController::class, 'show'])->name('show')->whereUuid('listing');
+            Route::get('reservations', [ListingReservationAdminController::class, 'index'])->name('reservations');
+            Route::get('reservations/{reservation}', [ListingReservationAdminController::class, 'show'])->name('reservation')->whereUuid('reservation');
+            Route::get('payouts', [ListingReservationAdminController::class, 'payouts'])->name('payouts');
         });
         Route::middleware('can:place_edit')->group(function () {
             Route::get('settings/policy', [ListingAdminController::class, 'settings'])->name('settings');
@@ -56,6 +60,8 @@ Route::group(['prefix' => 'admin', 'as' => 'admin.', 'middleware' => 'admin'], f
             Route::get('visits/{verification}/at-the-place', [ListingAdminController::class, 'visitPage'])->name('visit');
             Route::post('visits/{verification}/at-the-place', [ListingAdminController::class, 'visitSubmit'])->name('visit.submit');
             Route::post('reports/{report}/decide', [ListingAdminController::class, 'decide'])->name('decide');
+            Route::post('reservations/{reservation}/decide', [ListingReservationAdminController::class, 'decide'])->name('reservation.decide');
+            Route::post('payouts/{payout}/paid', [ListingReservationAdminController::class, 'markPaid'])->name('payout.paid');
         });
     });
 

@@ -16,6 +16,8 @@ class ListingVisit extends Model
     use HasUuid;
 
     public const WINDOWS = ['morning', 'afternoon', 'evening'];
+    /** When each window starts and ends (hours, local time). The app shows the same: "Morning (8 to 12)". */
+    public const WINDOW_HOURS = ['morning' => [8, 12], 'afternoon' => [12, 16], 'evening' => [16, 19]];
     public const OUTCOMES = ['as_described', 'not_as_described', 'taken', 'no_show'];
 
     public const REQUESTED = 'requested';
@@ -30,7 +32,7 @@ class ListingVisit extends Model
 
     protected $fillable = [
         'listing_id', 'seeker_id', 'owner_id', 'visit_date', 'time_window', 'status',
-        'proposed_date', 'proposed_window', 'outcome', 'outcome_note', 'taking', 'reminded_at',
+        'proposed_date', 'proposed_window', 'outcome', 'outcome_note', 'taking', 'reminded_at', 'soon_reminded_at',
     ];
 
     protected $casts = [
@@ -38,7 +40,21 @@ class ListingVisit extends Model
         'proposed_date' => 'date',
         'taking' => 'boolean',
         'reminded_at' => 'datetime',
+        'soon_reminded_at' => 'datetime',
     ];
+
+    /** The start of the visit's time window. */
+    public function startsAt(): \Illuminate\Support\Carbon
+    {
+        return $this->visit_date->copy()->setTime(self::WINDOW_HOURS[$this->time_window][0] ?? 8, 0);
+    }
+
+    /** "8:00 to 12:00", for messages. */
+    public function windowHours(): string
+    {
+        [$from, $to] = self::WINDOW_HOURS[$this->time_window] ?? [8, 12];
+        return sprintf('%d:00 to %d:00', $from, $to);
+    }
 
     public function listing(): BelongsTo
     {

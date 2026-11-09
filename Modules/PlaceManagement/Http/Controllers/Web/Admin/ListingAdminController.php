@@ -200,7 +200,13 @@ class ListingAdminController extends Controller
 
     public function settings(): View
     {
-        $settings = ListingSettings::all();
+        $r = ListingSettings::reservations();
+        $settings = ListingSettings::all() + [
+            'reservations_enabled' => $r['enabled'], 'reservation_min' => $r['min'], 'reservation_max' => $r['max'],
+            'reservation_fee_percent' => $r['fee_percent'], 'reservation_pay_minutes' => $r['pay_minutes'],
+            'reservation_accept_hours' => $r['accept_hours'], 'reservation_release_days' => $r['release_days'],
+            'reservation_move_in_days' => $r['move_in_days'],
+        ];
         return view('placemanagement::admin.listings.settings', compact('settings'));
     }
 
@@ -222,7 +228,17 @@ class ListingAdminController extends Controller
             'landmark_name' => 'nullable|string|max:60',
             'landmark_latitude' => 'nullable|required_with:landmark_name|numeric|between:-90,90',
             'landmark_longitude' => 'nullable|required_with:landmark_name|numeric|between:-180,180',
+            // Reservation money.
+            'reservations_enabled' => 'nullable|boolean',
+            'reservation_min' => 'required|numeric|min:100',
+            'reservation_max' => 'required|numeric|gte:reservation_min',
+            'reservation_fee_percent' => 'required|numeric|min:0|max:50',
+            'reservation_pay_minutes' => 'required|integer|min:5|max:120',
+            'reservation_accept_hours' => 'required|integer|min:1|max:168',
+            'reservation_release_days' => 'required|integer|min:1|max:30',
+            'reservation_move_in_days' => 'required|integer|min:1|max:90',
         ]);
+        $data['reservations_enabled'] = $request->boolean('reservations_enabled') ? '1' : '0';
         foreach ($data as $key => $value) {
             updateBusinessSetting(keyName: 'listing_' . $key, settingType: PLACE_SETTINGS, value: trim((string)$value));
         }

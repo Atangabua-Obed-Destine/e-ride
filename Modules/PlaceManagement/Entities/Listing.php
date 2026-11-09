@@ -82,7 +82,7 @@ class Listing extends Model
     protected $fillable = [
         'owner_id', 'type', 'title', 'description', 'neighbourhood', 'address', 'latitude', 'longitude', 'zone_id',
         'units_available', 'furnished', 'rent', 'rent_period', 'advance_months', 'caution', 'available_from',
-        'water', 'power', 'backup_power', 'toilet', 'kitchen', 'fenced', 'security', 'amenities', 'owner_role',
+        'water', 'power', 'backup_power', 'toilet', 'kitchen', 'fenced', 'security', 'amenities', 'reservations_on', 'reservation_amount', 'payout_phone', 'payout_name', 'owner_role',
         'status', 'review_note', 'needs_review', 'approved_at', 'last_confirmed_at', 'reminder_stage', 'paused_at',
         'taken_check_until', 'verified_until', 'verified_expiry_notified_at', 'stale_nudged_at', 'rented_at', 'views',
     ];
@@ -99,6 +99,8 @@ class Listing extends Model
         'fenced' => 'boolean',
         'security' => 'boolean',
         'amenities' => 'array',
+        'reservations_on' => 'boolean',
+        'reservation_amount' => 'float',
         'needs_review' => 'boolean',
         'available_from' => 'date',
         'approved_at' => 'datetime',
@@ -136,6 +138,21 @@ class Listing extends Model
     public function reports(): HasMany
     {
         return $this->hasMany(ListingReport::class)->latest();
+    }
+
+    public function reservations(): HasMany
+    {
+        return $this->hasMany(ListingReservation::class)->latest();
+    }
+
+    /** Seekers can reserve this place through E-Ride now (the feature on, the owner opted in, a unit free). */
+    public function takesReservations(): bool
+    {
+        if (!ListingSettings::reservations()['enabled'] || !$this->reservations_on || !$this->reservation_amount || $this->status !== self::LIVE) {
+            return false;
+        }
+        $pending = $this->reservations()->whereIn('status', [ListingReservation::AWAITING, ListingReservation::HELD])->count();
+        return $this->units_available - $pending > 0;
     }
 
     /** Days between two confirmations of "still available". */

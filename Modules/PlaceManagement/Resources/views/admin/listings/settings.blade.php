@@ -54,6 +54,25 @@
                     </div>
                 </div></div>
 
+                <div class="card mb-3"><div class="card-body">
+                    <h5 class="mb-1">{{ translate('Reservations') }}</h5>
+                    <p class="fs-12 text-muted">{{ translate('After an accepted visit, a seeker can pay the owner reservation amount to E-Ride. E-Ride holds it until the move-in, then pays the owner minus the fee, or refunds the seeker. Owners choose it per listing.') }}</p>
+                    <div class="form-check form-switch mb-3">
+                        <input type="hidden" name="reservations_enabled" value="0">
+                        <input class="form-check-input" type="checkbox" role="switch" id="reservations_enabled" name="reservations_enabled" value="1" {{ old('reservations_enabled', $settings['reservations_enabled']) ? 'checked' : '' }}>
+                        <label class="form-check-label" for="reservations_enabled">{{ translate('Seekers can reserve through E-Ride') }}</label>
+                    </div>
+                    <div class="row g-3">
+                        {!! $field('reservation_min', translate('Smallest amount (FCFA)')) !!}
+                        {!! $field('reservation_max', translate('Largest amount (FCFA)'), translate('Never more than one year of rent either.')) !!}
+                        {!! $field('reservation_fee_percent', translate('E-Ride fee (% of the reservation, from the owner payout)')) !!}
+                        {!! $field('reservation_pay_minutes', translate('Minutes to pay once started')) !!}
+                        {!! $field('reservation_accept_hours', translate('Hours the owner has to accept')) !!}
+                        {!! $field('reservation_release_days', translate('Days after the move-in date before automatic release')) !!}
+                        {!! $field('reservation_move_in_days', translate('Move-in date at most (days ahead)')) !!}
+                    </div>
+                </div></div>
+
                 <button type="submit" class="btn btn-primary">{{ translate('Save') }}</button>
             </form>
         </div>

@@ -34,6 +34,11 @@ class ListingController extends Controller
             'water' => Listing::WATER,
             'power' => Listing::POWER,
             'amenities' => Listing::AMENITIES,
+            // Reservation money: null while the feature is off, so the app shows no switch.
+            'reservations' => ($r = ListingSettings::reservations())['enabled'] ? [
+                'min' => $r['min'], 'max' => $r['max'], 'fee_percent' => $r['fee_percent'], 'accept_hours' => $r['accept_hours'],
+                'release_days' => $r['release_days'], 'move_in_days' => $r['move_in_days'],
+            ] : null,
             'windows' => ListingVisit::WINDOWS,
             'report_reasons' => ListingReport::REASONS,
             'min_photos' => Listing::MIN_PHOTOS,
@@ -101,6 +106,9 @@ class ListingController extends Controller
         if ($validator->fails()) {
             return response()->json(responseFormatter(DEFAULT_400, errors: errorProcessor($validator)), 403);
         }
+        if ($problem = $this->reservationProblem($validator->validated())) {
+            return $this->fail('reservation_amount', $problem);
+        }
         $listing = $this->listings->create($request->user(), $validator->validated(), $request->file('photos', []));
         return response()->json(responseFormatter(DEFAULT_STORE_200, ListingPresenter::listing($listing, $request->user()->id)));
     }
@@ -113,6 +121,9 @@ class ListingController extends Controller
         $validator = Validator::make($request->all(), $this->rules(false));
         if ($validator->fails()) {
             return response()->json(responseFormatter(DEFAULT_400, errors: errorProcessor($validator)), 403);
+        }
+        if ($problem = $this->reservationProblem($validator->validated())) {
+            return $this->fail('reservation_amount', $problem);
         }
         try {
             $listing = $this->listings->update($listing, $validator->validated(), $request->file('photos', []), array_map('intval', (array)$request->input('remove_photos', [])));
@@ -148,12 +159,38 @@ class ListingController extends Controller
             'fenced' => 'required|boolean',
             'security' => 'required|boolean',
             'amenities' => 'nullable|string|max:300',   // "wifi,cctv", keys of Listing::AMENITIES
+            // Reservation money: the owner opts in, sets the amount and where E-Ride pays them.
+            'reservations_on' => 'nullable|boolean',
+            'reservation_amount' => 'nullable|numeric|min:0',
+            'payout_phone' => 'nullable|string|max:20',
+            'payout_name' => 'nullable|string|max:80',
             'owner_role' => ['required', Rule::in(['owner', 'caretaker'])],
             'accept_policy' => $creating ? 'accepted' : 'nullable',
             'photos' => $creating ? 'required|array|min:' . Listing::MIN_PHOTOS . '|max:' . Listing::MAX_PHOTOS : 'nullable|array|max:' . Listing::MAX_PHOTOS,
             'photos.*' => $image,
             'remove_photos' => 'nullable|array',
         ];
+    }
+
+    /** Reservations on: an amount within the policy (and not above a year of rent) and a payout number. */
+    private function reservationProblem(array $data): ?string
+    {
+        if (empty($data['reservations_on'])) {
+            return null;
+        }
+        $s = ListingSettings::reservations();
+        $amount = (float)($data['reservation_amount'] ?? 0);
+        $yearRent = ($data['rent_period'] ?? 'month') === 'year' ? (float)$data['rent'] : (float)$data['rent'] * 12;
+        $max = min($s['max'], $yearRent);
+        if ($amount < $s['min'] || $amount > $max) {
+            return translate(key: 'The reservation amount must be between {min} and {max}.', replace: [
+                'min' => getCurrencyFormat($s['min']), 'max' => getCurrencyFormat($max),
+            ]);
+        }
+        if (strlen(preg_replace('/\D/', '', (string)($data['payout_phone'] ?? ''))) < 9) {
+            return translate('Add the mobile money number E-Ride pays you on.');
+        }
+        return null;
     }
 
     // ------------------------------------------------------------- owner actions
@@ -216,10 +253,12 @@ class ListingController extends Controller
             'neighbourhood' => 'nullable|string|max:60',
             'max_monthly_rent' => 'nullable|numeric|min:0',
             'verified_only' => 'nullable|boolean',
+            'amenities' => 'nullable|string|max:300',   // "wifi,cctv": the place must have all of them
         ]);
         if (ListingAlert::where('user_id', $request->user()->id)->count() >= ListingAlert::MAX_PER_USER) {
             return $this->fail('alert', translate(key: 'You can keep {count} alerts. Remove one first.', replace: ['count' => ListingAlert::MAX_PER_USER]));
         }
+        $data['amenities'] = Listing::cleanAmenities($data['amenities'] ?? null) ?: null;
         $alert = ListingAlert::create($data + ['user_id' => $request->user()->id, 'verified_only' => (bool)($data['verified_only'] ?? false)]);
         return response()->json(responseFormatter(DEFAULT_STORE_200, $alert));
     }

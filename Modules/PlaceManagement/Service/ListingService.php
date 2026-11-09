@@ -10,6 +10,7 @@ use Illuminate\Validation\ValidationException;
 use MatanYadaev\EloquentSpatial\Objects\Point;
 use Modules\PlaceManagement\Entities\Listing;
 use Modules\PlaceManagement\Entities\ListingAlert;
+use Modules\PlaceManagement\Entities\ListingReservation;
 use Modules\PlaceManagement\Entities\ListingOwner;
 use Modules\PlaceManagement\Entities\ListingPhoto;
 use Modules\PlaceManagement\Entities\ListingReport;
@@ -97,7 +98,7 @@ class ListingService
     {
         $keys = ['type', 'title', 'description', 'neighbourhood', 'address', 'latitude', 'longitude', 'units_available', 'furnished',
             'rent', 'rent_period', 'advance_months', 'caution', 'available_from', 'water', 'power', 'backup_power', 'toilet', 'kitchen',
-            'fenced', 'security', 'amenities', 'owner_role'];
+            'fenced', 'security', 'amenities', 'reservations_on', 'reservation_amount', 'payout_phone', 'payout_name', 'owner_role'];
         $fields = array_intersect_key($data, array_flip($keys));
         // Sent as "wifi,cctv"; an empty value clears them. Not sent (older app): left as is.
         if (array_key_exists('amenities', $fields)) {
@@ -150,13 +151,20 @@ class ListingService
      * is theirs (with Move for the day they move in); other open visits are
      * closed and those seekers told.
      */
-    public function markRented(Listing $listing): Listing
+    public function markRented(Listing $listing, ?string $reservedVisitId = null): Listing
     {
         $listing->update(['status' => Listing::RENTED, 'rented_at' => now(), 'units_available' => 0]);
+        // Reservations the owner never accepted are refunded; accepted ones stay with their seekers.
+        app(ListingReservationService::class)->refundAllFor($listing, 'rented', onlyUnaccepted: true);
+        $reserved = $listing->reservations()->whereIn('status', [ListingReservation::RESERVED, ListingReservation::PROBLEM])->pluck('visit_id')->all();
         $vars = ['title' => $listing->title, 'area' => $listing->neighbourhood];
         $listing->visits()->where(fn($q) => $q->whereIn('status', ListingVisit::OPEN)->orWhere('taking', 1))->with('seeker')->get()
-            ->each(function (ListingVisit $visit) use ($listing, $vars) {
-                if ($visit->taking) {
+            ->each(function (ListingVisit $visit) use ($listing, $vars, $reserved, $reservedVisitId) {
+                // A seeker with an accepted reservation keeps the visit; the one just accepted already got its push.
+                if (in_array($visit->id, $reserved, true)) {
+                    return;
+                }
+                if ($visit->taking && !$reservedVisitId) {
                     $this->push($visit->seeker, 'listing_yours', 'The place is yours', 'The owner confirmed {title} is yours. To move your things in, book an E-Ride Move truck from Home.', $vars, $listing);
                     return;
                 }
@@ -417,6 +425,7 @@ class ListingService
     {
         $listing->update(['status' => Listing::REMOVED, 'review_note' => $note]);
         $listing->visits()->whereIn('status', ListingVisit::OPEN)->update(['status' => ListingVisit::CANCELLED]);
+        app(ListingReservationService::class)->refundAllFor($listing, 'removed');
         if ($block) {
             ListingOwner::updateOrCreate(['owner_id' => $listing->owner_id], ['blocked' => true]);
             Listing::where('owner_id', $listing->owner_id)->whereIn('status', [Listing::LIVE, Listing::PAUSED, Listing::PENDING])
@@ -564,13 +573,39 @@ class ListingService
         ListingVisit::with(['listing', 'seeker', 'owner'])->where('status', ListingVisit::ACCEPTED)->whereNull('reminded_at')
             ->whereDate('visit_date', $now->copy()->addDay()->toDateString())->get()
             ->each(function (ListingVisit $visit) use ($now) {
-                $vars = ['title' => $visit->listing->title, 'window' => translate($visit->time_window)];
-                $this->push($visit->seeker, 'listing_visit_reminder', 'Visit tomorrow', 'Your visit to {title} is tomorrow, {window}. Ride there from My visits.', $vars, $visit->listing);
-                $this->push($visit->owner, 'listing_visit_reminder', 'Visit tomorrow', 'A seeker visits {title} tomorrow, {window}.', $vars, $visit->listing);
+                $vars = ['title' => $visit->listing->title, 'hours' => $visit->windowHours()];
+                $this->push($visit->seeker, 'listing_visit_reminder', 'Visit tomorrow', 'Your visit to {title} is tomorrow, {hours}. Ride there from My visits.', $vars, $visit->listing);
+                $this->push($visit->owner, 'listing_visit_reminder', 'Visit tomorrow', 'A seeker visits {title} tomorrow, {hours}.', $vars, $visit->listing);
                 $visit->update(['reminded_at' => $now]);
             });
 
         return $counts;
+    }
+
+    /**
+     * The second visit reminder: about 2 hours before the window starts (morning
+     * visits at 7:00, not earlier). Run every few minutes; each visit gets it once,
+     * and never after the window has started.
+     */
+    public function remindSoon(?Carbon $now = null): int
+    {
+        $now ??= now();
+        $sent = 0;
+        ListingVisit::with(['listing', 'seeker', 'owner'])->where('status', ListingVisit::ACCEPTED)->whereNull('soon_reminded_at')
+            ->whereDate('visit_date', $now->toDateString())->get()
+            ->each(function (ListingVisit $visit) use ($now, &$sent) {
+                $start = $visit->startsAt();
+                $sendFrom = $start->copy()->subHours(2)->max($start->copy()->setTime(7, 0));
+                if ($now->lt($sendFrom) || $now->gte($start)) {
+                    return;
+                }
+                $vars = ['title' => $visit->listing->title, 'hours' => $visit->windowHours()];
+                $this->push($visit->seeker, 'listing_visit_reminder', 'Your visit is soon', 'Your visit to {title} is today, {hours}. Tap Ride there in My visits.', $vars, $visit->listing);
+                $this->push($visit->owner, 'listing_visit_reminder', 'A visit is soon', 'A seeker visits {title} today, {hours}. Be there to open.', $vars, $visit->listing);
+                $visit->update(['soon_reminded_at' => $now]);
+                $sent++;
+            });
+        return $sent;
     }
 
     // ------------------------------------------------------------- pushes

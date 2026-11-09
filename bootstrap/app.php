@@ -126,6 +126,8 @@ $app = Application::configure(basePath: dirname(__DIR__))
         $schedule->command('trip-deposits:tick')->everyFifteenSeconds()->withoutOverlapping();
         // Homes & spaces: the still-available policy, at 8:00 so reminders arrive in the morning.
         $schedule->command('listings:sweep')->dailyAt('08:00')->withoutOverlapping();
+        $schedule->command('listings:visit-soon')->everyTenMinutes()->withoutOverlapping();
+        $schedule->command('listing-reservations:tick')->everyMinute()->withoutOverlapping();
     })
     ->create();
 

@@ -315,6 +315,7 @@ class FapshiPayments
             'tripDepositPaymentUpdate' => $business . ' deposit' . ($ref ? ' trip #' . $ref : ''),
             'customerWalletUpdate' => $business . ' wallet top-up',
             'driverDigitalPay' => $business . ' driver payment',
+            'listingReservationPaid' => $business . ' reservation, held until move-in',
             default => $business . ' payment',
         };
         return Str::limit(trim($text), 60, '');

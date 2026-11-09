@@ -61,6 +61,8 @@
                             <tr><th>{{ translate('Toilet_and_kitchen') }}</th><td>{{ $listing->toilet ? translate($listing->toilet) : '-' }} / {{ $listing->kitchen ? translate($listing->kitchen) : '-' }}</td></tr>
                             <tr><th>{{ translate('Fence_and_security') }}</th><td>{{ $yes($listing->fenced) }} / {{ $yes($listing->security) }}</td></tr>
                             @php($amenityLabels = \Modules\PlaceManagement\Entities\Listing::amenityLabels())
+                            <tr><th>{{ translate('Reservations') }}</th><td>@if($listing->reservations_on){{ getCurrencyFormat($listing->reservation_amount) }} · {{ translate('pays_out_to') }} {{ $listing->payout_phone }} {{ $listing->payout_name ? '(' . $listing->payout_name . ')' : '' }}
+                                    <a href="{{ route('admin.listing.reservations', ['tab' => 'all', 'search' => $listing->title]) }}" class="ms-1">{{ translate('See_reservations') }}</a>@else{{ translate('Off') }}@endif</td></tr>
                             <tr><th>{{ translate('Extras') }}</th><td>{{ collect($listing->amenities ?? [])->map(fn($a) => $amenityLabels[$a] ?? $a)->implode(', ') ?: '-' }}</td></tr>
                             <tr><th>{{ translate('Address') }}</th><td>{{ $listing->address ?: '-' }} · <a href="https://www.google.com/maps/search/?api=1&query={{ $listing->latitude }},{{ $listing->longitude }}" target="_blank">{{ translate('Open_the_pin_in_Maps') }}</a>
                                 @if(!$listing->zone_id)<span class="badge bg-danger ms-1">{{ translate('Outside_all_zones') }}</span>@endif</td></tr>
