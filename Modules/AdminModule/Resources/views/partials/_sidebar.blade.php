@@ -563,6 +563,12 @@
                             <span class="link-title">{{ translate('Verified_listings') }}</span>
                         </a>
                     </li>
+                    <li class="{{ Request::is('admin/homes*') ? 'active open' : '' }}">
+                        <a href="{{ route('admin.listing.index') }}">
+                            <i class="bi bi-house-door"></i>
+                            <span class="link-title">{{ translate('Homes_&_spaces') }}</span>
+                        </a>
+                    </li>
                     <li class="{{ Request::is('admin/places/on-duty*') ? 'active open' : '' }}">
                         <a href="{{ route('admin.place.on-duty') }}">
                             <i class="bi bi-capsule"></i>

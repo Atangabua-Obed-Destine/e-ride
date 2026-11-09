@@ -124,6 +124,8 @@ $app = Application::configure(basePath: dirname(__DIR__))
         $schedule->command('fapshi:reconcile')->everyTwoMinutes()->withoutOverlapping();
         $schedule->command('store-orders:tick')->everyMinute()->withoutOverlapping();
         $schedule->command('trip-deposits:tick')->everyFifteenSeconds()->withoutOverlapping();
+        // Homes & spaces: the still-available policy, at 8:00 so reminders arrive in the morning.
+        $schedule->command('listings:sweep')->dailyAt('08:00')->withoutOverlapping();
     })
     ->create();
 

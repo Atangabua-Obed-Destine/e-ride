@@ -199,6 +199,8 @@ function buildDeviceNotificationPayload($fcm_token, $title, $description, $statu
                 "new_trip_id" => (string)($notificationData['new_trip_id'] ?? null),
                 "trip_readable_id" => (string)($notificationData['readable_id'] ?? null),
                 "trip_cancellation_time" => (string)($notificationData['cancellation_time'] ?? null),
+                // Homes & spaces: the listing the push is about.
+                "listing_id" => (string)($notificationData['listing_id'] ?? null),
                 "pickup_address" => (string)($notificationData['pickup_address'] ?? null),
                 "estimated_fare" => (string)($notificationData['estimated_fare'] ?? null),
             ],

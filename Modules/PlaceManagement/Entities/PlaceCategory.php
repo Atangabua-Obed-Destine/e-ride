@@ -16,7 +16,7 @@ class PlaceCategory extends Model
     /** Icons the app can draw. Keep in step with the app's ExploreIcons. */
     public const ICONS = [
         'pharmacy', 'hospital', 'bank', 'bus', 'bed', 'store', 'fuel', 'police', 'school', 'church',
-        'restaurant', 'atm', 'money', 'market', 'place',
+        'restaurant', 'atm', 'money', 'market', 'place', 'home',
     ];
 
     /** Place types an admin can pick for a listing, per category key. Unknown categories use "other". */

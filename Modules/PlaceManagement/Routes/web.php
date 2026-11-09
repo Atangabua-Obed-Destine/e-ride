@@ -2,6 +2,7 @@
 
 use Illuminate\Support\Facades\Route;
 use Modules\PlaceManagement\Http\Controllers\Web\Admin\GooglePlaceController;
+use Modules\PlaceManagement\Http\Controllers\Web\Admin\ListingAdminController;
 use Modules\PlaceManagement\Http\Controllers\Web\Admin\OnDutyController;
 use Modules\PlaceManagement\Http\Controllers\Web\Admin\PlaceCategoryController;
 use Modules\PlaceManagement\Http\Controllers\Web\Admin\PlaceController;
@@ -33,6 +34,29 @@ Route::group(['prefix' => 'admin', 'as' => 'admin.', 'middleware' => 'admin'], f
             Route::post('{place}/status', [PlaceController::class, 'status'])->name('status');
         });
         Route::delete('{place}', [PlaceController::class, 'destroy'])->name('destroy')->middleware('can:place_delete');
+    });
+
+    // Homes & spaces: customers' listings, staff visits, reports, policy.
+    Route::group(['prefix' => 'homes', 'as' => 'listing.'], function () {
+        Route::middleware('can:place_view')->group(function () {
+            Route::get('/', [ListingAdminController::class, 'index'])->name('index');
+            Route::get('visits', [ListingAdminController::class, 'visits'])->name('visits');
+            Route::get('reports', [ListingAdminController::class, 'reports'])->name('reports');
+            Route::get('{listing}', [ListingAdminController::class, 'show'])->name('show')->whereUuid('listing');
+        });
+        Route::middleware('can:place_edit')->group(function () {
+            Route::get('settings/policy', [ListingAdminController::class, 'settings'])->name('settings');
+            Route::post('settings/policy', [ListingAdminController::class, 'saveSettings'])->name('settings.save');
+            Route::post('{listing}/approve', [ListingAdminController::class, 'approve'])->name('approve');
+            Route::post('{listing}/reviewed', [ListingAdminController::class, 'reviewed'])->name('reviewed');
+            Route::post('{listing}/changes', [ListingAdminController::class, 'changes'])->name('changes');
+            Route::post('{listing}/refuse', [ListingAdminController::class, 'refuse'])->name('refuse');
+            Route::post('{listing}/remove', [ListingAdminController::class, 'remove'])->name('remove');
+            Route::post('visits/{verification}/assign', [ListingAdminController::class, 'assign'])->name('assign');
+            Route::get('visits/{verification}/at-the-place', [ListingAdminController::class, 'visitPage'])->name('visit');
+            Route::post('visits/{verification}/at-the-place', [ListingAdminController::class, 'visitSubmit'])->name('visit.submit');
+            Route::post('reports/{report}/decide', [ListingAdminController::class, 'decide'])->name('decide');
+        });
     });
 
     Route::group(['prefix' => 'place-settings', 'as' => 'place-setting.', 'middleware' => 'can:place_edit'], function () {

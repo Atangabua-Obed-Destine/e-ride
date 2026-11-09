@@ -51,8 +51,9 @@ class StayController extends Controller
             'latitude' => 'nullable|numeric|between:-90,90',
             'longitude' => 'nullable|numeric|between:-180,180',
         ]);
-        if (!PlaceSettings::enabled()) {
-            return response()->json(responseFormatter(DEFAULT_200, ['enabled' => false, 'verified' => [], 'top_rated' => [], 'nearby' => [], 'on_duty' => [], 'google_available' => false]));
+        // Homes & spaces has its own screens (listings); an older app opening it here gets an empty list, not a Google search.
+        if (!PlaceSettings::enabled() || $category === 'homes') {
+            return response()->json(responseFormatter(DEFAULT_200, ['enabled' => $category === 'homes', 'verified' => [], 'top_rated' => [], 'nearby' => [], 'on_duty' => [], 'google_available' => false]));
         }
         $lat = $request->filled('latitude') ? (float)$request->query('latitude') : null;
         $lng = $request->filled('longitude') ? (float)$request->query('longitude') : null;
