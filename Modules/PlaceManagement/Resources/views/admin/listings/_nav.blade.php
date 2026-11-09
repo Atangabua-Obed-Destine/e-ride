@@ -1,4 +1,5 @@
-@php($navCounts = $navCounts ?? [
+{{-- A page may pass some counts (the listings page does); the rest are counted here, so every tab has one. --}}
+@php($navCounts = ($navCounts ?? []) + [
     'review' => \Modules\PlaceManagement\Entities\Listing::where(fn($q) => $q->where('status', 'pending')->orWhere('needs_review', 1))->count(),
     'visits' => \Modules\PlaceManagement\Entities\ListingVerification::whereIn('status', ['requested', 'scheduled'])->count(),
     'reports' => \Modules\PlaceManagement\Entities\ListingReport::where('status', 'open')->count(),

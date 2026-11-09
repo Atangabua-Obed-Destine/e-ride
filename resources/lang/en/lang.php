@@ -5453,4 +5453,7 @@
   'Also_count_a_strike_for_the_owner' => 'Also count a strike for the owner',
   'This_moves_money._Continue' => 'This moves money. Continue',
   'Save_decision' => 'Save decision',
+  'room' => 'Room',
+  'caretaker' => 'Caretaker',
+  'month' => 'Month',
 );
