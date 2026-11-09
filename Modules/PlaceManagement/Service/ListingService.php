@@ -97,8 +97,13 @@ class ListingService
     {
         $keys = ['type', 'title', 'description', 'neighbourhood', 'address', 'latitude', 'longitude', 'units_available', 'furnished',
             'rent', 'rent_period', 'advance_months', 'caution', 'available_from', 'water', 'power', 'backup_power', 'toilet', 'kitchen',
-            'fenced', 'security', 'owner_role'];
-        return array_intersect_key($data, array_flip($keys));
+            'fenced', 'security', 'amenities', 'owner_role'];
+        $fields = array_intersect_key($data, array_flip($keys));
+        // Sent as "wifi,cctv"; an empty value clears them. Not sent (older app): left as is.
+        if (array_key_exists('amenities', $fields)) {
+            $fields['amenities'] = Listing::cleanAmenities($fields['amenities']);
+        }
+        return $fields;
     }
 
     private function zoneFor(float $lat, float $lng): ?string
@@ -195,6 +200,9 @@ class ListingService
         if (!empty($filters['max_rent'])) {
             $max = (float)$filters['max_rent'];
             $items = $items->filter(fn(Listing $l) => $l->monthlyRent() <= $max);
+        }
+        if ($required = Listing::cleanAmenities($filters['amenities'] ?? null)) {
+            $items = $items->filter(fn(Listing $l) => $l->hasAmenities($required));
         }
         $now = now();
         $items = $items->sortBy([

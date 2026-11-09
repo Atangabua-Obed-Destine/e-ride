@@ -26,6 +26,47 @@ class Listing extends Model
     public const SHORT_TYPES = ['hostel_room', 'room', 'studio'];
     public const WATER = ['tap', 'borehole', 'well', 'none'];
     public const POWER = ['prepaid_meter', 'shared_meter', 'none'];
+    /**
+     * Extras an owner can tick, in display order. Water, light, backup power, toilet,
+     * kitchen, fence and security guard have their own fields. The app has the labels and icons.
+     */
+    public const AMENITIES = [
+        'wifi', 'cctv', 'water_tank', 'parking', 'tarred_road', 'tiled_floor', 'wardrobe',
+        'study_area', 'hot_water', 'laundry_area', 'cleaning', 'air_conditioning',
+    ];
+
+    /** Admin labels for AMENITIES. */
+    public static function amenityLabels(): array
+    {
+        return [
+            'wifi' => translate('Internet (WiFi)'),
+            'cctv' => translate('CCTV cameras'),
+            'water_tank' => translate('Water storage tank'),
+            'parking' => translate('Parking'),
+            'tarred_road' => translate('Tarred road to the gate'),
+            'tiled_floor' => translate('Tiled floor'),
+            'wardrobe' => translate('Wardrobe'),
+            'study_area' => translate('Study or reading room'),
+            'hot_water' => translate('Hot water'),
+            'laundry_area' => translate('Laundry area'),
+            'cleaning' => translate('Shared areas cleaned'),
+            'air_conditioning' => translate('Air conditioning'),
+        ];
+    }
+
+    /** "wifi, cctv" or a list, to the known keys in display order. */
+    public static function cleanAmenities(string|array|null $value): array
+    {
+        $given = is_array($value) ? $value : explode(',', (string)$value);
+        $given = array_map(fn($v) => trim((string)$v), $given);
+        return array_values(array_filter(self::AMENITIES, fn($key) => in_array($key, $given, true)));
+    }
+
+    /** @param string[] $required */
+    public function hasAmenities(array $required): bool
+    {
+        return !array_diff($required, $this->amenities ?? []);
+    }
 
     public const PENDING = 'pending';
     public const CHANGES = 'changes';
@@ -41,7 +82,7 @@ class Listing extends Model
     protected $fillable = [
         'owner_id', 'type', 'title', 'description', 'neighbourhood', 'address', 'latitude', 'longitude', 'zone_id',
         'units_available', 'furnished', 'rent', 'rent_period', 'advance_months', 'caution', 'available_from',
-        'water', 'power', 'backup_power', 'toilet', 'kitchen', 'fenced', 'security', 'owner_role',
+        'water', 'power', 'backup_power', 'toilet', 'kitchen', 'fenced', 'security', 'amenities', 'owner_role',
         'status', 'review_note', 'needs_review', 'approved_at', 'last_confirmed_at', 'reminder_stage', 'paused_at',
         'taken_check_until', 'verified_until', 'verified_expiry_notified_at', 'stale_nudged_at', 'rented_at', 'views',
     ];
@@ -57,6 +98,7 @@ class Listing extends Model
         'backup_power' => 'boolean',
         'fenced' => 'boolean',
         'security' => 'boolean',
+        'amenities' => 'array',
         'needs_review' => 'boolean',
         'available_from' => 'date',
         'approved_at' => 'datetime',

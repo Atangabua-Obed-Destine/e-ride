@@ -54,6 +54,7 @@ class ListingPresenter
             'kitchen' => $listing->kitchen,
             'fenced' => $listing->fenced,
             'security' => $listing->security,
+            'amenities' => array_values($listing->amenities ?? []),
             'owner_role' => $listing->owner_role,
             'owner_first_name' => $listing->owner?->first_name,
             'status' => $listing->status,

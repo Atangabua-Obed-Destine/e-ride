@@ -33,6 +33,7 @@ class ListingController extends Controller
             'neighbourhoods' => $settings['neighbourhoods'],
             'water' => Listing::WATER,
             'power' => Listing::POWER,
+            'amenities' => Listing::AMENITIES,
             'windows' => ListingVisit::WINDOWS,
             'report_reasons' => ListingReport::REASONS,
             'min_photos' => Listing::MIN_PHOTOS,
@@ -56,12 +57,13 @@ class ListingController extends Controller
             'verified' => 'nullable|boolean',
             'water' => 'nullable|boolean',
             'backup_power' => 'nullable|boolean',
+            'amenities' => 'nullable|string|max:300',   // "wifi,cctv": has all of them
             'limit' => 'nullable|integer|min:1|max:50',
             'offset' => 'nullable|integer|min:1',
         ]);
         $limit = (int)$request->query('limit', 20);
         $offset = ((int)$request->query('offset', 1) - 1) * $limit;
-        $result = $this->listings->search($request->only(['type', 'neighbourhood', 'max_rent', 'verified', 'water', 'backup_power']), $offset, $limit);
+        $result = $this->listings->search($request->only(['type', 'neighbourhood', 'max_rent', 'verified', 'water', 'backup_power', 'amenities']), $offset, $limit);
         $viewer = $request->user()->id;
         return response()->json(responseFormatter(DEFAULT_200, [
             'total' => $result['total'],
@@ -145,6 +147,7 @@ class ListingController extends Controller
             'kitchen' => ['nullable', Rule::in(['private', 'shared', 'none'])],
             'fenced' => 'required|boolean',
             'security' => 'required|boolean',
+            'amenities' => 'nullable|string|max:300',   // "wifi,cctv", keys of Listing::AMENITIES
             'owner_role' => ['required', Rule::in(['owner', 'caretaker'])],
             'accept_policy' => $creating ? 'accepted' : 'nullable',
             'photos' => $creating ? 'required|array|min:' . Listing::MIN_PHOTOS . '|max:' . Listing::MAX_PHOTOS : 'nullable|array|max:' . Listing::MAX_PHOTOS,
