@@ -12,5 +12,8 @@ class TrustedContact extends Model
 
     public const MAX_PER_CUSTOMER = 3;
 
-    protected $fillable = ['user_id', 'name', 'phone'];
+    protected $fillable = ['user_id', 'name', 'phone', 'night_share'];
+
+    /** night_share: this contact follows every night ride (TripCheckinService). */
+    protected $casts = ['night_share' => 'boolean'];
 }

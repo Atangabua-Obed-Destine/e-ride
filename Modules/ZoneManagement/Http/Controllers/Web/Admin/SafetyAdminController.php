@@ -12,6 +12,8 @@ use Illuminate\Validation\Rule;
 use Modules\ZoneManagement\Entities\DangerReport;
 use Modules\ZoneManagement\Entities\SafetyArea;
 use Modules\ZoneManagement\Entities\Zone;
+use Modules\TripManagement\Entities\TripCheckin;
+use Modules\TripManagement\Lib\CheckinSettings;
 use Modules\ZoneManagement\Lib\SafetySettings;
 use Modules\ZoneManagement\Service\SafetyService;
 
@@ -34,6 +36,8 @@ class SafetyAdminController extends Controller
             ->latest('updated_at')->limit(15)->get();
         $zones = Zone::where('is_active', 1)->orderBy('name')->get(['id', 'name']);
         $settings = SafetySettings::all();
+        $checkinSettings = CheckinSettings::all();
+        $checkins = TripCheckin::with('trip:id,ref_id')->where('asked_at', '>=', $now->copy()->subDay())->latest('asked_at')->limit(30)->get();
         $mapAreas = $areas->map(fn(SafetyArea $a) => $this->safety->presentArea($a) + [
             'state' => !$a->isActive($now) ? 'planned' : (!$a->confirmed ? 'decide' : $a->kind),
             'zone_name' => $a->zone?->name,
@@ -42,7 +46,7 @@ class SafetyAdminController extends Controller
             'lat' => $r->latitude, 'lng' => $r->longitude, 'type' => DangerReport::label($r->type), 'role' => $r->role,
             'status' => $r->status, 'at' => $r->created_at->format('H:i'),
         ])->values();
-        return view('zonemanagement::admin.safety.index', compact('decide', 'inForce', 'planned', 'reports', 'past', 'zones', 'settings', 'mapAreas', 'mapReports'));
+        return view('zonemanagement::admin.safety.index', compact('decide', 'inForce', 'planned', 'reports', 'past', 'zones', 'settings', 'mapAreas', 'mapReports', 'checkinSettings', 'checkins'));
     }
 
     public function pause(Request $request): RedirectResponse
@@ -118,6 +122,30 @@ class SafetyAdminController extends Controller
         }
         Cache::forget(CACHE_BUSINESS_SETTINGS);
         Toastr::success(translate('Safety settings saved'));
+        return back();
+    }
+
+    /** Trip check-ins and night sharing (TripCheckinService). */
+    public function checkinSettings(Request $request): RedirectResponse
+    {
+        $data = $request->validate([
+            'enabled' => 'nullable|boolean',
+            'stop_minutes' => 'required|integer|min:2|max:60',
+            'stop_m' => 'required|integer|min:10|max:500',
+            'off_route_m' => 'required|integer|min:200|max:10000',
+            'off_route_times' => 'required|integer|min:1|max:10',
+            'long_factor' => 'required|numeric|min:1.2|max:5',
+            'answer_minutes' => 'required|integer|min:1|max:15',
+            'quiet_minutes' => 'required|integer|min:1|max:60',
+            'night_from' => 'required|integer|min:0|max:23',
+            'night_to' => 'required|integer|min:0|max:23',
+        ]);
+        $data['enabled'] = $request->boolean('enabled') ? 1 : 0;
+        foreach ($data as $key => $value) {
+            updateBusinessSetting(keyName: 'checkin_' . $key, settingType: CheckinSettings::TYPE, value: (string)$value);
+        }
+        Cache::forget(CACHE_BUSINESS_SETTINGS);
+        Toastr::success(translate('Check-in settings saved'));
         return back();
     }
 }

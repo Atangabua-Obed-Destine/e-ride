@@ -11,6 +11,7 @@ use Modules\TripManagement\Http\Controllers\Api\PaymentController;
 use Modules\TripManagement\Http\Controllers\Api\Customer\MoveController as CustomerMoveController;
 use Modules\TripManagement\Http\Controllers\Api\Driver\MoveController as DriverMoveController;
 use Modules\TripManagement\Http\Controllers\Api\Customer\TripShareController;
+use Modules\TripManagement\Http\Controllers\Api\Customer\TripCheckinController;
 
 /**
  * CUSTOMER API LIST
@@ -70,7 +71,10 @@ Route::group(['prefix' => 'customer', 'middleware' => ['auth:api', 'maintenance_
         Route::post('/', [TripShareController::class, 'storeContact'])->middleware('throttle:20,1,trusted-contacts');
         Route::put('{contactId}', [TripShareController::class, 'updateContact'])->middleware('throttle:20,1,trusted-contacts');
         Route::delete('{contactId}', [TripShareController::class, 'destroyContact']);
+        Route::post('{contactId}/night-share', [TripShareController::class, 'nightShare'])->middleware('throttle:20,1,trusted-contacts');
     });
+    Route::get('trip-checkin', [TripCheckinController::class, 'show']);
+    Route::post('trip-checkin/{checkinId}/answer', [TripCheckinController::class, 'answer'])->middleware('throttle:20,1,trip-checkin');
     Route::get('trip-report/reasons', [TripReportController::class, 'reasons']);
     Route::post('trip-report', [TripReportController::class, 'store'])->middleware('throttle:5,1,trip-report');
     Route::group(['prefix' => 'parcel'], function () {

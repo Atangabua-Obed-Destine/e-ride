@@ -188,7 +188,47 @@
                                 <button class="btn btn-outline-primary w-100 mt-2">{{ translate('Save settings') }}</button>
                             </form>
                         </div></div>
+
+                        <div class="card mb-3" id="trip-checkins"><div class="card-body">
+                            <h5 class="mb-1">{{ translate('Trip check-ins') }}</h5>
+                            <p class="fs-12 text-muted mb-3">{{ translate('When a ride stops too long, leaves its route or runs far too long, the rider is asked if they are OK. No answer or I need help opens a safety alert and tells their trusted contacts.') }}</p>
+                            <form action="{{ route('admin.safety.checkin-settings') }}" method="POST">@csrf
+                                <div class="form-check form-switch mb-3">
+                                    <input type="hidden" name="enabled" value="0">
+                                    <input class="form-check-input" type="checkbox" role="switch" id="checkin-enabled" name="enabled" value="1" {{ $checkinSettings['enabled'] ? 'checked' : '' }}>
+                                    <label class="form-check-label" for="checkin-enabled">{{ translate('Trip check-ins and night sharing are on') }}</label>
+                                </div>
+                                @foreach([
+                                    'stop_minutes' => translate('Ask after a stop of (minutes)'),
+                                    'stop_m' => translate('A stop means moving less than (metres)'),
+                                    'off_route_m' => translate('Off route means further from the route than (metres)'),
+                                    'off_route_times' => translate('Off route that many minutes in a row'),
+                                    'long_factor' => translate('Too long means this many times the estimate'),
+                                    'answer_minutes' => translate('Time to answer before the alert (minutes)'),
+                                    'quiet_minutes' => translate('After I am OK, do not ask again for (minutes)'),
+                                    'night_from' => translate('Night sharing from (hour, 0 to 23)'),
+                                    'night_to' => translate('Night sharing until (hour, 0 to 23)'),
+                                ] as $key => $label)
+                                    <div class="mb-2"><label class="form-label fs-12 mb-1">{{ $label }}</label>
+                                        <input type="number" step="any" name="{{ $key }}" class="form-control form-control-sm" value="{{ $checkinSettings[$key] }}"></div>
+                                @endforeach
+                                <button class="btn btn-outline-primary w-100 mt-2">{{ translate('Save check-in settings') }}</button>
+                            </form>
+                        </div></div>
                     @endcan
+
+                    @if($checkins->isNotEmpty())
+                        <div class="card mb-3"><div class="card-body">
+                            <h5 class="mb-3">{{ translate('Check-ins, last 24 hours') }}</h5>
+                            @foreach($checkins as $ci)
+                                <div class="fs-12 border-bottom py-1">
+                                    <b>{{ translate('Trip') }} #{{ $ci->trip?->ref_id }}</b> · {{ \Modules\TripManagement\Entities\TripCheckin::reasonLabel($ci->reason) }}
+                                    <span class="badge {{ in_array($ci->status, ['help', 'no_answer']) ? 'bg-danger' : ($ci->status === 'ok' ? 'bg-success' : 'bg-secondary') }}">{{ \Modules\TripManagement\Entities\TripCheckin::statusLabel($ci->status) }}</span>
+                                    <div class="text-muted">{{ $ci->asked_at?->format('d M H:i') }}@if($ci->escalated_at) · {{ translate('safety alert opened') }}@endif</div>
+                                </div>
+                            @endforeach
+                        </div></div>
+                    @endif
 
                     @if($past->isNotEmpty())
                         <div class="card mb-3"><div class="card-body">

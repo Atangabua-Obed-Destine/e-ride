@@ -97,10 +97,26 @@ class TripShareController extends Controller
         return response()->json(responseFormatter(DEFAULT_200, $this->list()));
     }
 
+    /** Night sharing: this contact follows every night ride. One contact at a time. */
+    public function nightShare(Request $request, string $contactId): JsonResponse
+    {
+        $contact = TrustedContact::where('user_id', auth('api')->id())->where('id', $contactId)->first();
+        if (!$contact) {
+            return response()->json(responseFormatter(DEFAULT_404), 404);
+        }
+        $on = $request->boolean('on');
+        if ($on) {
+            TrustedContact::where('user_id', auth('api')->id())->where('id', '!=', $contactId)->update(['night_share' => 0]);
+        }
+        $contact->update(['night_share' => $on]);
+        return response()->json(responseFormatter(DEFAULT_200, $this->list()));
+    }
+
     private function list(): array
     {
         return TrustedContact::where('user_id', auth('api')->id())->orderBy('created_at')->get()
-            ->map(fn(TrustedContact $contact) => ['id' => $contact->id, 'name' => $contact->name, 'phone' => $contact->phone])
+            ->map(fn(TrustedContact $contact) => ['id' => $contact->id, 'name' => $contact->name, 'phone' => $contact->phone,
+                'night_share' => (bool)$contact->night_share])
             ->values()->all();
     }
 

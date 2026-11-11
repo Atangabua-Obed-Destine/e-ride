@@ -41,5 +41,6 @@ Route::group(['prefix' => 'admin/safety', 'as' => 'admin.safety.', 'middleware' 
         Route::post('areas/{area}/lift', [SafetyAdminController::class, 'lift'])->name('lift');
         Route::post('reports/{report}', [SafetyAdminController::class, 'report'])->name('report');
         Route::post('settings', [SafetyAdminController::class, 'settings'])->name('settings');
+        Route::post('checkin-settings', [SafetyAdminController::class, 'checkinSettings'])->name('checkin-settings');
     });
 });

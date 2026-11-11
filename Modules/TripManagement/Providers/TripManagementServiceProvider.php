@@ -34,6 +34,9 @@ class TripManagementServiceProvider extends ServiceProvider
         $this->loadMigrationsFrom(module_path($this->moduleName, 'Database/Migrations'));
         ParcelRefund::observe(ParcelRefundObserver::class);
         TripRequest::observe(TripRequestObserver::class);
+        if ($this->app->runningInConsole()) {
+            $this->commands([\Modules\TripManagement\Console\TripCheckinTick::class]);
+        }
     }
 
     /**
