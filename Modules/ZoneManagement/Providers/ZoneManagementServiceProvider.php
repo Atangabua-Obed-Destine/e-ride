@@ -31,6 +31,9 @@ class ZoneManagementServiceProvider extends ServiceProvider
         $this->registerViews();
         $this->loadMigrationsFrom(module_path($this->moduleName, 'Database/Migrations'));
         Zone::observe(ZoneObserver::class);
+        if ($this->app->runningInConsole()) {
+            $this->commands([\Modules\ZoneManagement\Console\SafetyTick::class]);
+        }
     }
 
     /**

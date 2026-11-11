@@ -24,6 +24,8 @@
                    href="{{route('admin.trip.show', ['id' => $notification->model_id])}}"
                @elseif($notification->model == 'channel_conversation')
                    href="{{route('admin.chatting')}}"
+               @elseif(in_array($notification->model, ['danger_report', 'safety_area']))
+                   href="{{route('admin.safety.index')}}"
                @endif
                class="dropdown-item-text media gap-3 align-items-center seen-notification">
                 <h1><i class="bi bi-info-circle-fill"></i></h1>

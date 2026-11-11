@@ -87,6 +87,14 @@
                             <span class="link-title text-capitalize">{{ translate('zone_setup') }}</span>
                         </a>
                     </li>
+                    <li class="{{ Request::is('admin/safety*') ? 'active open' : '' }}">
+                        <a href="{{ route('admin.safety.index') }}">
+                            <i class="bi bi-shield-exclamation"></i>
+                            <span class="link-title">{{ translate('Safety map') }}</span>
+                            @php($safetyDecide = \Modules\ZoneManagement\Entities\SafetyArea::where('confirmed', 0)->whereNull('lifted_at')->where('ends_at', '>', now())->count())
+                            @if($safetyDecide)<span class="badge bg-danger ms-1">{{ $safetyDecide }}</span>@endif
+                        </a>
+                    </li>
                     <!---------- End Zone Management --------------->
                 @endif
 

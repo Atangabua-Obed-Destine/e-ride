@@ -2,6 +2,7 @@
 
 use Illuminate\Support\Facades\Route;
 use Modules\ZoneManagement\Http\Controllers\Api\Driver\ZoneController;
+use Modules\ZoneManagement\Http\Controllers\Api\SafetyController;
 
 /*
 |--------------------------------------------------------------------------
@@ -22,3 +23,12 @@ Route::group(['prefix' => 'driver'], function () {
         });
     });
 });
+
+// Area pause and danger reports: the same calls for riders (customer/...) and drivers (driver/...).
+foreach (['customer', 'driver'] as $side) {
+    Route::group(['prefix' => $side . '/safety', 'middleware' => ['auth:api', 'maintenance_mode']], function () {
+        Route::get('meta', [SafetyController::class, 'meta']);
+        Route::get('nearby', [SafetyController::class, 'nearby'])->middleware('throttle:60,1,safety-nearby');
+        Route::post('report', [SafetyController::class, 'report'])->middleware('throttle:10,1,safety-report');
+    });
+}

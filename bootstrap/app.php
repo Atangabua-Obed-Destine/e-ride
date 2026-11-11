@@ -128,6 +128,8 @@ $app = Application::configure(basePath: dirname(__DIR__))
         $schedule->command('listings:sweep')->dailyAt('08:00')->withoutOverlapping();
         $schedule->command('listings:visit-soon')->everyTenMinutes()->withoutOverlapping();
         $schedule->command('listing-reservations:tick')->everyMinute()->withoutOverlapping();
+        // Area pause: planned pauses start and are announced on time; danger reports fade.
+        $schedule->command('safety:tick')->everyMinute()->withoutOverlapping();
     })
     ->create();
 

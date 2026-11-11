@@ -133,6 +133,10 @@ class TripRequestController extends Controller
         if (!$getTripZone) {
             return response()->json(responseFormatter(ZONE_404), 403);
         }
+        // Area pause or no-go area (danger reports): no trips to or from it for now.
+        if ($paused = app(\Modules\ZoneManagement\Service\SafetyService::class)->tripProblem($pickup_point, $destination_point)) {
+            return response()->json(responseFormatter(DEFAULT_400, errors: [['error_code' => 'area_paused', 'message' => $paused]]), 403);
+        }
 
         // E-Ride Move: booked on a move vehicle. E-Ride sets no price, only the deposit is charged.
         $isMove = $request->type == RIDE_REQUEST && app(\Modules\TripManagement\Service\MoveTripService::class)->isMoveCategory($request->vehicle_category_id);
@@ -279,6 +283,10 @@ class TripRequestController extends Controller
 
         if (!$getTripZone) {
             return response()->json(responseFormatter(ZONE_404), 403);
+        }
+        // Area pause or no-go area (danger reports): no trips to or from it for now.
+        if ($paused = app(\Modules\ZoneManagement\Service\SafetyService::class)->tripProblem($pickupPoint, $destinationPoint)) {
+            return response()->json(responseFormatter(DEFAULT_400, errors: [['error_code' => 'area_paused', 'message' => $paused]]), 403);
         }
 
         if ($request->type == 'ride_request') {

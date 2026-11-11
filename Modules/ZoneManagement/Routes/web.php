@@ -1,6 +1,7 @@
 <?php
 
 use Illuminate\Support\Facades\Route;
+use Modules\ZoneManagement\Http\Controllers\Web\Admin\SafetyAdminController;
 use Modules\ZoneManagement\Http\Controllers\Web\Admin\ZoneController;
 
 //New Route Mamun
@@ -28,5 +29,17 @@ Route::group(['prefix' => 'admin', 'as' => 'admin.', 'middleware' => 'admin'], f
             });
         });
 
+    });
+});
+
+// Safety map: danger reports, pauses and no-go areas.
+Route::group(['prefix' => 'admin/safety', 'as' => 'admin.safety.', 'middleware' => 'admin'], function () {
+    Route::get('/', [SafetyAdminController::class, 'index'])->name('index')->middleware('can:zone_view');
+    Route::middleware('can:zone_edit')->group(function () {
+        Route::post('pause', [SafetyAdminController::class, 'pause'])->name('pause');
+        Route::post('areas/{area}/confirm', [SafetyAdminController::class, 'confirm'])->name('confirm');
+        Route::post('areas/{area}/lift', [SafetyAdminController::class, 'lift'])->name('lift');
+        Route::post('reports/{report}', [SafetyAdminController::class, 'report'])->name('report');
+        Route::post('settings', [SafetyAdminController::class, 'settings'])->name('settings');
     });
 });
