@@ -64,7 +64,7 @@ class SafetyAdminController extends Controller
         } else {
             $data['zone_id'] = null;
         }
-        $data['starts_at'] = $data['starts_at'] ?: now()->toDateTimeString();
+        $data['starts_at'] = ($data['starts_at'] ?? null) ?: now()->toDateTimeString();
         $area = $this->safety->pause(auth()->user(), $data);
         Toastr::success($area->starts_at->isFuture()
             ? translate('Pause planned. People near it are told 12 hours before.')

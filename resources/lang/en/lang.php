@@ -5533,4 +5533,5 @@
   'Protest or crowd' => 'Protest or crowd',
   'New danger report' => 'New danger report',
   'Automatic no-go area: confirm or lift it' => 'Automatic no-go area: confirm or lift it',
+  'Area paused. People in and near it were told.' => 'Area paused. People in and near it were told.',
 );

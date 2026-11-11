@@ -47,6 +47,9 @@ class LocationController extends Controller
 
         if ($userLastLocation) {
             $this->userLastLocationService->update(id: $userLastLocation->id, data: $attributes);
+            // Same spot as last time saves nothing, which left updated_at frozen and a parked
+            // driver looking gone (danger cautions and area alerts use "seen in the last minutes").
+            $userLastLocation->touch();
         } else {
             $userLastLocation = $this->userLastLocationService->create($attributes)?->load('user');
         }
