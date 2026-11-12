@@ -218,6 +218,9 @@ class ConfigController extends Controller
             'stay_label' => \Modules\PlaceManagement\Lib\PlaceSettings::all()['label'],
             'explore_status' => \Modules\PlaceManagement\Lib\PlaceSettings::enabled(),
             'explore_label' => \Modules\PlaceManagement\Lib\PlaceSettings::all()['explore_label'],
+            // Landmarks first in the place search; fixed "drop" prices on popular routes.
+            'landmarks_status' => \Modules\PlaceManagement\Lib\LocalSettings::landmarks(),
+            'drop_fares_status' => \Modules\PlaceManagement\Lib\LocalSettings::dropFares(),
             'schedule_trip_status' => (bool)$info->firstWhere('key_name', 'schedule_trip_status')?->value == 1,
             'minimum_schedule_book_time' => $info->firstWhere('key_name', 'schedule_trip_status')?->value ? convertTimeToSecond(
                 (int)$info->firstWhere('key_name', 'minimum_schedule_book_time')?->value ?? 0,
@@ -319,7 +322,13 @@ class ConfigController extends Controller
 
         // Send POST request
         $response = Http::withHeaders($headers)->post($url, $data);
-        return response()->json(responseFormatter(DEFAULT_200, $response->json()), 200);
+        $result = $response->json() ?? [];
+        // The rider's saved places and E-Ride's landmarks come first, in Google's own shape.
+        $ours = app(\Modules\PlaceManagement\Service\LandmarkService::class)->suggestions((string)$request->input('search_text'), auth('api')->id());
+        if ($ours) {
+            $result['suggestions'] = array_merge($ours, $result['suggestions'] ?? []);
+        }
+        return response()->json(responseFormatter(DEFAULT_200, $result), 200);
     }
 
     public function placeApiDetails(Request $request): JsonResponse
@@ -330,6 +339,14 @@ class ConfigController extends Controller
 
         if ($validator->fails()) {
             return response()->json(responseFormatter(DEFAULT_400, null, null, null, errorProcessor($validator)), 400);
+        }
+        // A landmark or a saved place: answered here, without Google.
+        $landmarks = app(\Modules\PlaceManagement\Service\LandmarkService::class);
+        if ($landmarks->isOurs((string)$request['placeid'])) {
+            $place = $landmarks->details((string)$request['placeid']);
+            return $place
+                ? response()->json(responseFormatter(DEFAULT_200, $place), 200)
+                : response()->json(responseFormatter(DEFAULT_404), 404);
         }
         $mapApiKey = businessConfig(GOOGLE_MAP_API)?->value['map_api_key_server'] ?? null;
         // API Headers

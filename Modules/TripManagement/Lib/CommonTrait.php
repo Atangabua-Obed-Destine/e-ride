@@ -118,6 +118,11 @@ trait CommonTrait
             $vat_percent = (double)get_cache('vat_percent') ?? 1;
             $distanceFare = $trip->rise_request_count > 0 ? $trip->actual_fare / (1 + ($vat_percent / 100)) : $actual_fare;
             $actual_fare = $bid_on_fare ? $bid_on_fare->bid_fare / (1 + ($vat_percent / 100)) : $distanceFare;
+            // Drop fare: the fixed price (VAT included) when the ride ended at the destination landmark.
+            if (app(\Modules\PlaceManagement\Service\DropFareService::class)->holdsAtEnd($trip)) {
+                $actual_fare = (float)$trip->drop_fare_price / (1 + ($vat_percent / 100));
+                $isDropPrice = true;
+            }
         } else {
             $actual_fare = 0;
         }
@@ -138,6 +143,9 @@ trait CommonTrait
         $delay_diff = $actual_time - ($trip->time->estimated_time + $delay_fee_buffer + $trip->time->idle_time);
         $delay_time = max($delay_diff, 0);
         $delay_fee = $delay_time * $fare->trip_delay_fee_per_min;
+        if (!empty($isDropPrice)) {
+            $idle_fee = $delay_fee = 0; // a drop price has no waiting or delay charges
+        }
 
 
         $vat_percent = (double)get_cache('vat_percent') ?? 1;

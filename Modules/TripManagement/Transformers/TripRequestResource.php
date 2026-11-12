@@ -77,6 +77,9 @@ class TripRequestResource extends JsonResource
             'driver_reported' => $this->driverReport()->exists(),
             // E-Ride Move: no price in the app (agreed in person), photos of the load.
             'is_move' => (bool)$this->is_move,
+            // Drop fare: a fixed price for this route; the rider pays exactly drop_fare_price.
+            'is_drop_fare' => (bool)$this->drop_fare_id,
+            'drop_fare_price' => $this->drop_fare_price !== null ? (float)$this->drop_fare_price : null,
             'move_photos' => app(\Modules\TripManagement\Service\MoveTripService::class)->photoUrls($this->move_photos),
             'coupon_amount' => round((double)$this->coupon_amount, 2),
             'discount' => $this->discount_id === null ? null : DiscountResource::make($this->discount),

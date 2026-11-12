@@ -178,6 +178,24 @@ class TripRequestController extends Controller
             $returnFee = $request->type == PARCEL ? $request->return_fee : 0;
             $cancellationFee = $request->type == PARCEL ? $request->cancellation_fee : 0;
         }
+        // Drop fare: decided here from the route, never taken from the app. A rider's own bid keeps its price.
+        $dropFare = null;
+        if ($request->type == RIDE_REQUEST && !$isMove && !$request->trip_request_id && empty($request['bid'])) {
+            $stops = json_decode((string)$request->input('intermediate_coordinates'), true);
+            $dropFare = app(\Modules\PlaceManagement\Service\DropFareService::class)->match(
+                pickup: $pickup_point,
+                destination: $destination_point,
+                vehicleCategoryId: (string)$request->vehicle_category_id,
+                at: $request['scheduled_at'] ? \Illuminate\Support\Carbon::parse($request['scheduled_at']) : null,
+                hasStops: is_array($stops) && count($stops) > 0,
+            );
+            if ($dropFare) {
+                $estimatedFare = $actualFare = $dropFare->price;
+                $riseRequestCount = 0;
+                $request->merge(['extra_fare_fee' => 0, 'extra_fare_amount' => 0, 'surge_multiplier' => 0,
+                    'drop_fare_id' => $dropFare->id, 'drop_fare_price' => $dropFare->price]);
+            }
+        }
         DB::beginTransaction();
         try {
             if ($request->trip_request_id) {
@@ -210,7 +228,9 @@ class TripRequestController extends Controller
                 $save_trip = $this->tripRequestService->createRideRequest(attributes: $request->all());
             }
 
-            if ($request->bid) {
+            if ($request->bid || $dropFare) {
+                // A bid or a drop price is the price: no automatic discount on top.
+                $dropFare?->increment('uses');
                 $final = $this->tripRequestService->findOneBy(criteria: ['id' => $save_trip->id], relations: ['driver.lastLocations', 'time', 'coordinate', 'fee', 'parcelRefund']);
             } else {
                 $vat_percent = (double)get_cache('vat_percent') ?? 1;
@@ -353,6 +373,11 @@ class TripRequestController extends Controller
             tripFare: $tripFare,
             beforeCreate: true
         );
+        // Drop fares: a fixed price on popular routes, for each vehicle category that has one.
+        if ($request->type == 'ride_request') {
+            $estimatedFare = app(\Modules\PlaceManagement\Service\DropFareService::class)
+                ->applyToEstimate(collect($estimatedFare), $pickupPoint, $destinationPoint, !empty($intermediateCoordinates));
+        }
 
         $recentAddressData = [
             'user_id' => $user?->id,
@@ -545,7 +570,8 @@ class TripRequestController extends Controller
             $trip->refresh();
             $this->updateCouponCount($response['coupon'], $response['discount']);
         }
-        if (!(($bidOnFare || $trip->rise_request_count > 0) && $trip->type == 'ride_request')) {
+        $dropPrice = $trip->type == 'ride_request' && app(\Modules\PlaceManagement\Service\DropFareService::class)->holdsAtEnd($trip);
+        if (!(($bidOnFare || $trip->rise_request_count > 0 || $dropPrice) && $trip->type == 'ride_request')) {
             $attributes = [
                 'discount_id' => null,
                 'discount_amount' => null,

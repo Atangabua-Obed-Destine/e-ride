@@ -2070,6 +2070,9 @@ class TripRequestService extends BaseService implements TripRequestServiceInterf
                 'ride_request_type' => $attributes['ride_request_type'] ?? null,
                 'is_female_driver_requested' => $isFemaleDriverRequested,
                 'is_move' => (bool)($attributes['is_move'] ?? false),
+                // Drop fare: a fixed price on this route (DropFareService).
+                'drop_fare_id' => $attributes['drop_fare_id'] ?? null,
+                'drop_fare_price' => $attributes['drop_fare_price'] ?? null,
                 'move_photos' => $attributes['move_photos'] ?? null,
                 'scheduled_at' => $attributes['scheduled_at'] ?? null,
                 'is_notification_sent' => $attributes['ride_request_type'] == SCHEDULED ? 0 : 1,

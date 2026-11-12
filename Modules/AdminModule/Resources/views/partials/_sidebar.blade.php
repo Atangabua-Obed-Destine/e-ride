@@ -595,6 +595,12 @@
                             <span class="link-title">{{ translate('Google_results') }}</span>
                         </a>
                     </li>
+                    <li class="{{ Request::is('admin/landmarks*') ? 'active open' : '' }}">
+                        <a href="{{ route('admin.landmark.index') }}">
+                            <i class="bi bi-signpost-2"></i>
+                            <span class="link-title">{{ translate('Landmarks') }}</span>
+                        </a>
+                    </li>
                     @can('place_edit')
                         <li class="{{ Request::is('admin/place-settings*') ? 'active open' : '' }}">
                             <a href="{{ route('admin.place-setting.edit') }}">
@@ -668,6 +674,12 @@
                         <a href="{{ route('admin.fare.surge-pricing.index') }}">
                             <i class="bi bi-cash-stack"></i>
                             <span class="link-title text-capitalize">{{translate('surge_price')}}</span>
+                        </a>
+                    </li>
+                    <li class="{{Request::is('admin/drop-fares*')? 'active open' : ''}}">
+                        <a href="{{ route('admin.drop-fare.index') }}">
+                            <i class="bi bi-pin-map"></i>
+                            <span class="link-title">{{ translate('Drop fares') }}</span>
                         </a>
                     </li>
                     <!---------- End Fare Management --------------->

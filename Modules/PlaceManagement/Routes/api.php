@@ -1,6 +1,7 @@
 <?php
 
 use Illuminate\Support\Facades\Route;
+use Modules\PlaceManagement\Http\Controllers\Api\Customer\LandmarkController;
 use Modules\PlaceManagement\Http\Controllers\Api\Customer\ListingController;
 use Modules\PlaceManagement\Http\Controllers\Api\Customer\ListingReservationController;
 use Modules\PlaceManagement\Http\Controllers\Api\Customer\ListingVisitController;
@@ -14,6 +15,8 @@ Route::group(['prefix' => 'customer', 'middleware' => ['auth:api', 'maintenance_
     Route::get('stay', [StayController::class, 'index'])->middleware('throttle:20,1,stay');
     // Explore Bamenda. Each category opened is one live Google search.
     Route::get('explore', [StayController::class, 'categories']);
+    // Landmarks: what the place search shows before anything is typed.
+    Route::get('landmarks/start', [LandmarkController::class, 'start'])->middleware('throttle:60,1,landmarks');
     Route::get('explore/{category}', [StayController::class, 'explore'])->where('category', '[a-z0-9_]+')->middleware('throttle:30,1,explore');
 
     // Homes & spaces. Each group has its own limit (a named counter), so a busy

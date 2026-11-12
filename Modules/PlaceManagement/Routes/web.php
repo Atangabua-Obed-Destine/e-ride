@@ -1,7 +1,9 @@
 <?php
 
 use Illuminate\Support\Facades\Route;
+use Modules\PlaceManagement\Http\Controllers\Web\Admin\DropFareAdminController;
 use Modules\PlaceManagement\Http\Controllers\Web\Admin\GooglePlaceController;
+use Modules\PlaceManagement\Http\Controllers\Web\Admin\LandmarkAdminController;
 use Modules\PlaceManagement\Http\Controllers\Web\Admin\ListingAdminController;
 use Modules\PlaceManagement\Http\Controllers\Web\Admin\ListingReservationAdminController;
 use Modules\PlaceManagement\Http\Controllers\Web\Admin\OnDutyController;
@@ -35,6 +37,31 @@ Route::group(['prefix' => 'admin', 'as' => 'admin.', 'middleware' => 'admin'], f
             Route::post('{place}/status', [PlaceController::class, 'status'])->name('status');
         });
         Route::delete('{place}', [PlaceController::class, 'destroy'])->name('destroy')->middleware('can:place_delete');
+    });
+
+    // Landmarks: the places riders find first in the app's place search.
+    Route::group(['prefix' => 'landmarks', 'as' => 'landmark.'], function () {
+        Route::get('/', [LandmarkAdminController::class, 'index'])->name('index')->middleware('can:place_view');
+        Route::middleware('can:place_edit')->group(function () {
+            Route::post('/', [LandmarkAdminController::class, 'store'])->name('store');
+            Route::post('import', [LandmarkAdminController::class, 'import'])->name('import');
+            Route::post('settings', [LandmarkAdminController::class, 'settings'])->name('settings');
+            Route::put('{landmark}', [LandmarkAdminController::class, 'update'])->name('update');
+            Route::post('{landmark}/toggle', [LandmarkAdminController::class, 'toggle'])->name('toggle');
+            Route::delete('{landmark}', [LandmarkAdminController::class, 'destroy'])->name('destroy');
+        });
+    });
+
+    // Drop fares: fixed prices between two landmarks (sidebar: Fare management).
+    Route::group(['prefix' => 'drop-fares', 'as' => 'drop-fare.'], function () {
+        Route::get('/', [DropFareAdminController::class, 'index'])->name('index')->middleware('can:fare_view');
+        Route::middleware('can:fare_add')->group(function () {
+            Route::post('/', [DropFareAdminController::class, 'store'])->name('store');
+            Route::post('settings', [DropFareAdminController::class, 'settings'])->name('settings');
+            Route::put('{dropFare}', [DropFareAdminController::class, 'update'])->name('update');
+            Route::post('{dropFare}/toggle', [DropFareAdminController::class, 'toggle'])->name('toggle');
+            Route::delete('{dropFare}', [DropFareAdminController::class, 'destroy'])->name('destroy');
+        });
     });
 
     // Homes & spaces: customers' listings, staff visits, reports, policy.

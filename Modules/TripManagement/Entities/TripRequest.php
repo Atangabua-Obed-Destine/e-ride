@@ -68,6 +68,8 @@ class TripRequest extends Model
         'ride_request_type',
         'is_female_driver_requested',
         'is_move',
+        'drop_fare_id',
+        'drop_fare_price',
         'move_photos',
         'share_token',
         'shared_at',
