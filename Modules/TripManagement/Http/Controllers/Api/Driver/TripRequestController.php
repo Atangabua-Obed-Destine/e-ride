@@ -1147,6 +1147,10 @@ class TripRequestController extends Controller
         if ($trip->is_move) {
             return response()->json(responseFormatter(DEFAULT_400, errors: [['error_code' => 'move', 'message' => translate('The price of a move is agreed with the customer in person.')]]), 403);
         }
+        if ($trip->is_health_ride || $trip->drop_fare_id) {
+            // Health rides use the normal fare and drop fares a fixed price: no bidding on either.
+            return response()->json(responseFormatter(DEFAULT_400, errors: [['error_code' => 'no_bidding', 'message' => translate(key: 'This ride has a fixed price. Accept it to take it.', locale: $user?->current_language_key)]]), 403);
+        }
 
         if (!$this->driverAvailabilityScheduleService->isDriverAvailableForTrip($user->id, $trip)) {
             return response()->json(responseFormatter(constant: DRIVER_SCHEDULE_UNAVAILABLE_403), 403);

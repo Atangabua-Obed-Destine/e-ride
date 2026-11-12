@@ -221,6 +221,14 @@ class ConfigController extends Controller
             // Landmarks first in the place search; fixed "drop" prices on popular routes.
             'landmarks_status' => \Modules\PlaceManagement\Lib\LocalSettings::landmarks(),
             'drop_fares_status' => \Modules\PlaceManagement\Lib\LocalSettings::dropFares(),
+            // Health rides: the switch, the daily limit and the emergency numbers to show.
+            'health_ride' => app(\Modules\TripManagement\Service\HealthRideService::class)->config(),
+            // Lost and found: how long after a ride a rider can report, and the return fee.
+            'lost_items' => [
+                'status' => \Modules\TripManagement\Lib\LostItemSettings::enabled(),
+                'report_days' => \Modules\TripManagement\Lib\LostItemSettings::all()['report_days'],
+                'return_fee' => \Modules\TripManagement\Lib\LostItemSettings::all()['return_fee'],
+            ],
             'schedule_trip_status' => (bool)$info->firstWhere('key_name', 'schedule_trip_status')?->value == 1,
             'minimum_schedule_book_time' => $info->firstWhere('key_name', 'schedule_trip_status')?->value ? convertTimeToSecond(
                 (int)$info->firstWhere('key_name', 'minimum_schedule_book_time')?->value ?? 0,

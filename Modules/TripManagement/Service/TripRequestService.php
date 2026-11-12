@@ -36,6 +36,7 @@ use Modules\UserManagement\Entities\User;
 use Modules\UserManagement\Lib\LevelHistoryManagerTrait;
 use Modules\UserManagement\Lib\LevelUpdateCheckerTrait;
 use Modules\UserManagement\Repository\UserLastLocationRepositoryInterface;
+use Modules\TripManagement\Lib\HealthRideSettings;
 use Modules\UserManagement\Repository\UserRepositoryInterface;
 use Modules\UserManagement\Service\Interfaces\DriverDetailServiceInterface;
 use Modules\ZoneManagement\Repository\ZoneRepositoryInterface;
@@ -1648,12 +1649,14 @@ class TripRequestService extends BaseService implements TripRequestServiceInterf
         if (isset($data['no_more_regular_ride'])) {
             $criteria = array_merge($criteria, ['ride_request_type' => SCHEDULED]);
         }
+        $healthDistance = HealthRideSettings::enabled() ? app(HealthRideService::class)->radiusKm() * 1000 : 0;
 
         $relations = [
             'driver.driverDetails' => [], 'customer' => [], 'ignoredRequests' => [], 'time' => [], 'fee' => [],
             'parcel' => [], 'parcelRefund' => [],
             'fare_biddings' => [['driver_id', '=', auth('api')->id()]],
-            'coordinate' => fn($query) => $query->distanceSphere('pickup_coordinates', $data['driver_locations'], $data['distance']),
+            // Health rides reach further (HealthRideService::radiusKm); whereHas below does the exact filtering.
+            'coordinate' => fn($query) => $query->distanceSphere('pickup_coordinates', $data['driver_locations'], max($data['distance'], $healthDistance)),
         ];
 
         $femaleOnlyRideServiceEnabled = (bool)(businessConfig('female_only_ride_service', TRIP_SETTINGS)?->value ?? false);
@@ -1663,8 +1666,14 @@ class TripRequestService extends BaseService implements TripRequestServiceInterf
 
         $whereHasRelations = [];
 
-        $whereHasRelations['coordinate'] = function ($query) use ($data) {
-            $query->distanceSphere('pickup_coordinates', $data['driver_locations'], $data['distance']);
+        $whereHasRelations['coordinate'] = function ($query) use ($data, $healthDistance) {
+            if ($healthDistance <= $data['distance']) {
+                $query->distanceSphere('pickup_coordinates', $data['driver_locations'], $data['distance']);
+                return;
+            }
+            $query->where(fn($q) => $q->distanceSphere('pickup_coordinates', $data['driver_locations'], $data['distance'])
+                ->orWhere(fn($h) => $h->whereRaw('trip_requests.is_health_ride = 1')
+                    ->distanceSphere('pickup_coordinates', $data['driver_locations'], $healthDistance)));
         };
         $orderBy = ['created_at' => 'desc'];
         $withAvgRelations = [['customerReceivedReviews', 'rating']];
@@ -2073,6 +2082,7 @@ class TripRequestService extends BaseService implements TripRequestServiceInterf
                 // Drop fare: a fixed price on this route (DropFareService).
                 'drop_fare_id' => $attributes['drop_fare_id'] ?? null,
                 'drop_fare_price' => $attributes['drop_fare_price'] ?? null,
+                'is_health_ride' => (bool)($attributes['is_health_ride'] ?? false),
                 'move_photos' => $attributes['move_photos'] ?? null,
                 'scheduled_at' => $attributes['scheduled_at'] ?? null,
                 'is_notification_sent' => $attributes['ride_request_type'] == SCHEDULED ? 0 : 1,
@@ -2189,6 +2199,10 @@ class TripRequestService extends BaseService implements TripRequestServiceInterf
             'ride_request_type' => $oldTrip->ride_request_type,
             'is_female_driver_requested' => $oldTrip->is_female_driver_requested,
             'is_move' => $oldTrip->is_move,
+            // The rebooked trip keeps its drop price and its health-ride rules.
+            'drop_fare_id' => $oldTrip->drop_fare_id,
+            'drop_fare_price' => $oldTrip->drop_fare_price,
+            'is_health_ride' => $oldTrip->is_health_ride,
             'move_photos' => $oldTrip->move_photos,
             'scheduled_at' => $oldTrip->scheduled_at,
             'entrance' => $oldTrip->entrance,
@@ -2218,7 +2232,7 @@ class TripRequestService extends BaseService implements TripRequestServiceInterf
         }
 
         $final = $this->findOneBy(criteria: ['id' => $newTrip->id], relations: ['coordinate', 'time', 'customer']);
-        $searchRadius = (double)get_cache('search_radius') ?? 5;
+        $searchRadius = $final->is_health_ride ? app(HealthRideService::class)->radiusKm() : ((double)get_cache('search_radius') ?? 5);
         ProcessPushNotifications::dispatch(radius: $searchRadius, trip: $final, exceptDriverId: $cancellingDriverId)->afterResponse();
 
         return $final;

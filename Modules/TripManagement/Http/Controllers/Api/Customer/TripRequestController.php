@@ -157,6 +157,15 @@ class TripRequestController extends Controller
             ]);
         }
 
+        // Health ride: an urgent ride to care. Normal fare, no surge, no bidding, now only, a few a day.
+        $isHealth = $request->type == RIDE_REQUEST && !$request->trip_request_id && filter_var($request->input('health_ride'), FILTER_VALIDATE_BOOLEAN);
+        if ($isHealth && ($problem = app(\Modules\TripManagement\Service\HealthRideService::class)->problem(auth('api')->id(), $isMove, $request->ride_request_type, (bool)$request['bid']))) {
+            return response()->json(responseFormatter(DEFAULT_400, errors: [['error_code' => 'health_ride', 'message' => $problem]]), 403);
+        }
+        if ($request->trip_request_id && $request['bid'] && $save_trip?->is_health_ride) {
+            return response()->json(responseFormatter(DEFAULT_400, errors: [['error_code' => 'health_ride', 'message' => translate('A health ride uses the normal fare, so there is no bidding.')]]), 403);
+        }
+
         $extraFare = $isMove ? null : $this->checkZoneExtraFare($zone);
         $surgePrice = $isMove ? null : $this->surgePricingService->checkSurgePricing(zoneId: $zone->id, tripType: $request->type, vehicleCategoryId: $request->vehicle_category_id, scheduledAt: $request['scheduled_at']);
         if (array_key_exists('bid', $request->all()) && $request['bid']) {
@@ -177,6 +186,12 @@ class TripRequestController extends Controller
             $riseRequestCount = 0;
             $returnFee = $request->type == PARCEL ? $request->return_fee : 0;
             $cancellationFee = $request->type == PARCEL ? $request->cancellation_fee : 0;
+        }
+        if ($isHealth) {
+            // The normal fare, never the surge or extra-fare price, whatever the app sent.
+            $estimatedFare = $actualFare = $request['estimated_fare'];
+            $riseRequestCount = 0;
+            $request->merge(['extra_fare_fee' => 0, 'extra_fare_amount' => 0, 'surge_multiplier' => 0, 'is_health_ride' => 1]);
         }
         // Drop fare: decided here from the route, never taken from the app. A rider's own bid keeps its price.
         $dropFare = null;
@@ -252,7 +267,14 @@ class TripRequestController extends Controller
             }
             DB::commit();
 
-            $search_radius = (double)get_cache('search_radius') ?? 5;
+            $search_radius = $final->is_health_ride ? app(\Modules\TripManagement\Service\HealthRideService::class)->radiusKm() : ((double)get_cache('search_radius') ?? 5);
+            if ($final->is_health_ride) {
+                try {
+                    \Modules\AdminModule\Entities\AdminNotification::create(['model' => 'trip_request', 'model_id' => $final->id, 'message' => 'Health ride requested, trip #' . $final->ref_id]);
+                } catch (\Throwable $e) {
+                    Log::info('Health ride admin notification not saved', ['trip' => $final->id, 'error' => $e->getMessage()]);
+                }
+            }
             $final->ride_request_type != 'scheduled' && ProcessPushNotifications::dispatch(radius: $search_radius, trip: $final, parcelWeight: $request->weight ?? null)->afterResponse();
             $trip = new TripRequestResource($final);
 
@@ -307,6 +329,11 @@ class TripRequestController extends Controller
         // Area pause or no-go area (danger reports): no trips to or from it for now.
         if ($paused = app(\Modules\ZoneManagement\Service\SafetyService::class)->tripProblem($pickupPoint, $destinationPoint)) {
             return response()->json(responseFormatter(DEFAULT_400, errors: [['error_code' => 'area_paused', 'message' => $paused]]), 403);
+        }
+        // Health ride: checked before the fares, so the rider learns at once if they cannot book one.
+        $isHealth = $request->type == 'ride_request' && filter_var($request->input('health_ride'), FILTER_VALIDATE_BOOLEAN);
+        if ($isHealth && ($problem = app(\Modules\TripManagement\Service\HealthRideService::class)->problem($user->id, $request->input('service') === 'move', $request->ride_request_type))) {
+            return response()->json(responseFormatter(DEFAULT_400, errors: [['error_code' => 'health_ride', 'message' => $problem]]), 403);
         }
 
         if ($request->type == 'ride_request') {
@@ -377,6 +404,9 @@ class TripRequestController extends Controller
         if ($request->type == 'ride_request') {
             $estimatedFare = app(\Modules\PlaceManagement\Service\DropFareService::class)
                 ->applyToEstimate(collect($estimatedFare), $pickupPoint, $destinationPoint, !empty($intermediateCoordinates));
+        }
+        if ($isHealth) {
+            $estimatedFare = app(\Modules\TripManagement\Service\HealthRideService::class)->applyToEstimate(collect($estimatedFare));
         }
 
         $recentAddressData = [

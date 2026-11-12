@@ -26,6 +26,10 @@
                    href="{{route('admin.chatting')}}"
                @elseif(in_array($notification->model, ['danger_report', 'safety_area']))
                    href="{{route('admin.safety.index')}}"
+               @elseif($notification->model == 'lost_item')
+                   href="{{route('admin.lost-item.index', ['tab' => 'support'])}}"
+               @elseif($notification->model == 'trip_report')
+                   href="{{route('admin.driver-report.index', ['status' => 'open'])}}"
                @endif
                class="dropdown-item-text media gap-3 align-items-center seen-notification">
                 <h1><i class="bi bi-info-circle-fill"></i></h1>

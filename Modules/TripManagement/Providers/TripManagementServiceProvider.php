@@ -35,7 +35,7 @@ class TripManagementServiceProvider extends ServiceProvider
         ParcelRefund::observe(ParcelRefundObserver::class);
         TripRequest::observe(TripRequestObserver::class);
         if ($this->app->runningInConsole()) {
-            $this->commands([\Modules\TripManagement\Console\TripCheckinTick::class]);
+            $this->commands([\Modules\TripManagement\Console\TripCheckinTick::class, \Modules\TripManagement\Console\LostItemTick::class]);
         }
     }
 

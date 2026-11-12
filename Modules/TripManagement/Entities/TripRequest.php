@@ -70,6 +70,7 @@ class TripRequest extends Model
         'is_move',
         'drop_fare_id',
         'drop_fare_price',
+        'is_health_ride',
         'move_photos',
         'share_token',
         'shared_at',

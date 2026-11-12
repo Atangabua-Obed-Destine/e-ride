@@ -12,6 +12,9 @@ use Modules\TripManagement\Http\Controllers\Api\Customer\MoveController as Custo
 use Modules\TripManagement\Http\Controllers\Api\Driver\MoveController as DriverMoveController;
 use Modules\TripManagement\Http\Controllers\Api\Customer\TripShareController;
 use Modules\TripManagement\Http\Controllers\Api\Customer\TripCheckinController;
+use Modules\TripManagement\Http\Controllers\Api\Customer\HealthRideController;
+use Modules\TripManagement\Http\Controllers\Api\Customer\LostItemController as CustomerLostItemController;
+use Modules\TripManagement\Http\Controllers\Api\Driver\LostItemController as DriverLostItemController;
 
 /**
  * CUSTOMER API LIST
@@ -77,6 +80,13 @@ Route::group(['prefix' => 'customer', 'middleware' => ['auth:api', 'maintenance_
     Route::post('trip-checkin/{checkinId}/answer', [TripCheckinController::class, 'answer'])->middleware('throttle:20,1,trip-checkin');
     Route::get('trip-report/reasons', [TripReportController::class, 'reasons']);
     Route::post('trip-report', [TripReportController::class, 'store'])->middleware('throttle:5,1,trip-report');
+    // Health rides: care places near the rider and the numbers to call (booking goes through ride/create).
+    Route::get('health-rides/places', [HealthRideController::class, 'places'])->middleware('throttle:20,1,health-places');
+    // Lost and found
+    Route::get('lost-items', [CustomerLostItemController::class, 'index']);
+    Route::get('lost-items/{id}', [CustomerLostItemController::class, 'show']);
+    Route::post('lost-items', [CustomerLostItemController::class, 'store'])->middleware('throttle:5,60,lost-item-report');
+    Route::post('lost-items/{id}/action', [CustomerLostItemController::class, 'act'])->middleware('throttle:20,1,lost-item');
     Route::group(['prefix' => 'parcel'], function () {
         Route::controller(ParcelRefundController::class)->group(function () {
             Route::group(['prefix' => 'refund'], function () {
@@ -102,6 +112,10 @@ Route::group(['prefix' => 'customer', 'middleware' => ['auth:api', 'maintenance_
 Route::group(['prefix' => 'driver', 'middleware' => ['auth:api', 'maintenance_mode']], function () {
     Route::get('last-ride-details', [NewDriverTripController::class, 'lastRideDetails']);
     Route::put('move/{tripId}/no-agreement', [DriverMoveController::class, 'noAgreement']);
+    // Lost and found
+    Route::get('lost-items', [DriverLostItemController::class, 'index']);
+    Route::get('lost-items/{id}', [DriverLostItemController::class, 'show']);
+    Route::post('lost-items/{id}/action', [DriverLostItemController::class, 'act'])->middleware('throttle:20,1,lost-item');
     Route::group(['prefix' => 'ride', 'middleware' => ['auth:api', 'maintenance_mode']], function () {
         Route::get('final-fare', [NewCustomerTripController::class, 'finalFareCalculation']);
         Route::get('payment', [PaymentController::class, 'payment']);

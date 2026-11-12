@@ -3,6 +3,8 @@
 use Illuminate\Support\Facades\Route;
 use Modules\TripManagement\Http\Controllers\Web\BookingDepositController;
 use Modules\TripManagement\Http\Controllers\Web\DriverReportController;
+use Modules\TripManagement\Http\Controllers\Web\HealthRideAdminController;
+use Modules\TripManagement\Http\Controllers\Web\LostItemAdminController;
 use Modules\TripManagement\Http\Controllers\Web\MoveAdminController;
 use Modules\TripManagement\Http\Controllers\Web\RefundController;
 use Modules\TripManagement\Http\Controllers\Web\SafetyAlertController;
@@ -59,6 +61,19 @@ Route::group(['prefix' => 'admin', 'as' => 'admin.', 'middleware' => 'admin'], f
         Route::get('directory/{id}/edit', [MoveAdminController::class, 'editListing'])->name('directory.edit');
         Route::put('directory/{id}', [MoveAdminController::class, 'updateListing'])->name('directory.update');
         Route::put('directory/{id}/toggle', [MoveAdminController::class, 'toggleListing'])->name('directory.toggle');
+    });
+
+    // Health rides: every health ride and the settings.
+    Route::group(['prefix' => 'health-rides', 'as' => 'health-ride.'], function () {
+        Route::get('/', [HealthRideAdminController::class, 'index'])->name('index');
+        Route::post('settings', [HealthRideAdminController::class, 'settings'])->name('settings');
+    });
+
+    // Lost and found: cases, staff actions and the settings.
+    Route::group(['prefix' => 'lost-items', 'as' => 'lost-item.'], function () {
+        Route::get('/', [LostItemAdminController::class, 'index'])->name('index');
+        Route::post('settings', [LostItemAdminController::class, 'settings'])->name('settings');
+        Route::post('{item}/action', [LostItemAdminController::class, 'act'])->name('act');
     });
 
     Route::group(['prefix' => 'driver-report', 'as' => 'driver-report.'], function () {

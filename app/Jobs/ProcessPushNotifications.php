@@ -59,6 +59,10 @@ class ProcessPushNotifications implements ShouldQueue
                 // Same action (every driver app rings for it), move wording, no fare.
                 $push['title'] = 'New move request';
                 $push['description'] = 'A customer needs a truck from {pickUpLocation}. You agree the price together at the pickup.';
+            } elseif ($this->trip->is_health_ride) {
+                // Urgent, to care: the driver app shows it in red. Not an ambulance.
+                $push['title'] = 'Health ride request';
+                $push['description'] = 'Urgent: a rider needs to get to {dropOffLocation} for care. Pickup at {pickUpLocation}.';
             }
             $notification = [
                 'title' => $push['title'],
@@ -106,6 +110,7 @@ class ProcessPushNotifications implements ShouldQueue
                                 'pickup_address' => (string)($notification['replace']['pickUpLocation'] ?? ''),
                                 'estimated_fare' => $this->trip->is_move ? '' : (string)($notification['replace']['approximateAmount'] ?? ''),
                                 'is_move' => $this->trip->is_move ? '1' : '0',
+                                'is_health_ride' => $this->trip->is_health_ride ? '1' : '0',
                             ],
                         ];
                     }

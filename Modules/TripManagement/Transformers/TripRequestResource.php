@@ -80,6 +80,8 @@ class TripRequestResource extends JsonResource
             // Drop fare: a fixed price for this route; the rider pays exactly drop_fare_price.
             'is_drop_fare' => (bool)$this->drop_fare_id,
             'drop_fare_price' => $this->drop_fare_price !== null ? (float)$this->drop_fare_price : null,
+            // Health ride: an urgent ride to care; no bidding or surge, shown in red to the driver.
+            'is_health_ride' => (bool)$this->is_health_ride,
             'move_photos' => app(\Modules\TripManagement\Service\MoveTripService::class)->photoUrls($this->move_photos),
             'coupon_amount' => round((double)$this->coupon_amount, 2),
             'discount' => $this->discount_id === null ? null : DiscountResource::make($this->discount),

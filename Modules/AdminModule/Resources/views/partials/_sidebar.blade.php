@@ -241,6 +241,22 @@
                             @endif
                         </a>
                     </li>
+                    <li class="{{ Request::is('admin/health-rides*') ? 'active open' : '' }}">
+                        <a href="{{ route('admin.health-ride.index') }}">
+                            <i class="bi bi-heart-pulse"></i>
+                            <span class="link-title">{{ translate('Health rides') }}</span>
+                        </a>
+                    </li>
+                    <li class="{{ Request::is('admin/lost-items*') ? 'active open' : '' }}">
+                        <a href="{{ route('admin.lost-item.index') }}">
+                            <i class="bi bi-bag-check"></i>
+                            <span class="link-title">{{ translate('Lost and found') }}</span>
+                            @php($lostItemsForSupport = \Modules\TripManagement\Entities\LostItem::whereIn('status', \Modules\TripManagement\Entities\LostItem::OPEN)->whereNotNull('escalated_at')->count())
+                            @if($lostItemsForSupport > 0)
+                                <span class="badge badge-danger float-end">{{ $lostItemsForSupport }}</span>
+                            @endif
+                        </a>
+                    </li>
                     <!----------------- End Trip Management ------------------------>
                 @endif
 

@@ -131,6 +131,7 @@ $app = Application::configure(basePath: dirname(__DIR__))
         // Area pause: planned pauses start and are announced on time; danger reports fade.
         $schedule->command('safety:tick')->everyMinute()->withoutOverlapping();
         $schedule->command('trip-checkins:tick')->everyMinute()->withoutOverlapping();
+        $schedule->command('lost-items:tick')->everyFiveMinutes()->withoutOverlapping();
     })
     ->create();
 

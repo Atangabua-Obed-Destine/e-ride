@@ -198,6 +198,8 @@ class ConfigController extends Controller
             'enable_parcel_delivery_proof' => (bool) (businessConfig('enable_parcel_delivery_proof', PARCEL_SETTINGS)?->value ?? 0),
             'auto_arrival_notification' => $autoArrivalNotification,
             'auto_arrival_notification_time' => $autoArrivalNotification ? (int)convertTimeToSecond($info->firstWhere('key_name', 'auto_arrival_notification_time')?->value, 'minute') : null,
+            // Lost and found: the driver's Lost items menu.
+            'lost_items_status' => \Modules\TripManagement\Lib\LostItemSettings::enabled(),
             'auto_arrival_notification_message' => $autoArrivalNotification ? translate(key: $info->firstWhere('key_name', 'auto_arrival_notification_driver_message')?->value, replace: ['min' => convertTimeToSecond($info->firstWhere('key_name', 'auto_arrival_notification_time')?->value, 'minute')]) : null,
         ];
 
