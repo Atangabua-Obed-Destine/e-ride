@@ -133,17 +133,63 @@ class ScheduledRideService
         return $n;
     }
 
+    // ------------------------------------------------------------ the time
+
+    /**
+     * Why a scheduled ride cannot be booked (or moved) to this pickup time, or null: the
+     * admin's limits in Business setup > Trips > Scheduled trips (shortest notice, how far
+     * ahead). The app's date picker keeps to them; this keeps any app to them.
+     */
+    public function timeProblem(?string $scheduledAt): ?string
+    {
+        if (!businessConfig('schedule_trip_status')?->value) {
+            return translate('Scheduled rides are not available right now.');
+        }
+        try {
+            $at = Carbon::parse((string)$scheduledAt);
+        } catch (Throwable) {
+            return translate('Choose a valid pickup time.');
+        }
+        $get = fn(string $key) => businessConfig($key, SCHEDULE_TRIP_SETTINGS)?->value;
+        // A little slack: the rider picked the time a moment before sending it.
+        $slack = 120;
+        $min = (int)$get('minimum_schedule_book_time');
+        $minType = (string)($get('minimum_schedule_book_time_type') ?: 'minute');
+        if ($min > 0 && $at->lt(now()->addSeconds((int)convertTimeToSecond($min, $minType) - $slack))) {
+            return translate(key: 'Book at least {time} ahead.', replace: ['time' => $this->span($min, $minType)]);
+        }
+        if ($at->lt(now()->subSeconds($slack))) {
+            return translate('Choose a pickup time in the future.');
+        }
+        $max = (int)$get('advance_schedule_book_time');
+        $maxType = (string)($get('advance_schedule_book_time_type') ?: 'day');
+        if ($max > 0 && $at->gt(now()->addSeconds((int)convertTimeToSecond($max, $maxType) + $slack))) {
+            return translate(key: 'You can book up to {time} ahead.', replace: ['time' => $this->span($max, $maxType)]);
+        }
+        return null;
+    }
+
+    /** "30 minutes", "1 hour", "7 days", in the rider's language. */
+    protected function span(int $n, string $type): string
+    {
+        $unit = in_array($type, ['minute', 'hour', 'day'], true) ? $type : 'minute';
+        return translate(key: '{n} ' . $unit . ($n === 1 ? '' : 's'), replace: ['n' => $n]);
+    }
+
     // ---------------------------------------------------------------- safety
 
     /**
      * Heads-up about area pauses, no-go areas and fresh danger reports at the pickup or
-     * the destination of a scheduled ride: to the rider, and to the driver once one has
-     * it. At booking ($trip given as an id, nothing near yet) only pauses that cover the
-     * pickup time are told, so the rider can plan; the same pause is told again near the time.
+     * the destination of a trip: to the rider, and to the driver once one has it.
+     * A scheduled ride: at booking ($trip given as an id, nothing near yet) only pauses that
+     * cover the pickup time are told, so the rider can plan; the same pause is told again
+     * near the time. A ride for now: when a driver accepts ($only = ['driver']; the rider
+     * was warned before booking).
      *
+     * @param array|null $only 'customer' and/or 'driver': tell only them
      * @return int pushes sent
      */
-    public function safetyCheck(TripRequest|string $trip, ?Carbon $now = null): int
+    public function safetyCheck(TripRequest|string $trip, ?Carbon $now = null, ?array $only = null): int
     {
         $now ??= now();
         if (!SafetySettings::all()['enabled']) {
@@ -151,12 +197,13 @@ class ScheduledRideService
         }
         $trip = $trip instanceof TripRequest ? $trip : TripRequest::find($trip);
         $trip?->loadMissing(['coordinate', 'customer', 'driver']);
-        if (!$trip || $trip->ride_request_type != SCHEDULED || !$trip->scheduled_at || !$trip->coordinate
+        if (!$trip || !$trip->coordinate || $trip->type != RIDE_REQUEST
             || !in_array($trip->current_status, [PENDING, ACCEPTED, OUT_FOR_PICKUP])) {
             return 0;
         }
-        $at = Carbon::parse($trip->scheduled_at);
-        $near = $at->lte($now->copy()->addMinutes(SafetySettings::all()['scheduled_alert_minutes']));
+        $scheduled = $trip->ride_request_type == SCHEDULED && $trip->scheduled_at;
+        $at = $scheduled ? Carbon::parse($trip->scheduled_at) : $now->copy();
+        $near = !$scheduled || $at->lte($now->copy()->addMinutes(SafetySettings::all()['scheduled_alert_minutes']));
         $points = [$trip->coordinate->pickup_coordinates, $trip->coordinate->destination_coordinates];
 
         // Pauses and no-go areas in force at the pickup time (or now, when it is close).
@@ -169,7 +216,7 @@ class ScheduledRideService
         $sent = 0;
         $who = $near ? ['customer' => $trip->customer, 'driver' => $trip->driver] : ['booking' => $trip->customer];
         foreach ($who as $mark => $user) {
-            if (!$user) {
+            if (!$user || ($only !== null && !in_array($mark === 'booking' ? 'customer' : $mark, $only))) {
                 continue;
             }
             foreach ($areas as $area) {
@@ -192,15 +239,18 @@ class ScheduledRideService
                 $what = $reports->map(fn(DangerReport $r) => DangerReport::label($r->type))->unique()->implode(', ');
                 foreach (['customer' => $trip->customer, 'driver' => $trip->driver] as $mark => $user) {
                     $new = $reports->pluck('id')->diff((array)$this->marked($trip, 'reports_' . $mark));
-                    if (!$user || $new->isEmpty()) {
+                    if (!$user || $new->isEmpty() || ($only !== null && !in_array($mark, $only))) {
                         continue;
                     }
                     $this->mark($trip, 'reports_' . $mark, array_values(array_merge((array)$this->marked($trip, 'reports_' . $mark), $new->all())));
-                    $this->push($user, $trip, 'scheduled_safety_alert', 'Heads-up for your scheduled ride',
-                        $mark === 'driver'
-                            ? 'Reported near the pickup or destination of your ride at {time}: {what}. Stay alert and agree a safe meeting point with the customer.'
-                            : 'Reported near your pickup or destination: {what}. Your ride at {time} still goes ahead. Stay alert and agree a safe meeting point with your driver.',
-                        ['time' => $this->time($trip), 'what' => $what]);
+                    $this->push($user, $trip, 'scheduled_safety_alert', $scheduled ? 'Heads-up for your scheduled ride' : 'Heads-up for your ride',
+                        match (true) {
+                            $mark === 'driver' && $scheduled => 'Reported near the pickup or destination of your ride at {time}: {what}. Stay alert and agree a safe meeting point with the customer.',
+                            $mark === 'driver' => 'Reported near the pickup or destination of this ride: {what}. Stay alert and agree a safe meeting point with the customer.',
+                            $scheduled => 'Reported near your pickup or destination: {what}. Your ride at {time} still goes ahead. Stay alert and agree a safe meeting point with your driver.',
+                            default => 'Reported near your pickup or destination: {what}. Stay alert and agree a safe meeting point with your driver.',
+                        },
+                        ['time' => $scheduled ? $this->time($trip) : '', 'what' => $what]);
                     $sent++;
                 }
             }
@@ -210,9 +260,16 @@ class ScheduledRideService
 
     protected function pushArea(User $user, TripRequest $trip, SafetyArea $area, bool $driver): int
     {
+        $vars = ['place' => $area->title, 'reason' => $area->reason, 'until' => $this->when($area->ends_at)];
+        if ($trip->ride_request_type != SCHEDULED || !$trip->scheduled_at) {
+            // A ride for now (only areas in force now reach here).
+            $this->push($user, $trip, 'scheduled_safety_alert', 'Heads-up for your ride', $driver
+                ? 'This ride goes to or from {place}, where E-Ride has paused trips until {until}: {reason}. Stay alert and agree a safe meeting point with the customer.'
+                : 'Your ride goes to or from {place}, where E-Ride has paused trips until {until}: {reason}. Stay alert and agree a safe meeting point with your driver. You can cancel for free.', $vars);
+            return 1;
+        }
         $planned = $area->starts_at->isFuture();
-        $vars = ['place' => $area->title, 'reason' => $area->reason, 'time' => $this->time($trip),
-            'from' => $this->when($area->starts_at), 'until' => $this->when($area->ends_at)];
+        $vars += ['time' => $this->time($trip), 'from' => $this->when($area->starts_at)];
         $body = match (true) {
             $driver && $planned => 'Your ride at {time} goes to or from {place}, where E-Ride pauses trips from {from} to {until}: {reason}. It still goes ahead. Stay alert and agree a safe meeting point with the customer.',
             $driver => 'Your ride at {time} goes to or from {place}, where E-Ride has paused trips until {until}: {reason}. It still goes ahead. Stay alert and agree a safe meeting point with the customer.',

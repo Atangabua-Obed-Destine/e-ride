@@ -1139,6 +1139,9 @@ class TripRequestController extends Controller
             user_id: $trip->customer->id
         );
         $this->tripRequestService->sendDriverIdentityVerificationPush($trip);
+        // The driver hears of a pause or a fresh danger report at the pickup or destination.
+        $acceptedId = $trip->id;
+        app()->terminating(fn() => app(\Modules\TripManagement\Service\ScheduledRideService::class)->safetyCheck($acceptedId, null, ['driver']));
         try {
             checkReverbConnection() && DriverTripAcceptedEvent::broadcast($trip);
         } catch (\Exception $exception) {

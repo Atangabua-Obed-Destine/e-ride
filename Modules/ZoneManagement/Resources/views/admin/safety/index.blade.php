@@ -174,6 +174,12 @@
                                     <input class="form-check-input" type="checkbox" role="switch" id="safety-enabled" name="enabled" value="1" {{ $settings['enabled'] ? 'checked' : '' }}>
                                     <label class="form-check-label" for="safety-enabled">{{ translate('Danger reports and area pause are on') }}</label>
                                 </div>
+                                <div class="form-check form-switch mb-3">
+                                    <input type="hidden" name="pause_blocks" value="0">
+                                    <input class="form-check-input" type="checkbox" role="switch" id="safety-blocks" name="pause_blocks" value="1" {{ $settings['pause_blocks'] ? 'checked' : '' }}>
+                                    <label class="form-check-label fs-12" for="safety-blocks">{{ translate('A paused area blocks new trips') }}</label>
+                                    <div class="fs-11 text-muted">{{ translate('Off: trips to or from it still go ahead, the rider and the driver are warned, and the rider can cancel for free. Scheduled rides are only warned either way.') }}</div>
+                                </div>
                                 @foreach([
                                     'auto_reports' => translate('Driver reports that block a spot'),
                                     'auto_radius_m' => translate('Within (metres), and the size of the no-go area'),

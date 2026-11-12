@@ -20,8 +20,11 @@ use Throwable;
 
 /**
  * Area pause, no-go areas and danger reports. A report always warns (E-Ride and
- * nearby drivers); only repeated driver reports or an admin block an area. A
- * blocked area refuses new trips with a pickup or a destination inside it.
+ * nearby drivers); only repeated driver reports or an admin block an area. What a
+ * blocked area does is the admin's choice (Safety map > Settings): by default trips
+ * to or from it still go ahead and rider and driver are warned, and a rider may
+ * cancel such a trip for free. With "block new trips" on, it refuses new trips with
+ * a pickup or a destination inside it (scheduled rides are only warned either way).
  */
 class SafetyService
 {
@@ -115,9 +118,40 @@ class SafetyService
         return null;
     }
 
-    /** Why a trip from $pickup to $destination cannot be booked now, or null. */
+    /** Pauses refuse new trips (the admin's choice), rather than only warning. */
+    public function blocksTrips(): bool
+    {
+        return SafetySettings::all()['pause_blocks'];
+    }
+
+    /** The area in force at the pickup or the destination, if any. */
+    public function areaOnTrip(Point $pickup, Point $destination): ?SafetyArea
+    {
+        foreach ([$pickup, $destination] as $point) {
+            if ($area = $this->blockingArea($point->latitude, $point->longitude)) {
+                return $area;
+            }
+        }
+        return null;
+    }
+
+    /** Warn-only pauses: what the rider is told before booking a trip to or from one, or null. */
+    public function tripNotice(Point $pickup, Point $destination): ?string
+    {
+        if ($this->blocksTrips() || !($area = $this->areaOnTrip($pickup, $destination))) {
+            return null;
+        }
+        return translate(key: 'E-Ride has paused trips around {place} until {time}: {reason}. Your ride can still go ahead: stay alert and agree a safe meeting point with your driver.', replace: [
+            'place' => $area->title, 'time' => $this->when($area->ends_at), 'reason' => $area->reason,
+        ]);
+    }
+
+    /** Why a trip from $pickup to $destination cannot be booked now, or null (never when pauses only warn). */
     public function tripProblem(Point $pickup, Point $destination): ?string
     {
+        if (!$this->blocksTrips()) {
+            return null;
+        }
         foreach ([[$pickup, 'pickup'], [$destination, 'destination']] as [$point, $which]) {
             $area = $this->blockingArea($point->latitude, $point->longitude);
             if ($area) {
@@ -144,7 +178,7 @@ class SafetyService
     {
         $settings = SafetySettings::all();
         if (!$settings['enabled']) {
-            return ['areas' => [], 'reports' => []];
+            return ['areas' => [], 'reports' => [], 'blocks_trips' => false];
         }
         $reach = $settings['banner_radius_km'] * 1000;
         $areas = SafetyArea::active()->get()->filter(fn(SafetyArea $a) => $a->zone_id
@@ -165,7 +199,8 @@ class SafetyService
                 'distance_m' => (int)round(haversineDistance($r->latitude, $r->longitude, $lat, $lng)),
                 'minutes_ago' => (int)$r->created_at->diffInMinutes(now()),
             ])->all();
-        return ['areas' => $areas, 'upcoming' => $soon, 'reports' => $reports];
+        // The apps word their banners from this: "no trips" or "stay alert".
+        return ['areas' => $areas, 'upcoming' => $soon, 'reports' => $reports, 'blocks_trips' => $settings['pause_blocks']];
     }
 
     public function presentArea(SafetyArea $a, ?float $lat = null, ?float $lng = null): array
@@ -326,10 +361,10 @@ class SafetyService
             ->where('starts_at', '>', $now->copy()->addMinutes(30))->where('starts_at', '<=', $now->copy()->addHours(self::PRE_NOTIFY_HOURS))->get();
         foreach ($soon as $area) {
             $area->update(['pre_notified_at' => $now]);
-            $this->broadcast($area, 'area_pause_planned', translate('Service pause planned'),
-                translate(key: 'E-Ride will pause trips around {place} from {from} to {to}: {reason}.', replace: [
-                    'place' => $area->title, 'from' => $this->when($area->starts_at), 'to' => $this->when($area->ends_at), 'reason' => $area->reason,
-                ]));
+            $vars = ['place' => $area->title, 'from' => $this->when($area->starts_at), 'to' => $this->when($area->ends_at), 'reason' => $area->reason];
+            $this->broadcast($area, 'area_pause_planned', translate('Service pause planned'), $this->blocksTrips()
+                ? translate(key: 'E-Ride will pause trips around {place} from {from} to {to}: {reason}.', replace: $vars)
+                : translate(key: 'Safety warning around {place} from {from} to {to}: {reason}. Trips still run: stay alert.', replace: $vars));
             $c['announced']++;
         }
         $c['faded'] = DangerReport::where('status', DangerReport::OPEN)
@@ -371,11 +406,12 @@ class SafetyService
     public function notifyArea(SafetyArea $area): void
     {
         $area->update(['notified_at' => now()]);
+        $vars = ['place' => $area->title, 'time' => $this->when($area->ends_at), 'reason' => $area->reason];
         $this->broadcast($area, $area->kind === SafetyArea::PAUSE ? 'area_paused' : 'area_no_go',
             $area->kind === SafetyArea::PAUSE ? translate('Service paused') : translate('Area closed for safety'),
-            translate(key: 'No E-Ride trips to or from {place} until {time}: {reason}.', replace: [
-                'place' => $area->title, 'time' => $this->when($area->ends_at), 'reason' => $area->reason,
-            ]));
+            $this->blocksTrips()
+                ? translate(key: 'No E-Ride trips to or from {place} until {time}: {reason}.', replace: $vars)
+                : translate(key: 'Stay alert around {place} until {time}: {reason}. Trips still run, but avoid the area if you can.', replace: $vars));
         // Trips accepted or under way that start or end inside: both sides decide what to do.
         TripRequest::with(['coordinate', 'customer', 'driver'])->whereIn('current_status', [ACCEPTED, OUT_FOR_PICKUP, ONGOING])->get()
             ->filter(function (TripRequest $trip) use ($area) {

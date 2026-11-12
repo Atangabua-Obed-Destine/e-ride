@@ -59,7 +59,9 @@
                 <div class="card mb-3">
                     <div class="card-body">
                         <h5 class="mb-1">{{ translate('Scheduled rides') }}</h5>
-                        <p class="fs-12 text-muted">{{ translate('Rides booked ahead. These apply when scheduled rides are on in Business setup.') }}</p>
+                        <p class="fs-12 text-muted">{{ translate('Rides booked ahead. These apply when scheduled rides are on in Business setup.') }}
+                            {{ translate('How far ahead riders can book (in days or hours), the shortest notice, and when drivers get the request are set there.') }}
+                            <a href="{{ route('admin.business.setup.trip-fare.trips') }}#schedule_trip_form">{{ translate('Open scheduled trip settings') }}</a></p>
                         <label class="form-label">{{ translate('When the customer pays the deposit') }}</label>
                         <div class="d-flex flex-column gap-2 mb-3">
                             <label class="d-flex gap-2 align-items-start">

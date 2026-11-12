@@ -133,8 +133,13 @@ class TripRequestController extends Controller
         if (!$getTripZone) {
             return response()->json(responseFormatter(ZONE_404), 403);
         }
-        // Area pause or no-go area (danger reports): no trips to or from it for now. A scheduled
-        // ride is not blocked: the pause may be over by then, and both sides are alerted before it.
+        // A scheduled ride: within the admin's limits (shortest notice, how far ahead).
+        if ($request->type == RIDE_REQUEST && $request->ride_request_type == SCHEDULED && !$request->trip_request_id
+            && ($problem = app(\Modules\TripManagement\Service\ScheduledRideService::class)->timeProblem($request['scheduled_at']))) {
+            return response()->json(responseFormatter(DEFAULT_400, errors: [['error_code' => 'schedule_time', 'message' => $problem]]), 403);
+        }
+        // Area pause or no-go area (danger reports): no trips to or from it, when the admin
+        // made pauses block. A scheduled ride never is: both sides are alerted before it.
         if ($request->ride_request_type != SCHEDULED
             && ($paused = app(\Modules\ZoneManagement\Service\SafetyService::class)->tripProblem($pickup_point, $destination_point))) {
             return response()->json(responseFormatter(DEFAULT_400, errors: [['error_code' => 'area_paused', 'message' => $paused]]), 403);
@@ -339,9 +344,15 @@ class TripRequestController extends Controller
         // Area pause or no-go area (danger reports): no trips to or from it for now. Scheduled rides
         // are not blocked (alerted before the pickup instead).
         $isScheduled = $request->ride_request_type == SCHEDULED && $request->filled('scheduled_at');
+        if ($isScheduled && $request->type == 'ride_request'
+            && ($problem = app(\Modules\TripManagement\Service\ScheduledRideService::class)->timeProblem($request->input('scheduled_at')))) {
+            return response()->json(responseFormatter(DEFAULT_400, errors: [['error_code' => 'schedule_time', 'message' => $problem]]), 403);
+        }
         if (!$isScheduled && ($paused = app(\Modules\ZoneManagement\Service\SafetyService::class)->tripProblem($pickupPoint, $destinationPoint))) {
             return response()->json(responseFormatter(DEFAULT_400, errors: [['error_code' => 'area_paused', 'message' => $paused]]), 403);
         }
+        // Pauses that only warn: the rider sees why before booking (on every fare).
+        $safetyNotice = $isScheduled ? null : app(\Modules\ZoneManagement\Service\SafetyService::class)->tripNotice($pickupPoint, $destinationPoint);
         // Health ride: checked before the fares, so the rider learns at once if they cannot book one.
         $isHealth = $request->type == 'ride_request' && filter_var($request->input('health_ride'), FILTER_VALIDATE_BOOLEAN);
         if ($isHealth && ($problem = app(\Modules\TripManagement\Service\HealthRideService::class)->problem($user->id, $request->input('service') === 'move', $request->ride_request_type, false, $request->input('scheduled_at')))) {
@@ -420,6 +431,9 @@ class TripRequestController extends Controller
         }
         if ($isHealth) {
             $estimatedFare = app(\Modules\TripManagement\Service\HealthRideService::class)->applyToEstimate(collect($estimatedFare));
+        }
+        if ($safetyNotice) {
+            $estimatedFare = collect($estimatedFare)->map(fn($entry) => array_merge((array)$entry, ['safety_notice' => $safetyNotice]))->values();
         }
 
         $recentAddressData = [
@@ -783,6 +797,9 @@ class TripRequestController extends Controller
                 }
             }
             app(TripDepositService::class)->open($trip->refresh());
+            // The driver hears of a pause or a fresh danger report at the pickup or destination.
+            $tripId = $trip->id;
+            app()->terminating(fn() => app(\Modules\TripManagement\Service\ScheduledRideService::class)->safetyCheck($tripId, null, ['driver']));
             $push = getNotification('bid_accepted');
             sendDeviceNotification(fcm_token: $driver->fcm_token,
                 title: translate(key: $push['title'], locale: $driver?->current_language_key),
@@ -1321,6 +1338,9 @@ class TripRequestController extends Controller
         // Only the rider's own scheduled ride, while no driver has taken it.
         if (!$trip || $trip->customer_id !== auth('api')->id() || $trip->ride_request_type == 'regular' || $trip->current_status !== PENDING) {
             return response()->json(responseFormatter(constant: TRIP_REQUEST_404), 403);
+        }
+        if ($problem = app(\Modules\TripManagement\Service\ScheduledRideService::class)->timeProblem($request->scheduled_at)) {
+            return response()->json(responseFormatter(DEFAULT_400, errors: [['error_code' => 'schedule_time', 'message' => $problem]]), 403);
         }
 
 

@@ -446,6 +446,11 @@ class TripDepositService
             return ['free' => true, 'reason' => 'free_window', 'free_until' => $freeUntil];
         }
         $trip ??= TripRequest::with(['time', 'coordinate'])->find($deposit->trip_request_id);
+        // The pickup or the destination is in an area E-Ride paused for safety: the rider may cancel for free.
+        if ($trip && ($c = $trip->coordinate) && $c->pickup_coordinates && $c->destination_coordinates
+            && app(\Modules\ZoneManagement\Service\SafetyService::class)->areaOnTrip($c->pickup_coordinates, $c->destination_coordinates)) {
+            return ['free' => true, 'reason' => 'area_paused', 'free_until' => null];
+        }
         // A scheduled ride: free while no driver has taken it, and until the set time before the pickup.
         if ($trip && $trip->ride_request_type == SCHEDULED && $trip->scheduled_at) {
             if (!$trip->driver_id) {
@@ -518,6 +523,9 @@ class TripDepositService
             if ($terms['free']) {
                 return $this->refund($deposit, match ($terms['reason']) {
                     'driver_late' => 'Customer cancelled: driver late',
+                    'area_paused' => 'Customer cancelled: trip to or from an area paused for safety',
+                    'no_driver_yet' => 'Customer cancelled the scheduled ride before a driver took it',
+                    'before_pickup' => 'Customer cancelled the scheduled ride in good time',
                     'identity_mismatch' => 'Customer cancelled: driver or vehicle did not match',
                     default => 'Customer cancelled within the free window',
                 }, 'refunded_free_cancel');

@@ -13,7 +13,7 @@ class SafetySettings
     public const KEYS = [
         'safety_enabled', 'safety_auto_reports', 'safety_auto_radius_m', 'safety_auto_window_min', 'safety_auto_minutes',
         'safety_caution_radius_km', 'safety_reports_per_hour', 'safety_report_fade_min', 'safety_banner_radius_km',
-        'safety_report_reward', 'safety_scheduled_alert_minutes',
+        'safety_report_reward', 'safety_scheduled_alert_minutes', 'safety_pause_blocks',
     ];
 
     public static function all(): array
@@ -21,6 +21,8 @@ class SafetySettings
         $get = fn(string $key, $default) => businessConfig($key, self::TYPE)?->value ?? $default;
         return [
             'enabled' => (bool)(int)$get('safety_enabled', 0),
+            // A pause or no-go area refuses new trips to or from it. Off (the default): trips go ahead, both sides are warned.
+            'pause_blocks' => (bool)(int)$get('safety_pause_blocks', 0),
             // Driver reports within this circle and time that make an automatic no-go area.
             'auto_reports' => max(2, (int)$get('safety_auto_reports', 2)),
             'auto_radius_m' => max(100, (int)$get('safety_auto_radius_m', 500)),

@@ -109,6 +109,7 @@ class SafetyAdminController extends Controller
     {
         $data = $request->validate([
             'enabled' => 'nullable|boolean',
+            'pause_blocks' => 'nullable|boolean',
             'auto_reports' => 'required|integer|min:2|max:10',
             'auto_radius_m' => 'required|integer|min:100|max:5000',
             'auto_window_min' => 'required|integer|min:5|max:240',
@@ -121,6 +122,7 @@ class SafetyAdminController extends Controller
             'scheduled_alert_minutes' => 'required|integer|min:15|max:720',
         ]);
         $data['enabled'] = $request->boolean('enabled') ? 1 : 0;
+        $data['pause_blocks'] = $request->boolean('pause_blocks') ? 1 : 0;
         foreach ($data as $key => $value) {
             updateBusinessSetting(keyName: 'safety_' . $key, settingType: SafetySettings::TYPE, value: (string)$value);
         }
