@@ -15,6 +15,7 @@ use Modules\ZoneManagement\Entities\Zone;
 use Modules\TripManagement\Entities\TripCheckin;
 use Modules\TripManagement\Lib\CheckinSettings;
 use Modules\ZoneManagement\Lib\SafetySettings;
+use Modules\ZoneManagement\Lib\SupportDesk;
 use Modules\ZoneManagement\Service\SafetyService;
 
 /** Admin, Zone management > Safety map: danger reports, pauses and no-go areas. */
@@ -36,6 +37,7 @@ class SafetyAdminController extends Controller
             ->latest('updated_at')->limit(15)->get();
         $zones = Zone::where('is_active', 1)->orderBy('name')->get(['id', 'name']);
         $settings = SafetySettings::all();
+        $desk = SupportDesk::all() + ['open_now' => SupportDesk::openNow(), 'hours' => SupportDesk::hoursLabel()];
         $checkinSettings = CheckinSettings::all();
         $checkins = TripCheckin::with('trip:id,ref_id')->where('asked_at', '>=', $now->copy()->subDay())->latest('asked_at')->limit(30)->get();
         $mapAreas = $areas->map(fn(SafetyArea $a) => $this->safety->presentArea($a) + [
@@ -46,7 +48,7 @@ class SafetyAdminController extends Controller
             'lat' => $r->latitude, 'lng' => $r->longitude, 'type' => DangerReport::label($r->type), 'role' => $r->role,
             'status' => $r->status, 'at' => $r->created_at->format('H:i'),
         ])->values();
-        return view('zonemanagement::admin.safety.index', compact('decide', 'inForce', 'planned', 'reports', 'past', 'zones', 'settings', 'mapAreas', 'mapReports', 'checkinSettings', 'checkins'));
+        return view('zonemanagement::admin.safety.index', compact('decide', 'inForce', 'planned', 'reports', 'past', 'zones', 'settings', 'mapAreas', 'mapReports', 'checkinSettings', 'checkins', 'desk'));
     }
 
     public function pause(Request $request): RedirectResponse
@@ -115,6 +117,7 @@ class SafetyAdminController extends Controller
             'reports_per_hour' => 'required|integer|min:1|max:20',
             'report_fade_min' => 'required|integer|min:15|max:1440',
             'banner_radius_km' => 'required|numeric|min:0.5|max:50',
+            'report_reward' => 'required|numeric|min:0|max:100000',
         ]);
         $data['enabled'] = $request->boolean('enabled') ? 1 : 0;
         foreach ($data as $key => $value) {
@@ -122,6 +125,24 @@ class SafetyAdminController extends Controller
         }
         Cache::forget(CACHE_BUSINESS_SETTINGS);
         Toastr::success(translate('Safety settings saved'));
+        return back();
+    }
+
+    /** Who answers safety alerts and lost items that need support, the number riders call, and the hours. */
+    public function supportDesk(Request $request): RedirectResponse
+    {
+        $data = $request->validate([
+            'support_desk_name' => 'required|string|max:60',
+            'support_desk_phone' => 'nullable|string|max:30',
+            'support_desk_from' => 'required|integer|min:0|max:23',
+            'support_desk_to' => 'required|integer|min:0|max:23',
+            'support_desk_staff' => 'nullable|string|max:500',
+        ]);
+        foreach ($data as $key => $value) {
+            updateBusinessSetting(keyName: $key, settingType: SupportDesk::TYPE, value: trim((string)$value));
+        }
+        Cache::forget(CACHE_BUSINESS_SETTINGS);
+        Toastr::success(translate('Support desk saved'));
         return back();
     }
 

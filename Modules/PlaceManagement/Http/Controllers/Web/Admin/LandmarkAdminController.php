@@ -28,11 +28,12 @@ class LandmarkAdminController extends Controller
             ->when($request->query('show') === 'hidden', fn($w) => $w->where('is_active', 0), fn($w) => $w->where('is_active', 1))
             ->orderByDesc('uses')->orderBy('name')->paginate(30)->withQueryString();
         $edit = $request->query('edit') ? Landmark::find($request->query('edit')) : null;
+        $mergeTargets = $edit ? Landmark::where('id', '!=', $edit->id)->orderBy('name')->get(['id', 'name', 'area', 'is_active']) : collect();
         $counts = ['active' => Landmark::where('is_active', 1)->count(), 'hidden' => Landmark::where('is_active', 0)->count()];
         $mapPoints = Landmark::where('is_active', 1)->get(['id', 'name', 'latitude', 'longitude'])
             ->map(fn($l) => ['id' => $l->id, 'name' => $l->name, 'lat' => $l->latitude, 'lng' => $l->longitude])->values();
         $settings = LocalSettings::all();
-        return view('placemanagement::admin.landmarks.index', compact('list', 'edit', 'counts', 'mapPoints', 'settings', 'q'));
+        return view('placemanagement::admin.landmarks.index', compact('list', 'edit', 'counts', 'mapPoints', 'settings', 'q', 'mergeTargets'));
     }
 
     public function store(Request $request): RedirectResponse
@@ -66,6 +67,22 @@ class LandmarkAdminController extends Controller
         $landmark->delete();
         Toastr::success(translate('Landmark deleted'));
         return back();
+    }
+
+    /** Merge a duplicate into the landmark to keep (names, uses and drop fares move over). */
+    public function merge(Request $request, Landmark $landmark): RedirectResponse
+    {
+        $data = $request->validate(['into' => 'required|string']);
+        $keep = Landmark::find($data['into']);
+        if (!$keep || $keep->id === $landmark->id) {
+            Toastr::error(translate('Choose another landmark to keep.'));
+            return back();
+        }
+        $name = $landmark->name;
+        $c = $this->landmarks->merge($landmark, $keep);
+        Toastr::success(translate(key: '{name} merged into {keep}. Drop fares moved: {moved}, removed: {removed}, turned off as repeats: {off}.',
+            replace: ['name' => $name, 'keep' => $keep->name, 'moved' => $c['moved'], 'removed' => $c['removed'], 'off' => $c['turned_off']]));
+        return redirect()->route('admin.landmark.index', ['edit' => $keep->id]);
     }
 
     /** Every Explore Bamenda verified place becomes a landmark (once). */

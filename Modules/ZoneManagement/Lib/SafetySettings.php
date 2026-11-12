@@ -13,6 +13,7 @@ class SafetySettings
     public const KEYS = [
         'safety_enabled', 'safety_auto_reports', 'safety_auto_radius_m', 'safety_auto_window_min', 'safety_auto_minutes',
         'safety_caution_radius_km', 'safety_reports_per_hour', 'safety_report_fade_min', 'safety_banner_radius_km',
+        'safety_report_reward',
     ];
 
     public static function all(): array
@@ -32,6 +33,8 @@ class SafetySettings
             'report_fade_min' => max(15, (int)$get('safety_report_fade_min', 60)),
             // The apps show a banner this close to a blocked area or a fresh report.
             'banner_radius_km' => max(0.5, (float)$get('safety_banner_radius_km', 3)),
+            // Paid to a driver when E-Ride confirms their danger report (0: no reward).
+            'report_reward' => max(0, (float)$get('safety_report_reward', 0)),
         ];
     }
 }

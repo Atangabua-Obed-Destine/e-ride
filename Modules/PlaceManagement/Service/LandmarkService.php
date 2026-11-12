@@ -4,6 +4,7 @@ namespace Modules\PlaceManagement\Service;
 
 use Illuminate\Support\Collection;
 use MatanYadaev\EloquentSpatial\Objects\Point;
+use Modules\PlaceManagement\Entities\DropFare;
 use Modules\PlaceManagement\Entities\Landmark;
 use Modules\PlaceManagement\Entities\Place;
 use Modules\PlaceManagement\Lib\LocalSettings;
@@ -112,6 +113,55 @@ class LandmarkService
             $count++;
         }
         return $count;
+    }
+
+    /**
+     * Merges a duplicate into another landmark: its name and other names become other
+     * names of the kept one, the use counts add up, and its drop fares move over. A route
+     * that would now join a landmark to itself is removed; one that repeats an existing
+     * route (same landmarks and vehicle) is turned off. The duplicate is deleted.
+     *
+     * @return array{moved: int, removed: int, turned_off: int}
+     */
+    public function merge(Landmark $duplicate, Landmark $keep): array
+    {
+        return \DB::transaction(function () use ($duplicate, $keep) {
+            $seen = [mb_strtolower(trim($keep->name)) => true];
+            $aliases = [];
+            foreach ([...$keep->aliasList(), $duplicate->name, ...$duplicate->aliasList()] as $alias) {
+                $key = mb_strtolower(trim($alias));
+                if ($key !== '' && !isset($seen[$key])) {
+                    $seen[$key] = true;
+                    $aliases[] = trim($alias);
+                }
+            }
+            $keep->update([
+                'aliases' => mb_substr(implode("\n", $aliases), 0, 2000) ?: null,
+                'uses' => $keep->uses + $duplicate->uses,
+                'area' => $keep->area ?: $duplicate->area,
+                'place_id' => $keep->place_id ?: $duplicate->place_id,
+            ]);
+
+            $count = ['moved' => 0, 'removed' => 0, 'turned_off' => 0];
+            $fares = DropFare::where('from_landmark_id', $duplicate->id)->orWhere('to_landmark_id', $duplicate->id)->get();
+            foreach ($fares as $fare) {
+                $from = $fare->from_landmark_id === $duplicate->id ? $keep->id : $fare->from_landmark_id;
+                $to = $fare->to_landmark_id === $duplicate->id ? $keep->id : $fare->to_landmark_id;
+                if ($from === $to) {
+                    $fare->delete();
+                    $count['removed']++;
+                    continue;
+                }
+                $repeat = DropFare::where('id', '!=', $fare->id)->where('vehicle_category_id', $fare->vehicle_category_id)
+                    ->where(fn($q) => $q->where(fn($a) => $a->where('from_landmark_id', $from)->where('to_landmark_id', $to))
+                        ->orWhere(fn($b) => $b->where('from_landmark_id', $to)->where('to_landmark_id', $from)->where('both_ways', 1)))
+                    ->exists();
+                $fare->update(['from_landmark_id' => $from, 'to_landmark_id' => $to] + ($repeat ? ['is_active' => 0] : []));
+                $count[$repeat ? 'turned_off' : 'moved']++;
+            }
+            $duplicate->delete();
+            return $count;
+        });
     }
 
     public function zoneAt(float $lat, float $lng): ?string

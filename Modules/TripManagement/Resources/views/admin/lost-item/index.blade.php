@@ -17,6 +17,7 @@
                 @endif
             </div>
 
+            @include('zonemanagement::admin.safety._desk', ['desk' => $desk])
             <div class="row g-3">
                 <div class="col-xl-8">
                     <div class="d-flex flex-wrap justify-content-between align-items-center gap-2 mb-3">

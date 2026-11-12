@@ -21,13 +21,15 @@ class DangerReport extends Model
 
     protected $fillable = [
         'user_id', 'role', 'type', 'place', 'note', 'latitude', 'longitude', 'zone_id', 'trip_request_id', 'status',
-        'safety_area_id', 'handled_by', 'handled_at',
+        'safety_area_id', 'handled_by', 'handled_at', 'reward_amount', 'rewarded_at',
     ];
 
     protected $casts = [
         'latitude' => 'float',
         'longitude' => 'float',
         'handled_at' => 'datetime',
+        'reward_amount' => 'float',
+        'rewarded_at' => 'datetime',
     ];
 
     public function user(): BelongsTo

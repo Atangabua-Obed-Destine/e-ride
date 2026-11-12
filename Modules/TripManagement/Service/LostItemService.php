@@ -10,6 +10,7 @@ use Modules\TripManagement\Entities\LostItem;
 use Modules\TripManagement\Entities\TripRequest;
 use Modules\TripManagement\Lib\LostItemSettings;
 use Modules\UserManagement\Entities\User;
+use Modules\ZoneManagement\Lib\SupportDesk;
 use Throwable;
 
 /**
@@ -130,9 +131,9 @@ class LostItemService
             Log::info('Lost item admin notification not saved', ['item' => $item->id, 'error' => $e->getMessage()]);
         }
         $body = match ($why) {
-            'no_answer' => 'Your driver has not answered yet, so E-Ride support will help you get your item back. We may call you.',
-            'stale' => 'Your item is not back yet, so E-Ride support will help. We may call you.',
-            default => 'E-Ride support will look into your lost item. We may call you.',
+            'no_answer' => 'Your driver has not answered yet, so {desk} will help you get your item back. Support answers {open}.',
+            'stale' => 'Your item is not back yet, so {desk} will help. Support answers {open}.',
+            default => '{desk} will look into your lost item. Support answers {open}.',
         };
         $this->toCustomer($item, 'E-Ride support is on it', $body);
     }
@@ -216,6 +217,8 @@ class LostItemService
                 'vehicle' => $viewer === 'customer' ? trim(($trip?->vehicle?->model?->name ?? '') . ' ' . ($trip?->vehicle?->licence_plate_number ?? '')) : null,
             ],
             'actions' => $this->actions($item, $viewer),
+            // Who to call while E-Ride support has the case.
+            'support' => $item->needsSupport() ? SupportDesk::present() : null,
             'created_at' => $item->created_at?->toIso8601String(),
             'answered_at' => $item->answered_at?->toIso8601String(),
             'driver_returned_at' => $item->driver_returned_at?->toIso8601String(),
@@ -252,9 +255,10 @@ class LostItemService
         $r = $this->replace($item);
         $text = $viewer === 'customer'
             ? match (true) {
-                $item->status === LostItem::REPORTED && $item->escalated_at !== null => 'Your driver has not answered, so E-Ride support is on it. We may call you.',
+                $item->status === LostItem::REPORTED && $item->escalated_at !== null => 'Your driver has not answered, so {desk} is on it. Support answers {open}.',
                 $item->status === LostItem::REPORTED => 'We asked {driver} to check the car. You will hear back within {hours} hours.',
-                $item->status === LostItem::NOT_FOUND && $item->escalated_at !== null => 'E-Ride support is looking into it. We may call you.',
+                $item->status === LostItem::NOT_FOUND && $item->escalated_at !== null => '{desk} is looking into it. Support answers {open}.',
+                $item->status === LostItem::FOUND && $item->escalated_at !== null => 'Your item is not back yet, so {desk} is helping. Support answers {open}.',
                 $item->status === LostItem::NOT_FOUND => '{driver} did not find it in the car. If you are sure you left it there, ask E-Ride support to help.',
                 $item->status === LostItem::FOUND && $item->driver_returned_at !== null => '{driver} says it is back with you. Confirm below, or ask for help if you do not have it.',
                 $item->status === LostItem::FOUND && $item->return_method === LostItem::DELIVER => '{driver} will bring it to you. Pay them {fee} in cash when you get it.',
@@ -278,7 +282,7 @@ class LostItemService
         return translate(key: $text, replace: $r);
     }
 
-    protected function replace(LostItem $item): array
+    protected function replace(LostItem $item, ?string $locale = null): array
     {
         $item->loadMissing(['trip', 'customer', 'driver']);
         return [
@@ -288,6 +292,8 @@ class LostItemService
             'item' => mb_strimwidth($item->description, 0, 60, '...'),
             'fee' => getCurrencyFormat($item->return_fee ?: LostItemSettings::all()['return_fee']),
             'hours' => LostItemSettings::all()['answer_hours'],
+            'desk' => SupportDesk::all()['name'],
+            'open' => SupportDesk::hoursLabel($locale),
         ];
     }
 
@@ -317,7 +323,7 @@ class LostItemService
         $locale = $user->current_language_key ?: 'en';
         try {
             sendDeviceNotification(fcm_token: $user->fcm_token, title: translate(key: $title, locale: $locale),
-                description: translate(key: $body, replace: $this->replace($item), locale: $locale), status: 1,
+                description: translate(key: $body, replace: $this->replace($item, $locale), locale: $locale), status: 1,
                 ride_request_id: $item->trip_request_id, type: 'lost_item', notification_type: 'lost_item',
                 action: self::PUSH_ACTION, user_id: $user->id);
         } catch (Throwable $e) {

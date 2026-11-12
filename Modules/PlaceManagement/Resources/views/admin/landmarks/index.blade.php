@@ -88,6 +88,22 @@
                             </form>
                         </div></div>
 
+                        @if($edit && $mergeTargets->isNotEmpty())
+                            <div class="card mb-3"><div class="card-body">
+                                <h5 class="mb-1">{{ translate('Merge a duplicate') }}</h5>
+                                <p class="fs-12 text-muted">{{ translate(key: 'Merge {name} into the landmark to keep. Its names become other names of the kept one, the counts add up, and its drop fares move over. {name} is then deleted.', replace: ['name' => $edit->name]) }}</p>
+                                <form action="{{ route('admin.landmark.merge', $edit) }}" method="POST" onsubmit="return confirm('{{ translate('Merge and delete this landmark') }}')">@csrf
+                                    <select name="into" class="form-select form-select-sm mb-2" required>
+                                        <option value="">{{ translate('Landmark to keep') }}</option>
+                                        @foreach($mergeTargets as $t)
+                                            <option value="{{ $t->id }}">{{ $t->name }}{{ $t->area ? ' (' . $t->area . ')' : '' }}{{ $t->is_active ? '' : ' - ' . translate('hidden') }}</option>
+                                        @endforeach
+                                    </select>
+                                    <button class="btn btn-outline-danger w-100">{{ translate('Merge into it') }}</button>
+                                </form>
+                            </div></div>
+                        @endif
+
                         <div class="card mb-3"><div class="card-body">
                             <h5 class="mb-1">{{ translate('Explore Bamenda places') }}</h5>
                             <p class="fs-12 text-muted">{{ translate('Add every verified Explore Bamenda place as a landmark. Places already added are skipped.') }}</p>

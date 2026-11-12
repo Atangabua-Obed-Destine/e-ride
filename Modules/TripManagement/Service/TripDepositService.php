@@ -70,6 +70,10 @@ class TripDepositService
         if (!DepositSettings::forTrip($trip)['status'] || $this->isStoreOrderTrip($trip) || !$trip->zone_id) {
             return 0;
         }
+        // Health rides: no deposit step when the admin turned it off for them (Trip management > Health rides).
+        if ($trip->is_health_ride && !\Modules\TripManagement\Lib\HealthRideSettings::all()['deposit']) {
+            return 0;
+        }
         return $this->amountForCategory($trip->zone_id, $trip->vehicle_category_id);
     }
 

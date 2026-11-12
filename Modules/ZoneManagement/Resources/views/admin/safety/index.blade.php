@@ -19,6 +19,7 @@
             @if ($errors->any())
                 <div class="alert alert-danger"><ul class="mb-0 ps-3">@foreach ($errors->all() as $error)<li>{{ $error }}</li>@endforeach</ul></div>
             @endif
+            @include('zonemanagement::admin.safety._desk', ['desk' => $desk])
 
             <div class="row g-3">
                 <div class="col-xl-8">
@@ -98,7 +99,8 @@
                                         <td>{{ $r->place ?: $r->zone?->name }}<div class="fs-12"><a href="https://www.google.com/maps/search/?api=1&query={{ $r->latitude }},{{ $r->longitude }}" target="_blank">{{ translate('Map') }}</a></div></td>
                                         <td>{{ $r->user?->first_name }} {{ $r->user?->last_name }}<div class="fs-12 text-muted">{{ translate($r->role) }} · {{ $r->user?->phone }}</div></td>
                                         <td><span class="badge {{ $statusBadge[$r->status] ?? 'bg-light text-dark' }}">{{ translate('report_' . $r->status) }}</span>
-                                            @if($r->safety_area_id)<div class="fs-12 text-muted">{{ translate('in a blocked area') }}</div>@endif</td>
+                                            @if($r->safety_area_id)<div class="fs-12 text-muted">{{ translate('in a blocked area') }}</div>@endif
+                                            @if($r->rewarded_at)<div class="fs-12 text-success">{{ translate('Rewarded') }} {{ set_currency_symbol($r->reward_amount) }}</div>@endif</td>
                                         <td class="text-center">
                                             @can('zone_edit')
                                                 @if($r->status === 'open')
@@ -181,11 +183,33 @@
                                     'reports_per_hour' => translate('Reports per person per hour'),
                                     'report_fade_min' => translate('A report warns for (minutes)'),
                                     'banner_radius_km' => translate('Show banners within (km)'),
+                                    'report_reward' => translate('Reward to a driver for a confirmed report, into their wallet (0 for none)'),
                                 ] as $key => $label)
                                     <div class="mb-2"><label class="form-label fs-12 mb-1">{{ $label }}</label>
                                         <input type="number" step="any" name="{{ $key }}" class="form-control form-control-sm" value="{{ $settings[$key] }}"></div>
                                 @endforeach
                                 <button class="btn btn-outline-primary w-100 mt-2">{{ translate('Save settings') }}</button>
+                            </form>
+                        </div></div>
+
+                        <div class="card mb-3" id="support-desk"><div class="card-body">
+                            <h5 class="mb-1">{{ translate('Support desk') }}</h5>
+                            <p class="fs-12 text-muted mb-3">{{ translate('Who answers safety alerts and lost items that need support, and when. Riders see the name, number and hours on a lost item that needs support.') }}</p>
+                            <form action="{{ route('admin.safety.support-desk') }}" method="POST">@csrf
+                                <div class="mb-2"><label class="form-label fs-12 mb-1">{{ translate('Name riders see') }}</label>
+                                    <input type="text" name="support_desk_name" maxlength="60" required class="form-control form-control-sm" value="{{ $desk['name'] }}"></div>
+                                <div class="mb-2"><label class="form-label fs-12 mb-1">{{ translate('Number riders call') }}</label>
+                                    <input type="text" name="support_desk_phone" maxlength="30" class="form-control form-control-sm" value="{{ $desk['phone'] }}" placeholder="+237..."></div>
+                                <div class="row g-2 mb-2">
+                                    <div class="col-6"><label class="form-label fs-12 mb-1">{{ translate('Open from (hour)') }}</label>
+                                        <input type="number" min="0" max="23" name="support_desk_from" required class="form-control form-control-sm" value="{{ $desk['from'] }}"></div>
+                                    <div class="col-6"><label class="form-label fs-12 mb-1">{{ translate('Until (hour)') }}</label>
+                                        <input type="number" min="0" max="23" name="support_desk_to" required class="form-control form-control-sm" value="{{ $desk['to'] }}"></div>
+                                </div>
+                                <div class="fs-11 text-muted mb-2">{{ translate('The same hour twice means around the clock.') }}</div>
+                                <div class="mb-2"><label class="form-label fs-12 mb-1">{{ translate('Who is on duty when (for the team only)') }}</label>
+                                    <textarea name="support_desk_staff" rows="2" maxlength="500" class="form-control form-control-sm" placeholder="{{ translate('Marie 08-14, Paul 14-20') }}">{{ $desk['staff'] }}</textarea></div>
+                                <button class="btn btn-outline-primary w-100 mt-2">{{ translate('Save support desk') }}</button>
                             </form>
                         </div></div>
 

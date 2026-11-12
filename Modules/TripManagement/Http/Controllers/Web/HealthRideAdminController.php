@@ -58,11 +58,13 @@ class HealthRideAdminController extends Controller
         $this->authorize('trip_edit');
         $data = $request->validate([
             'health_rides_enabled' => 'nullable|boolean',
+            'health_rides_deposit' => 'nullable|boolean',
             'health_rides_daily_limit' => 'required|integer|min:1|max:10',
             'health_rides_radius_km' => 'nullable|numeric|min:0|max:500',
             'health_rides_emergency_numbers' => 'nullable|string|max:600',
         ]);
         $data['health_rides_enabled'] = $request->boolean('health_rides_enabled') ? 1 : 0;
+        $data['health_rides_deposit'] = $request->boolean('health_rides_deposit') ? 1 : 0;
         $data['health_rides_radius_km'] = (float)($data['health_rides_radius_km'] ?? 0);
         $data['health_rides_emergency_numbers'] = trim((string)($data['health_rides_emergency_numbers'] ?? ''));
         foreach ($data as $key => $value) {

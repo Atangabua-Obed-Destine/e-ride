@@ -20,6 +20,8 @@ class HealthRideSettings
             'enabled' => (bool)(int)$get('health_rides_enabled', 0),
             // Health rides a rider can book per day (to stop misuse).
             'daily_limit' => min(10, max(1, (int)$get('health_rides_daily_limit', 2))),
+            // Ask the booking deposit on a health ride (when deposits are on). Off: the driver sets off at once.
+            'deposit' => (bool)(int)$get('health_rides_deposit', 1),
             // Drivers this far from the pickup get the request. 0: twice the normal search radius.
             'radius_km' => max(0, (float)$get('health_rides_radius_km', 0)),
             // One per line, "Label: number".

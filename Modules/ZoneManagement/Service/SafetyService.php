@@ -222,7 +222,11 @@ class SafetyService
             'reason' => $reason ?: null,
             'created_by' => $area->created_by ?? $admin->id,
         ], fn($v) => $v !== null));
+        $open = $area->reports()->where('status', DangerReport::OPEN)->get();
         $area->reports()->where('status', DangerReport::OPEN)->update(['status' => DangerReport::CONFIRMED, 'handled_by' => $admin->id, 'handled_at' => now()]);
+        foreach ($open as $report) {
+            $this->reward($report->refresh());
+        }
         return $area;
     }
 
@@ -240,7 +244,68 @@ class SafetyService
     public function decideReport(DangerReport $report, User $admin, string $status): DangerReport
     {
         $report->update(['status' => $status, 'handled_by' => $admin->id, 'handled_at' => now()]);
+        if ($status === DangerReport::CONFIRMED) {
+            $this->reward($report);
+        }
         return $report;
+    }
+
+    /**
+     * A driver whose danger report E-Ride confirmed earns the reward set in the settings,
+     * once, into their wallet (receivable balance, owed by E-Ride as for other driver earnings).
+     */
+    public function reward(DangerReport $report): void
+    {
+        $amount = SafetySettings::all()['report_reward'];
+        if ($amount <= 0 || $report->role !== 'driver' || $report->rewarded_at || $report->status !== DangerReport::CONFIRMED) {
+            return;
+        }
+        $this->safely(function () use ($report, $amount) {
+            DB::transaction(function () use ($report, $amount) {
+                $fresh = DangerReport::whereKey($report->id)->lockForUpdate()->first();
+                if (!$fresh || $fresh->rewarded_at) {
+                    return;
+                }
+                $adminId = User::where('user_type', ADMIN_USER_TYPES[0])->value('id');
+                $driver = $this->lockedAccount($fresh->user_id);
+                $driver->receivable_balance += $amount;
+                $driver->save();
+                \Modules\TransactionManagement\Entities\Transaction::create([
+                    'attribute' => 'danger_report_reward', 'attribute_id' => $fresh->id, 'credit' => $amount,
+                    'balance' => $driver->receivable_balance, 'user_id' => $fresh->user_id, 'account' => 'receivable_balance',
+                    'trx_type' => 'Confirmed danger report: reward added to driver receivable balance',
+                ]);
+                if ($adminId) {
+                    $admin = $this->lockedAccount($adminId);
+                    $admin->payable_balance += $amount;
+                    $admin->save();
+                    \Modules\TransactionManagement\Entities\Transaction::create([
+                        'attribute' => 'danger_report_reward', 'attribute_id' => $fresh->id, 'credit' => $amount,
+                        'balance' => $admin->payable_balance, 'user_id' => $adminId, 'account' => 'payable_balance',
+                        'trx_type' => 'Danger report reward owed to the driver added to admin payable balance',
+                    ]);
+                }
+                $fresh->update(['reward_amount' => $amount, 'rewarded_at' => now()]);
+            });
+            $driverUser = User::find($report->user_id);
+            if ($driverUser?->fcm_token) {
+                $locale = $driverUser->current_language_key ?: 'en';
+                sendDeviceNotification(fcm_token: $driverUser->fcm_token,
+                    title: translate(key: 'Thank you for your report', locale: $locale),
+                    description: translate(key: 'E-Ride confirmed your danger report. {amount} was added to your wallet.', replace: ['amount' => getCurrencyFormat($amount)], locale: $locale),
+                    status: 1, type: 'safety_reward', notification_type: 'safety_reward', action: 'danger_report_reward', user_id: $driverUser->id);
+            }
+        });
+    }
+
+    protected function lockedAccount(string $userId): \Modules\UserManagement\Entities\UserAccount
+    {
+        $account = \Modules\UserManagement\Entities\UserAccount::where('user_id', $userId)->lockForUpdate()->first();
+        if (!$account) {
+            $account = \Modules\UserManagement\Entities\UserAccount::create(['user_id' => $userId]);
+            $account = \Modules\UserManagement\Entities\UserAccount::whereKey($account->id)->lockForUpdate()->first();
+        }
+        return $account;
     }
 
     // ------------------------------------------------------------- the clock

@@ -39,7 +39,8 @@ class LostItemAdminController extends Controller
             'open' => LostItem::whereIn('status', LostItem::OPEN)->count(),
         ];
         $settings = LostItemSettings::all();
-        return view('tripmanagement::admin.lost-item.index', compact('items', 'tab', 'counts', 'settings'));
+        $desk = \Modules\ZoneManagement\Lib\SupportDesk::all() + ['open_now' => \Modules\ZoneManagement\Lib\SupportDesk::openNow(), 'hours' => \Modules\ZoneManagement\Lib\SupportDesk::hoursLabel()];
+        return view('tripmanagement::admin.lost-item.index', compact('items', 'tab', 'counts', 'settings', 'desk'));
     }
 
     /** Staff step in: confirm found / not found on the driver's behalf, mark it back, close it, or keep a note. */

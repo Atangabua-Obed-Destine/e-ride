@@ -48,6 +48,7 @@ Route::group(['prefix' => 'admin', 'as' => 'admin.', 'middleware' => 'admin'], f
             Route::post('settings', [LandmarkAdminController::class, 'settings'])->name('settings');
             Route::put('{landmark}', [LandmarkAdminController::class, 'update'])->name('update');
             Route::post('{landmark}/toggle', [LandmarkAdminController::class, 'toggle'])->name('toggle');
+            Route::post('{landmark}/merge', [LandmarkAdminController::class, 'merge'])->name('merge');
             Route::delete('{landmark}', [LandmarkAdminController::class, 'destroy'])->name('destroy');
         });
     });

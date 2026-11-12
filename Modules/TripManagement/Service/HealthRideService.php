@@ -72,12 +72,13 @@ class HealthRideService
     /** The estimate list for a health ride: the normal fare with no surge or extra fare, and the flag. */
     public function applyToEstimate(Collection $estimates): Collection
     {
-        return $estimates->map(function ($entry) {
+        $deposit = HealthRideSettings::all()['deposit'];
+        return $estimates->map(function ($entry) use ($deposit) {
             $entry = (array)$entry;
             if (!empty($entry['is_move'])) {
                 return $entry + ['is_health_ride' => false];
             }
-            return array_merge($entry, [
+            return array_merge($entry, $deposit ? [] : ['booking_deposit' => 0], [
                 'extra_estimated_fare' => 0,
                 'extra_discount_fare' => 0,
                 'extra_discount_amount' => 0,
