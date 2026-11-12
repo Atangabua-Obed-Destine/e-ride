@@ -133,8 +133,10 @@ class TripRequestController extends Controller
         if (!$getTripZone) {
             return response()->json(responseFormatter(ZONE_404), 403);
         }
-        // Area pause or no-go area (danger reports): no trips to or from it for now.
-        if ($paused = app(\Modules\ZoneManagement\Service\SafetyService::class)->tripProblem($pickup_point, $destination_point)) {
+        // Area pause or no-go area (danger reports): no trips to or from it for now. A scheduled
+        // ride is not blocked: the pause may be over by then, and both sides are alerted before it.
+        if ($request->ride_request_type != SCHEDULED
+            && ($paused = app(\Modules\ZoneManagement\Service\SafetyService::class)->tripProblem($pickup_point, $destination_point))) {
             return response()->json(responseFormatter(DEFAULT_400, errors: [['error_code' => 'area_paused', 'message' => $paused]]), 403);
         }
 
@@ -159,7 +161,7 @@ class TripRequestController extends Controller
 
         // Health ride: an urgent ride to care. Normal fare, no surge, no bidding, now only, a few a day.
         $isHealth = $request->type == RIDE_REQUEST && !$request->trip_request_id && filter_var($request->input('health_ride'), FILTER_VALIDATE_BOOLEAN);
-        if ($isHealth && ($problem = app(\Modules\TripManagement\Service\HealthRideService::class)->problem(auth('api')->id(), $isMove, $request->ride_request_type, (bool)$request['bid']))) {
+        if ($isHealth && ($problem = app(\Modules\TripManagement\Service\HealthRideService::class)->problem(auth('api')->id(), $isMove, $request->ride_request_type, (bool)$request['bid'], $request['scheduled_at']))) {
             return response()->json(responseFormatter(DEFAULT_400, errors: [['error_code' => 'health_ride', 'message' => $problem]]), 403);
         }
         if ($request->trip_request_id && $request['bid'] && $save_trip?->is_health_ride) {
@@ -201,8 +203,9 @@ class TripRequestController extends Controller
                 pickup: $pickup_point,
                 destination: $destination_point,
                 vehicleCategoryId: (string)$request->vehicle_category_id,
-                at: $request['scheduled_at'] ? \Illuminate\Support\Carbon::parse($request['scheduled_at']) : null,
+                at: $request->ride_request_type == SCHEDULED && $request['scheduled_at'] ? \Illuminate\Support\Carbon::parse($request['scheduled_at']) : null,
                 hasStops: is_array($stops) && count($stops) > 0,
+                scheduled: $request->ride_request_type == SCHEDULED,
             );
             if ($dropFare) {
                 $estimatedFare = $actualFare = $dropFare->price;
@@ -276,6 +279,13 @@ class TripRequestController extends Controller
                 }
             }
             $final->ride_request_type != 'scheduled' && ProcessPushNotifications::dispatch(radius: $search_radius, trip: $final, parcelWeight: $request->weight ?? null)->afterResponse();
+            if ($final->ride_request_type == SCHEDULED && !$request->trip_request_id) {
+                // Deposit at booking (the admin's choice), and a heads-up if E-Ride has paused the area for that time.
+                app(\Modules\TripManagement\Service\TripDepositService::class)->openAtBooking($final);
+                $final->unsetRelation('deposit');
+                $scheduledRides = app(\Modules\TripManagement\Service\ScheduledRideService::class);
+                app()->terminating(fn() => $scheduledRides->safetyCheck($final->id));
+            }
             $trip = new TripRequestResource($final);
 
         } catch (Exception $exception) {
@@ -326,13 +336,15 @@ class TripRequestController extends Controller
         if (!$getTripZone) {
             return response()->json(responseFormatter(ZONE_404), 403);
         }
-        // Area pause or no-go area (danger reports): no trips to or from it for now.
-        if ($paused = app(\Modules\ZoneManagement\Service\SafetyService::class)->tripProblem($pickupPoint, $destinationPoint)) {
+        // Area pause or no-go area (danger reports): no trips to or from it for now. Scheduled rides
+        // are not blocked (alerted before the pickup instead).
+        $isScheduled = $request->ride_request_type == SCHEDULED && $request->filled('scheduled_at');
+        if (!$isScheduled && ($paused = app(\Modules\ZoneManagement\Service\SafetyService::class)->tripProblem($pickupPoint, $destinationPoint))) {
             return response()->json(responseFormatter(DEFAULT_400, errors: [['error_code' => 'area_paused', 'message' => $paused]]), 403);
         }
         // Health ride: checked before the fares, so the rider learns at once if they cannot book one.
         $isHealth = $request->type == 'ride_request' && filter_var($request->input('health_ride'), FILTER_VALIDATE_BOOLEAN);
-        if ($isHealth && ($problem = app(\Modules\TripManagement\Service\HealthRideService::class)->problem($user->id, $request->input('service') === 'move', $request->ride_request_type))) {
+        if ($isHealth && ($problem = app(\Modules\TripManagement\Service\HealthRideService::class)->problem($user->id, $request->input('service') === 'move', $request->ride_request_type, false, $request->input('scheduled_at')))) {
             return response()->json(responseFormatter(DEFAULT_400, errors: [['error_code' => 'health_ride', 'message' => $problem]]), 403);
         }
 
@@ -403,7 +415,8 @@ class TripRequestController extends Controller
         // Drop fares: a fixed price on popular routes, for each vehicle category that has one.
         if ($request->type == 'ride_request') {
             $estimatedFare = app(\Modules\PlaceManagement\Service\DropFareService::class)
-                ->applyToEstimate(collect($estimatedFare), $pickupPoint, $destinationPoint, !empty($intermediateCoordinates));
+                ->applyToEstimate(collect($estimatedFare), $pickupPoint, $destinationPoint, !empty($intermediateCoordinates),
+                    $isScheduled ? \Illuminate\Support\Carbon::parse($request->input('scheduled_at')) : null, $isScheduled);
         }
         if ($isHealth) {
             $estimatedFare = app(\Modules\TripManagement\Service\HealthRideService::class)->applyToEstimate(collect($estimatedFare));
@@ -1305,7 +1318,8 @@ class TripRequestController extends Controller
 
         $trip = $this->tripRequestService->findOneBy(criteria: ['id' => $trip_request_id]);
 
-        if (!$trip || $trip->ride_request_type == 'regular' || $trip->current_status === ACCEPTED) {
+        // Only the rider's own scheduled ride, while no driver has taken it.
+        if (!$trip || $trip->customer_id !== auth('api')->id() || $trip->ride_request_type == 'regular' || $trip->current_status !== PENDING) {
             return response()->json(responseFormatter(constant: TRIP_REQUEST_404), 403);
         }
 
@@ -1325,6 +1339,9 @@ class TripRequestController extends Controller
         $criteria = [
             'scheduled_at' => $request->scheduled_at,
             'sending_notification_at' => $sending_notification_at,
+            // Drivers hear of it again at the new time, and the safety heads-up is checked again for it.
+            'is_notification_sent' => 0,
+            'schedule_marks' => null,
         ];
 
         $trip = $this->tripRequestService->update(id: $trip_request_id, data: $criteria);

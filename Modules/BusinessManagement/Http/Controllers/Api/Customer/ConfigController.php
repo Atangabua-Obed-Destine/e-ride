@@ -151,6 +151,9 @@ class ConfigController extends Controller
             'booking_deposit_status' => \Modules\TripManagement\Lib\DepositSettings::enabled(),
             'booking_deposit_window_minutes' => \Modules\TripManagement\Lib\DepositSettings::all()['window_minutes'],
             'booking_deposit_free_cancel_seconds' => \Modules\TripManagement\Lib\DepositSettings::all()['free_cancel_seconds'],
+            // Scheduled rides: 'booking' (paid when booked) or 'before_pickup' (asked before the pickup, once a driver accepted).
+            'booking_deposit_scheduled_timing' => \Modules\TripManagement\Lib\DepositSettings::all()['scheduled_timing'],
+            'booking_deposit_scheduled_free_cancel_minutes' => \Modules\TripManagement\Lib\DepositSettings::all()['scheduled_free_cancel_minutes'],
             // E-Ride Move: trucks booked like rides, price agreed in person.
             'move_status' => \Modules\TripManagement\Lib\MoveSettings::enabled(),
             'move_deposit_status' => \Modules\TripManagement\Lib\DepositSettings::move()['status'],

@@ -184,6 +184,7 @@
                                     'report_fade_min' => translate('A report warns for (minutes)'),
                                     'banner_radius_km' => translate('Show banners within (km)'),
                                     'report_reward' => translate('Reward to a driver for a confirmed report, into their wallet (0 for none)'),
+                                    'scheduled_alert_minutes' => translate('Scheduled rides are not blocked by a pause: alert the rider and driver this long before the pickup (minutes)'),
                                 ] as $key => $label)
                                     <div class="mb-2"><label class="form-label fs-12 mb-1">{{ $label }}</label>
                                         <input type="number" step="any" name="{{ $key }}" class="form-control form-control-sm" value="{{ $settings[$key] }}"></div>

@@ -29,42 +29,55 @@ class HealthRideService
     }
 
     /**
-     * Health rides that count toward today's limit: every one booked today, except
-     * those cancelled before any driver accepted (nobody came, so nothing was used).
+     * Health rides that count toward a day's limit (today unless $day is given): every
+     * one riding that day (its pickup time when scheduled, else when it was booked),
+     * except those cancelled before any driver accepted (nobody came, so nothing was used).
      */
-    public function ridesToday(string $customerId): int
+    public function ridesToday(string $customerId, ?\Illuminate\Support\Carbon $day = null): int
     {
+        $day = ($day ?? now())->copy();
         return TripRequest::where('customer_id', $customerId)
             ->where('is_health_ride', 1)
-            ->where('created_at', '>=', now()->startOfDay())
+            ->whereRaw('COALESCE(scheduled_at, created_at) >= ? AND COALESCE(scheduled_at, created_at) < ?', [$day->copy()->startOfDay(), $day->copy()->addDay()->startOfDay()])
             ->where(fn($q) => $q->where('current_status', '!=', CANCELLED)
                 ->orWhereHas('tripStatus', fn($s) => $s->whereNotNull('accepted')))
             ->count();
     }
 
-    public function ridesLeft(string $customerId): int
+    public function ridesLeft(string $customerId, ?\Illuminate\Support\Carbon $day = null): int
     {
-        return max(0, HealthRideSettings::all()['daily_limit'] - $this->ridesToday($customerId));
+        return max(0, HealthRideSettings::all()['daily_limit'] - $this->ridesToday($customerId, $day));
     }
 
-    /** Why this health ride cannot be booked, or null. */
-    public function problem(string $customerId, bool $isMove = false, ?string $rideRequestType = null, bool $bid = false): ?string
+    /** Why this health ride cannot be booked, or null. $scheduledAt: the pickup time of a scheduled one. */
+    public function problem(string $customerId, bool $isMove = false, ?string $rideRequestType = null, bool $bid = false, ?string $scheduledAt = null): ?string
     {
+        $day = null;
+        if ($rideRequestType === SCHEDULED && $scheduledAt) {
+            try {
+                $day = \Illuminate\Support\Carbon::parse($scheduledAt);
+            } catch (\Throwable) {
+                $day = null;
+            }
+        }
         if (!HealthRideSettings::enabled()) {
             return translate('Health rides are not available right now. Book a normal ride.');
         }
         if ($isMove) {
             return translate('A health ride is for a person, not a move.');
         }
-        if ($rideRequestType === SCHEDULED) {
+        if ($rideRequestType === SCHEDULED && !HealthRideSettings::all()['schedule']) {
             return translate('A health ride is for right now. Schedule a normal ride instead.');
         }
         if ($bid) {
             return translate('A health ride uses the normal fare, so there is no bidding.');
         }
-        if ($this->ridesLeft($customerId) <= 0) {
-            return translate(key: 'You have used your {n} health rides for today. Book a normal ride, or call the emergency numbers if it is an emergency.',
-                replace: ['n' => HealthRideSettings::all()['daily_limit']]);
+        if ($this->ridesLeft($customerId, $day) <= 0) {
+            return $day && !$day->isToday()
+                ? translate(key: 'You already have {n} health rides on that day. Choose another day, or book a normal ride.',
+                    replace: ['n' => HealthRideSettings::all()['daily_limit']])
+                : translate(key: 'You have used your {n} health rides for today. Book a normal ride, or call the emergency numbers if it is an emergency.',
+                    replace: ['n' => HealthRideSettings::all()['daily_limit']]);
         }
         return null;
     }
@@ -142,6 +155,8 @@ class HealthRideService
         return [
             'status' => $s['enabled'],
             'daily_limit' => $s['daily_limit'],
+            // A health ride can be scheduled (when scheduling is on).
+            'schedule' => $s['schedule'],
             'emergency_numbers' => HealthRideSettings::emergencyNumbers(),
         ];
     }

@@ -35,12 +35,7 @@
                             <div class="col-sm-6">
                                 <label class="form-label">{{ translate('Time_to_pay_after_a_driver_accepts_(minutes)') }}</label>
                                 <input type="number" name="window_minutes" class="form-control" required min="1" max="30" value="{{ $settings['window_minutes'] }}">
-                                <div class="fs-12 text-muted mt-1">{{ translate('When it runs out, the trip is cancelled and the driver is free for other requests. A MoMo payment already in progress gets 2 more minutes.') }}</div>
-                            </div>
-                            <div class="col-sm-6">
-                                <label class="form-label">{{ translate('Time_to_pay_for_scheduled_rides_(minutes)') }}</label>
-                                <input type="number" name="scheduled_window_minutes" class="form-control" required min="1" max="1440" value="{{ $settings['scheduled_window_minutes'] }}">
-                                <div class="fs-12 text-muted mt-1">{{ translate('Scheduled rides are often accepted long before the pickup, so the customer may need longer.') }}</div>
+                                <div class="fs-12 text-muted mt-1">{{ translate('When it runs out, the trip is cancelled and the driver is free for other requests. A MoMo payment already in progress gets 2 more minutes. Also the time to pay when booking a scheduled ride.') }}</div>
                             </div>
                             <div class="col-sm-6">
                                 <label class="form-label">{{ translate('Free_cancellation_after_paying_(seconds)') }}</label>
@@ -56,6 +51,46 @@
                                 <label class="form-label">{{ translate('E-Ride_share_of_a_kept_deposit_(%)') }}</label>
                                 <input type="number" name="admin_share_percent" class="form-control" required min="0" max="100" step="0.01" value="{{ $settings['admin_share_percent'] }}">
                                 <div class="fs-12 text-muted mt-1">{{ translate('When a customer cancels late, the driver gets the rest, added to their wallet. 0 gives it all to the driver.') }}</div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="card mb-3">
+                    <div class="card-body">
+                        <h5 class="mb-1">{{ translate('Scheduled rides') }}</h5>
+                        <p class="fs-12 text-muted">{{ translate('Rides booked ahead. These apply when scheduled rides are on in Business setup.') }}</p>
+                        <label class="form-label">{{ translate('When the customer pays the deposit') }}</label>
+                        <div class="d-flex flex-column gap-2 mb-3">
+                            <label class="d-flex gap-2 align-items-start">
+                                <input type="radio" name="scheduled_timing" value="booking" class="mt-1" {{ $settings['scheduled_timing'] === 'booking' ? 'checked' : '' }}>
+                                <span><b>{{ translate('When booking') }}</b><br><span class="fs-12 text-muted">{{ translate('The customer pays right away, with the time to pay above. Drivers see the ride only once it is paid, so every scheduled ride they accept is confirmed.') }}</span></span>
+                            </label>
+                            <label class="d-flex gap-2 align-items-start">
+                                <input type="radio" name="scheduled_timing" value="before_pickup" class="mt-1" {{ $settings['scheduled_timing'] === 'before_pickup' ? 'checked' : '' }}>
+                                <span><b>{{ translate('Near the pickup time') }}</b><br><span class="fs-12 text-muted">{{ translate('Once a driver has accepted, the customer is asked to pay a set time before the pickup. Not paid in time: the ride is cancelled and the driver is free.') }}</span></span>
+                            </label>
+                        </div>
+                        <div class="row g-3">
+                            <div class="col-sm-6">
+                                <label class="form-label">{{ translate('Near the pickup: ask this long before (minutes)') }}</label>
+                                <input type="number" name="scheduled_before_minutes" class="form-control" required min="10" max="1440" value="{{ $settings['scheduled_before_minutes'] }}">
+                                <div class="fs-12 text-muted mt-1">{{ translate('If a driver accepts later than this, it is asked when they accept.') }}</div>
+                            </div>
+                            <div class="col-sm-6">
+                                <label class="form-label">{{ translate('Near the pickup: time to pay (minutes)') }}</label>
+                                <input type="number" name="scheduled_window_minutes" class="form-control" required min="1" max="1440" value="{{ $settings['scheduled_window_minutes'] }}">
+                                <div class="fs-12 text-muted mt-1">{{ translate('Never past the pickup time itself.') }}</div>
+                            </div>
+                            <div class="col-sm-6">
+                                <label class="form-label">{{ translate('Free cancellation until (minutes before the pickup)') }}</label>
+                                <input type="number" name="scheduled_free_cancel_minutes" class="form-control" required min="0" max="2880" value="{{ $settings['scheduled_free_cancel_minutes'] }}">
+                                <div class="fs-12 text-muted mt-1">{{ translate('Before that, a customer who cancels gets the deposit back. After it, the driver and E-Ride share it as for any late cancel. While no driver has taken the ride, cancelling is always free.') }}</div>
+                            </div>
+                            <div class="col-sm-6">
+                                <label class="form-label">{{ translate('No driver: cancel this long after the pickup time (minutes)') }}</label>
+                                <input type="number" name="scheduled_no_driver_minutes" class="form-control" required min="0" max="240" value="{{ $settings['scheduled_no_driver_minutes'] }}">
+                                <div class="fs-12 text-muted mt-1">{{ translate('The customer is told, and a paid deposit goes back to their wallet. A driver who drops a scheduled ride before its time: it is offered to other drivers and the deposit carries over.') }}</div>
                             </div>
                         </div>
                     </div>

@@ -21,10 +21,14 @@ use Modules\TripManagement\Entities\TripRequest;
  */
 class DropFareService
 {
-    /** The drop route for this ride and vehicle category right now, if any. Rides with stops never get one. */
-    public function match(Point $pickup, Point $destination, string $vehicleCategoryId, ?Carbon $at = null, bool $hasStops = false): ?DropFare
+    /**
+     * The drop route for this ride and vehicle category, if any: right now, or at the
+     * pickup time of a scheduled ride ($at). Rides with stops never get one, nor
+     * scheduled rides when the admin turned drop fares off for them.
+     */
+    public function match(Point $pickup, Point $destination, string $vehicleCategoryId, ?Carbon $at = null, bool $hasStops = false, bool $scheduled = false): ?DropFare
     {
-        if ($hasStops || !LocalSettings::dropFares()) {
+        if ($hasStops || !LocalSettings::dropFares() || ($scheduled && !LocalSettings::all()['drop_fares_scheduled'])) {
             return null;
         }
         $at ??= now();
@@ -47,20 +51,21 @@ class DropFareService
      * The estimate list (one entry per vehicle category) with drop prices put in.
      * Each matched entry says is_drop_fare, the route, and has no surge or extra fare.
      */
-    public function applyToEstimate(Collection $estimates, Point $pickup, Point $destination, bool $hasStops): Collection
+    public function applyToEstimate(Collection $estimates, Point $pickup, Point $destination, bool $hasStops, ?Carbon $at = null, bool $scheduled = false): Collection
     {
         if (!LocalSettings::dropFares()) {
             return $estimates;
         }
-        if ($hasStops) {
+        if ($hasStops || ($scheduled && !LocalSettings::all()['drop_fares_scheduled'])) {
             return $estimates->map(fn($entry) => ((array)$entry) + ['is_drop_fare' => false]);
         }
-        return $estimates->map(function ($entry) use ($pickup, $destination) {
+        return $estimates->map(function ($entry) use ($pickup, $destination, $at, $scheduled) {
             $entry = (array)$entry;
             if (!empty($entry['is_move']) || empty($entry['vehicle_category_id'])) {
                 return $entry + ['is_drop_fare' => false];
             }
-            $route = $this->match($pickup, $destination, $entry['vehicle_category_id']);
+            // The same time and rule as at booking, so the price shown is the price booked.
+            $route = $this->match($pickup, $destination, $entry['vehicle_category_id'], $at, false, $scheduled);
             if (!$route) {
                 return $entry + ['is_drop_fare' => false];
             }

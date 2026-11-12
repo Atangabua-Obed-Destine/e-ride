@@ -13,7 +13,7 @@ class SafetySettings
     public const KEYS = [
         'safety_enabled', 'safety_auto_reports', 'safety_auto_radius_m', 'safety_auto_window_min', 'safety_auto_minutes',
         'safety_caution_radius_km', 'safety_reports_per_hour', 'safety_report_fade_min', 'safety_banner_radius_km',
-        'safety_report_reward',
+        'safety_report_reward', 'safety_scheduled_alert_minutes',
     ];
 
     public static function all(): array
@@ -35,6 +35,8 @@ class SafetySettings
             'banner_radius_km' => max(0.5, (float)$get('safety_banner_radius_km', 3)),
             // Paid to a driver when E-Ride confirms their danger report (0: no reward).
             'report_reward' => max(0, (float)$get('safety_report_reward', 0)),
+            // Scheduled rides are never blocked by a pause: rider and driver get a heads-up this long before the pickup.
+            'scheduled_alert_minutes' => min(720, max(15, (int)$get('safety_scheduled_alert_minutes', 60))),
         ];
     }
 }

@@ -132,6 +132,7 @@ $app = Application::configure(basePath: dirname(__DIR__))
         $schedule->command('safety:tick')->everyMinute()->withoutOverlapping();
         $schedule->command('trip-checkins:tick')->everyMinute()->withoutOverlapping();
         $schedule->command('lost-items:tick')->everyFiveMinutes()->withoutOverlapping();
+        $schedule->command('scheduled-rides:tick')->everyMinute()->withoutOverlapping();
     })
     ->create();
 

@@ -19,8 +19,17 @@ class DepositSettings
             'status' => (string)$get('booking_deposit_status', '0') === '1',
             // Minutes the customer has to pay after a driver accepts.
             'window_minutes' => max(1, (int)$get('booking_deposit_window_minutes', 3)),
-            // Scheduled rides are often accepted long before pickup.
+            // Scheduled rides: when the deposit is asked for. 'booking': when the ride is booked, before
+            // any driver sees it. 'before_pickup': once a driver has accepted, this many minutes before the pickup.
+            'scheduled_timing' => in_array($get('booking_deposit_scheduled_timing', 'booking'), ['booking', 'before_pickup'], true)
+                ? $get('booking_deposit_scheduled_timing', 'booking') : 'booking',
+            'scheduled_before_minutes' => min(1440, max(10, (int)$get('booking_deposit_scheduled_before_minutes', 60))),
+            // Minutes to pay a scheduled ride's deposit when it is asked for before the pickup.
             'scheduled_window_minutes' => max(1, (int)$get('booking_deposit_scheduled_window_minutes', 30)),
+            // A scheduled ride cancels for free until this many minutes before the pickup.
+            'scheduled_free_cancel_minutes' => min(2880, max(0, (int)$get('booking_deposit_scheduled_free_cancel_minutes', 60))),
+            // A scheduled ride no driver accepted is cancelled (deposit refunded) this many minutes after its pickup time.
+            'scheduled_no_driver_minutes' => min(240, max(0, (int)$get('booking_deposit_scheduled_no_driver_minutes', 15))),
             // After paying, the customer can still cancel for free this long.
             'free_cancel_seconds' => max(0, (int)$get('booking_deposit_free_cancel_seconds', 60)),
             // A driver this many minutes past the promised arrival lets the customer cancel for free.

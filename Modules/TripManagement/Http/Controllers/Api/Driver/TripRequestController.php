@@ -805,8 +805,11 @@ class TripRequestController extends Controller
         }
 
         // A paid booking deposit goes back to the customer's wallet (a rebooked
-        // trip asks for a new one when its new driver accepts).
-        if ($request->status == CANCELLED) {
+        // trip asks for a new one when its new driver accepts). A scheduled ride
+        // offered again keeps its paid deposit instead.
+        $carryDeposit = $request->status == CANCELLED && $shouldRebook && $trip->ride_request_type == SCHEDULED
+            && \Modules\TripManagement\Entities\TripDeposit::where('trip_request_id', $trip->id)->where('status', \Modules\TripManagement\Entities\TripDeposit::PAID)->exists();
+        if ($request->status == CANCELLED && !$carryDeposit) {
             app(TripDepositService::class)->onTripCancelled($trip->id, 'driver', $statusBeforeUpdate);
         }
         // E-Ride Move: nothing is paid in the app; the deposit is the booking fee.
@@ -815,6 +818,9 @@ class TripRequestController extends Controller
         }
 
         $rebookedTrip = $shouldRebook ? $this->tripRequestService->rebookCancelledTrip($trip, auth('api')->id()) : null;
+        if ($carryDeposit && (!$rebookedTrip || !app(TripDepositService::class)->carryOver($trip->id, $rebookedTrip))) {
+            app(TripDepositService::class)->onTripCancelled($trip->id, 'driver', $statusBeforeUpdate);
+        }
 
         $tripType = $trip->type == PARCEL ? PARCEL : ($trip->ride_request_type == SCHEDULED ? 'schedule_ride' : 'trip');
         //Get status wise notification message
@@ -833,6 +839,24 @@ class TripRequestController extends Controller
                 notification_type: $trip->type == RIDE_REQUEST ? 'trip' : 'parcel',
                 action: $push['action'],
                 user_id: $trip->customer->id
+            );
+        } elseif ($rebookedTrip && $trip->ride_request_type == SCHEDULED) {
+            // Not the "finding a driver" screen: the ride is still ahead.
+            $locale = $trip->customer->current_language_key;
+            $when = Carbon::parse($trip->scheduled_at);
+            $vars = ['time' => $when->isToday() ? $when->format('H:i') : $when->format('D d M, H:i')];
+            sendDeviceNotification(fcm_token: $trip->customer->fcm_token,
+                title: translate(key: 'Your driver cancelled', locale: $locale),
+                description: $carryDeposit
+                    ? translate(key: 'Your ride at {time} is still booked and we are finding you another driver. Your deposit carries over.', replace: $vars, locale: $locale)
+                    : translate(key: 'Your ride at {time} is still booked and we are finding you another driver.', replace: $vars, locale: $locale),
+                status: 1,
+                ride_request_id: $rebookedTrip->id,
+                type: $trip->type,
+                notification_type: 'trip',
+                action: 'scheduled_rebooked',
+                user_id: $trip->customer->id,
+                notificationData: ['new_trip_id' => $rebookedTrip->id],
             );
         } elseif ($rebookedTrip) {
             $push = getNotification(key: 'searching_for_rider', group: 'customer');
@@ -981,6 +1005,11 @@ class TripRequestController extends Controller
 
         if (!$this->driverAvailabilityScheduleService->isDriverAvailableForTrip($user->id, $trip)) {
             return response()->json(responseFormatter(constant: DRIVER_SCHEDULE_UNAVAILABLE_403), 403);
+        }
+        // A scheduled ride whose deposit (asked at booking) is not paid yet is not confirmed.
+        if (app(TripDepositService::class)->awaitingAtBooking($trip)) {
+            return response()->json(responseFormatter(DEFAULT_400, errors: [['error_code' => 'not_confirmed',
+                'message' => translate(key: 'The customer has not confirmed this ride yet.', locale: $user?->current_language_key)]]), 403);
         }
 
         $env = env('APP_MODE');

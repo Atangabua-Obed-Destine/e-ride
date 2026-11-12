@@ -55,7 +55,11 @@ class BookingDepositController extends Controller
         $data = $request->validate([
             'status' => 'nullable|boolean',
             'window_minutes' => 'required|integer|min:1|max:30',
+            'scheduled_timing' => 'required|in:booking,before_pickup',
+            'scheduled_before_minutes' => 'required|integer|min:10|max:1440',
             'scheduled_window_minutes' => 'required|integer|min:1|max:1440',
+            'scheduled_free_cancel_minutes' => 'required|integer|min:0|max:2880',
+            'scheduled_no_driver_minutes' => 'required|integer|min:0|max:240',
             'free_cancel_seconds' => 'required|integer|min:0|max:600',
             'late_minutes' => 'required|integer|min:1|max:120',
             'admin_share_percent' => 'required|numeric|min:0|max:100',
@@ -63,7 +67,11 @@ class BookingDepositController extends Controller
         $save = fn(string $key, $value) => updateBusinessSetting(keyName: $key, settingType: TRIP_SETTINGS, value: (string)$value);
         $save('booking_deposit_status', $request->boolean('status') ? '1' : '0');
         $save('booking_deposit_window_minutes', $data['window_minutes']);
+        $save('booking_deposit_scheduled_timing', $data['scheduled_timing']);
+        $save('booking_deposit_scheduled_before_minutes', $data['scheduled_before_minutes']);
         $save('booking_deposit_scheduled_window_minutes', $data['scheduled_window_minutes']);
+        $save('booking_deposit_scheduled_free_cancel_minutes', $data['scheduled_free_cancel_minutes']);
+        $save('booking_deposit_scheduled_no_driver_minutes', $data['scheduled_no_driver_minutes']);
         $save('booking_deposit_free_cancel_seconds', $data['free_cancel_seconds']);
         $save('booking_deposit_late_minutes', $data['late_minutes']);
         $save('booking_deposit_admin_share_percent', $data['admin_share_percent']);

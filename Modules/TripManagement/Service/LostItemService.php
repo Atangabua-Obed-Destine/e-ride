@@ -256,6 +256,7 @@ class LostItemService
         $text = $viewer === 'customer'
             ? match (true) {
                 $item->status === LostItem::REPORTED && $item->escalated_at !== null => 'Your driver has not answered, so {desk} is on it. Support answers {open}.',
+                $item->status === LostItem::REPORTED && LostItemSettings::all()['answer_hours'] === 1 => 'We asked {driver} to check the car. You will hear back within the hour.',
                 $item->status === LostItem::REPORTED => 'We asked {driver} to check the car. You will hear back within {hours} hours.',
                 $item->status === LostItem::NOT_FOUND && $item->escalated_at !== null => '{desk} is looking into it. Support answers {open}.',
                 $item->status === LostItem::FOUND && $item->escalated_at !== null => 'Your item is not back yet, so {desk} is helping. Support answers {open}.',

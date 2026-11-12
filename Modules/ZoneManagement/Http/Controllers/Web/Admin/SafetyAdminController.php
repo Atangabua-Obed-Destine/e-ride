@@ -118,6 +118,7 @@ class SafetyAdminController extends Controller
             'report_fade_min' => 'required|integer|min:15|max:1440',
             'banner_radius_km' => 'required|numeric|min:0.5|max:50',
             'report_reward' => 'required|numeric|min:0|max:100000',
+            'scheduled_alert_minutes' => 'required|integer|min:15|max:720',
         ]);
         $data['enabled'] = $request->boolean('enabled') ? 1 : 0;
         foreach ($data as $key => $value) {

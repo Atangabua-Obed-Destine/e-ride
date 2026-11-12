@@ -16,6 +16,8 @@ class LocalSettings
         return [
             'landmarks_enabled' => (bool)(int)$get('landmarks_enabled', 0),
             'drop_fares_enabled' => (bool)(int)$get('drop_fares_enabled', 0),
+            // Scheduled rides get drop prices too, judged at their pickup time (a route's hours).
+            'drop_fares_scheduled' => (bool)(int)$get('drop_fares_scheduled', 1),
             // Landmarks shown before Google's results while typing.
             'search_results' => min(8, max(1, (int)$get('landmarks_search_results', 4))),
             // Landmarks shown when nothing is typed yet.

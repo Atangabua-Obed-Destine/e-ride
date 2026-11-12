@@ -18,6 +18,8 @@ class ProcessScheduledTrips extends Command
         }
 
         $search_radius = (double)get_cache('search_radius');
+        $deposits = app(\Modules\TripManagement\Service\TripDepositService::class);
+        $health = app(\Modules\TripManagement\Service\HealthRideService::class);
         $scheduledTrips = TripRequest::where('ride_request_type', 'scheduled')
             ->where('current_status', PENDING)
             ->where('sending_notification_at', '<=', now())
@@ -25,7 +27,11 @@ class ProcessScheduledTrips extends Command
             ->get();
         if ($scheduledTrips) {
             foreach ($scheduledTrips as $trip) {
-                ProcessPushNotifications::dispatch(trip: $trip, radius: $search_radius);
+                // Deposit at booking not paid yet: drivers hear of it once it is.
+                if ($deposits->awaitingAtBooking($trip)) {
+                    continue;
+                }
+                ProcessPushNotifications::dispatch(trip: $trip, radius: $trip->is_health_ride ? $health->radiusKm() : $search_radius);
                 $trip->update(['is_notification_sent' => true]);
             }
         }

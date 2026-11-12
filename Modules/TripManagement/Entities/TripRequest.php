@@ -75,6 +75,7 @@ class TripRequest extends Model
         'share_token',
         'shared_at',
         'scheduled_at',
+        'schedule_marks',
         'current_status',
         'is_notification_sent',
         'sending_notification_at',
@@ -91,6 +92,8 @@ class TripRequest extends Model
     ];
 
     protected $casts = [
+        // Scheduled rides: what was already sent (safety heads-ups, "still looking"), see ScheduledRideService.
+        'schedule_marks' => 'array',
         'estimated_fare' => 'float',
         'actual_fare' => 'float',
         'return_fee' => 'float',

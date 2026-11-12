@@ -58,9 +58,11 @@ class DropFareAdminController extends Controller
     {
         $data = $request->validate([
             'drop_fares_enabled' => 'nullable|boolean',
+            'drop_fares_scheduled' => 'nullable|boolean',
             'drop_fares_radius_m' => 'required|integer|min:50|max:2000',
         ]);
         $data['drop_fares_enabled'] = $request->boolean('drop_fares_enabled') ? 1 : 0;
+        $data['drop_fares_scheduled'] = $request->boolean('drop_fares_scheduled') ? 1 : 0;
         foreach ($data as $key => $value) {
             updateBusinessSetting(keyName: $key, settingType: LocalSettings::TYPE, value: (string)$value);
         }

@@ -109,6 +109,12 @@
                                     <input class="form-check-input" type="checkbox" role="switch" id="drop-enabled" name="drop_fares_enabled" value="1" {{ $settings['drop_fares_enabled'] ? 'checked' : '' }}>
                                     <label class="form-check-label" for="drop-enabled">{{ translate('Drop fares are on') }}</label>
                                 </div>
+                                <div class="form-check form-switch mb-3">
+                                    <input type="hidden" name="drop_fares_scheduled" value="0">
+                                    <input class="form-check-input" type="checkbox" role="switch" id="drop-scheduled" name="drop_fares_scheduled" value="1" {{ $settings['drop_fares_scheduled'] ? 'checked' : '' }}>
+                                    <label class="form-check-label fs-12" for="drop-scheduled">{{ translate('Scheduled rides get drop prices too') }}</label>
+                                    <div class="fs-11 text-muted">{{ translate('A route with hours is judged at the pickup time, not when the ride is booked. Off: scheduled rides pay the normal fare.') }}</div>
+                                </div>
                                 <div class="mb-2"><label class="form-label fs-12 mb-1">{{ translate('Default distance around each landmark for new routes (metres)') }}</label>
                                     <input type="number" name="drop_fares_radius_m" min="50" max="2000" class="form-control form-control-sm" value="{{ $settings['drop_radius_m'] }}"></div>
                                 <button class="btn btn-outline-primary w-100 mt-2">{{ translate('Save settings') }}</button>

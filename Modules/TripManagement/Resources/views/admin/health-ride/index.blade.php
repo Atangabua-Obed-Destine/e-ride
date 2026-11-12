@@ -83,6 +83,12 @@
                                     <label class="form-check-label fs-12" for="health-deposit">{{ translate('Ask the booking deposit on health rides') }}</label>
                                     <div class="fs-11 text-muted">{{ translate('Off: the driver sets off at once, with no payment step. The daily limit still stops misuse.') }}</div>
                                 </div>
+                                <div class="form-check form-switch mb-3">
+                                    <input type="hidden" name="health_rides_schedule" value="0">
+                                    <input class="form-check-input" type="checkbox" role="switch" id="health-schedule" name="health_rides_schedule" value="1" {{ $settings['schedule'] ? 'checked' : '' }}>
+                                    <label class="form-check-label fs-12" for="health-schedule">{{ translate('Riders can book health rides ahead') }}</label>
+                                    <div class="fs-11 text-muted">{{ translate('For a clinic appointment or a treatment. Needs scheduled rides on in Business setup. The daily limit counts the day of the ride.') }}</div>
+                                </div>
                                 <div class="mb-2"><label class="form-label fs-12 mb-1">{{ translate('Health rides a rider can book per day') }}</label>
                                     <input type="number" name="health_rides_daily_limit" min="1" max="10" class="form-control form-control-sm" value="{{ $settings['daily_limit'] }}"></div>
                                 <div class="mb-2"><label class="form-label fs-12 mb-1">{{ translate('Search radius for drivers (km), 0 for twice the normal radius') }}</label>
