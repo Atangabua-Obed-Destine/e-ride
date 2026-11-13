@@ -20,6 +20,9 @@ use Throwable;
 
 /**
  * Scheduled rides with the E-Ride features, run every minute by scheduled-rides:tick:
+ *  - drivers see a scheduled ride as soon as it is booked (offerNow), and are alerted
+ *    again at the "driver request notify" time if nobody has taken it;
+ *  - reminders to rider and driver a set time before the pickup, and at the pickup time;
  *  - the booking deposit, when the admin asks it a set time before the pickup;
  *  - safety: an area pause never blocks a scheduled ride. Rider and driver get a
  *    heads-up before the pickup (and the rider at booking when a pause covers that time);
@@ -39,14 +42,96 @@ class ScheduledRideService
     public function tick(?Carbon $now = null): array
     {
         $now ??= now();
-        $c = ['deposits_asked' => 0, 'alerts' => 0, 'still_looking' => 0, 'no_driver' => 0];
+        $c = ['deposits_asked' => 0, 'alerts' => 0, 'still_looking' => 0, 'no_driver' => 0, 'second_offers' => 0, 'reminders' => 0];
         $c['deposits_asked'] = $this->askDeposits($now);
+        $c['second_offers'] = $this->offerAgain($now);
+        $c['reminders'] = $this->remind($now);
         $c['still_looking'] = $this->stillLooking($now);
         $c['no_driver'] = $this->cancelUntaken($now);
         foreach ($this->upcoming($now, SafetySettings::all()['scheduled_alert_minutes']) as $trip) {
             $c['alerts'] += $this->safetyCheck($trip, $now);
         }
         return $c;
+    }
+
+    // ---------------------------------------------------------------- drivers
+
+    /**
+     * Drivers near the pickup see the ride now and can accept it ahead of time (unless its
+     * deposit is due when booking and not paid yet: then once it is).
+     */
+    public function offerNow(TripRequest $trip): void
+    {
+        if ($trip->ride_request_type != SCHEDULED || $trip->current_status !== PENDING || $trip->driver_id
+            || $this->deposits->awaitingAtBooking($trip)) {
+            return;
+        }
+        TripRequest::whereKey($trip->id)->update(['is_notification_sent' => 1]);
+        $trip->is_notification_sent = 1;
+        $radius = $trip->is_health_ride ? app(HealthRideService::class)->radiusKm() : ((double)get_cache('search_radius') ?: 5);
+        $this->safely(fn() => \App\Jobs\ProcessPushNotifications::dispatch(radius: $radius, trip: $trip->fresh(['coordinate', 'customer', 'time'])));
+    }
+
+    /** Nobody took it yet at the "driver request notify" time (Business setup > Trips): drivers are alerted again. */
+    protected function offerAgain(Carbon $now): int
+    {
+        $n = 0;
+        $trips = $this->untaken()->where('is_notification_sent', 1)->whereNotNull('sending_notification_at')
+            ->where('sending_notification_at', '<=', $this->stamp($now))->where('scheduled_at', '>', $this->stamp($now))->limit(50)->get();
+        foreach ($trips as $trip) {
+            if ($this->marked($trip, 'offered_again') || $this->deposits->awaitingAtBooking($trip)) {
+                continue;
+            }
+            $this->mark($trip, 'offered_again', true);
+            $this->offerNow($trip);
+            $n++;
+        }
+        return $n;
+    }
+
+    /**
+     * Reminders for a confirmed scheduled ride (a driver has it, no deposit left to pay): a set
+     * time before the pickup, and at the pickup time. Each goes out once.
+     */
+    protected function remind(Carbon $now): int
+    {
+        $before = DepositSettings::all()['scheduled_reminder_minutes'];
+        $n = 0;
+        $trips = TripRequest::with(['customer', 'driver.vehicle.model', 'coordinate'])->where('ride_request_type', SCHEDULED)
+            ->whereIn('current_status', [ACCEPTED, OUT_FOR_PICKUP])->whereNotNull('driver_id')
+            ->where('scheduled_at', '<=', $this->stamp($now->copy()->addMinutes(max(0, $before))))
+            ->where('scheduled_at', '>', $this->stamp($now->copy()->subMinutes(15)))->limit(200)->get();
+        foreach ($trips as $trip) {
+            if (TripDeposit::where('trip_request_id', $trip->id)->where('status', TripDeposit::AWAITING)->exists()) {
+                continue; // not booked until it is paid
+            }
+            $at = Carbon::parse($trip->scheduled_at);
+            $vars = [
+                'time' => $this->time($trip),
+                'driver' => trim((string)$trip->driver?->first_name) ?: translate('Your driver'),
+                'car' => trim(($trip->driver?->vehicle?->model?->name ?? '') . ' ' . ($trip->driver?->vehicle?->licence_plate_number ?? '')),
+                'customer' => trim((string)$trip->customer?->first_name) ?: translate('the customer'),
+                'pickup' => (string)($trip->coordinate?->pickup_address ?? ''),
+            ];
+            if ($at->gt($now) && $before > 0 && !$this->marked($trip, 'reminded')) {
+                $this->mark($trip, 'reminded', true);
+                $this->push($trip->customer, $trip, 'scheduled_reminder', 'Your ride is at {time}',
+                    '{driver} ({car}) picks you up at {time}. Be ready at the pickup.', $vars);
+                $this->push($trip->driver, $trip, 'scheduled_reminder', 'Scheduled ride at {time}',
+                    'Pick up {customer} at {time} from {pickup}. Set off in good time.', $vars);
+                $n++;
+            } elseif ($at->lte($now) && !$this->marked($trip, 'due_now')) {
+                $this->mark($trip, 'due_now', true);
+                if ($trip->current_status === ACCEPTED) {
+                    $this->push($trip->driver, $trip, 'scheduled_reminder', 'Time to pick up {customer}',
+                        'Your scheduled ride starts now. Head to the pickup: {pickup}.', $vars);
+                }
+                $this->push($trip->customer, $trip, 'scheduled_reminder', 'Your ride is due now',
+                    '{driver} ({car}) is due at the pickup now.', $vars);
+                $n++;
+            }
+        }
+        return $n;
     }
 
     // --------------------------------------------------------------- deposit

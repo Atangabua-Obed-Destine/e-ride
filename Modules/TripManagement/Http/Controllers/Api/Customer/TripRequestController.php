@@ -289,6 +289,8 @@ class TripRequestController extends Controller
                 app(\Modules\TripManagement\Service\TripDepositService::class)->openAtBooking($final);
                 $final->unsetRelation('deposit');
                 $scheduledRides = app(\Modules\TripManagement\Service\ScheduledRideService::class);
+                // Drivers see it now and can accept it ahead of time (once paid, when the deposit is due at booking).
+                $scheduledRides->offerNow($final);
                 app()->terminating(fn() => $scheduledRides->safetyCheck($final->id));
             }
             $trip = new TripRequestResource($final);
@@ -1365,6 +1367,8 @@ class TripRequestController extends Controller
         ];
 
         $trip = $this->tripRequestService->update(id: $trip_request_id, data: $criteria);
+        // Drivers see the new time now.
+        app(\Modules\TripManagement\Service\ScheduledRideService::class)->offerNow(\Modules\TripManagement\Entities\TripRequest::find($trip_request_id));
         $resource = TripRequestResource::make($trip->append('distance_wise_fare'));
 
         return response()->json(responseFormatter(DEFAULT_UPDATE_200, $resource));

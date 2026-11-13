@@ -2225,15 +2225,11 @@ class TripRequestService extends BaseService implements TripRequestServiceInterf
             'estimated_time' => (string)($oldTrip->time?->estimated_time ?? 0),
         ];
 
-        // A scheduled ride hours away goes to drivers at its usual time, not now.
-        $notifyLater = $oldTrip->ride_request_type == SCHEDULED && $oldTrip->sending_notification_at
-            && Carbon::parse($oldTrip->sending_notification_at)->isFuture();
         DB::beginTransaction();
         try {
+            // Drivers see it at once, a scheduled ride too (they can accept it ahead of time).
             $newTrip = $this->createRideRequest(attributes: $attributes);
-            $this->tripRequestRepository->update(id: $newTrip->id, data: $notifyLater
-                ? ['is_notification_sent' => 0, 'sending_notification_at' => $oldTrip->sending_notification_at]
-                : ['is_notification_sent' => 1]);
+            $this->tripRequestRepository->update(id: $newTrip->id, data: ['is_notification_sent' => 1]);
             $this->rejectedDriverRequestService->create([
                 'trip_request_id' => $newTrip->id,
                 'user_id' => $cancellingDriverId,
@@ -2246,7 +2242,7 @@ class TripRequestService extends BaseService implements TripRequestServiceInterf
 
         $final = $this->findOneBy(criteria: ['id' => $newTrip->id], relations: ['coordinate', 'time', 'customer']);
         $searchRadius = $final->is_health_ride ? app(HealthRideService::class)->radiusKm() : ((double)get_cache('search_radius') ?? 5);
-        $notifyLater || ProcessPushNotifications::dispatch(radius: $searchRadius, trip: $final, exceptDriverId: $cancellingDriverId)->afterResponse();
+        ProcessPushNotifications::dispatch(radius: $searchRadius, trip: $final, exceptDriverId: $cancellingDriverId)->afterResponse();
 
         return $final;
     }

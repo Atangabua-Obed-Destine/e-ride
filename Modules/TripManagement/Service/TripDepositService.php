@@ -129,10 +129,11 @@ class TripDepositService
             && DepositSettings::forTrip($trip)['scheduled_timing'] === 'booking';
     }
 
-    /** When a scheduled ride's deposit is asked for, in 'before_pickup' timing. */
+    /** When a scheduled ride's deposit is asked for, in 'before_pickup' timing (otherwise at accept or booking: null). */
     public function scheduledOpensAt(TripRequest $trip): ?Carbon
     {
-        if ($trip->ride_request_type != SCHEDULED || !$trip->scheduled_at || $this->takesAtBooking($trip)) {
+        if ($trip->ride_request_type != SCHEDULED || !$trip->scheduled_at || $trip->is_move
+            || DepositSettings::forTrip($trip)['scheduled_timing'] !== 'before_pickup') {
             return null;
         }
         return Carbon::parse($trip->scheduled_at)->subMinutes(DepositSettings::forTrip($trip)['scheduled_before_minutes']);
@@ -251,6 +252,19 @@ class TripDepositService
         }
         $locale = $trip->customer?->current_language_key;
         $minutes = max(1, (int)ceil(now()->diffInSeconds($deposit->due_at, false) / 60));
+        if ($trip->ride_request_type == SCHEDULED && $trip->scheduled_at && !$trip->is_move) {
+            // A ride booked ahead: it is booked once the deposit is paid.
+            $at = Carbon::parse($trip->scheduled_at);
+            return [
+                translate(key: 'Driver found: confirm your ride', locale: $locale),
+                translate(key: '{driver} accepted your ride at {time}. Pay the {amount} deposit within {minutes} min to book it. It counts toward your fare.', replace: [
+                    'driver' => trim((string)$trip->driver?->first_name) ?: translate(key: 'A driver', locale: $locale),
+                    'time' => $at->isToday() ? $at->format('H:i') : $at->format('D d M, H:i'),
+                    'amount' => getCurrencyFormat($deposit->amount),
+                    'minutes' => $minutes,
+                ], locale: $locale),
+            ];
+        }
         if ($trip->is_move) {
             return [
                 translate(key: 'Truck found: confirm with the booking fee', locale: $locale),
@@ -399,6 +413,11 @@ class TripDepositService
         DB::afterCommit(function () use ($deposit) {
             $trip = TripRequest::with(['driver', 'customer'])->find($deposit->trip_request_id);
             if (!$trip) {
+                return;
+            }
+            // Paid when booking: drivers see the ride now.
+            if ($trip->ride_request_type == SCHEDULED && $trip->current_status == PENDING && !$trip->driver_id) {
+                app(ScheduledRideService::class)->offerNow($trip);
                 return;
             }
             try {
@@ -943,9 +962,13 @@ class TripDepositService
                 checkReverbConnection() && TripDepositExpiredEvent::broadcast($trip);
             } catch (Throwable) {
             }
-            $this->push($trip->customer, $trip, 'deposit_expired',
-                'Your trip was cancelled',
-                'The deposit was not paid in time, so your driver was released. You can book again.');
+            $trip->ride_request_type == SCHEDULED
+                ? $this->push($trip->customer, $trip, 'deposit_expired',
+                    'Your scheduled ride was not booked',
+                    'The deposit was not paid in time, so the driver was released and the ride was not booked. You can schedule it again.')
+                : $this->push($trip->customer, $trip, 'deposit_expired',
+                    'Your trip was cancelled',
+                    'The deposit was not paid in time, so your driver was released. You can book again.');
         }
         return true;
     }

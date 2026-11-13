@@ -453,7 +453,7 @@
                                                         class="form-label">{{ translate('driver_request_notify') }} <span class="text-danger">*</span> <i
                                                             class="bi bi-info-circle-fill text-primary cursor-pointer"
                                                             data-bs-toggle="tooltip"
-                                                            data-bs-title="{{ translate('Set when drivers should be notified about upcoming scheduled trips (e.g., 30 mins before start).') }}"></i></label>
+                                                            data-bs-title="{{ translate('Drivers see a scheduled ride as soon as it is booked. If nobody has taken it by this time before the pickup, nearby drivers are alerted again.') }}"></i></label>
                                                     <div class="input-group input--group">
                                                         <input type="number" name="driver_request_notify_time" id="driverRequestNotify"
                                                             step="1" min="1" max="99999999" class="form-control"

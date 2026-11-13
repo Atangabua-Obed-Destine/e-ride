@@ -65,8 +65,12 @@
                         <label class="form-label">{{ translate('When the customer pays the deposit') }}</label>
                         <div class="d-flex flex-column gap-2 mb-3">
                             <label class="d-flex gap-2 align-items-start">
+                                <input type="radio" name="scheduled_timing" value="accept" class="mt-1" {{ $settings['scheduled_timing'] === 'accept' ? 'checked' : '' }}>
+                                <span><b>{{ translate('When a driver accepts (recommended)') }}</b><br><span class="fs-12 text-muted">{{ translate('Drivers see the ride as soon as it is booked and can accept it ahead of time. The customer then pays with a countdown, like a ride for now. Not paid in time: the driver is released and the ride is not booked.') }}</span></span>
+                            </label>
+                            <label class="d-flex gap-2 align-items-start">
                                 <input type="radio" name="scheduled_timing" value="booking" class="mt-1" {{ $settings['scheduled_timing'] === 'booking' ? 'checked' : '' }}>
-                                <span><b>{{ translate('When booking') }}</b><br><span class="fs-12 text-muted">{{ translate('The customer pays right away, with the time to pay above. Drivers see the ride only once it is paid, so every scheduled ride they accept is confirmed.') }}</span></span>
+                                <span><b>{{ translate('When booking') }}</b><br><span class="fs-12 text-muted">{{ translate('The customer pays right away, with the time to pay above, before any driver has accepted. Drivers see the ride once it is paid.') }}</span></span>
                             </label>
                             <label class="d-flex gap-2 align-items-start">
                                 <input type="radio" name="scheduled_timing" value="before_pickup" class="mt-1" {{ $settings['scheduled_timing'] === 'before_pickup' ? 'checked' : '' }}>
@@ -80,9 +84,14 @@
                                 <div class="fs-12 text-muted mt-1">{{ translate('If a driver accepts later than this, it is asked when they accept.') }}</div>
                             </div>
                             <div class="col-sm-6">
-                                <label class="form-label">{{ translate('Near the pickup: time to pay (minutes)') }}</label>
+                                <label class="form-label">{{ translate('Time to pay once a driver accepts (minutes)') }}</label>
                                 <input type="number" name="scheduled_window_minutes" class="form-control" required min="1" max="1440" value="{{ $settings['scheduled_window_minutes'] }}">
                                 <div class="fs-12 text-muted mt-1">{{ translate('Never past the pickup time itself.') }}</div>
+                            </div>
+                            <div class="col-sm-6">
+                                <label class="form-label">{{ translate('Remind the customer and the driver (minutes before the pickup)') }}</label>
+                                <input type="number" name="scheduled_reminder_minutes" class="form-control" required min="0" max="1440" value="{{ $settings['scheduled_reminder_minutes'] }}">
+                                <div class="fs-12 text-muted mt-1">{{ translate('Both are reminded again at the pickup time. 0: only at the pickup time.') }}</div>
                             </div>
                             <div class="col-sm-6">
                                 <label class="form-label">{{ translate('Free cancellation until (minutes before the pickup)') }}</label>

@@ -55,7 +55,8 @@ class BookingDepositController extends Controller
         $data = $request->validate([
             'status' => 'nullable|boolean',
             'window_minutes' => 'required|integer|min:1|max:30',
-            'scheduled_timing' => 'required|in:booking,before_pickup',
+            'scheduled_timing' => 'required|in:accept,booking,before_pickup',
+            'scheduled_reminder_minutes' => 'required|integer|min:0|max:1440',
             'scheduled_before_minutes' => 'required|integer|min:10|max:1440',
             'scheduled_window_minutes' => 'required|integer|min:1|max:1440',
             'scheduled_free_cancel_minutes' => 'required|integer|min:0|max:2880',
@@ -68,6 +69,7 @@ class BookingDepositController extends Controller
         $save('booking_deposit_status', $request->boolean('status') ? '1' : '0');
         $save('booking_deposit_window_minutes', $data['window_minutes']);
         $save('booking_deposit_scheduled_timing', $data['scheduled_timing']);
+        $save('booking_deposit_scheduled_reminder_minutes', $data['scheduled_reminder_minutes']);
         $save('booking_deposit_scheduled_before_minutes', $data['scheduled_before_minutes']);
         $save('booking_deposit_scheduled_window_minutes', $data['scheduled_window_minutes']);
         $save('booking_deposit_scheduled_free_cancel_minutes', $data['scheduled_free_cancel_minutes']);
