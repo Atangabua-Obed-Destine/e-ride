@@ -23,6 +23,11 @@ class MarketManagementServiceProvider extends ServiceProvider
 
     public function register(): void
     {
+        // Web requests define this in index.php; the scheduler and other artisan commands do not, and building an
+        // image URL (dynamicStorage) then fails. This server serves public/ (URLs /storage/...).
+        if (!defined('DOMAIN_POINTED_DIRECTORY')) {
+            define('DOMAIN_POINTED_DIRECTORY', 'public');
+        }
         $this->app->register(RouteServiceProvider::class);
     }
 }

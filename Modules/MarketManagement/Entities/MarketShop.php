@@ -26,7 +26,11 @@ class MarketShop extends Model
         'visits', 'chats', 'new_users', 'followers_notified_at',
         'taking_orders', 'fulfilment', 'pay_methods', 'open_from', 'open_to', 'min_order', 'rating', 'rating_count', 'orders_completed',
         'reply_minutes', 'demoted_until',
+        'service_hours', 'service_capacity', 'service_notice_minutes', 'service_ahead_days', 'service_auto_confirm', 'taking_bookings',
+        'service_areas', 'travel_fee', 'bookings_completed',
     ];
+
+    public const DAYS = ['mon', 'tue', 'wed', 'thu', 'fri', 'sat', 'sun'];
 
     protected $casts = [
         'pickup_lat' => 'float',
@@ -49,7 +53,39 @@ class MarketShop extends Model
         'orders_completed' => 'integer',
         'reply_minutes' => 'integer',
         'demoted_until' => 'datetime',
+        'service_hours' => 'array',
+        'service_capacity' => 'integer',
+        'service_notice_minutes' => 'integer',
+        'service_ahead_days' => 'integer',
+        'service_auto_confirm' => 'boolean',
+        'taking_bookings' => 'boolean',
+        'travel_fee' => 'float',
+        'bookings_completed' => 'integer',
     ];
+
+    /**
+     * When the shop takes bookings, day by day: ["08:00","18:00"] or null (closed).
+     * Before the shop sets them: its opening hours (or 08:00 to 18:00), Monday to Saturday.
+     *
+     * @return array<string, ?array{0: string, 1: string}>
+     */
+    public function serviceHours(): array
+    {
+        $saved = (array)($this->service_hours ?? []);
+        $from = $this->open_from && $this->open_to && $this->open_from < $this->open_to ? $this->open_from : '08:00';
+        $to = $this->open_from && $this->open_to && $this->open_from < $this->open_to ? $this->open_to : '18:00';
+        $out = [];
+        foreach (self::DAYS as $day) {
+            if ($saved === []) {
+                $out[$day] = $day === 'sun' ? null : [$from, $to];
+                continue;
+            }
+            $h = $saved[$day] ?? null;
+            $out[$day] = is_array($h) && count($h) === 2 && preg_match('/^\d{2}:\d{2}$/', (string)$h[0]) && preg_match('/^\d{2}:\d{2}$/', (string)$h[1]) && $h[0] < $h[1]
+                ? [(string)$h[0], (string)$h[1]] : null;
+        }
+        return $out;
+    }
 
     public function owner(): BelongsTo
     {

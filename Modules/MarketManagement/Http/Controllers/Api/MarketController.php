@@ -63,6 +63,16 @@ class MarketController extends Controller
                 'extend_minutes' => $settings['auction_extend_minutes'],
                 'cannot_bid_reason' => app(\Modules\MarketManagement\Service\AuctionService::class)->canBid($user),
             ],
+            'services' => [
+                'kinds' => MarketItem::SERVICE_KINDS,
+                'durations' => MarketItem::DURATIONS,
+                'answer_minutes' => $settings['service_answer_minutes'],
+                'quote_hours' => $settings['service_quote_hours'],
+                'cancel_hours' => $settings['service_cancel_hours'],
+                'review_tags' => \Modules\MarketManagement\Entities\MarketReview::SERVICE_TAGS,
+                'cannot_book_reason' => app(\Modules\MarketManagement\Service\BookingService::class)->cannotBookReason($user),
+            ],
+            'bookings' => app(\Modules\MarketManagement\Service\BookingService::class)->counts($user),
         ]));
     }
 
@@ -76,6 +86,8 @@ class MarketController extends Controller
             'kind' => 'nullable|in:retail,wholesale',
             'sale' => 'nullable|in:auction',
             'seller' => 'nullable|in:private,shop',
+            'service_kind' => ['nullable', Rule::in(MarketItem::SERVICE_KINDS)],
+            'comes' => 'nullable|in:0,1',
             'verified' => 'nullable|boolean',
             'lat' => 'nullable|numeric|between:-90,90',
             'lng' => 'nullable|numeric|between:-180,180',
@@ -88,7 +100,7 @@ class MarketController extends Controller
         $limit = (int)$request->query('limit', 20);
         $offset = ((int)$request->query('offset', 1) - 1) * $limit;
         $viewer = $request->user()->id;
-        $filters = $request->only(['category', 'q', 'shop', 'kind', 'sale', 'seller']) + ['following' => $request->boolean('following'), 'verified' => $request->boolean('verified')];
+        $filters = $request->only(['category', 'q', 'shop', 'kind', 'sale', 'seller', 'service_kind', 'comes']) + ['following' => $request->boolean('following'), 'verified' => $request->boolean('verified')];
         if ($request->filled(['lat', 'lng'])) {
             $filters['lat'] = (float)$request->query('lat');
             $filters['lng'] = (float)$request->query('lng');

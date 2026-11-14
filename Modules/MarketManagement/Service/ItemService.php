@@ -62,7 +62,7 @@ class ItemService
             $item->save();
             $added = $this->addPhotos($item, $photos, false);
             $this->addPhotos($item, $previews, true);
-            if (!$digital && !$shop->isPrivate() && ($item->sale_type ?? 'fixed') !== 'auction' && $this->applyOptions($item, $data, $added)) {
+            if (!$digital && !$item->isService() && !$shop->isPrivate() && ($item->sale_type ?? 'fixed') !== 'auction' && $this->applyOptions($item, $data, $added)) {
                 if (!$word) {
                     $item->status = $item->quantity < 1 ? MarketItem::SOLD_OUT : MarketItem::LIVE;
                 }
@@ -94,7 +94,9 @@ class ItemService
         }
         $digital = ($data['condition'] ?? $item->condition) === 'digital';
         return DB::transaction(function () use ($item, $data, $photos, $removePhotoIds, $previews, $digital) {
-            $item->fill($this->fields($data + $item->only(['condition']), $digital));
+            // A service edit keeps the service details it does not send (extras, where, length...).
+            $keep = $item->isService() ? ['condition', 'price_type', 'price', 'duration_minutes', 'service_where', 'extras', 'service_kind'] : ['condition'];
+            $item->fill($this->fields($data + $item->only($keep), $digital));
             $item->photos()->whereIn('id', $removePhotoIds)->get()->each(function (MarketItemPhoto $photo) {
                 fileRemover(MarketItemPhoto::DIR, $photo->file);
                 OgImage::remove($photo);
@@ -102,7 +104,7 @@ class ItemService
             });
             $added = $this->addPhotos($item, $photos, false);
             $this->addPhotos($item, $previews, true);
-            if (!$digital && !$item->shop?->isPrivate() && $item->sale_type !== 'auction') {
+            if (!$digital && !$item->isService() && !$item->shop?->isPrivate() && $item->sale_type !== 'auction') {
                 $this->applyOptions($item, $data, $added);
             }
             if ($item->sale_type === 'auction' && (array_key_exists('auction_start', $data) || array_key_exists('auction_days', $data))) {
@@ -165,6 +167,42 @@ class ItemService
         return null;
     }
 
+    /** A service: how the price is given, how long, where, priced extras; no stock, options or delivery. */
+    private function serviceFields(array $fields, array $data): array
+    {
+        $type = in_array($fields['price_type'] ?? null, MarketItem::PRICE_TYPES, true) ? $fields['price_type'] : 'fixed';
+        $fields['price_type'] = $type;
+        if ($type === 'quote') {
+            $fields['price'] = null;
+        } elseif (!isset($fields['price']) || (float)$fields['price'] <= 0) {
+            $this->fail('price', translate('Give a price, or choose "Ask for a quote".'));
+        }
+        $fields['duration_minutes'] = max(15, min(1440, (int)($fields['duration_minutes'] ?? 60)));
+        $where = $fields['service_where'] ?? ($data['service_where'] ?? null);
+        $where = is_array($where) ? $where : array_filter(explode(',', (string)$where));
+        $where = array_values(array_intersect(MarketItem::SERVICE_WHERE, array_map('trim', $where)));
+        $fields['service_where'] = $where ?: ['place'];
+        $extras = $fields['extras'] ?? null;
+        $extras = is_array($extras) ? $extras : (json_decode((string)$extras, true) ?: []);
+        $clean = [];
+        foreach (array_slice($extras, 0, MarketItem::MAX_EXTRAS) as $e) {
+            $name = trim(mb_substr((string)($e['name'] ?? ''), 0, 40));
+            if ($name !== '') {
+                $clean[] = ['name' => $name, 'price' => max(0, (float)($e['price'] ?? 0))];
+            }
+        }
+        $fields['extras'] = $clean ?: null;
+        $fields['service_kind'] = in_array($fields['service_kind'] ?? null, MarketItem::SERVICE_KINDS, true) ? $fields['service_kind'] : 'other';
+        if (isset($fields['title'])) {
+            $fields['title'] = trim(preg_replace('/\s+/', ' ', $fields['title']));
+        }
+        return array_merge($fields, [
+            'category' => 'services', 'sale_type' => 'fixed', 'negotiable' => false, 'quantity' => 1, 'used_grade' => null,
+            'digital_kind' => null, 'wholesale_price' => null, 'wholesale_min' => null,
+            'pickup' => false, 'eride_delivery' => false, 'seller_delivers' => false,
+        ]);
+    }
+
     private function checkDigital(bool $digital, array $data, int $previews): void
     {
         if (!$digital) {
@@ -187,7 +225,17 @@ class ItemService
     private function fields(array $data, bool $digital): array
     {
         $fields = array_intersect_key($data, array_flip(['title', 'description', 'price', 'negotiable', 'condition', 'digital_kind', 'category',
-            'quantity', 'pickup', 'eride_delivery', 'seller_delivers', 'wholesale_price', 'wholesale_min', 'sale_type', 'used_grade']));
+            'quantity', 'pickup', 'eride_delivery', 'seller_delivers', 'wholesale_price', 'wholesale_min', 'sale_type', 'used_grade',
+            'price_type', 'duration_minutes', 'service_where', 'extras', 'service_kind']));
+        if (($data['condition'] ?? null) === 'service') {
+            return $this->serviceFields($fields, $data);
+        }
+        // Not a service (any more): no service details.
+        $fields['price_type'] = null;
+        $fields['duration_minutes'] = null;
+        $fields['service_where'] = null;
+        $fields['extras'] = null;
+        $fields['service_kind'] = null;
         // How it is sold: a fixed price, open to offers (negotiable), or an auction.
         if (isset($fields['sale_type'])) {
             $fields['sale_type'] = in_array($fields['sale_type'], MarketItem::SALE_TYPES, true) ? $fields['sale_type'] : 'fixed';

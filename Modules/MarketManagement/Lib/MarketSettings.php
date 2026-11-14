@@ -55,6 +55,15 @@ class MarketSettings
             'auction_offer_hours' => min(72, max(1, (int)$get('market_auction_offer_hours', 12))),
             'auction_strikes' => min(10, max(1, (int)$get('market_auction_strikes', 2))),
             'auction_strike_days' => min(365, max(7, (int)$get('market_auction_strike_days', 90))),
+            // Services: minutes the provider has to answer, hours a quote stays open, hours before the start a
+            // client can still change or cancel for free, and no-shows or late cancels that pause booking.
+            'service_answer_minutes' => min(1440, max(10, (int)$get('market_service_answer_minutes', 120))),
+            'service_quote_hours' => min(168, max(1, (int)$get('market_service_quote_hours', 24))),
+            'service_cancel_hours' => min(72, max(0, (int)$get('market_service_cancel_hours', 3))),
+            'service_noshow_limit' => min(20, max(1, (int)$get('market_service_noshow_limit', 3))),
+            'service_noshow_days' => min(365, max(7, (int)$get('market_service_noshow_days', 90))),
+            // The day-before reminder goes at this hour (0 to 23).
+            'service_reminder_hour' => min(23, max(0, (int)$get('market_service_reminder_hour', 18))),
         ];
     }
 

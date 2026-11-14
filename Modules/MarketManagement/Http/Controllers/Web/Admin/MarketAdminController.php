@@ -199,6 +199,50 @@ class MarketAdminController extends Controller
         return back();
     }
 
+    /** Services: bookings by tab, the numbers, and the booking rules. */
+    public function services(Request $request): View
+    {
+        $B = \Modules\MarketManagement\Entities\MarketBooking::class;
+        $tab = in_array($request->query('tab'), ['open', 'today', 'done', 'closed'], true) ? $request->query('tab') : 'open';
+        $since = now()->subDays(30);
+        $stats = [
+            'services' => MarketItem::where('condition', 'service')->where('status', MarketItem::LIVE)->count(),
+            'today' => $B::whereDate('starts_at', now()->toDateString())->whereIn('status', ['confirmed', 'completed', 'no_show'])->count(),
+            'waiting' => $B::whereIn('status', ['requested', 'quote_requested'])->count(),
+            'done' => $B::where('status', 'completed')->where('completed_at', '>=', $since)->count(),
+            'quotes' => $B::where('kind', 'quote')->whereNotNull('quote_price')->where('updated_at', '>=', $since)->count(),
+            'missed' => $B::where('updated_at', '>=', $since)->where(fn($q) => $q->where('status', 'no_show')->orWhere('late_cancel', true))->count(),
+        ];
+        $query = $B::with(['item', 'shop', 'client']);
+        match ($tab) {
+            'today' => $query->whereDate('starts_at', now()->toDateString())->orderBy('starts_at'),
+            'done' => $query->where('status', 'completed')->orderByDesc('completed_at'),
+            'closed' => $query->whereIn('status', ['declined', 'expired', 'cancelled', 'no_show'])->orderByDesc('updated_at'),
+            default => $query->whereIn('status', $B::OPEN)->orderByRaw('COALESCE(starts_at, created_at)'),
+        };
+        $bookings = $query->paginate(paginationLimit())->withQueryString();
+        $settings = MarketSettings::all();
+        return view('marketmanagement::admin.services', compact('bookings', 'stats', 'tab', 'settings'));
+    }
+
+    public function saveServiceRules(Request $request): RedirectResponse
+    {
+        $data = $request->validate([
+            'service_answer_minutes' => 'required|integer|min:10|max:1440',
+            'service_quote_hours' => 'required|integer|min:1|max:168',
+            'service_cancel_hours' => 'required|integer|min:0|max:72',
+            'service_reminder_hour' => 'required|integer|min:0|max:23',
+            'service_noshow_limit' => 'required|integer|min:1|max:20',
+            'service_noshow_days' => 'required|integer|min:7|max:365',
+        ]);
+        foreach ($data as $key => $value) {
+            updateBusinessSetting(keyName: 'market_' . $key, settingType: MarketSettings::TYPE, value: (string)$value);
+        }
+        Cache::forget(CACHE_BUSINESS_SETTINGS);
+        Toastr::success(translate('Rules saved'));
+        return back();
+    }
+
     /** An abusive or fake rating can be hidden; the shop's rating is recomputed. */
     public function hideReview(Request $request, MarketReview $review): RedirectResponse
     {

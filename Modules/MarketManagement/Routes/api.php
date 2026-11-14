@@ -5,6 +5,7 @@ use Modules\MarketManagement\Http\Controllers\Api\MarketChatController;
 use Modules\MarketManagement\Http\Controllers\Api\MarketController;
 use Modules\MarketManagement\Http\Controllers\Api\MarketOrderController;
 use Modules\MarketManagement\Http\Controllers\Api\MarketAuctionController;
+use Modules\MarketManagement\Http\Controllers\Api\MarketBookingController;
 use Modules\MarketManagement\Http\Controllers\Api\MarketSellerController;
 
 /*
@@ -23,7 +24,27 @@ Route::group(['prefix' => 'customer/market', 'middleware' => ['auth:api', 'maint
         Route::get('orders/{id}', [MarketOrderController::class, 'show']);
         Route::get('shops/{slug}/reviews', [MarketOrderController::class, 'reviews'])->where('slug', '[a-z0-9-]+');
         Route::get('items/{code}/bids', [MarketAuctionController::class, 'bids'])->where('code', '[a-z0-9]+');
+        Route::get('items/{code}/slots', [MarketBookingController::class, 'slots'])->where('code', '[a-z0-9]+');
+        Route::get('bookings', [MarketBookingController::class, 'index']);
+        Route::get('bookings/{id}', [MarketBookingController::class, 'show']);
     });
+    // Services: book a time or ask for a quote; the provider answers; either side moves on.
+    Route::middleware('throttle:60,1,market-bookings')->group(function () {
+        Route::post('items/{code}/book', [MarketBookingController::class, 'book'])->where('code', '[a-z0-9]+');
+        Route::post('items/{code}/quote', [MarketBookingController::class, 'quote'])->where('code', '[a-z0-9]+');
+        Route::post('bookings/{id}/accept', [MarketBookingController::class, 'accept']);
+        Route::post('bookings/{id}/decline', [MarketBookingController::class, 'decline']);
+        Route::post('bookings/{id}/suggest', [MarketBookingController::class, 'suggest']);
+        Route::post('bookings/{id}/send-quote', [MarketBookingController::class, 'sendQuote']);
+        Route::post('bookings/{id}/agree', [MarketBookingController::class, 'agree']);
+        Route::post('bookings/{id}/refuse', [MarketBookingController::class, 'refuse']);
+        Route::post('bookings/{id}/reschedule', [MarketBookingController::class, 'reschedule']);
+        Route::post('bookings/{id}/cancel', [MarketBookingController::class, 'cancel']);
+        Route::post('bookings/{id}/no-show', [MarketBookingController::class, 'noShow']);
+        Route::post('bookings/{id}/review', [MarketBookingController::class, 'review']);
+        Route::post('shop/service-settings', [MarketSellerController::class, 'serviceSettings']);
+    });
+    Route::post('bookings/{id}/complete', [MarketBookingController::class, 'complete'])->middleware('throttle:8,1,market-code');
     // Orders: the buyer sends a cart to a shop; the seller answers, sends and completes it.
     Route::middleware('throttle:60,1,market-orders')->group(function () {
         Route::post('orders', [MarketOrderController::class, 'place']);

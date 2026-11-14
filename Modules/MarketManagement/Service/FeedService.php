@@ -39,6 +39,13 @@ class FeedService
         // Auctions show while they run (an ended auction is reached by its link only).
         $query->where(fn($w) => $w->where('market_items.sale_type', '!=', 'auction')
             ->orWhereHas('auction', fn($a) => $a->where('status', 'live')->where('ends_at', '>', now())));
+        // Services: one kind (hair and beauty, repairs...), or only those who come to the client.
+        if (!empty($filters['service_kind'])) {
+            $query->where('market_items.condition', 'service')->where('market_items.service_kind', $filters['service_kind']);
+        }
+        if (($filters['comes'] ?? null) === '1') {
+            $query->where('market_items.condition', 'service')->whereJsonContains('market_items.service_where', 'client');
+        }
         if (($filters['sale'] ?? null) === 'auction') {
             $query->where('market_items.sale_type', 'auction');
         }

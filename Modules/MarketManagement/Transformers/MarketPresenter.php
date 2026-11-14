@@ -57,8 +57,21 @@ class MarketPresenter
             'rating_count' => (int)$shop->rating_count,
             'orders_completed' => (int)$shop->orders_completed,
             'reply_minutes' => $shop->reply_minutes,
+            // Services
+            'taking_bookings' => (bool)($shop->taking_bookings ?? true),
+            'bookings_completed' => (int)$shop->bookings_completed,
+            'service_hours' => $shop->serviceHours(),
         ];
         if ($mine) {
+            $data += [
+                'service_capacity' => (int)$shop->service_capacity,
+                'service_notice_minutes' => (int)$shop->service_notice_minutes,
+                'service_ahead_days' => (int)$shop->service_ahead_days,
+                'service_auto_confirm' => (bool)$shop->service_auto_confirm,
+                'service_areas' => $shop->service_areas,
+                'travel_fee' => $shop->travel_fee,
+                'has_services' => $shop->items()->where('condition', 'service')->whereNotIn('status', [MarketItem::REMOVED])->exists(),
+            ];
             $data += [
                 'status' => $shop->status,
                 'closed_reason' => $shop->closed_reason,
@@ -138,6 +151,26 @@ class MarketPresenter
         }
         if ($item->isAuction() && ($auction = $item->auction)) {
             $data['auction'] = self::auction($auction, $viewer, $mine, $full);
+        }
+        if ($item->isService()) {
+            $next = app(\Modules\MarketManagement\Service\BookingService::class)->nextFree($item);
+            $data['service'] = [
+                'price_type' => $item->price_type ?? 'fixed',
+                'duration_minutes' => (int)($item->duration_minutes ?: 60),
+                'where' => $item->whereList(),
+                'extras' => $item->extrasList(),
+                'kind' => $item->service_kind,
+                'next_free' => $next?->toIso8601String(),
+                'taking_bookings' => (bool)($shop?->taking_bookings ?? true),
+                'bookings_done' => (int)($shop?->bookings_completed ?? 0),
+            ];
+            if ($full && $shop) {
+                $data['service'] += [
+                    'hours' => $shop->serviceHours(),
+                    'areas' => $shop->service_areas,
+                    'travel_fee' => $shop->travel_fee,
+                ];
+            }
         }
         if ($mine) {
             $data += ['visits' => $item->visits, 'chats' => $item->chats, 'status_note' => $item->status_note,
@@ -297,6 +330,79 @@ class MarketPresenter
         $review = $order->review;
         $data['review'] = $review ? ['stars' => $review->stars, 'tags' => $review->tags ?? [], 'comment' => $review->comment] : null;
         $data['can_review'] = $role === 'buyer' && $order->status === MarketOrder::COMPLETED && !$review;
+        return $data;
+    }
+
+    /** A booking as one side sees it. The client's exact place shows to the provider only once confirmed. */
+    public static function booking(\Modules\MarketManagement\Entities\MarketBooking $b, string $viewer, bool $full = false): array
+    {
+        $role = $b->roleOf($viewer) ?? 'client';
+        $item = $b->item;
+        $shop = $b->shop;
+        $service = app(\Modules\MarketManagement\Service\BookingService::class);
+        $confirmedOrLater = in_array($b->status, [\Modules\MarketManagement\Entities\MarketBooking::CONFIRMED, \Modules\MarketManagement\Entities\MarketBooking::COMPLETED,
+            \Modules\MarketManagement\Entities\MarketBooking::NO_SHOW], true);
+        $photos = $item && $item->relationLoaded('photos') ? $item->photos : ($item ? $item->photos()->get() : collect());
+        $cover = $photos->firstWhere('preview', false) ?? $photos->first();
+        $data = [
+            'id' => $b->id,
+            'code' => $b->code,
+            'kind' => $b->kind,
+            'status' => $b->status,
+            'role' => $role,
+            'item' => $item ? ['code' => $item->code, 'title' => $item->title, 'cover' => $cover?->url(),
+                'duration_minutes' => (int)($item->duration_minutes ?: 60), 'price_type' => $item->price_type] : null,
+            'shop' => $shop ? ['slug' => $shop->slug, 'name' => $shop->name, 'logo' => $shop->logoUrl(), 'kind' => $shop->kind ?? 'shop'] : null,
+            'client_name' => $role === 'provider' ? (trim((string)$b->client?->first_name) ?: translate('A client')) : null,
+            'starts_at' => $b->starts_at?->toIso8601String(),
+            'ends_at' => $b->ends_at?->toIso8601String(),
+            'suggested_starts_at' => $b->suggested_starts_at?->toIso8601String(),
+            'location' => $b->location,
+            'price_type' => $b->price_type,
+            'price' => $b->shownPrice(),
+            'quote_price' => $b->quote_price,
+            'quote_note' => $b->quote_note,
+            'quote_expires_at' => $b->quote_expires_at?->toIso8601String(),
+            'final_price' => $b->final_price,
+            'respond_by' => $b->respond_by?->toIso8601String(),
+            'extras' => $b->extras ?? [],
+            'note' => $b->note,
+            'when_text' => $b->when_text,
+            'decline_reason' => $b->decline_reason,
+            'cancelled_by' => $b->cancelled_by,
+            'cancel_reason' => $b->cancel_reason,
+            'late_cancel' => (bool)$b->late_cancel,
+            'conversation_id' => $b->conversation_id,
+            'created_at' => $b->created_at?->toIso8601String(),
+        ];
+        // Where: the client's place (to the provider only once confirmed), or the provider's place (to the client once confirmed,
+        // or at once when the shop is on the map).
+        if ($b->location === 'client') {
+            $show = $role === 'client' || $confirmedOrLater;
+            $data['place'] = $show ? ['lat' => $b->lat, 'lng' => $b->lng, 'address' => $b->address] : ['lat' => null, 'lng' => null, 'address' => null];
+            $data['area_only'] = !$show;
+        } elseif ($b->location === 'place' && $shop) {
+            $show = $shop->onMap() || ($role === 'client' && $confirmedOrLater) || $role === 'provider';
+            $data['place'] = $show && $shop->pickup_lat !== null
+                ? ['lat' => $shop->pickup_lat, 'lng' => $shop->pickup_lng, 'address' => $shop->pickup_address, 'note' => $shop->address_note]
+                : ['lat' => null, 'lng' => null, 'address' => $shop->area_label, 'note' => null];
+            $data['area_only'] = !$show;
+        }
+        if ($role === 'client') {
+            $data['receive_code'] = $b->status === \Modules\MarketManagement\Entities\MarketBooking::CONFIRMED ? $b->receive_code : null;
+            $data['can_review'] = $b->status === \Modules\MarketManagement\Entities\MarketBooking::COMPLETED && !$b->review()->exists();
+            $data['cancel_free_until'] = $b->status === \Modules\MarketManagement\Entities\MarketBooking::CONFIRMED ? $service->cancelFreeUntil($b)?->toIso8601String() : null;
+            $data['free_to_change'] = $service->freeToChange($b);
+        } else {
+            $data['client_record'] = $service->record($b->client_id);
+            $data['can_no_show'] = $b->status === \Modules\MarketManagement\Entities\MarketBooking::CONFIRMED && $b->starts_at && $b->starts_at->copy()->addMinutes(30)->isPast();
+        }
+        if ($full) {
+            $data['photos'] = $b->photoUrls();
+            if ($r = $b->review) {
+                $data['review'] = ['stars' => $r->stars, 'tags' => $r->tags ?? [], 'comment' => $r->comment];
+            }
+        }
         return $data;
     }
 

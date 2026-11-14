@@ -626,7 +626,6 @@ class MarketOrderService
                 'ready' => translate(key: 'Order {code} is ready', replace: ['code' => $order->code]),
                 'completed' => translate(key: 'Order {code} completed', replace: ['code' => $order->code]),
                 'auction_won' => translate(key: 'Auction won: order {code}', replace: ['code' => $order->code]),
-                'auction_won' => translate(key: 'Auction won: order {code}', replace: ['code' => $order->code]),
                 default => $order->code,
             };
             DB::transaction(function () use ($order, $by, $event, $text) {

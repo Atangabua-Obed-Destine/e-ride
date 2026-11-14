@@ -172,9 +172,23 @@ class AuctionService
             });
         MarketAuction::where('status', MarketAuction::LIVE)->where('ends_at', '<=', now())->limit(100)->get()
             ->each(function (MarketAuction $a) use (&$done) {
-                $result = $this->finish($a);
+                try {
+                    $result = $this->finish($a);
+                } catch (\Throwable $e) {
+                    \Illuminate\Support\Facades\Log::error('Market auction end failed', ['auction' => $a->id, 'error' => $e->getMessage()]);
+                    $result = null;
+                }
                 if ($result) {
                     $done[$result]++;
+                }
+            });
+        // A sale whose order could not be made (an error at the end): try again for 2 days.
+        $done['orders_repaired'] = 0;
+        MarketAuction::where('status', MarketAuction::SOLD)->whereNotNull('winner_id')->whereNull('order_id')
+            ->where('ended_at', '>', now()->subDays(2))->where('ended_at', '<', now()->subSeconds(30))->limit(50)->get()
+            ->each(function (MarketAuction $a) use (&$done) {
+                if ($this->completeSale($a)) {
+                    $done['orders_repaired']++;
                 }
             });
         // An offer to the next bidder that nobody answered.
@@ -208,9 +222,38 @@ class AuctionService
                 ['title' => $item->title], ['item_code' => $item->code]);
             return 'unsold';
         }
+        $this->completeSale($auction);
+        return 'sold';
+    }
+
+    /**
+     * The winner's order, once: created under a lock, only when the auction has a winner and no order yet.
+     * A failure is logged and rolled back, and the next tick tries again (see tick()).
+     */
+    public function completeSale(MarketAuction $auction): ?MarketOrder
+    {
+        try {
+            $order = DB::transaction(function () use ($auction) {
+                $a = MarketAuction::lockForUpdate()->find($auction->id);
+                if (!$a || $a->status !== MarketAuction::SOLD || !$a->winner_id || $a->order_id) {
+                    return null;
+                }
+                $order = $this->orders->createForAuction($a, User::find($a->winner_id), (float)$a->winner_bid);
+                $a->update(['order_id' => $order->id]);
+                return $order;
+            });
+        } catch (\Throwable $e) {
+            \Illuminate\Support\Facades\Log::error('Market auction sale failed', ['auction' => $auction->id, 'error' => $e->getMessage(),
+                'at' => $e->getFile() . ':' . $e->getLine()]);
+            return null;
+        }
+        if (!$order) {
+            return null;
+        }
+        $auction->refresh();
+        $item = $auction->item;
+        $seller = User::find($auction->seller_id);
         $winner = User::find($auction->winner_id);
-        $order = $this->orders->createForAuction($auction, $winner, (float)$auction->winner_bid);
-        $auction->update(['order_id' => $order->id]);
         $hours = MarketSettings::all()['auction_pay_hours'];
         MarketPush::send($winner, 'market_auction_won', 'You won the auction', '{title} for {amount}. Arrange payment with the seller within {hours} hours.',
             ['title' => $item->title, 'amount' => getCurrencyFormat($auction->winner_bid), 'hours' => $hours], ['order_id' => $order->id]);
@@ -220,7 +263,7 @@ class AuctionService
             MarketPush::send(User::find($userId), 'market_auction_lost', 'Auction ended', '{title} went for {amount}.',
                 ['title' => $item->title, 'amount' => getCurrencyFormat($auction->winner_bid)], ['item_code' => $item->code]);
         }
-        return 'sold';
+        return $order;
     }
 
     // ------------------------------------------------------------------ after the end

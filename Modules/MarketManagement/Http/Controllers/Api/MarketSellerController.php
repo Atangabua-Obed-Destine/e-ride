@@ -118,6 +118,51 @@ class MarketSellerController extends Controller
         return response()->json(responseFormatter(DEFAULT_200, MarketPresenter::shop($shop, $request->user()->id, true)));
     }
 
+    /** Services: when the shop takes bookings, clients at a time, notice, how far ahead, auto-confirm, pause. */
+    public function serviceSettings(Request $request): JsonResponse
+    {
+        $shop = $this->shops->mine($request->user());
+        if (!$shop) {
+            return $this->fail('shop', translate('Open your shop first.'));
+        }
+        $validator = Validator::make($request->all(), [
+            // {"mon":["08:00","18:00"],"sun":null}
+            'service_hours' => 'nullable',
+            'service_capacity' => 'nullable|integer|min:1|max:20',
+            'service_notice_minutes' => 'nullable|integer|min:0|max:10080',
+            'service_ahead_days' => 'nullable|integer|min:1|max:90',
+            'service_auto_confirm' => 'nullable|boolean',
+            'taking_bookings' => 'nullable|boolean',
+            'service_areas' => 'nullable|string|max:300',
+            'travel_fee' => 'nullable|numeric|min:0|max:10000000',
+        ]);
+        if ($validator->fails()) {
+            return response()->json(responseFormatter(DEFAULT_400, errors: errorProcessor($validator)), 403);
+        }
+        $data = array_intersect_key($request->all(), array_flip(['service_hours', 'service_capacity', 'service_notice_minutes', 'service_ahead_days',
+            'service_auto_confirm', 'taking_bookings', 'service_areas', 'travel_fee']));
+        foreach (['service_auto_confirm', 'taking_bookings'] as $flag) {
+            if (array_key_exists($flag, $data)) {
+                $data[$flag] = $request->boolean($flag);
+            }
+        }
+        if (array_key_exists('service_hours', $data)) {
+            $hours = is_array($data['service_hours']) ? $data['service_hours'] : (json_decode((string)$data['service_hours'], true) ?: []);
+            $clean = [];
+            foreach (\Modules\MarketManagement\Entities\MarketShop::DAYS as $day) {
+                $h = $hours[$day] ?? null;
+                $clean[$day] = is_array($h) && count($h) === 2 && preg_match('/^\d{2}:\d{2}$/', (string)$h[0]) && preg_match('/^\d{2}:\d{2}$/', (string)$h[1]) && $h[0] < $h[1]
+                    ? [(string)$h[0], (string)$h[1]] : null;
+            }
+            $data['service_hours'] = $clean;
+        }
+        if (array_key_exists('travel_fee', $data) && ($data['travel_fee'] === '' || $data['travel_fee'] === null)) {
+            $data['travel_fee'] = null;
+        }
+        $shop->update($data);
+        return response()->json(responseFormatter(DEFAULT_200, MarketPresenter::shop($shop->fresh(), $request->user()->id, true)));
+    }
+
     public function requestVerification(Request $request): JsonResponse
     {
         $shop = $this->shops->mine($request->user());
@@ -219,6 +264,14 @@ class MarketSellerController extends Controller
             'auction_days' => 'nullable|integer|min:1|max:30',
             'auction_hours' => 'nullable|integer|min:1|max:720',
             'auction_reserve' => 'nullable|numeric|min:0|max:100000000',
+            // Services.
+            'price_type' => ['nullable', Rule::in(MarketItem::PRICE_TYPES)],
+            'duration_minutes' => 'nullable|integer|min:15|max:1440',
+            // "place,client" or a list
+            'service_where' => 'nullable',
+            // [{"name":"Long","price":2000}]
+            'extras' => 'nullable',
+            'service_kind' => ['nullable', Rule::in(MarketItem::SERVICE_KINDS)],
         ];
     }
 

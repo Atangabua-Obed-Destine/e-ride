@@ -23,7 +23,7 @@ class MarketItem extends Model
     public const SOLD_OUT = 'sold_out';
     public const PUBLIC = [self::LIVE, self::SOLD_OUT];
 
-    public const CONDITIONS = ['new', 'used', 'digital'];
+    public const CONDITIONS = ['new', 'used', 'digital', 'service'];
     public const MAX_PHOTOS = 6;
     public const MAX_PREVIEWS = 3;
 
@@ -31,7 +31,15 @@ class MarketItem extends Model
         'shop_id', 'code', 'title', 'description', 'price', 'negotiable', 'condition', 'digital_kind', 'category', 'quantity',
         'pickup', 'eride_delivery', 'seller_delivers', 'status', 'blocked_word', 'status_note', 'report_count', 'visits', 'chats',
         'options', 'stock', 'wholesale_price', 'wholesale_min', 'orders', 'sale_type', 'used_grade',
+        'price_type', 'duration_minutes', 'service_where', 'extras', 'service_kind',
     ];
+
+    /** Services: how the price is given, where it happens, and the kinds clients filter by. */
+    public const PRICE_TYPES = ['fixed', 'from', 'hour', 'quote'];
+    public const SERVICE_WHERE = ['place', 'client', 'online'];
+    public const SERVICE_KINDS = ['hair_beauty', 'repairs', 'tailoring', 'cleaning', 'lessons', 'events', 'photography', 'other'];
+    public const DURATIONS = [30, 60, 90, 120, 180, 240, 360, 480];
+    public const MAX_EXTRAS = 6;
 
     public const SALE_TYPES = ['fixed', 'offers', 'auction'];
     public const USED_GRADES = ['like_new', 'good', 'fair', 'parts'];
@@ -51,6 +59,9 @@ class MarketItem extends Model
         'wholesale_price' => 'float',
         'wholesale_min' => 'integer',
         'orders' => 'integer',
+        'duration_minutes' => 'integer',
+        'service_where' => 'array',
+        'extras' => 'array',
     ];
 
     public const MAX_COLOURS = 12;
@@ -80,6 +91,30 @@ class MarketItem extends Model
     public function isDigital(): bool
     {
         return $this->condition === 'digital';
+    }
+
+    /** Booked for a time (or quoted), not put in a cart. */
+    public function isService(): bool
+    {
+        return $this->condition === 'service';
+    }
+
+    public function isQuoteOnly(): bool
+    {
+        return $this->isService() && $this->price_type === 'quote';
+    }
+
+    /** @return array<int, array{name: string, price: float}> */
+    public function extrasList(): array
+    {
+        return array_values(array_filter((array)($this->extras ?? []), fn($e) => is_array($e) && trim((string)($e['name'] ?? '')) !== ''));
+    }
+
+    /** @return string[] */
+    public function whereList(): array
+    {
+        $list = array_values(array_intersect((array)($this->service_where ?? []), self::SERVICE_WHERE));
+        return $list ?: ['place'];
     }
 
     public function isPublic(): bool
@@ -121,7 +156,7 @@ class MarketItem extends Model
     /** A buyer can put it in a cart: live, priced, and not a digital product (those are bought in the chat). */
     public function orderable(): bool
     {
-        return $this->status === self::LIVE && $this->price !== null && $this->price > 0 && !$this->isDigital() && !$this->isAuction();
+        return $this->status === self::LIVE && $this->price !== null && $this->price > 0 && !$this->isDigital() && !$this->isAuction() && !$this->isService();
     }
 
     /** The price for one piece when the buyer takes $count pieces of this item in one order. */

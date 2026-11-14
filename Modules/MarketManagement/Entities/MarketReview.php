@@ -11,7 +11,10 @@ class MarketReview extends Model
 {
     public const TAGS = ['as_described', 'fast_reply', 'good_price', 'well_packed', 'problem'];
 
-    protected $fillable = ['order_id', 'shop_id', 'buyer_id', 'stars', 'tags', 'comment', 'hidden'];
+    /** Tags for services (bookings). */
+    public const SERVICE_TAGS = ['on_time', 'great_result', 'friendly', 'clean_place', 'fair_price', 'problem'];
+
+    protected $fillable = ['order_id', 'booking_id', 'shop_id', 'buyer_id', 'stars', 'tags', 'comment', 'hidden'];
 
     protected $casts = [
         'stars' => 'integer',
