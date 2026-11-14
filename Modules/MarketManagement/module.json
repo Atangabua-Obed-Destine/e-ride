@@ -1,0 +1,13 @@
+{
+    "name": "MarketManagement",
+    "alias": "marketmanagement",
+    "description": "E-Ride Market: riders open a shop, post items and share links on WhatsApp; buyers chat with the seller in the app.",
+    "keywords": [],
+    "priority": 0,
+    "providers": [
+        "Modules\\MarketManagement\\Providers\\MarketManagementServiceProvider"
+    ],
+    "aliases": {},
+    "files": [],
+    "requires": []
+}

@@ -117,7 +117,7 @@ class ConfigController extends Controller
             'conversion_status' => (bool)($loyaltyPoints['status'] ?? false),
             'conversion_rate' => (double)($loyaltyPoints['points'] ?? 0),
             'websocket_url' => $info->firstWhere('key_name', 'websocket_url')?->value ?? null,
-            'websocket_port' => (string)$info->firstWhere('key_name', 'websocket_port')?->value ?? 6001,
+            'websocket_port' => (string)($info->firstWhere('key_name', 'websocket_port')?->value ?: 6001),
             'websocket_key' => env('PUSHER_APP_KEY'),
             'websocket_scheme' => env('PUSHER_SCHEME'),
             'base_url' => url('/') . '/api/v1/',
@@ -154,6 +154,9 @@ class ConfigController extends Controller
             // Scheduled rides: 'booking' (paid when booked) or 'before_pickup' (asked before the pickup, once a driver accepted).
             'booking_deposit_scheduled_timing' => \Modules\TripManagement\Lib\DepositSettings::all()['scheduled_timing'],
             'booking_deposit_scheduled_free_cancel_minutes' => \Modules\TripManagement\Lib\DepositSettings::all()['scheduled_free_cancel_minutes'],
+            // E-Ride Market: shops riders open, shared on WhatsApp (Modules/MarketManagement).
+            'market_status' => class_exists(\Modules\MarketManagement\Lib\MarketSettings::class)
+                && \Modules\MarketManagement\Lib\MarketSettings::enabled(),
             // E-Ride Move: trucks booked like rides, price agreed in person.
             'move_status' => \Modules\TripManagement\Lib\MoveSettings::enabled(),
             'move_deposit_status' => \Modules\TripManagement\Lib\DepositSettings::move()['status'],

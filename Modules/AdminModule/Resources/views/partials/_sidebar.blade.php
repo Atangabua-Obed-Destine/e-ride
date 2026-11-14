@@ -593,6 +593,12 @@
                             <span class="link-title">{{ translate('Homes_&_spaces') }}</span>
                         </a>
                     </li>
+                    <li class="{{ Request::is('admin/market*') ? 'active open' : '' }}">
+                        <a href="{{ route('admin.market.moderation') }}">
+                            <i class="bi bi-shop"></i>
+                            <span class="link-title">{{ translate('E-Ride Market') }}</span>
+                        </a>
+                    </li>
                     <li class="{{ Request::is('admin/places/on-duty*') ? 'active open' : '' }}">
                         <a href="{{ route('admin.place.on-duty') }}">
                             <i class="bi bi-capsule"></i>

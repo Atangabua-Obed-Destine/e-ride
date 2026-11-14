@@ -16,5 +16,6 @@
     "BlogManagement": true,
     "AiModule": true,
     "StoreManagement": true,
-    "PlaceManagement": true
+    "PlaceManagement": true,
+    "MarketManagement": true
 }
