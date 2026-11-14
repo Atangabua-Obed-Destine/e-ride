@@ -103,6 +103,7 @@ class MarketController extends Controller
         }
         return response()->json(responseFormatter(DEFAULT_200, MarketPresenter::shop($shop, $viewer) + [
             'following' => $this->shops->follows($viewer, $shop->id),
+            'follow_notify' => $this->shops->followNotify($viewer, $shop->id),
             'blocked' => $this->shops->blocked($viewer, $shop->id),
         ]));
     }
@@ -120,6 +121,7 @@ class MarketController extends Controller
         }
         return response()->json(responseFormatter(DEFAULT_200, MarketPresenter::item($item, $viewer, true) + [
             'following' => $this->shops->follows($viewer, $item->shop_id),
+            'follow_notify' => $this->shops->followNotify($viewer, $item->shop_id),
         ]));
     }
 
@@ -159,8 +161,12 @@ class MarketController extends Controller
         if (!$shop) {
             return $this->fail('shop', translate('This shop is no longer on E-Ride Market.'), 404);
         }
-        $this->shops->follow($request->user(), $shop, $request->boolean('on', true));
-        return response()->json(responseFormatter(DEFAULT_200, ['following' => $this->shops->follows($request->user()->id, $shop->id)]));
+        $request->validate(['on' => 'nullable|boolean', 'notify' => 'nullable|boolean']);
+        $this->shops->follow($request->user(), $shop, $request->boolean('on', true), $request->has('notify') ? $request->boolean('notify') : null);
+        return response()->json(responseFormatter(DEFAULT_200, [
+            'following' => $this->shops->follows($request->user()->id, $shop->id),
+            'notify' => $this->shops->followNotify($request->user()->id, $shop->id),
+        ]));
     }
 
     public function block(Request $request, string $slug): JsonResponse

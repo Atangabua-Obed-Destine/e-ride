@@ -198,13 +198,26 @@ class ShopService
 
     // --------------------------------------------------------- follows and blocks
 
-    public function follow(User $user, MarketShop $shop, bool $on): void
+    /** Follows (with or without new-post alerts; null keeps the current choice, on for a new follow) or unfollows. */
+    public function follow(User $user, MarketShop $shop, bool $on, ?bool $notify = null): void
     {
         if ($shop->user_id === $user->id) {
             return;
         }
-        $on ? MarketFollow::firstOrCreate(['user_id' => $user->id, 'shop_id' => $shop->id])
-            : MarketFollow::where('user_id', $user->id)->where('shop_id', $shop->id)->delete();
+        if (!$on) {
+            MarketFollow::where('user_id', $user->id)->where('shop_id', $shop->id)->delete();
+            return;
+        }
+        $follow = MarketFollow::firstOrCreate(['user_id' => $user->id, 'shop_id' => $shop->id], ['notify' => $notify ?? true]);
+        if ($notify !== null && $follow->notify !== $notify) {
+            $follow->update(['notify' => $notify]);
+        }
+    }
+
+    /** Whether $userId gets new-post alerts from the shop (false when not following). */
+    public function followNotify(string $userId, string $shopId): bool
+    {
+        return (bool)MarketFollow::where('user_id', $userId)->where('shop_id', $shopId)->value('notify');
     }
 
     public function block(User $user, MarketShop $shop, bool $on): void

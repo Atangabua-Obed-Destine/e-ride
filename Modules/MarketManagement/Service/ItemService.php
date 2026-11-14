@@ -302,7 +302,7 @@ class ItemService
         }
         $shop->update(['followers_notified_at' => now()]);
         $sent = 0;
-        MarketFollow::where('shop_id', $shop->id)->pluck('user_id')->chunk(200)->each(function ($ids) use ($shop, &$sent) {
+        MarketFollow::where('shop_id', $shop->id)->where('notify', true)->pluck('user_id')->chunk(200)->each(function ($ids) use ($shop, &$sent) {
             foreach (User::whereIn('id', $ids)->where('is_active', 1)->get() as $user) {
                 MarketPush::send($user, 'market_follow_new', '{shop} posted something new', 'Have a look in E-Ride Market.',
                     ['shop' => $shop->name], ['shop_slug' => $shop->slug]);
