@@ -126,7 +126,7 @@ class MarketOrderService
 
         $this->chatNote($order, $buyer, 'placed');
         $count = array_sum(array_column($rows, 'qty'));
-        MarketPush::send($shop->owner, 'market_order_new', 'New order {code}', '{buyer} wants {count} pieces, {total}. Answer within {time}.', [
+        MarketPush::send($shop->owner, 'market_order_new', 'New order {code}', '{buyer} sent an order of {total}. Answer within {time}.', [
             'code' => $order->code, 'buyer' => $this->firstName($buyer), 'count' => $count, 'total' => getCurrencyFormat($total),
             'time' => $this->duration($order->respond_by),
         ], ['order_id' => $order->id]);
@@ -597,7 +597,10 @@ class MarketOrderService
     private function duration(?\Carbon\CarbonInterface $until): string
     {
         $minutes = $until ? max(1, (int)ceil(now()->diffInMinutes($until, false))) : 0;
-        return $minutes >= 60 ? intdiv($minutes, 60) . ' h ' . str_pad((string)($minutes % 60), 2, '0', STR_PAD_LEFT) : $minutes . ' min';
+        if ($minutes < 60) {
+            return $minutes . ' min';
+        }
+        return intdiv($minutes, 60) . ' h' . ($minutes % 60 ? ' ' . str_pad((string)($minutes % 60), 2, '0', STR_PAD_LEFT) : '');
     }
 
     private function firstName(?User $user): string

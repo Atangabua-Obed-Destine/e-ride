@@ -5165,4 +5165,5 @@
   'market_pay_momo_delivery' => 'Mobile money à la livraison',
   'market_pay_pickup' => 'Au retrait',
   'market_pay_before' => 'Avant la livraison',
+  '{buyer} sent an order of {total}. Answer within {time}.' => ':buyer a envoyé une commande de :total. Répondez dans les :time.',
 );

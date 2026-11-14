@@ -6117,4 +6117,5 @@
   'market_fulfilment_seller' => 'Seller delivers',
   'market_pay_momo_delivery' => 'Mobile money on delivery',
   'market_pay_before' => 'Before delivery',
+  '{buyer} sent an order of {total}. Answer within {time}.' => ':buyer sent an order of :total. Answer within :time.',
 );
