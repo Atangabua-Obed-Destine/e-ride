@@ -232,6 +232,7 @@ class MarketOrderService
         if (!in_array($order->status, $allowed, true)) {
             $this->fail('order', translate('This order can no longer be cancelled.'));
         }
+        $wasHeld = in_array($order->status, MarketOrder::HELD, true);
         if (in_array($order->status, MarketOrder::HELD, true) && trim((string)$reason) === '') {
             $this->fail('reason', translate('Say why you cancel: the other side sees it.'));
         }
@@ -243,11 +244,74 @@ class MarketOrderService
                 'closed_at' => now(),
             ]);
         });
+        // An auction winner backing out is a no-show.
+        if ($role === 'buyer' && $order->auction_id && $wasHeld) {
+            \Modules\MarketManagement\Entities\MarketStrike::create(['user_id' => $user->id, 'auction_id' => $order->auction_id, 'reason' => 'no_payment']);
+            \Modules\MarketManagement\Entities\MarketAuction::whereKey($order->auction_id)->update(['order_id' => null]);
+        }
         $this->chatNote($order, $user, 'cancelled');
         $other = $role === 'buyer' ? $order->shop->owner : $order->buyer;
         MarketPush::send($other, 'market_order_cancelled', 'Order {code} cancelled', '{who} cancelled the order.', [
             'code' => $order->code, 'who' => $role === 'buyer' ? $this->firstName($order->buyer) : $order->shop->name,
         ], ['order_id' => $order->id]);
+        return $order->fresh(['lines', 'shop']);
+    }
+
+    // ------------------------------------------------------------------ auctions
+
+    /** The auction winner's order: confirmed at once (the item is held), with a time to arrange payment. */
+    public function createForAuction(\Modules\MarketManagement\Entities\MarketAuction $auction, User $winner, float $price): MarketOrder
+    {
+        $item = MarketItem::with(['shop.owner', 'photos'])->withTrashed()->find($auction->item_id);
+        $shop = $item->shop;
+        $conversation = null;
+        try {
+            $conversation = $this->chats->start($winner, $item);
+        } catch (\Throwable) {
+        }
+        $settings = MarketSettings::all();
+        $order = DB::transaction(function () use ($auction, $winner, $price, $item, $shop, $conversation, $settings) {
+            $order = MarketOrder::create([
+                'code' => $this->newCode(),
+                'shop_id' => $shop->id, 'buyer_id' => $winner->id, 'seller_id' => $shop->user_id, 'conversation_id' => $conversation?->id,
+                'auction_id' => $auction->id, 'status' => MarketOrder::CONFIRMED,
+                'fulfilment' => $shop->fulfilmentList()[0], 'pay_method' => $shop->payMethodList()[0],
+                'requested_total' => $price, 'confirmed_total' => $price, 'confirmed_at' => now(), 'answered_at' => now(),
+                'payment_due_at' => now()->addHours($settings['auction_pay_hours']),
+                'receive_code' => str_pad((string)random_int(0, 9999), 4, '0', STR_PAD_LEFT), 'stock_held' => true,
+            ]);
+            $order->lines()->create(['item_id' => $item->id, 'title' => $item->title, 'photo' => $item->cover()?->url(),
+                'unit_price' => $price, 'wholesale' => false, 'qty' => 1, 'qty_confirmed' => 1]);
+            $item->forceFill(['quantity' => 0, 'status' => MarketItem::SOLD_OUT])->save();
+            MarketItem::whereKey($item->id)->increment('orders');
+            return $order;
+        });
+        $this->chatNote($order, $winner, 'auction_won');
+        return $order->fresh(['lines', 'shop']);
+    }
+
+    /** An auction order that ends without a sale (no-show, or put up again): the item is free again. */
+    public function cancelForAuction(MarketOrder $order, string $reason): void
+    {
+        DB::transaction(function () use ($order, $reason) {
+            if ($order->stock_held) {
+                $item = MarketItem::lockForUpdate()->find($order->lines()->value('item_id'));
+                if ($item) {
+                    $item->forceFill(['quantity' => 1, 'status' => MarketItem::LIVE])->save();
+                }
+            }
+            $order->update(['status' => MarketOrder::CANCELLED, 'cancelled_by' => 'seller', 'cancel_reason' => $reason, 'closed_at' => now(), 'stock_held' => false]);
+        });
+    }
+
+    /** The seller says the winner arranged payment: the deadline no longer applies. */
+    public function paymentArranged(User $seller, MarketOrder $order): MarketOrder
+    {
+        $this->asSeller($seller, $order);
+        if (!$order->auction_id || !$order->isOpen()) {
+            $this->fail('order', translate('This order is not waiting for payment.'));
+        }
+        $order->update(['payment_arranged_at' => now()]);
         return $order->fresh(['lines', 'shop']);
     }
 
@@ -561,6 +625,8 @@ class MarketOrderService
                 'cancelled' => translate(key: 'Order {code} cancelled', replace: ['code' => $order->code]),
                 'ready' => translate(key: 'Order {code} is ready', replace: ['code' => $order->code]),
                 'completed' => translate(key: 'Order {code} completed', replace: ['code' => $order->code]),
+                'auction_won' => translate(key: 'Auction won: order {code}', replace: ['code' => $order->code]),
+                'auction_won' => translate(key: 'Auction won: order {code}', replace: ['code' => $order->code]),
                 default => $order->code,
             };
             DB::transaction(function () use ($order, $by, $event, $text) {

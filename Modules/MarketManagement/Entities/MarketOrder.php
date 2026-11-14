@@ -40,7 +40,7 @@ class MarketOrder extends Model
     public const DECLINE_REASONS = ['sold_out', 'no_delivery_area', 'price_changed', 'closed_today', 'other'];
 
     protected $fillable = [
-        'code', 'shop_id', 'buyer_id', 'seller_id', 'conversation_id', 'status', 'fulfilment', 'pay_method', 'drop_lat', 'drop_lng',
+        'code', 'shop_id', 'buyer_id', 'seller_id', 'conversation_id', 'auction_id', 'payment_due_at', 'payment_arranged_at', 'status', 'fulfilment', 'pay_method', 'drop_lat', 'drop_lng',
         'drop_address', 'note', 'requested_total', 'confirmed_total', 'receive_code', 'decline_reason', 'decline_note', 'cancel_reason',
         'cancelled_by', 'trip_id', 'respond_by', 'agree_by', 'answered_at', 'confirmed_at', 'ready_at', 'completed_at', 'closed_at', 'stock_held',
     ];
@@ -51,6 +51,8 @@ class MarketOrder extends Model
         'requested_total' => 'float',
         'confirmed_total' => 'float',
         'respond_by' => 'datetime',
+        'payment_due_at' => 'datetime',
+        'payment_arranged_at' => 'datetime',
         'agree_by' => 'datetime',
         'answered_at' => 'datetime',
         'confirmed_at' => 'datetime',

@@ -38,11 +38,17 @@ class MarketSellerController extends Controller
         ]));
     }
 
-    /** Opens the rider's shop, or saves its details. */
+    /**
+     * Opens the rider's shop, or saves its details. kind=private: "Sell something I own" (a person,
+     * no shop to set up). A private seller sending kind=shop and a name turns into a shop.
+     */
     public function saveShop(Request $request): JsonResponse
     {
         $validator = Validator::make($request->all(), [
-            'name' => 'required|string|min:3|max:80',
+            'kind' => 'nullable|in:shop,private',
+            'name' => 'required_unless:kind,private|nullable|string|min:3|max:80',
+            'map_visible' => 'nullable|boolean',
+            'address_note' => 'nullable|string|max:191',
             'category' => ['nullable', Rule::in(MarketSettings::CATEGORIES)],
             // Several categories: "fashion,beauty" or a list.
             'categories' => 'nullable',
@@ -62,9 +68,27 @@ class MarketSellerController extends Controller
         if (!$existing && !$request->boolean('agree_rules')) {
             return $this->fail('agree_rules', translate('Agree to the E-Ride Market rules to open a shop.'));
         }
-        $shop = $existing
-            ? $this->shops->update($existing, $validator->validated(), $request->file('logo'))
-            : $this->shops->open($user, $validator->validated(), $request->file('logo'));
+        $data = $validator->validated();
+        if (array_key_exists('map_visible', $data)) {
+            $data['map_visible'] = $request->boolean('map_visible');
+        }
+        $kind = $request->input('kind');
+        if ($kind === 'private' && !$existing) {
+            $shop = $this->shops->openPrivate($user);
+            $rest = array_intersect_key($data, array_flip(['about', 'area_label', 'pickup_lat', 'pickup_lng', 'pickup_address']));
+            if ($rest) {
+                $shop = $this->shops->update($shop, $rest);
+            }
+        } elseif ($existing && $existing->isPrivate() && $kind === 'shop') {
+            $shop = $this->shops->turnIntoShop($existing, $data, $request->file('logo'));
+        } elseif ($existing) {
+            if ($existing->isPrivate()) {
+                unset($data['name']);
+            }
+            $shop = $this->shops->update($existing, $data, $request->file('logo'));
+        } else {
+            $shop = $this->shops->open($user, $data, $request->file('logo'));
+        }
         return response()->json(responseFormatter(DEFAULT_STORE_200, MarketPresenter::shop($shop, $user->id, true)));
     }
 
@@ -188,6 +212,13 @@ class MarketSellerController extends Controller
             'stock' => 'nullable|string|max:20000',
             'wholesale_price' => 'nullable|numeric|min:0|max:100000000',
             'wholesale_min' => 'nullable|integer|min:0|max:100000',
+            'sale_type' => ['nullable', Rule::in(MarketItem::SALE_TYPES)],
+            'used_grade' => ['nullable', Rule::in(MarketItem::USED_GRADES)],
+            'auction_start' => 'nullable|numeric|min:1|max:100000000',
+            'auction_step' => 'nullable|numeric|min:0|max:10000000',
+            'auction_days' => 'nullable|integer|min:1|max:30',
+            'auction_hours' => 'nullable|integer|min:1|max:720',
+            'auction_reserve' => 'nullable|numeric|min:0|max:100000000',
         ];
     }
 

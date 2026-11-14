@@ -40,6 +40,11 @@ class MarketPresenter
             'link' => MarketLinks::shop($shop),
             'items_count' => $shop->items_count ?? $shop->items()->whereIn('status', MarketItem::PUBLIC)->count(),
             'mine' => $mine,
+            // shop | private (a person selling things they own)
+            'kind' => $shop->kind ?? 'shop',
+            // A shop's place (pin, address, how to find it); private sellers never.
+            'map' => $shop->onMap() ? ['lat' => $shop->pickup_lat, 'lng' => $shop->pickup_lng, 'address' => $shop->pickup_address,
+                'note' => $shop->address_note] : null,
             // Orders: what buyers see before sending one.
             'taking_orders' => $shop->acceptsOrders(),
             'fulfilment' => $shop->fulfilmentList(),
@@ -61,6 +66,8 @@ class MarketPresenter
                 'pickup_lat' => $shop->pickup_lat,
                 'pickup_lng' => $shop->pickup_lng,
                 'pickup_address' => $shop->pickup_address,
+                'map_visible' => (bool)$shop->map_visible,
+                'address_note' => $shop->address_note,
             ];
         }
         if ($mine && $stats) {
@@ -97,7 +104,9 @@ class MarketPresenter
             'cover' => $cover?->url(),
             'link' => MarketLinks::item($item),
             'shop' => $shop ? ['slug' => $shop->slug, 'name' => $shop->name, 'area' => $shop->area_label, 'verified' => $shop->isVerified(),
-                'logo' => $shop->logoUrl()] : null,
+                'logo' => $shop->logoUrl(), 'kind' => $shop->kind ?? 'shop'] : null,
+            'sale_type' => $item->sale_type ?? 'fixed',
+            'used_grade' => $item->used_grade,
             'mine' => $mine,
             'created_at' => $item->created_at?->toIso8601String(),
             'wholesale_price' => $item->wholesale_price,
@@ -127,11 +136,69 @@ class MarketPresenter
                 ] : null,
             ];
         }
+        if ($item->isAuction() && ($auction = $item->auction)) {
+            $data['auction'] = self::auction($auction, $viewer, $mine, $full);
+        }
         if ($mine) {
             $data += ['visits' => $item->visits, 'chats' => $item->chats, 'status_note' => $item->status_note,
                 'blocked_word' => $item->blocked_word];
         }
         return $data;
+    }
+
+    /** An auction as one person sees it: everyone sees the bid and the time; the bidder sees where they stand; the seller sees the result. */
+    public static function auction(\Modules\MarketManagement\Entities\MarketAuction $a, ?string $viewer, bool $mine, bool $full): array
+    {
+        $data = [
+            'live' => $a->isLive(),
+            'status' => $a->isLive() ? 'live' : ($a->status === 'live' ? 'ending' : $a->status),
+            'start_price' => $a->start_price,
+            'step' => $a->step,
+            'current_bid' => $a->current_bid,
+            'bid_count' => $a->bid_count,
+            'ends_at' => $a->ends_at?->toIso8601String(),
+            'has_reserve' => $a->reserve_price !== null,
+            'reserve_met' => $a->reserveMet(),
+            'min_next' => $a->minNext(),
+        ];
+        if (!$full || !$viewer) {
+            return $data;
+        }
+        $data['leading'] = $a->leader_id === $viewer && $a->isLive();
+        $data['my_bid'] = \Modules\MarketManagement\Entities\MarketBid::where('auction_id', $a->id)->where('user_id', $viewer)->max('amount');
+        $data['won'] = $a->winner_id === $viewer;
+        if ($a->winner_id === $viewer || $mine) {
+            $data['order_id'] = $a->order_id;
+        }
+        if ($a->offered_to === $viewer && $a->offer_expires_at?->isFuture()) {
+            $data['offer'] = ['price' => $a->offered_price, 'expires_at' => $a->offer_expires_at->toIso8601String()];
+        }
+        if ($mine) {
+            $winner = $a->winner_id ? \Modules\UserManagement\Entities\User::find($a->winner_id) : null;
+            $order = $a->order_id ? MarketOrder::find($a->order_id) : null;
+            $data += [
+                'reserve_price' => $a->reserve_price,
+                'winner_name' => $winner ? (trim((string)$winner->first_name) ?: translate('Buyer')) : null,
+                'winner_bid' => $a->winner_bid,
+                'order_status' => $order?->status,
+                'payment_due_at' => $order && $order->isOpen() && !$order->payment_arranged_at ? $order->payment_due_at?->toIso8601String() : null,
+                'offered' => $a->offered_to !== null && $a->offer_expires_at?->isFuture(),
+                'offer_expires_at' => $a->offer_expires_at?->toIso8601String(),
+                'next_bidder' => (bool)app(\Modules\MarketManagement\Service\AuctionService::class)->nextBidder($a),
+            ];
+        }
+        return $data;
+    }
+
+    /** The bids, highest first; other people as initials ("B***a"). */
+    public static function bids(\Modules\MarketManagement\Entities\MarketAuction $a, ?string $viewer): array
+    {
+        return $a->bids()->with('user:id,first_name')->limit(50)->get()->map(function ($b) use ($viewer) {
+            $name = trim((string)$b->user?->first_name);
+            $masked = $name === '' ? '***' : mb_substr($name, 0, 1) . '***' . (mb_strlen($name) > 1 ? mb_substr($name, -1) : '');
+            return ['amount' => $b->amount, 'name' => $b->user_id === $viewer ? null : $masked, 'mine' => $b->user_id === $viewer,
+                'created_at' => $b->created_at?->toIso8601String()];
+        })->all();
     }
 
     public static function conversation(MarketConversation $c, string $viewer): array
@@ -182,6 +249,9 @@ class MarketPresenter
             'summary' => $lines->take(3)->map(fn(MarketOrderLine $l) => $l->title . ($l->qty > 1 ? ' ×' . $l->qty : ''))->implode(', '),
             'respond_by' => $order->respond_by?->toIso8601String(),
             'agree_by' => $order->agree_by?->toIso8601String(),
+            'auction' => $order->auction_id !== null,
+            'payment_due_at' => $order->auction_id && !$order->payment_arranged_at && $order->isOpen() ? $order->payment_due_at?->toIso8601String() : null,
+            'payment_arranged' => $order->payment_arranged_at !== null,
             'created_at' => $order->created_at?->toIso8601String(),
         ];
         if (!$full) {

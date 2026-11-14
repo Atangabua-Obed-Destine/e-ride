@@ -60,12 +60,58 @@ class ShopService
         });
     }
 
+    /**
+     * "Sell something I own": a person, not a shop. Their seller profile is made from their name
+     * (no shop to set up), never on the map. A rider who already has a shop sells from it.
+     */
+    public function openPrivate(User $user): MarketShop
+    {
+        if ($reason = $this->cannotOpenReason($user)) {
+            $this->fail('shop', $reason);
+        }
+        if ($existing = $this->mine($user)) {
+            return $existing;
+        }
+        $first = trim((string)$user->first_name);
+        $last = trim((string)$user->last_name);
+        $name = trim($first . ($last !== '' ? ' ' . mb_strtoupper(mb_substr($last, 0, 1)) . '.' : '')) ?: translate('Private seller');
+        return DB::transaction(function () use ($user, $name) {
+            $shop = new MarketShop([
+                'kind' => MarketShop::KIND_PRIVATE, 'name' => $name, 'map_visible' => false,
+                'fulfilment' => ['pickup', 'eride'], 'pay_methods' => ['cash_delivery', 'momo_delivery', 'pickup'],
+            ]);
+            $shop->user_id = $user->id;
+            $shop->slug = $this->slugFor($name);
+            $shop->status = MarketShop::LIVE;
+            $shop->save();
+            return $shop->fresh();
+        });
+    }
+
+    /** A private seller who grows: their profile becomes a shop (items, ratings and followers stay). */
+    public function turnIntoShop(MarketShop $shop, array $data, ?UploadedFile $logo = null): MarketShop
+    {
+        if (!$shop->isPrivate()) {
+            return $this->update($shop, $data, $logo);
+        }
+        if (trim((string)($data['name'] ?? '')) === '') {
+            $this->fail('name', translate('Give your shop a name.'));
+        }
+        $shop->kind = MarketShop::KIND_SHOP;
+        $shop->map_visible = true;
+        return $this->update($shop, $data, $logo);
+    }
+
     public function update(MarketShop $shop, array $data, ?UploadedFile $logo = null): MarketShop
     {
         if (!$shop->isLive()) {
             $this->fail('shop', translate('This shop is closed.'));
         }
         $shop->fill($this->fields($data));
+        if ($shop->isPrivate()) {
+            // A person's place is never on the map.
+            $shop->map_visible = false;
+        }
         if ($logo) {
             $shop->logo = fileUploader(MarketShop::LOGO_DIR, APPLICATION_IMAGE_FORMAT, $logo, $shop->logo);
         }
@@ -121,7 +167,11 @@ class ShopService
 
     private function fields(array $data): array
     {
-        $fields = array_intersect_key($data, array_flip(['name', 'category', 'about', 'area_label', 'pickup_lat', 'pickup_lng', 'pickup_address']));
+        $fields = array_intersect_key($data, array_flip(['name', 'category', 'about', 'area_label', 'pickup_lat', 'pickup_lng', 'pickup_address',
+            'map_visible', 'address_note']));
+        if (array_key_exists('map_visible', $fields)) {
+            $fields['map_visible'] = filter_var($fields['map_visible'], FILTER_VALIDATE_BOOLEAN);
+        }
         // Several categories: a list (or "fashion,beauty"); the first is also kept as the main one.
         if (array_key_exists('categories', $data)) {
             $raw = $data['categories'];

@@ -4,6 +4,7 @@ use Illuminate\Support\Facades\Route;
 use Modules\MarketManagement\Http\Controllers\Api\MarketChatController;
 use Modules\MarketManagement\Http\Controllers\Api\MarketController;
 use Modules\MarketManagement\Http\Controllers\Api\MarketOrderController;
+use Modules\MarketManagement\Http\Controllers\Api\MarketAuctionController;
 use Modules\MarketManagement\Http\Controllers\Api\MarketSellerController;
 
 /*
@@ -21,6 +22,7 @@ Route::group(['prefix' => 'customer/market', 'middleware' => ['auth:api', 'maint
         Route::get('orders', [MarketOrderController::class, 'index']);
         Route::get('orders/{id}', [MarketOrderController::class, 'show']);
         Route::get('shops/{slug}/reviews', [MarketOrderController::class, 'reviews'])->where('slug', '[a-z0-9-]+');
+        Route::get('items/{code}/bids', [MarketAuctionController::class, 'bids'])->where('code', '[a-z0-9]+');
     });
     // Orders: the buyer sends a cart to a shop; the seller answers, sends and completes it.
     Route::middleware('throttle:60,1,market-orders')->group(function () {
@@ -33,7 +35,15 @@ Route::group(['prefix' => 'customer/market', 'middleware' => ['auth:api', 'maint
         Route::post('orders/{id}/trip', [MarketOrderController::class, 'trip']);
         Route::post('orders/{id}/review', [MarketOrderController::class, 'review']);
         Route::post('shop/order-settings', [MarketSellerController::class, 'orderSettings']);
+        // Auctions: after the end (seller), and the next bidder's answer.
+        Route::post('items/{code}/auction/offer-next', [MarketAuctionController::class, 'offerNext']);
+        Route::post('items/{code}/auction/answer', [MarketAuctionController::class, 'answerOffer']);
+        Route::post('items/{code}/auction/relist', [MarketAuctionController::class, 'relist']);
+        Route::post('orders/{id}/payment-arranged', [MarketAuctionController::class, 'paymentArranged']);
+        Route::post('orders/{id}/no-show', [MarketAuctionController::class, 'noShow']);
     });
+    // Bidding: a little room for a busy last minute.
+    Route::post('items/{code}/bid', [MarketAuctionController::class, 'bid'])->middleware('throttle:20,1,market-bid');
     // Typing a receive code: few tries, so a code cannot be guessed.
     Route::post('orders/{id}/complete', [MarketOrderController::class, 'complete'])->middleware('throttle:8,1,market-code');
     Route::middleware('throttle:30,1,market-write')->group(function () {

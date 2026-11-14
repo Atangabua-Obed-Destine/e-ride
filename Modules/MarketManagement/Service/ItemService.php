@@ -34,6 +34,13 @@ class ItemService
             $this->fail('shop', translate('This shop is closed.'));
         }
         $settings = MarketSettings::all();
+        if ($shop->isPrivate()) {
+            $forSale = $shop->items()->whereIn('status', [MarketItem::LIVE, MarketItem::HIDDEN, MarketItem::BLOCKED])->count();
+            if ($forSale >= $settings['private_max_items']) {
+                $this->fail('items', translate(key: 'You can have up to {count} items for sale at once. Turn into a shop to sell more.',
+                    replace: ['count' => $settings['private_max_items']]));
+            }
+        }
         $count = $shop->items()->whereNotIn('status', [MarketItem::REMOVED])->count();
         if ($count >= $settings['items_per_shop']) {
             $this->fail('items', translate(key: 'A shop can have up to {count} items. Remove some to post more.', replace: ['count' => $settings['items_per_shop']]));
@@ -55,11 +62,14 @@ class ItemService
             $item->save();
             $added = $this->addPhotos($item, $photos, false);
             $this->addPhotos($item, $previews, true);
-            if (!$digital && $this->applyOptions($item, $data, $added)) {
+            if (!$digital && !$shop->isPrivate() && ($item->sale_type ?? 'fixed') !== 'auction' && $this->applyOptions($item, $data, $added)) {
                 if (!$word) {
                     $item->status = $item->quantity < 1 ? MarketItem::SOLD_OUT : MarketItem::LIVE;
                 }
                 $item->save();
+            }
+            if (($item->sale_type ?? 'fixed') === 'auction') {
+                app(AuctionService::class)->start($item->fresh('shop'), $data);
             }
             return $item->fresh(['photos', 'shop']);
         });
@@ -92,8 +102,12 @@ class ItemService
             });
             $added = $this->addPhotos($item, $photos, false);
             $this->addPhotos($item, $previews, true);
-            if (!$digital) {
+            if (!$digital && !$item->shop?->isPrivate() && $item->sale_type !== 'auction') {
                 $this->applyOptions($item, $data, $added);
+            }
+            if ($item->sale_type === 'auction' && (array_key_exists('auction_start', $data) || array_key_exists('auction_days', $data))) {
+                app(AuctionService::class)->start($item->fresh('shop'), $data);
+                $item->refresh();
             }
             $previewCount = $item->photos()->where('preview', true)->count();
             $this->checkDigital($digital, $item->toArray(), $previewCount);
@@ -173,7 +187,20 @@ class ItemService
     private function fields(array $data, bool $digital): array
     {
         $fields = array_intersect_key($data, array_flip(['title', 'description', 'price', 'negotiable', 'condition', 'digital_kind', 'category',
-            'quantity', 'pickup', 'eride_delivery', 'seller_delivers', 'wholesale_price', 'wholesale_min']));
+            'quantity', 'pickup', 'eride_delivery', 'seller_delivers', 'wholesale_price', 'wholesale_min', 'sale_type', 'used_grade']));
+        // How it is sold: a fixed price, open to offers (negotiable), or an auction.
+        if (isset($fields['sale_type'])) {
+            $fields['sale_type'] = in_array($fields['sale_type'], MarketItem::SALE_TYPES, true) ? $fields['sale_type'] : 'fixed';
+            $fields['negotiable'] = $fields['sale_type'] === 'offers';
+            if ($fields['sale_type'] === 'auction') {
+                $fields['price'] = $data['auction_start'] ?? ($fields['price'] ?? null);
+                $fields['quantity'] = 1;
+                unset($fields['wholesale_price'], $fields['wholesale_min']);
+            }
+        }
+        if (array_key_exists('used_grade', $fields)) {
+            $fields['used_grade'] = in_array($fields['used_grade'], MarketItem::USED_GRADES, true) && ($data['condition'] ?? 'used') === 'used' ? $fields['used_grade'] : null;
+        }
         // A wholesale price only counts when it is lower than the price and starts from 2 pieces.
         if (array_key_exists('wholesale_price', $fields) || array_key_exists('wholesale_min', $fields)) {
             $price = (float)($data['price'] ?? 0);

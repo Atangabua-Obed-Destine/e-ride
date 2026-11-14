@@ -44,6 +44,17 @@ class MarketSettings
             'before_pay_verified_only' => (bool)(int)$get('market_before_pay_verified_only', 1),
             // A shop that lets this many orders expire in 7 days drops in the feed for 7 days.
             'demote_after_expired' => min(50, max(1, (int)$get('market_demote_after_expired', 3))),
+            // People selling things they own: how many items they can have for sale at once.
+            'private_max_items' => min(100, max(1, (int)$get('market_private_max_items', 10))),
+            // Auctions.
+            'auction_who' => in_array($w = (string)$get('market_auction_who', 'everyone'), ['everyone', 'verified'], true) ? $w : 'everyone',
+            'auction_bidders' => in_array($b = (string)$get('market_auction_bidders', 'phone_verified'), ['everyone', 'phone_verified'], true) ? $b : 'phone_verified',
+            'auction_max_days' => min(30, max(1, (int)$get('market_auction_max_days', 7))),
+            'auction_extend_minutes' => min(30, max(0, (int)$get('market_auction_extend_minutes', 2))),
+            'auction_pay_hours' => min(168, max(1, (int)$get('market_auction_pay_hours', 24))),
+            'auction_offer_hours' => min(72, max(1, (int)$get('market_auction_offer_hours', 12))),
+            'auction_strikes' => min(10, max(1, (int)$get('market_auction_strikes', 2))),
+            'auction_strike_days' => min(365, max(7, (int)$get('market_auction_strike_days', 90))),
         ];
     }
 

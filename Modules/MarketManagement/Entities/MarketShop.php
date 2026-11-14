@@ -14,11 +14,14 @@ class MarketShop extends Model
     use HasUuid;
 
     public const LIVE = 'live';
+    public const KIND_SHOP = 'shop';
+    /** A person selling things they own, not a shop. */
+    public const KIND_PRIVATE = 'private';
     public const CLOSED = 'closed';
     public const LOGO_DIR = 'market/shop/';
 
     protected $fillable = [
-        'user_id', 'name', 'slug', 'category', 'categories', 'about', 'area_label', 'pickup_lat', 'pickup_lng', 'pickup_address', 'logo',
+        'user_id', 'kind', 'map_visible', 'address_note', 'name', 'slug', 'category', 'categories', 'about', 'area_label', 'pickup_lat', 'pickup_lng', 'pickup_address', 'logo',
         'status', 'closed_reason', 'closed_at', 'verification_requested_at', 'verified_at', 'verified_by',
         'visits', 'chats', 'new_users', 'followers_notified_at',
         'taking_orders', 'fulfilment', 'pay_methods', 'open_from', 'open_to', 'min_order', 'rating', 'rating_count', 'orders_completed',
@@ -36,6 +39,7 @@ class MarketShop extends Model
         'chats' => 'integer',
         'new_users' => 'integer',
         'categories' => 'array',
+        'map_visible' => 'boolean',
         'taking_orders' => 'boolean',
         'fulfilment' => 'array',
         'pay_methods' => 'array',
@@ -60,6 +64,17 @@ class MarketShop extends Model
     public function follows(): HasMany
     {
         return $this->hasMany(MarketFollow::class, 'shop_id');
+    }
+
+    public function isPrivate(): bool
+    {
+        return $this->kind === self::KIND_PRIVATE;
+    }
+
+    /** A shop's place for buyers (pin, address, directions); private sellers never. */
+    public function onMap(): bool
+    {
+        return !$this->isPrivate() && $this->map_visible && $this->pickup_lat !== null && $this->pickup_lng !== null;
     }
 
     public function isLive(): bool

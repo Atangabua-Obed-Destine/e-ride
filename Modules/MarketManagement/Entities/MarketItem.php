@@ -30,8 +30,11 @@ class MarketItem extends Model
     protected $fillable = [
         'shop_id', 'code', 'title', 'description', 'price', 'negotiable', 'condition', 'digital_kind', 'category', 'quantity',
         'pickup', 'eride_delivery', 'seller_delivers', 'status', 'blocked_word', 'status_note', 'report_count', 'visits', 'chats',
-        'options', 'stock', 'wholesale_price', 'wholesale_min', 'orders',
+        'options', 'stock', 'wholesale_price', 'wholesale_min', 'orders', 'sale_type', 'used_grade',
     ];
+
+    public const SALE_TYPES = ['fixed', 'offers', 'auction'];
+    public const USED_GRADES = ['like_new', 'good', 'fair', 'parts'];
 
     protected $casts = [
         'price' => 'float',
@@ -56,6 +59,17 @@ class MarketItem extends Model
     public function shop(): BelongsTo
     {
         return $this->belongsTo(MarketShop::class, 'shop_id');
+    }
+
+    /** The latest auction of this item (an item can be put up again). */
+    public function auction(): \Illuminate\Database\Eloquent\Relations\HasOne
+    {
+        return $this->hasOne(MarketAuction::class, 'item_id')->latestOfMany();
+    }
+
+    public function isAuction(): bool
+    {
+        return $this->sale_type === 'auction';
     }
 
     public function photos(): HasMany
@@ -107,7 +121,7 @@ class MarketItem extends Model
     /** A buyer can put it in a cart: live, priced, and not a digital product (those are bought in the chat). */
     public function orderable(): bool
     {
-        return $this->status === self::LIVE && $this->price !== null && $this->price > 0 && !$this->isDigital();
+        return $this->status === self::LIVE && $this->price !== null && $this->price > 0 && !$this->isDigital() && !$this->isAuction();
     }
 
     /** The price for one piece when the buyer takes $count pieces of this item in one order. */

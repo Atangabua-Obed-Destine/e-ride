@@ -23,6 +23,7 @@ Route::group(['prefix' => 'admin/market', 'as' => 'admin.market.', 'middleware' 
         Route::get('shops', [MarketAdminController::class, 'shops'])->name('shops');
         Route::get('settings', [MarketAdminController::class, 'settings'])->name('settings');
         Route::get('orders', [MarketAdminController::class, 'orders'])->name('orders');
+        Route::get('auctions', [MarketAdminController::class, 'auctions'])->name('auctions');
     });
     Route::middleware('can:place_edit')->group(function () {
         Route::post('items/{item}/decide', [MarketAdminController::class, 'decide'])->name('decide');
@@ -31,6 +32,7 @@ Route::group(['prefix' => 'admin/market', 'as' => 'admin.market.', 'middleware' 
         Route::post('shops/{shop}/reopen', [MarketAdminController::class, 'reopen'])->name('reopen');
         Route::post('settings', [MarketAdminController::class, 'saveSettings'])->name('settings.save');
         Route::post('order-rules', [MarketAdminController::class, 'saveOrderRules'])->name('order-rules');
+        Route::post('auction-rules', [MarketAdminController::class, 'saveAuctionRules'])->name('auction-rules');
         Route::post('reviews/{review}/hide', [MarketAdminController::class, 'hideReview'])->name('review-hide');
     });
 });

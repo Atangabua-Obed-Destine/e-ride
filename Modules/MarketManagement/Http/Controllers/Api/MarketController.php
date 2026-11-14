@@ -54,6 +54,15 @@ class MarketController extends Controller
             ],
             'decline_reasons' => \Modules\MarketManagement\Entities\MarketOrder::DECLINE_REASONS,
             'review_tags' => \Modules\MarketManagement\Entities\MarketReview::TAGS,
+            'private_max_items' => $settings['private_max_items'],
+            'auctions' => [
+                'can_run' => $settings['auction_who'] === 'everyone' || (bool)$shop?->isVerified(),
+                'max_days' => $settings['auction_max_days'],
+                'pay_hours' => $settings['auction_pay_hours'],
+                'strikes_limit' => $settings['auction_strikes'],
+                'extend_minutes' => $settings['auction_extend_minutes'],
+                'cannot_bid_reason' => app(\Modules\MarketManagement\Service\AuctionService::class)->canBid($user),
+            ],
         ]));
     }
 
@@ -65,6 +74,8 @@ class MarketController extends Controller
             'following' => 'nullable|boolean',
             'shop' => 'nullable|string|max:90',
             'kind' => 'nullable|in:retail,wholesale',
+            'sale' => 'nullable|in:auction',
+            'seller' => 'nullable|in:private,shop',
             'verified' => 'nullable|boolean',
             'lat' => 'nullable|numeric|between:-90,90',
             'lng' => 'nullable|numeric|between:-180,180',
@@ -77,7 +88,7 @@ class MarketController extends Controller
         $limit = (int)$request->query('limit', 20);
         $offset = ((int)$request->query('offset', 1) - 1) * $limit;
         $viewer = $request->user()->id;
-        $filters = $request->only(['category', 'q', 'shop', 'kind']) + ['following' => $request->boolean('following'), 'verified' => $request->boolean('verified')];
+        $filters = $request->only(['category', 'q', 'shop', 'kind', 'sale', 'seller']) + ['following' => $request->boolean('following'), 'verified' => $request->boolean('verified')];
         if ($request->filled(['lat', 'lng'])) {
             $filters['lat'] = (float)$request->query('lat');
             $filters['lng'] = (float)$request->query('lng');

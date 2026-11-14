@@ -157,6 +157,48 @@ class MarketAdminController extends Controller
         return back();
     }
 
+    /** Auctions and private sellers: numbers, the list, and their rules. */
+    public function auctions(Request $request): View
+    {
+        $status = in_array($request->query('status'), ['live', 'sold', 'unsold'], true) ? $request->query('status') : 'live';
+        $since = now()->subDays(30);
+        $settings = MarketSettings::all();
+        $strikeSince = now()->subDays($settings['auction_strike_days']);
+        $stats = [
+            'live' => \Modules\MarketManagement\Entities\MarketAuction::where('status', 'live')->count(),
+            'sold' => \Modules\MarketManagement\Entities\MarketAuction::where('status', 'sold')->where('ended_at', '>=', $since)->count(),
+            'unsold' => \Modules\MarketManagement\Entities\MarketAuction::where('status', 'unsold')->where('ended_at', '>=', $since)->count(),
+            'strikes' => \Modules\MarketManagement\Entities\MarketStrike::where('reason', 'no_payment')->where('created_at', '>=', $since)->count(),
+            'blocked' => \Modules\MarketManagement\Entities\MarketStrike::where('reason', 'no_payment')->where('created_at', '>=', $strikeSince)
+                ->select('user_id')->groupBy('user_id')->havingRaw('count(*) >= ?', [$settings['auction_strikes']])->get()->count(),
+            'private' => MarketShop::where('kind', 'private')->where('status', MarketShop::LIVE)->count(),
+        ];
+        $auctions = \Modules\MarketManagement\Entities\MarketAuction::with('item.shop')->where('status', $status)
+            ->orderBy($status === 'live' ? 'ends_at' : 'ended_at', $status === 'live' ? 'asc' : 'desc')->paginate(paginationLimit())->withQueryString();
+        return view('marketmanagement::admin.auctions', compact('auctions', 'stats', 'status', 'settings'));
+    }
+
+    public function saveAuctionRules(Request $request): RedirectResponse
+    {
+        $data = $request->validate([
+            'private_max_items' => 'required|integer|min:1|max:100',
+            'auction_who' => ['required', Rule::in(['everyone', 'verified'])],
+            'auction_bidders' => ['required', Rule::in(['everyone', 'phone_verified'])],
+            'auction_max_days' => 'required|integer|min:1|max:30',
+            'auction_extend_minutes' => 'required|integer|min:0|max:30',
+            'auction_pay_hours' => 'required|integer|min:1|max:168',
+            'auction_offer_hours' => 'required|integer|min:1|max:72',
+            'auction_strikes' => 'required|integer|min:1|max:10',
+            'auction_strike_days' => 'required|integer|min:7|max:365',
+        ]);
+        foreach ($data as $key => $value) {
+            updateBusinessSetting(keyName: 'market_' . $key, settingType: MarketSettings::TYPE, value: (string)$value);
+        }
+        Cache::forget(CACHE_BUSINESS_SETTINGS);
+        Toastr::success(translate('Rules saved'));
+        return back();
+    }
+
     /** An abusive or fake rating can be hidden; the shop's rating is recomputed. */
     public function hideReview(Request $request, MarketReview $review): RedirectResponse
     {

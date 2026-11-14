@@ -17,7 +17,7 @@ class FeedService
      */
     public function items(?string $viewer, array $filters, int $offset, int $limit): array
     {
-        $query = MarketItem::with(['photos', 'shop'])
+        $query = MarketItem::with(['photos', 'shop', 'auction'])
             ->whereIn('market_items.status', MarketItem::PUBLIC)
             ->whereHas('shop', fn($s) => $s->where('status', MarketShop::LIVE));
         if ($viewer) {
@@ -35,6 +35,15 @@ class FeedService
         // Retail: everything; wholesale: items with a wholesale price.
         if (($filters['kind'] ?? null) === 'wholesale') {
             $query->whereNotNull('market_items.wholesale_price')->whereNotNull('market_items.wholesale_min');
+        }
+        // Auctions show while they run (an ended auction is reached by its link only).
+        $query->where(fn($w) => $w->where('market_items.sale_type', '!=', 'auction')
+            ->orWhereHas('auction', fn($a) => $a->where('status', 'live')->where('ends_at', '>', now())));
+        if (($filters['sale'] ?? null) === 'auction') {
+            $query->where('market_items.sale_type', 'auction');
+        }
+        if (in_array($filters['seller'] ?? null, ['private', 'shop'], true)) {
+            $query->whereHas('shop', fn($s) => $s->where('kind', $filters['seller']));
         }
         if (!empty($filters['verified'])) {
             $query->whereHas('shop', fn($s) => $s->whereNotNull('verified_at'));
