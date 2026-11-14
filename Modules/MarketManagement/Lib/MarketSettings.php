@@ -35,6 +35,15 @@ class MarketSettings
             'banned_words' => (string)$get('market_banned_words', self::DEFAULT_BANNED),
             // Who pays the rest of a delivery fare when the seller books it (the seller always pays the deposit).
             'delivery_payer' => in_array($payer, self::DELIVERY_PAYERS, true) ? $payer : 'buyer',
+            // Orders: minutes the seller has to answer a request, and the buyer to agree to changes.
+            'answer_minutes' => min(1440, max(10, (int)$get('market_answer_minutes', 120))),
+            'agree_minutes' => min(1440, max(10, (int)$get('market_agree_minutes', 60))),
+            // Orders a buyer can have open at once (stops cart spam).
+            'open_orders_per_buyer' => min(50, max(1, (int)$get('market_open_orders_per_buyer', 5))),
+            // "Pay before delivery" only for E-Ride Verified shops.
+            'before_pay_verified_only' => (bool)(int)$get('market_before_pay_verified_only', 1),
+            // A shop that lets this many orders expire in 7 days drops in the feed for 7 days.
+            'demote_after_expired' => min(50, max(1, (int)$get('market_demote_after_expired', 3))),
         ];
     }
 

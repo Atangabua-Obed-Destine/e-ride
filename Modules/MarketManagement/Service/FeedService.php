@@ -32,6 +32,13 @@ class FeedService
         if (!empty($filters['category'])) {
             $query->where('market_items.category', $filters['category']);
         }
+        // Retail: everything; wholesale: items with a wholesale price.
+        if (($filters['kind'] ?? null) === 'wholesale') {
+            $query->whereNotNull('market_items.wholesale_price')->whereNotNull('market_items.wholesale_min');
+        }
+        if (!empty($filters['verified'])) {
+            $query->whereHas('shop', fn($s) => $s->whereNotNull('verified_at'));
+        }
         if (!empty($filters['shop'])) {
             $query->whereHas('shop', fn($s) => $s->where('slug', $filters['shop']));
         }
@@ -41,6 +48,10 @@ class FeedService
                 ->orWhereHas('shop', fn($s) => $s->where('name', 'like', $like)));
         }
         $total = (clone $query)->count();
+        // Shops that let orders expire again and again go after the others for a week.
+        $query->join('market_shops as rank_shop', 'rank_shop.id', '=', 'market_items.shop_id')
+            ->select('market_items.*')
+            ->orderByRaw('CASE WHEN rank_shop.demoted_until IS NOT NULL AND rank_shop.demoted_until > ? THEN 1 ELSE 0 END', [now()]);
         if (isset($filters['lat'], $filters['lng'])) {
             // Nearest shops first (their pickup point), then newest.
             $query->join('market_shops as near', 'near.id', '=', 'market_items.shop_id')

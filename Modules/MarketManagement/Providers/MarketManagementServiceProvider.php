@@ -15,6 +15,10 @@ class MarketManagementServiceProvider extends ServiceProvider
         $this->mergeConfigFrom(module_path($this->moduleName, 'Config/config.php'), $this->moduleNameLower);
         $this->loadViewsFrom(module_path($this->moduleName, 'Resources/views'), $this->moduleNameLower);
         $this->loadMigrationsFrom(module_path($this->moduleName, 'Database/Migrations'));
+
+        if ($this->app->runningInConsole()) {
+            $this->commands([\Modules\MarketManagement\Console\MarketOrdersTick::class]);
+        }
     }
 
     public function register(): void

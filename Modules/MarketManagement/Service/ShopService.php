@@ -73,6 +73,52 @@ class ShopService
         return $shop->fresh();
     }
 
+    /** How the shop takes orders: on or paused, ways to get items, ways to pay, hours, minimum. */
+    public function saveOrderSettings(MarketShop $shop, array $data): MarketShop
+    {
+        if (!$shop->isLive()) {
+            $this->fail('shop', translate('This shop is closed.'));
+        }
+        if (array_key_exists('taking_orders', $data)) {
+            $shop->taking_orders = (bool)$data['taking_orders'];
+        }
+        $list = fn($value) => is_array($value) ? $value : (json_decode((string)$value, true) ?: array_filter(explode(',', (string)$value)));
+        if (array_key_exists('fulfilment', $data)) {
+            $fulfilment = array_values(array_intersect(\Modules\MarketManagement\Entities\MarketOrder::FULFILMENT, $list($data['fulfilment'])));
+            if (!$fulfilment) {
+                $this->fail('fulfilment', translate('Keep at least one way for buyers to get items.'));
+            }
+            $shop->fulfilment = $fulfilment;
+        }
+        if (array_key_exists('pay_methods', $data)) {
+            $pay = array_values(array_intersect(\Modules\MarketManagement\Entities\MarketOrder::PAY_METHODS, $list($data['pay_methods'])));
+            if (!$pay) {
+                $this->fail('pay_methods', translate('Keep at least one way to pay.'));
+            }
+            $shop->pay_methods = $pay;
+        }
+        if (array_key_exists('open_from', $data) || array_key_exists('open_to', $data)) {
+            $from = trim((string)($data['open_from'] ?? ''));
+            $to = trim((string)($data['open_to'] ?? ''));
+            $valid = fn($t) => preg_match('/^([01]\d|2[0-3]):[0-5]\d$/', $t) === 1;
+            if ($from === '' || $to === '') {
+                $shop->open_from = null;
+                $shop->open_to = null;
+            } elseif ($valid($from) && $valid($to) && $from !== $to) {
+                $shop->open_from = $from;
+                $shop->open_to = $to;
+            } else {
+                $this->fail('open_from', translate('Set opening hours like 08:00 and 19:00.'));
+            }
+        }
+        if (array_key_exists('min_order', $data)) {
+            $min = (float)$data['min_order'];
+            $shop->min_order = $min > 0 ? $min : null;
+        }
+        $shop->save();
+        return $shop->fresh();
+    }
+
     private function fields(array $data): array
     {
         $fields = array_intersect_key($data, array_flip(['name', 'category', 'about', 'area_label', 'pickup_lat', 'pickup_lng', 'pickup_address']));

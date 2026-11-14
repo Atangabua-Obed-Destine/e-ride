@@ -66,6 +66,32 @@ class MarketSellerController extends Controller
         return response()->json(responseFormatter(DEFAULT_STORE_200, MarketPresenter::shop($shop, $user->id, true)));
     }
 
+    /** How the shop takes orders (also the quick "Taking orders" switch). */
+    public function orderSettings(Request $request): JsonResponse
+    {
+        $shop = $this->shops->mine($request->user());
+        if (!$shop) {
+            return $this->fail('shop', translate('Open your shop first.'));
+        }
+        $validator = Validator::make($request->all(), [
+            'taking_orders' => 'nullable|boolean',
+            'fulfilment' => 'nullable',
+            'pay_methods' => 'nullable',
+            'open_from' => 'nullable|string|max:5',
+            'open_to' => 'nullable|string|max:5',
+            'min_order' => 'nullable|numeric|min:0|max:100000000',
+        ]);
+        if ($validator->fails()) {
+            return response()->json(responseFormatter(DEFAULT_400, errors: errorProcessor($validator)), 403);
+        }
+        $data = array_intersect_key($request->all(), array_flip(['taking_orders', 'fulfilment', 'pay_methods', 'open_from', 'open_to', 'min_order']));
+        if (array_key_exists('taking_orders', $data)) {
+            $data['taking_orders'] = $request->boolean('taking_orders');
+        }
+        $shop = $this->shops->saveOrderSettings($shop, $data);
+        return response()->json(responseFormatter(DEFAULT_200, MarketPresenter::shop($shop, $request->user()->id, true)));
+    }
+
     public function requestVerification(Request $request): JsonResponse
     {
         $shop = $this->shops->mine($request->user());
@@ -154,6 +180,12 @@ class MarketSellerController extends Controller
             'previews' => 'nullable|array|max:' . MarketItem::MAX_PREVIEWS,
             'previews.*' => $image,
             'remove_photo_ids' => 'nullable|array',
+            // {"colours":[{"name":"Purple","photo_id":12} or {"name":"Red","photo_index":0}],"sizes":["40","41"]}
+            'options' => 'nullable|string|max:6000',
+            // {"Purple|40": 2, ...}
+            'stock' => 'nullable|string|max:20000',
+            'wholesale_price' => 'nullable|numeric|min:0|max:100000000',
+            'wholesale_min' => 'nullable|integer|min:0|max:100000',
         ];
     }
 

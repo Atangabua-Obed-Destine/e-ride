@@ -10,6 +10,9 @@ use Illuminate\Support\Facades\Cache;
 use Illuminate\Validation\Rule;
 use Illuminate\View\View;
 use Modules\MarketManagement\Entities\MarketItem;
+use Modules\MarketManagement\Entities\MarketOrder;
+use Modules\MarketManagement\Entities\MarketReview;
+use Modules\MarketManagement\Service\MarketOrderService;
 use Modules\MarketManagement\Entities\MarketReport;
 use Modules\MarketManagement\Entities\MarketShop;
 use Modules\MarketManagement\Lib\MarketSettings;
@@ -105,6 +108,61 @@ class MarketAdminController extends Controller
     {
         $this->shops->reopen($shop);
         Toastr::success(translate('Shop reopened'));
+        return back();
+    }
+
+    /** Orders across all shops: numbers for the period, the list, and the order rules. */
+    public function orders(Request $request): View
+    {
+        $days = in_array((int)$request->query('days'), [7, 30, 90], true) ? (int)$request->query('days') : 30;
+        $status = in_array($request->query('status'), ['open', 'completed', 'declined', 'expired', 'cancelled'], true) ? $request->query('status') : '';
+        $since = now()->subDays($days);
+        $period = MarketOrder::where('created_at', '>=', $since);
+        $requests = (clone $period)->count();
+        $confirmed = (clone $period)->whereNotNull('confirmed_at')->count();
+        $expired = (clone $period)->where('status', MarketOrder::EXPIRED)->count();
+        $stats = [
+            'requests' => $requests,
+            'confirmed_rate' => $requests ? (int)round($confirmed * 100 / $requests) : 0,
+            'expired_rate' => $requests ? (int)round($expired * 100 / $requests) : 0,
+            'completed' => (clone $period)->where('status', MarketOrder::COMPLETED)->count(),
+            'reply' => ($r = MarketShop::whereNotNull('reply_minutes')->avg('reply_minutes')) !== null ? (int)round($r) : null,
+            'rating' => MarketReview::where('hidden', false)->where('created_at', '>=', $since)->avg('stars'),
+        ];
+        $query = MarketOrder::with(['shop', 'buyer', 'seller', 'lines', 'review'])->where('created_at', '>=', $since);
+        if ($status === 'open') {
+            $query->whereIn('status', MarketOrder::OPEN);
+        } elseif ($status !== '') {
+            $query->where('status', $status);
+        }
+        $orders = $query->latest()->paginate(paginationLimit())->withQueryString();
+        return view('marketmanagement::admin.orders', compact('orders', 'stats', 'days', 'status') + ['settings' => MarketSettings::all()]);
+    }
+
+    public function saveOrderRules(Request $request): RedirectResponse
+    {
+        $data = $request->validate([
+            'answer_minutes' => 'required|integer|min:10|max:1440',
+            'agree_minutes' => 'required|integer|min:10|max:1440',
+            'open_orders_per_buyer' => 'required|integer|min:1|max:50',
+            'demote_after_expired' => 'required|integer|min:1|max:50',
+            'before_pay_verified_only' => 'nullable|boolean',
+        ]);
+        $data['before_pay_verified_only'] = $request->boolean('before_pay_verified_only') ? 1 : 0;
+        foreach ($data as $key => $value) {
+            updateBusinessSetting(keyName: 'market_' . $key, settingType: MarketSettings::TYPE, value: (string)$value);
+        }
+        Cache::forget(CACHE_BUSINESS_SETTINGS);
+        Toastr::success(translate('Order rules saved'));
+        return back();
+    }
+
+    /** An abusive or fake rating can be hidden; the shop's rating is recomputed. */
+    public function hideReview(Request $request, MarketReview $review): RedirectResponse
+    {
+        $review->update(['hidden' => $request->boolean('hidden')]);
+        app(MarketOrderService::class)->refreshRating($review->shop_id);
+        Toastr::success(translate($review->hidden ? 'Rating hidden' : 'Rating shown again'));
         return back();
     }
 

@@ -46,6 +46,14 @@ class MarketController extends Controller
             'my_shop' => $shop ? MarketPresenter::shop($shop, $user->id) : null,
             'cannot_open_reason' => $this->shops->cannotOpenReason($user),
             'unread' => $this->chats->unread($user),
+            'orders' => app(\Modules\MarketManagement\Service\MarketOrderService::class)->counts($user),
+            'order_rules' => [
+                'answer_minutes' => $settings['answer_minutes'],
+                'agree_minutes' => $settings['agree_minutes'],
+                'open_orders_per_buyer' => $settings['open_orders_per_buyer'],
+            ],
+            'decline_reasons' => \Modules\MarketManagement\Entities\MarketOrder::DECLINE_REASONS,
+            'review_tags' => \Modules\MarketManagement\Entities\MarketReview::TAGS,
         ]));
     }
 
@@ -56,6 +64,8 @@ class MarketController extends Controller
             'q' => 'nullable|string|max:80',
             'following' => 'nullable|boolean',
             'shop' => 'nullable|string|max:90',
+            'kind' => 'nullable|in:retail,wholesale',
+            'verified' => 'nullable|boolean',
             'lat' => 'nullable|numeric|between:-90,90',
             'lng' => 'nullable|numeric|between:-180,180',
             'limit' => 'nullable|integer|min:1|max:50',
@@ -67,7 +77,7 @@ class MarketController extends Controller
         $limit = (int)$request->query('limit', 20);
         $offset = ((int)$request->query('offset', 1) - 1) * $limit;
         $viewer = $request->user()->id;
-        $filters = $request->only(['category', 'q', 'shop']) + ['following' => $request->boolean('following')];
+        $filters = $request->only(['category', 'q', 'shop', 'kind']) + ['following' => $request->boolean('following'), 'verified' => $request->boolean('verified')];
         if ($request->filled(['lat', 'lng'])) {
             $filters['lat'] = (float)$request->query('lat');
             $filters['lng'] = (float)$request->query('lng');

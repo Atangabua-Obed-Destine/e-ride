@@ -203,7 +203,10 @@ function buildDeviceNotificationPayload($fcm_token, $title, $description, $statu
                 "listing_id" => (string)($notificationData['listing_id'] ?? null),
                 "pickup_address" => (string)($notificationData['pickup_address'] ?? null),
                 "estimated_fare" => (string)($notificationData['estimated_fare'] ?? null),
-            ],
+            ]
+            // E-Ride Market: the chat, item or shop the push is about (only when present).
+            + array_map('strval', array_filter(array_intersect_key($notificationData,
+                array_flip(['conversation_id', 'item_code', 'shop_slug', 'order_id'])), fn($v) => $v !== null && $v !== '')),
             'notification' => [
                 'title' => (string)$title,
                 'body' => (string)$description,

@@ -53,8 +53,14 @@ class ItemService
             $item->status = $word ? MarketItem::BLOCKED : ($item->quantity < 1 ? MarketItem::SOLD_OUT : MarketItem::LIVE);
             $item->blocked_word = $word;
             $item->save();
-            $this->addPhotos($item, $photos, false);
+            $added = $this->addPhotos($item, $photos, false);
             $this->addPhotos($item, $previews, true);
+            if (!$digital && $this->applyOptions($item, $data, $added)) {
+                if (!$word) {
+                    $item->status = $item->quantity < 1 ? MarketItem::SOLD_OUT : MarketItem::LIVE;
+                }
+                $item->save();
+            }
             return $item->fresh(['photos', 'shop']);
         });
 
@@ -84,8 +90,11 @@ class ItemService
                 OgImage::remove($photo);
                 $photo->delete();
             });
-            $this->addPhotos($item, $photos, false);
+            $added = $this->addPhotos($item, $photos, false);
             $this->addPhotos($item, $previews, true);
+            if (!$digital) {
+                $this->applyOptions($item, $data, $added);
+            }
             $previewCount = $item->photos()->where('preview', true)->count();
             $this->checkDigital($digital, $item->toArray(), $previewCount);
             if (!$digital && $item->photos()->where('preview', false)->count() < 1) {
@@ -112,6 +121,9 @@ class ItemService
         }
         $item->status = $soldOut ? MarketItem::SOLD_OUT : MarketItem::LIVE;
         if (!$soldOut && $item->quantity < 1) {
+            if ($item->hasOptions()) {
+                $this->fail('stock', translate('Set how many you have of each colour and size first.'));
+            }
             $item->quantity = 1;
         }
         $item->save();
@@ -161,11 +173,25 @@ class ItemService
     private function fields(array $data, bool $digital): array
     {
         $fields = array_intersect_key($data, array_flip(['title', 'description', 'price', 'negotiable', 'condition', 'digital_kind', 'category',
-            'quantity', 'pickup', 'eride_delivery', 'seller_delivers']));
+            'quantity', 'pickup', 'eride_delivery', 'seller_delivers', 'wholesale_price', 'wholesale_min']));
+        // A wholesale price only counts when it is lower than the price and starts from 2 pieces.
+        if (array_key_exists('wholesale_price', $fields) || array_key_exists('wholesale_min', $fields)) {
+            $price = (float)($data['price'] ?? 0);
+            $wp = isset($fields['wholesale_price']) && $fields['wholesale_price'] !== '' ? (float)$fields['wholesale_price'] : null;
+            $wm = isset($fields['wholesale_min']) && $fields['wholesale_min'] !== '' ? (int)$fields['wholesale_min'] : null;
+            if ($wp === null || $wm === null || $wm < 2 || $wp <= 0 || ($price > 0 && $wp >= $price)) {
+                $wp = null;
+                $wm = null;
+            }
+            $fields['wholesale_price'] = $wp;
+            $fields['wholesale_min'] = $wm;
+        }
         if (isset($fields['title'])) {
             $fields['title'] = trim(preg_replace('/\s+/', ' ', $fields['title']));
         }
         if ($digital) {
+            $fields['wholesale_price'] = null;
+            $fields['wholesale_min'] = null;
             // Nothing to carry: the seller sends the file in the chat.
             $fields['pickup'] = false;
             $fields['eride_delivery'] = false;
@@ -190,9 +216,13 @@ class ItemService
         return $code;
     }
 
-    /** @param UploadedFile[] $files */
-    private function addPhotos(MarketItem $item, array $files, bool $preview): void
+    /**
+     * @param UploadedFile[] $files
+     * @return MarketItemPhoto[] the photos added, in upload order
+     */
+    private function addPhotos(MarketItem $item, array $files, bool $preview): array
     {
+        $added = [];
         $max = $preview ? MarketItem::MAX_PREVIEWS : MarketItem::MAX_PHOTOS;
         $count = $item->photos()->where('preview', $preview)->count();
         $sort = (int)$item->photos()->max('sort');
@@ -204,9 +234,64 @@ class ItemService
             if ($file) {
                 $photo = $item->photos()->create(['file' => $file, 'preview' => $preview, 'sort' => ++$sort]);
                 OgImage::make($photo);
+                $added[] = $photo;
                 $count++;
             }
         }
+        return $added;
+    }
+
+    /**
+     * Colours (each may point to one of the item's photos, or to one uploaded in this request by
+     * its index), sizes, and stock per colour and size. With options, the quantity is the sum.
+     * Returns whether options were given.
+     * @param MarketItemPhoto[] $added
+     */
+    private function applyOptions(MarketItem $item, array $data, array $added): bool
+    {
+        if (!array_key_exists('options', $data)) {
+            return false;
+        }
+        $raw = is_array($data['options']) ? $data['options'] : (json_decode((string)$data['options'], true) ?: []);
+        $photoIds = $item->photos()->where('preview', false)->pluck('id')->map(fn($id) => (int)$id)->all();
+        $colours = [];
+        foreach (array_slice((array)($raw['colours'] ?? []), 0, MarketItem::MAX_COLOURS) as $c) {
+            $name = mb_substr(trim((string)(is_array($c) ? ($c['name'] ?? '') : $c)), 0, 40);
+            if ($name === '' || in_array(mb_strtolower($name), array_map(fn($x) => mb_strtolower($x['name']), $colours), true)) {
+                continue;
+            }
+            $photoId = null;
+            if (is_array($c) && isset($c['photo_index']) && isset($added[(int)$c['photo_index']])) {
+                $photoId = (int)$added[(int)$c['photo_index']]->id;
+            } elseif (is_array($c) && isset($c['photo_id']) && in_array((int)$c['photo_id'], $photoIds, true)) {
+                $photoId = (int)$c['photo_id'];
+            }
+            $colours[] = ['name' => $name, 'photo_id' => $photoId];
+        }
+        $sizes = [];
+        foreach (array_slice((array)($raw['sizes'] ?? []), 0, MarketItem::MAX_SIZES) as $size) {
+            $size = mb_substr(trim((string)$size), 0, 20);
+            if ($size !== '' && !in_array($size, $sizes, true)) {
+                $sizes[] = $size;
+            }
+        }
+        $item->options = ($colours || $sizes) ? ['colours' => $colours, 'sizes' => $sizes] : null;
+        if (!$item->hasOptions()) {
+            $item->stock = null;
+            return true;
+        }
+        $given = $data['stock'] ?? [];
+        $given = is_array($given) ? $given : (json_decode((string)$given, true) ?: []);
+        $stock = [];
+        foreach ($colours ?: [['name' => null]] as $c) {
+            foreach ($sizes ?: [null] as $size) {
+                $key = MarketItem::stockKey($c['name'], $size);
+                $stock[$key] = max(0, min(100000, (int)($given[$key] ?? 0)));
+            }
+        }
+        $item->stock = $stock;
+        $item->quantity = array_sum($stock);
+        return true;
     }
 
     /** "Grace Fabrics posted something new": to followers, at most once a day per shop. */
