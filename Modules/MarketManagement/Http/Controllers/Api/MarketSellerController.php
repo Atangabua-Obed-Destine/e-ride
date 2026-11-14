@@ -44,6 +44,8 @@ class MarketSellerController extends Controller
         $validator = Validator::make($request->all(), [
             'name' => 'required|string|min:3|max:80',
             'category' => ['nullable', Rule::in(MarketSettings::CATEGORIES)],
+            // Several categories: "fashion,beauty" or a list.
+            'categories' => 'nullable',
             'about' => 'nullable|string|max:600',
             'area_label' => 'nullable|string|max:80',
             'pickup_lat' => 'nullable|numeric|between:-90,90',

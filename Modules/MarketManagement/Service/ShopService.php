@@ -122,6 +122,16 @@ class ShopService
     private function fields(array $data): array
     {
         $fields = array_intersect_key($data, array_flip(['name', 'category', 'about', 'area_label', 'pickup_lat', 'pickup_lng', 'pickup_address']));
+        // Several categories: a list (or "fashion,beauty"); the first is also kept as the main one.
+        if (array_key_exists('categories', $data)) {
+            $raw = $data['categories'];
+            $raw = is_array($raw) ? $raw : (json_decode((string)$raw, true) ?: array_filter(array_map('trim', explode(',', (string)$raw))));
+            $list = array_values(array_unique(array_intersect(array_map('strval', (array)$raw), \Modules\MarketManagement\Lib\MarketSettings::CATEGORIES)));
+            $fields['categories'] = $list ?: null;
+            $fields['category'] = $list[0] ?? null;
+        } elseif (array_key_exists('category', $fields)) {
+            $fields['categories'] = $fields['category'] ? [$fields['category']] : null;
+        }
         if (isset($fields['name'])) {
             $fields['name'] = trim(preg_replace('/\s+/', ' ', $fields['name']));
         }

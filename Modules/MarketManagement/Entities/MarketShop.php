@@ -18,7 +18,7 @@ class MarketShop extends Model
     public const LOGO_DIR = 'market/shop/';
 
     protected $fillable = [
-        'user_id', 'name', 'slug', 'category', 'about', 'area_label', 'pickup_lat', 'pickup_lng', 'pickup_address', 'logo',
+        'user_id', 'name', 'slug', 'category', 'categories', 'about', 'area_label', 'pickup_lat', 'pickup_lng', 'pickup_address', 'logo',
         'status', 'closed_reason', 'closed_at', 'verification_requested_at', 'verified_at', 'verified_by',
         'visits', 'chats', 'new_users', 'followers_notified_at',
         'taking_orders', 'fulfilment', 'pay_methods', 'open_from', 'open_to', 'min_order', 'rating', 'rating_count', 'orders_completed',
@@ -35,6 +35,7 @@ class MarketShop extends Model
         'visits' => 'integer',
         'chats' => 'integer',
         'new_users' => 'integer',
+        'categories' => 'array',
         'taking_orders' => 'boolean',
         'fulfilment' => 'array',
         'pay_methods' => 'array',
@@ -75,6 +76,13 @@ class MarketShop extends Model
     public function isNew(): bool
     {
         return $this->created_at && $this->created_at->gt(now()->subDays(30));
+    }
+
+    /** What the shop sells (several kinds allowed); shops from before keep their single category. */
+    public function categoryList(): array
+    {
+        $list = array_values(array_filter((array)($this->categories ?? []), 'is_string'));
+        return $list ?: ($this->category ? [$this->category] : []);
     }
 
     /** How buyers can get items: pickup, E-Ride delivery, the seller's own delivery. */

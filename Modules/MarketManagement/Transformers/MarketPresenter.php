@@ -29,6 +29,7 @@ class MarketPresenter
             'slug' => $shop->slug,
             'name' => $shop->name,
             'category' => $shop->category,
+            'categories' => $shop->categoryList(),
             'about' => $shop->about,
             'area' => $shop->area_label,
             'logo' => $shop->logoUrl(),
