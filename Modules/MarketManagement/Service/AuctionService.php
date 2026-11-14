@@ -143,7 +143,8 @@ class AuctionService
             MarketPush::send(User::find($previousLeader), 'market_auction_outbid', "You've been outbid", '{title}: someone bid {amount}. Bid again before it ends.',
                 ['title' => $item->title, 'amount' => getCurrencyFormat($auction->current_bid)], ['item_code' => $item->code]);
         }
-        MarketPush::send(User::find($auction->seller_id), 'market_auction_bid', 'New bid on {title}', '{amount}, {count} bids so far.',
+        MarketPush::send(User::find($auction->seller_id), 'market_auction_bid', 'New bid on {title}',
+            $auction->bid_count === 1 ? 'First bid: {amount}.' : '{amount}, {count} bids so far.',
             ['title' => $item->title, 'amount' => getCurrencyFormat($auction->current_bid), 'count' => $auction->bid_count], ['item_code' => $item->code]);
         return $auction;
     }

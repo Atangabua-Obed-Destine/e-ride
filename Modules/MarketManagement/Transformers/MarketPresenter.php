@@ -165,7 +165,8 @@ class MarketPresenter
             return $data;
         }
         $data['leading'] = $a->leader_id === $viewer && $a->isLive();
-        $data['my_bid'] = \Modules\MarketManagement\Entities\MarketBid::where('auction_id', $a->id)->where('user_id', $viewer)->max('amount');
+        $myBid = \Modules\MarketManagement\Entities\MarketBid::where('auction_id', $a->id)->where('user_id', $viewer)->max('amount');
+        $data['my_bid'] = $myBid === null ? null : (float)$myBid;
         $data['won'] = $a->winner_id === $viewer;
         if ($a->winner_id === $viewer || $mine) {
             $data['order_id'] = $a->order_id;

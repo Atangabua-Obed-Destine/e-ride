@@ -5249,4 +5249,5 @@
   'Strikes clear after (days)' => 'Les avertissements s\'effacent après (jours)',
   'The winner gets a normal order: E-Ride never holds the money. A winner who does not arrange payment in time gets a strike, and the seller can offer the item to the next bidder.' => 'Le gagnant reçoit une commande normale : E-Ride ne garde jamais l\'argent. Un gagnant qui n\'organise pas le paiement à temps reçoit un avertissement, et le vendeur peut proposer l\'article au suivant.',
   'Rules saved' => 'Règles enregistrées',
+  'First bid: {amount}.' => 'Première offre : :amount.',
 );

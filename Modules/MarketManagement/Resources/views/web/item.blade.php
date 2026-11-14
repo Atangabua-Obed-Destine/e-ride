@@ -1,7 +1,7 @@
 @extends('marketmanagement::web._layout')
 
-@php($price = $item->price !== null ? getCurrencyFormat($item->price) : $t['ask_price'])
-@section('title', $item->title . ' · ' . $price)
+@php($price = $auction ? getCurrencyFormat($auction->current_bid ?? $auction->start_price) : ($item->price !== null ? getCurrencyFormat($item->price) : $t['ask_price']))
+@section('title', $item->title . ' · ' . ($auction ? $t['auction'] . ' · ' : '') . $price)
 @section('description', trim($shop->name . ($shop->area_label ? ' · ' . $shop->area_label : '') . ' · ' . $t['market']))
 @section('og_type', 'product')
 @section('og_url', $url)
@@ -25,12 +25,18 @@
 <div style="padding:16px;display:flex;flex-direction:column;gap:10px">
     <h1 style="margin:0;font-size:20px;line-height:1.25">{{ $item->title }}</h1>
     <div style="display:flex;align-items:baseline;gap:10px;flex-wrap:wrap">
+        @if($auction)<div class="muted" style="width:100%">&#9878; {{ $t['auction'] }} · {{ $auction->bid_count ? $t['current_bid'] : $t['starting_price'] }}</div>@endif
         <div class="price" style="font-size:24px">{{ $price }}</div>
-        @if($item->negotiable && $item->price !== null)<div class="muted">{{ $t['negotiable'] }}</div>@endif
+        @if($auction)
+            <div class="muted">{{ $auction->bid_count == 1 ? $t['one_bid'] : str_replace(':n', $auction->bid_count, $t['bids']) }}
+                · {{ $auction->isLive() ? str_replace(':time', $auction->ends_at?->timezone(config('app.timezone'))->format('d/m H:i'), $t['ends']) : $t['auction_ended'] }}</div>
+        @elseif($item->negotiable && $item->price !== null)<div class="muted">{{ $t['negotiable'] }}</div>@endif
     </div>
     <div class="chips">
-        <span class="chip">{{ $t[$item->condition] ?? $item->condition }}</span>
-        @if($item->status === 'sold_out')
+        @if($shop->isPrivate())<span class="chip" style="background:#EEF2FF;color:#3730A3">{{ $t['private_seller'] }}</span>@endif
+        <span class="chip">{{ $t[$item->condition] ?? $item->condition }}@if($item->condition === 'used' && $item->used_grade) · {{ $t['grade_' . $item->used_grade] ?? '' }}@endif</span>
+        @if($auction)
+        @elseif($item->status === 'sold_out')
             <span class="chip">{{ $t['sold_out'] }}</span>
         @elseif(!$item->isDigital())
             <span class="chip">{{ str_replace(':n', $item->quantity, $t['left']) }}</span>
@@ -56,6 +62,7 @@
 @else
     <div class="notice">{{ $t['stay_safe'] }}</div>
 @endif
-<a class="btn" href="{{ $openApp }}">{{ $t['chat'] }}</a>
+@if($shop->isPrivate())<div class="muted" style="padding:0 16px 8px">{{ $t['private_note'] }}</div>@endif
+<a class="btn" href="{{ $openApp }}">{{ $auction && $auction->isLive() ? $t['bid_in_app'] : $t['chat'] }}</a>
 <div class="foot"><span class="muted">{{ $t['no_phone'] }}</span><a href="{{ $openApp }}">{{ $t['report'] }}</a></div>
 @endsection

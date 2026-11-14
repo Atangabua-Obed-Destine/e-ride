@@ -11,12 +11,13 @@ use Modules\MarketManagement\Entities\MarketOrder;
 use Modules\MarketManagement\Lib\MarketSettings;
 use Modules\MarketManagement\Service\AuctionService;
 use Modules\MarketManagement\Service\MarketOrderService;
+use Modules\MarketManagement\Service\ShopService;
 use Modules\MarketManagement\Transformers\MarketPresenter;
 
 /** Customer app, E-Ride Market auctions: bidding, the bids, and what the seller does after the end. */
 class MarketAuctionController extends Controller
 {
-    public function __construct(protected AuctionService $auctions, protected MarketOrderService $orders)
+    public function __construct(protected AuctionService $auctions, protected MarketOrderService $orders, protected ShopService $shops)
     {
     }
 
@@ -110,7 +111,11 @@ class MarketAuctionController extends Controller
     {
         $item = MarketItem::with(['photos', 'shop', 'auction'])->where('code', $code)->first();
         $viewer = $request->user()->id;
-        return response()->json(responseFormatter(DEFAULT_200, MarketPresenter::item($item, $viewer, true)));
+        // Same shape as GET items/{code}, so the app keeps "Following" after a bid.
+        return response()->json(responseFormatter(DEFAULT_200, MarketPresenter::item($item, $viewer, true) + [
+            'following' => $this->shops->follows($viewer, $item->shop_id),
+            'follow_notify' => $this->shops->followNotify($viewer, $item->shop_id),
+        ]));
     }
 
     private function fail(string $code, string $message): JsonResponse

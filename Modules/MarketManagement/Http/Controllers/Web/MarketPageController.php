@@ -45,7 +45,7 @@ class MarketPageController extends Controller
 
     public function item(Request $request, string $code): Response
     {
-        $item = MarketItem::with(['photos', 'shop'])->where('code', $code)->first();
+        $item = MarketItem::with(['photos', 'shop', 'auction'])->where('code', $code)->first();
         $t = $this->words($request);
         if (!$item || !$item->isPublic() || !MarketSettings::enabled()) {
             $shop = $item?->shop?->isLive() ? $item->shop : null;
@@ -61,6 +61,7 @@ class MarketPageController extends Controller
             'shopUrl' => MarketLinks::shop($item->shop),
             'cover' => $item->cover(),
             'strongWarning' => $item->isDigital() && $settings['digital_warning'] && !$item->shop->isVerified(),
+            'auction' => $item->isAuction() ? $item->auction : null,
             'getAppUrl' => route('market.get-app', ['code' => $item->code]),
             'openApp' => MarketLinks::openInApp('/i/' . $item->code, route('market.get-app', ['code' => $item->code])),
         ]);
@@ -147,6 +148,20 @@ class MarketPageController extends Controller
             'get_have' => 'I already have E-Ride: open the item',
             'back_item' => 'Back to the item',
             'market' => 'E-Ride Market',
+            'auction' => 'Auction',
+            'current_bid' => 'Current bid',
+            'starting_price' => 'Starting price',
+            'bids' => ':n bids',
+            'one_bid' => '1 bid',
+            'ends' => 'Ends :time',
+            'auction_ended' => 'This auction has ended',
+            'bid_in_app' => 'Bid in the E-Ride app',
+            'private_seller' => 'Private seller',
+            'private_note' => 'A person selling something they own, not a shop. See the item before you pay.',
+            'grade_like_new' => 'Like new',
+            'grade_good' => 'Good',
+            'grade_fair' => 'Fair',
+            'grade_parts' => 'For parts',
         ];
         if (!$fr) {
             return $en;
@@ -190,6 +205,20 @@ class MarketPageController extends Controller
             'get_play' => 'Télécharger sur Google Play',
             'get_have' => 'J’ai déjà E-Ride : ouvrir l’article',
             'back_item' => 'Retour à l’article',
+            'auction' => 'Enchère',
+            'current_bid' => 'Enchère actuelle',
+            'starting_price' => 'Prix de départ',
+            'bids' => ':n enchères',
+            'one_bid' => '1 enchère',
+            'ends' => 'Fin :time',
+            'auction_ended' => 'Cette enchère est terminée',
+            'bid_in_app' => 'Enchérir dans l’app E-Ride',
+            'private_seller' => 'Particulier',
+            'private_note' => 'Une personne qui vend un objet lui appartenant, pas une boutique. Voyez l’article avant de payer.',
+            'grade_like_new' => 'Comme neuf',
+            'grade_good' => 'Bon état',
+            'grade_fair' => 'État correct',
+            'grade_parts' => 'Pour pièces',
         ]);
     }
 }

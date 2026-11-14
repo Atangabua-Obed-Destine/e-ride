@@ -6202,4 +6202,5 @@
   'Private seller' => 'Private seller',
   'No auctions here' => 'No auctions here',
   'Rules saved' => 'Rules saved',
+  'First bid: {amount}.' => 'First bid: :amount.',
 );
