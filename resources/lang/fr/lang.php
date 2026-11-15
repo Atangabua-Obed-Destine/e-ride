@@ -5520,4 +5520,5 @@
   'rejected' => 'refusée',
   'closed' => 'fermée',
   'hidden' => 'retirée',
+  '1 job' => '1 offre',
 );

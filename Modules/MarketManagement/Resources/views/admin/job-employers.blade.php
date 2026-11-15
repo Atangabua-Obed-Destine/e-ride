@@ -23,7 +23,7 @@
                         <div class="d-flex justify-content-between gap-2">
                             <div>
                                 <b class="fs-16">{{ $e->name }}</b>
-                                <div class="fs-13 text-muted">{{ translate($e->kind === 'private' ? 'Private employer (home)' : 'Business') }} · {{ $e->area_label ?: '-' }} · {{ $e->jobs_count }} {{ translate('jobs') }}</div>
+                                <div class="fs-13 text-muted">{{ translate($e->kind === 'private' ? 'Private employer (home)' : 'Business') }} · {{ $e->area_label ?: '-' }} · {{ $e->jobs_count == 1 ? translate('1 job') : $e->jobs_count . ' ' . translate('jobs') }}</div>
                                 <div class="fs-13">{{ $e->user?->first_name }} {{ $e->user?->last_name }} · {{ $e->user?->phone }}</div>
                                 @if($e->address)<div class="fs-12 text-muted">{{ $e->address }}@if($e->lat) · <a target="_blank" href="https://www.google.com/maps?q={{ $e->lat }},{{ $e->lng }}">{{ translate('map') }}</a>@endif</div>@endif
                             </div>

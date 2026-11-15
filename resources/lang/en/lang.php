@@ -6469,4 +6469,5 @@
   'sent back' => 'sent back',
   'closed' => 'closed',
   'hidden' => 'hidden',
+  '1 job' => '1 job',
 );
