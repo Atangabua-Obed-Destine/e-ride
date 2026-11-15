@@ -599,6 +599,12 @@
                             <span class="link-title">{{ translate('E-Ride Market') }}</span>
                         </a>
                     </li>
+                    <li class="{{ Request::is('admin/jobs*') ? 'active open' : '' }}">
+                        <a href="{{ route('admin.jobs.index') }}">
+                            <i class="bi bi-briefcase"></i>
+                            <span class="link-title">{{ translate('E-Ride Jobs') }}</span>
+                        </a>
+                    </li>
                     <li class="{{ Request::is('admin/places/on-duty*') ? 'active open' : '' }}">
                         <a href="{{ route('admin.place.on-duty') }}">
                             <i class="bi bi-capsule"></i>

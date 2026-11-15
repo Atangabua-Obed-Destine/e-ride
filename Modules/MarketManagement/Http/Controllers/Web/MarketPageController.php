@@ -97,7 +97,7 @@ class MarketPageController extends Controller
         return response()->json($statements);
     }
 
-    private function unavailable(array $t, string $message, ?MarketShop $shop, int $status): Response
+    protected function unavailable(array $t, string $message, ?MarketShop $shop, int $status): Response
     {
         return response()->view('marketmanagement::web.unavailable', [
             't' => $t, 'message' => $message, 'shop' => $shop, 'shopUrl' => $shop ? MarketLinks::shop($shop) : null,
@@ -105,7 +105,7 @@ class MarketPageController extends Controller
     }
 
     /** The page's words, English or French from the browser. */
-    private function words(Request $request): array
+    protected function words(Request $request): array
     {
         $fr = str_starts_with(strtolower((string)$request->getPreferredLanguage(['en', 'fr'])), 'fr');
         $en = [
@@ -162,6 +162,30 @@ class MarketPageController extends Controller
             'grade_good' => 'Good',
             'grade_fair' => 'Fair',
             'grade_parts' => 'For parts',
+            'service' => 'Service',
+            'independent' => 'Independent',
+            'independent_note' => 'A person offering the service themselves, not a business. Agree on the price before the job and pay once it is done.',
+            'ask_quote' => 'Ask for a quote',
+            'price_fixed' => ':price',
+            'price_from' => 'From :price',
+            'price_hour' => ':price / hour',
+            'takes_about' => 'About :time',
+            'where_place' => 'At their place',
+            'where_client' => 'Comes to you',
+            'where_online' => 'Online or by phone',
+            'sk_hair_beauty' => 'Hair & beauty',
+            'sk_repairs' => 'Repairs',
+            'sk_tailoring' => 'Tailoring',
+            'sk_cleaning' => 'Cleaning',
+            'sk_lessons' => 'Lessons',
+            'sk_events' => 'Events',
+            'sk_photography' => 'Photography',
+            'sk_other' => 'Other',
+            'stay_safe_service' => 'Stay safe: agree on the price and the time in the app, pay only once the job is done, and never pay a "booking fee" in advance.',
+            'book_in_app' => 'Book a time in the E-Ride app',
+            'get_title_service' => 'Book :shop in the E-Ride app',
+            'get_body_service' => 'Install E-Ride, sign in with your phone number, and this service opens by itself so you can book a free time or ask for a price.',
+            'quote_in_app' => 'Ask for a quote in the E-Ride app',
         ];
         if (!$fr) {
             return $en;
@@ -219,6 +243,29 @@ class MarketPageController extends Controller
             'grade_good' => 'Bon état',
             'grade_fair' => 'État correct',
             'grade_parts' => 'Pour pièces',
+            'service' => 'Service',
+            'independent' => 'Indépendant',
+            'independent_note' => 'Une personne qui propose le service elle-même, pas une entreprise. Mettez-vous d’accord sur le prix avant et payez une fois le travail fait.',
+            'ask_quote' => 'Demander un devis',
+            'price_from' => 'À partir de :price',
+            'price_hour' => ':price / heure',
+            'takes_about' => 'Environ :time',
+            'where_place' => 'Chez le prestataire',
+            'where_client' => 'Se déplace chez vous',
+            'where_online' => 'En ligne ou par téléphone',
+            'sk_hair_beauty' => 'Coiffure et beauté',
+            'sk_repairs' => 'Réparations',
+            'sk_tailoring' => 'Couture',
+            'sk_cleaning' => 'Ménage',
+            'sk_lessons' => 'Cours',
+            'sk_events' => 'Événements',
+            'sk_photography' => 'Photographie',
+            'sk_other' => 'Autre',
+            'stay_safe_service' => 'Restez prudent : convenez du prix et de l’heure dans l’app, payez seulement une fois le travail fait, et ne payez jamais de « frais de réservation » à l’avance.',
+            'book_in_app' => 'Réserver dans l’app E-Ride',
+            'get_title_service' => 'Réservez :shop dans l’app E-Ride',
+            'get_body_service' => 'Installez E-Ride, connectez-vous avec votre numéro, et ce service s’ouvre tout seul pour réserver un créneau libre ou demander un prix.',
+            'quote_in_app' => 'Demander un devis dans l’app E-Ride',
         ]);
     }
 }

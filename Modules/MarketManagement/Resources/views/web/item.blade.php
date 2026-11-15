@@ -1,6 +1,11 @@
 @extends('marketmanagement::web._layout')
 
-@php($price = $auction ? getCurrencyFormat($auction->current_bid ?? $auction->start_price) : ($item->price !== null ? getCurrencyFormat($item->price) : $t['ask_price']))
+@php($service = $item->isService())
+@php($price = $auction ? getCurrencyFormat($auction->current_bid ?? $auction->start_price)
+    : ($service
+        ? ($item->isQuoteOnly() || $item->price === null ? $t['ask_quote']
+            : str_replace(':price', getCurrencyFormat($item->price), $t['price_' . ($item->price_type ?: 'fixed')] ?? ':price'))
+        : ($item->price !== null ? getCurrencyFormat($item->price) : $t['ask_price'])))
 @section('title', $item->title . ' · ' . ($auction ? $t['auction'] . ' · ' : '') . $price)
 @section('description', trim($shop->name . ($shop->area_label ? ' · ' . $shop->area_label : '') . ' · ' . $t['market']))
 @section('og_type', 'product')
@@ -32,6 +37,15 @@
                 · {{ $auction->isLive() ? str_replace(':time', $auction->ends_at?->timezone(config('app.timezone'))->format('d/m H:i'), $t['ends']) : $t['auction_ended'] }}</div>
         @elseif($item->negotiable && $item->price !== null)<div class="muted">{{ $t['negotiable'] }}</div>@endif
     </div>
+    @if($service)
+    <div class="chips">
+        <span class="chip" style="background:#ECFDF5;color:#047857">{{ $t['service'] }}</span>
+        @if($shop->isPrivate())<span class="chip" style="background:#EEF2FF;color:#3730A3">{{ $t['independent'] }}</span>@endif
+        @if($item->service_kind)<span class="chip">{{ $t['sk_' . $item->service_kind] ?? $item->service_kind }}</span>@endif
+        @if($item->duration_minutes)<span class="chip">{{ str_replace(':time', $item->duration_minutes < 60 ? $item->duration_minutes . ' min' : intdiv($item->duration_minutes, 60) . ' h' . ($item->duration_minutes % 60 ? ' ' . ($item->duration_minutes % 60) : ''), $t['takes_about']) }}</span>@endif
+        @foreach($item->whereList() as $w)<span class="chip">{{ $t['where_' . $w] ?? $w }}</span>@endforeach
+    </div>
+    @else
     <div class="chips">
         @if($shop->isPrivate())<span class="chip" style="background:#EEF2FF;color:#3730A3">{{ $t['private_seller'] }}</span>@endif
         <span class="chip">{{ $t[$item->condition] ?? $item->condition }}@if($item->condition === 'used' && $item->used_grade) · {{ $t['grade_' . $item->used_grade] ?? '' }}@endif</span>
@@ -45,6 +59,7 @@
         @if($item->eride_delivery)<span class="chip">{{ $t['eride_delivery'] }}</span>@endif
         @if($item->seller_delivers)<span class="chip">{{ $t['seller_delivers'] }}</span>@endif
     </div>
+    @endif
     @if($item->description)<div style="font-size:14px;white-space:pre-line">{{ $item->description }}</div>@endif
     <div class="muted">{{ $shop->name }}@if($shop->isVerified()) · <span class="badge">&#10003; {{ $t['verified'] }}</span>@endif</div>
 </div>
@@ -60,9 +75,9 @@
 @if($strongWarning)
     <div class="danger"><b>{{ $t['digital_warning_title'] }}</b>{{ $t['digital_warning'] }}</div>
 @else
-    <div class="notice">{{ $t['stay_safe'] }}</div>
+    <div class="notice">{{ $service ? $t['stay_safe_service'] : $t['stay_safe'] }}</div>
 @endif
-@if($shop->isPrivate())<div class="muted" style="padding:0 16px 8px">{{ $t['private_note'] }}</div>@endif
-<a class="btn" href="{{ $openApp }}">{{ $auction && $auction->isLive() ? $t['bid_in_app'] : $t['chat'] }}</a>
+@if($shop->isPrivate())<div class="muted" style="padding:0 16px 8px">{{ $service ? $t['independent_note'] : $t['private_note'] }}</div>@endif
+<a class="btn" href="{{ $openApp }}">{{ $auction && $auction->isLive() ? $t['bid_in_app'] : ($service ? ($item->isQuoteOnly() ? $t['quote_in_app'] : $t['book_in_app']) : $t['chat']) }}</a>
 <div class="foot"><span class="muted">{{ $t['no_phone'] }}</span><a href="{{ $openApp }}">{{ $t['report'] }}</a></div>
 @endsection

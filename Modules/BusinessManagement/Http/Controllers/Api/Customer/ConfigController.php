@@ -157,6 +157,9 @@ class ConfigController extends Controller
             // E-Ride Market: shops riders open, shared on WhatsApp (Modules/MarketManagement).
             'market_status' => class_exists(\Modules\MarketManagement\Lib\MarketSettings::class)
                 && \Modules\MarketManagement\Lib\MarketSettings::enabled(),
+            // E-Ride Jobs: verified jobs, one-tap apply (Modules/MarketManagement, JobSettings).
+            'jobs_status' => class_exists(\Modules\MarketManagement\Lib\JobSettings::class)
+                && \Modules\MarketManagement\Lib\JobSettings::enabled(),
             // E-Ride Move: trucks booked like rides, price agreed in person.
             'move_status' => \Modules\TripManagement\Lib\MoveSettings::enabled(),
             'move_deposit_status' => \Modules\TripManagement\Lib\DepositSettings::move()['status'],

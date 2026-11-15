@@ -1,0 +1,68 @@
+<?php
+
+namespace Modules\MarketManagement\Entities;
+
+use App\Traits\HasUuid;
+use Illuminate\Database\Eloquent\Model;
+use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Support\Facades\Storage;
+use Illuminate\Support\Facades\URL;
+use Modules\UserManagement\Entities\User;
+
+/** A job seeker's Work Card: made once, sent with every application. No phone number on it. */
+class JobWorkCard extends Model
+{
+    use HasUuid;
+
+    public const MAX_SKILLS = 10;
+    public const MAX_EXPERIENCE = 6;
+    /** On the private disk (storage/app): opened through a signed link that lasts 30 minutes. */
+    public const CV_DIR = 'jobs/cv/';
+
+    protected $fillable = [
+        'user_id', 'name', 'area_label', 'languages', 'headline', 'skills', 'experience', 'education', 'looking_for', 'cv_file', 'cv_name',
+    ];
+
+    protected $casts = [
+        'skills' => 'array',
+        'experience' => 'array',
+        'looking_for' => 'array',
+    ];
+
+    public function user(): BelongsTo
+    {
+        return $this->belongsTo(User::class);
+    }
+
+    /** A link to the CV that works for 30 minutes. Give it only to the owner and to employers they applied to. */
+    public function cvUrl(): ?string
+    {
+        return $this->cv_file ? URL::temporarySignedRoute('jobs.cv', now()->addMinutes(30), ['card' => $this->id]) : null;
+    }
+
+    public function cvPath(): ?string
+    {
+        return $this->cv_file ? Storage::disk('local')->path(self::CV_DIR . $this->cv_file) : null;
+    }
+
+    /** 0 to 100: name, area, skills, experience, education, CV, what they look for. */
+    public function percent(): int
+    {
+        $parts = [
+            trim((string)$this->name) !== '' ? 15 : 0,
+            trim((string)$this->area_label) !== '' ? 10 : 0,
+            count((array)$this->skills) > 0 ? 20 : 0,
+            count((array)$this->experience) > 0 ? 20 : 0,
+            trim((string)$this->education) !== '' ? 10 : 0,
+            $this->cv_file ? 15 : 0,
+            count((array)$this->looking_for) > 0 ? 10 : 0,
+        ];
+        return array_sum($parts);
+    }
+
+    /** Enough to apply: a name, and skills or experience. */
+    public function canApply(): bool
+    {
+        return trim((string)$this->name) !== '' && (count((array)$this->skills) > 0 || count((array)$this->experience) > 0);
+    }
+}

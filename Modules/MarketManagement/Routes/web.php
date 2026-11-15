@@ -38,3 +38,28 @@ Route::group(['prefix' => 'admin/market', 'as' => 'admin.market.', 'middleware' 
         Route::post('reviews/{review}/hide', [MarketAdminController::class, 'hideReview'])->name('review-hide');
     });
 });
+
+/*
+| E-Ride Jobs: the job page people open from WhatsApp, "get the app", and the CV behind a signed link.
+*/
+Route::middleware('throttle:120,1,jobs-page')->group(function () {
+    Route::get('j/{code}', [\Modules\MarketManagement\Http\Controllers\Web\JobPageController::class, 'job'])->where('code', '[a-z0-9]+')->name('jobs.page');
+    Route::get('j/{code}/app', [\Modules\MarketManagement\Http\Controllers\Web\JobPageController::class, 'getApp'])->where('code', '[a-z0-9]+')->name('jobs.get-app');
+    Route::get('jobs/cv/{card}', [\Modules\MarketManagement\Http\Controllers\Web\JobPageController::class, 'cv'])->middleware('signed')->name('jobs.cv');
+});
+
+/*
+| Admin panel, sidebar "E-Ride Jobs".
+*/
+Route::group(['prefix' => 'admin/jobs', 'as' => 'admin.jobs.', 'middleware' => 'admin'], function () {
+    Route::middleware('can:place_view')->group(function () {
+        Route::get('/', [\Modules\MarketManagement\Http\Controllers\Web\Admin\JobAdminController::class, 'index'])->name('index');
+        Route::get('employers', [\Modules\MarketManagement\Http\Controllers\Web\Admin\JobAdminController::class, 'employers'])->name('employers');
+        Route::get('employers/{employer}/document', [\Modules\MarketManagement\Http\Controllers\Web\Admin\JobAdminController::class, 'document'])->name('document');
+    });
+    Route::middleware('can:place_edit')->group(function () {
+        Route::post('{job}/decide', [\Modules\MarketManagement\Http\Controllers\Web\Admin\JobAdminController::class, 'decide'])->name('decide');
+        Route::post('employers/{employer}/decide', [\Modules\MarketManagement\Http\Controllers\Web\Admin\JobAdminController::class, 'decideEmployer'])->name('decide-employer');
+        Route::post('settings', [\Modules\MarketManagement\Http\Controllers\Web\Admin\JobAdminController::class, 'saveSettings'])->name('settings');
+    });
+});

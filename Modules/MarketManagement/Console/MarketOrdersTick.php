@@ -20,6 +20,8 @@ class MarketOrdersTick extends Command
         foreach ($bookings->tick() as $key => $n) {
             $counts['bookings_' . $key] = $n;
         }
+        // E-Ride Jobs: jobs past their date close, unanswered applications close kindly.
+        $counts += app(\Modules\MarketManagement\Service\JobService::class)->tick();
         if (array_sum($counts) > 0) {
             $this->line(json_encode($counts + ['market_on' => MarketSettings::enabled()]));
         }

@@ -86,3 +86,38 @@ Route::group(['prefix' => 'customer/market', 'middleware' => ['auth:api', 'maint
         Route::post('shops/{slug}/report', [MarketController::class, 'reportShop']);
     });
 });
+
+/*
+| E-Ride Jobs, customer app: job seekers (feed, Work Card, apply) and employers (check, post, applicants, next step).
+*/
+Route::group(['prefix' => 'customer/jobs', 'middleware' => ['auth:api', 'maintenance_mode']], function () {
+    Route::middleware('throttle:120,1,jobs-read')->group(function () {
+        Route::get('meta', [\Modules\MarketManagement\Http\Controllers\Api\JobController::class, 'meta']);
+        Route::get('feed', [\Modules\MarketManagement\Http\Controllers\Api\JobController::class, 'feed']);
+        Route::get('jobs/{code}', [\Modules\MarketManagement\Http\Controllers\Api\JobController::class, 'show'])->where('code', '[a-z0-9]+');
+        Route::get('card', [\Modules\MarketManagement\Http\Controllers\Api\JobController::class, 'card']);
+        Route::get('applications', [\Modules\MarketManagement\Http\Controllers\Api\JobController::class, 'applications']);
+        Route::get('applications/{id}', [\Modules\MarketManagement\Http\Controllers\Api\JobController::class, 'application']);
+        Route::get('alert', [\Modules\MarketManagement\Http\Controllers\Api\JobController::class, 'alert']);
+        Route::get('employer', [\Modules\MarketManagement\Http\Controllers\Api\JobEmployerController::class, 'employer']);
+        Route::get('employer/jobs', [\Modules\MarketManagement\Http\Controllers\Api\JobEmployerController::class, 'jobs']);
+        Route::get('employer/jobs/{code}/applicants', [\Modules\MarketManagement\Http\Controllers\Api\JobEmployerController::class, 'applicants'])->where('code', '[a-z0-9]+');
+        Route::get('employer/applications/{id}', [\Modules\MarketManagement\Http\Controllers\Api\JobEmployerController::class, 'applicant']);
+    });
+    Route::middleware('throttle:30,1,jobs-write')->group(function () {
+        Route::post('jobs/{code}/save', [\Modules\MarketManagement\Http\Controllers\Api\JobController::class, 'save'])->where('code', '[a-z0-9]+');
+        Route::post('jobs/{code}/apply', [\Modules\MarketManagement\Http\Controllers\Api\JobController::class, 'apply'])->where('code', '[a-z0-9]+');
+        Route::post('card', [\Modules\MarketManagement\Http\Controllers\Api\JobController::class, 'saveCard']);
+        Route::post('applications/{id}/withdraw', [\Modules\MarketManagement\Http\Controllers\Api\JobController::class, 'withdraw']);
+        Route::post('alert', [\Modules\MarketManagement\Http\Controllers\Api\JobController::class, 'saveAlert']);
+        Route::post('employer', [\Modules\MarketManagement\Http\Controllers\Api\JobEmployerController::class, 'saveEmployer']);
+        Route::post('employer/jobs', [\Modules\MarketManagement\Http\Controllers\Api\JobEmployerController::class, 'store']);
+        Route::post('employer/jobs/{code}/update', [\Modules\MarketManagement\Http\Controllers\Api\JobEmployerController::class, 'update'])->where('code', '[a-z0-9]+');
+        Route::post('employer/jobs/{code}/close', [\Modules\MarketManagement\Http\Controllers\Api\JobEmployerController::class, 'close'])->where('code', '[a-z0-9]+');
+        Route::post('employer/applications/{id}/shortlist', [\Modules\MarketManagement\Http\Controllers\Api\JobEmployerController::class, 'shortlist']);
+        Route::post('employer/applications/{id}/not-selected', [\Modules\MarketManagement\Http\Controllers\Api\JobEmployerController::class, 'notSelected']);
+        Route::post('employer/applications/{id}/next-step', [\Modules\MarketManagement\Http\Controllers\Api\JobEmployerController::class, 'nextStep']);
+    });
+    Route::post('jobs/{code}/report', [\Modules\MarketManagement\Http\Controllers\Api\JobController::class, 'report'])->where('code', '[a-z0-9]+')
+        ->middleware('throttle:10,1,jobs-report');
+});
