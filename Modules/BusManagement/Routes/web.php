@@ -6,6 +6,7 @@ use Modules\BusManagement\Http\Controllers\Web\Admin\BusAdminController;
 use Modules\BusManagement\Http\Controllers\Web\BusPayController;
 use Modules\BusManagement\Http\Controllers\Web\Partner\AuthController;
 use Modules\BusManagement\Http\Controllers\Web\Partner\BoardingController;
+use Modules\BusManagement\Http\Controllers\Web\Partner\ClosureController;
 use Modules\BusManagement\Http\Controllers\Web\Partner\CollectController;
 use Modules\BusManagement\Http\Controllers\Web\Partner\SellController;
 use Modules\BusManagement\Http\Controllers\Web\Partner\TodayController;
@@ -75,6 +76,13 @@ Route::group(['prefix' => 'partner/bus-agency', 'as' => 'bus-partner.'], functio
         Route::post('bookings/{booking}/cancel', [TodayController::class, 'cancel'])->name('bookings.cancel')->whereUuid('booking');
         Route::post('bookings/{booking}/refund-sent', [TodayController::class, 'refundSent'])->name('bookings.refund')->whereUuid('booking');
         Route::post('boarding/{departure}/cancel', [BoardingController::class, 'cancel'])->name('boarding.cancel')->whereUuid('departure');
+
+        Route::get('closures', [ClosureController::class, 'index'])->name('closures');
+        Route::post('closures/preview', [ClosureController::class, 'preview'])->name('closures.preview')->middleware('throttle:120,1,bus-closure-preview');
+        Route::post('closures', [ClosureController::class, 'store'])->name('closures.store');
+        Route::get('closures/{closure}', [ClosureController::class, 'show'])->name('closures.show')->whereUuid('closure');
+        Route::post('closures/{closure}/confirm', [ClosureController::class, 'confirm'])->name('closures.confirm')->whereUuid('closure');
+        Route::post('closures/{closure}/lift', [ClosureController::class, 'lift'])->name('closures.lift')->whereUuid('closure');
 
         Route::get('payments', [PaymentController::class, 'index'])->name('payments');
         Route::post('payments/fapshi', [PaymentController::class, 'saveFapshi'])->name('payments.fapshi')->middleware('throttle:20,1,bus-fapshi');

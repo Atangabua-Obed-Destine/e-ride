@@ -38,6 +38,21 @@
     <a href="{{ route('bus-partner.sell') }}" class="btn btn-primary btn-sm"><i class="bi bi-ticket-perforated"></i> {{ translate('Quick sell') }}</a>
 </div>
 
+@foreach($suggestions as $s)
+    <div class="alert alert-warning d-flex flex-wrap align-items-center gap-2">
+        <div class="flex-grow-1"><b>{{ translate('E-Ride reports') }}: {{ $s->title }}</b> · {{ $s->starts_at->translatedFormat('D j M H:i') }} - {{ $s->ends_at->translatedFormat('D j M H:i') }}
+            <div class="small">{{ translate('Your departures inside may not be able to leave. Handle them in one step.') }}</div></div>
+        @if($busStaff->role === 'manager')<a class="btn btn-dark btn-sm" href="{{ route('bus-partner.closures', ['area' => $s->id]) }}#declare">{{ translate('Handle it') }}</a>@endif
+    </div>
+@endforeach
+@foreach($atRisk as $c)
+    <div class="alert alert-warning d-flex flex-wrap align-items-center gap-2">
+        <div class="flex-grow-1"><b>{{ \Modules\BusManagement\Service\ClosureService::kindLabel($c->kind) }}{{ $c->note ? ': ' . $c->note : '' }}</b>
+            <div class="small">{{ translate(key: 'Departures at risk. Decide by {time}, or passengers are moved.', replace: ['time' => $c->decide_by->translatedFormat('D j M H:i')]) }}</div></div>
+        @if($busStaff->role === 'manager')<a class="btn btn-dark btn-sm" href="{{ route('bus-partner.closures.show', $c->id) }}">{{ translate('Decide') }}</a>@endif
+    </div>
+@endforeach
+
 <div class="t-grid">
     <div>
         <section class="mb-3" aria-labelledby="reqTitle">

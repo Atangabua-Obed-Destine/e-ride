@@ -22,6 +22,7 @@
     @if($canEdit)
         <button class="btn btn-primary" data-bs-toggle="modal" data-bs-target="#lineModal" data-line="">{{ translate('Add a departure time') }}</button>
         <button class="btn btn-soft" data-bs-toggle="modal" data-bs-target="#extraModal">{{ translate('Add an extra departure') }}</button>
+        <a class="btn btn-soft" href="{{ route('bus-partner.closures') }}"><i class="bi bi-sign-stop"></i> {{ translate('Lockdown or ghost town') }}</a>
     @endif
 </div>
 

@@ -40,6 +40,9 @@ class CounterService
         if (!$departure->isOpen()) {
             throw ValidationException::withMessages(['departure' => translate('This departure has left or was cancelled.')]);
         }
+        if ($departure->closure_id) {
+            throw ValidationException::withMessages(['departure' => translate('A lockdown stops or puts this departure at risk: no sales until it is decided.')]);
+        }
         if (!$departure->vehicle_id || empty($departure->seat_plan['seats'])) {
             throw ValidationException::withMessages(['departure' => translate('Put a bus on this departure first (Departures).')]);
         }

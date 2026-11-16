@@ -24,9 +24,13 @@ class TodayController extends Controller
     {
     }
 
-    public function index(): View
+    public function index(Request $request): View
     {
-        return view('busmanagement::partner.today');
+        $agency = $request->attributes->get('busAgency');
+        $closures = app(\Modules\BusManagement\Service\ClosureService::class);
+        $suggestions = $closures->suggestions($agency);
+        $atRisk = \Modules\BusManagement\Entities\BusClosure::where('agency_id', $agency->id)->where('status', 'active')->where('outcome', 'at_risk')->orderBy('decide_by')->get();
+        return view('busmanagement::partner.today', compact('suggestions', 'atRisk'));
     }
 
     /** Polled every few seconds by Today, and by the menu badge (?count=1). */

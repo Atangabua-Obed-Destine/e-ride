@@ -29,6 +29,8 @@ class BusTick extends Command
         $counts += $bookings->expireDue();
         $counts['closed'] = $bookings->closePast();
         $counts['collect_reminders'] = $bookings->collectReminders();
+        // Lockdowns "at risk" not decided by their deadline: passengers are moved.
+        $counts['closures_decided'] = app(\Modules\BusManagement\Service\ClosureService::class)->tick();
         if ($this->option('open') || now()->minute % 15 === 0) {
             $counts['opened'] = $schedule->openAhead();
             BusAgency::where('status', BusAgency::SETUP)->whereNotNull('fapshi_ok_at')->get()->each(fn($a) => $agencies->refreshStatus($a));

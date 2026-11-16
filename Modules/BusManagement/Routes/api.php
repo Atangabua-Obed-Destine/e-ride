@@ -22,5 +22,6 @@ Route::group(['prefix' => 'customer/bus', 'middleware' => ['auth:api', 'maintena
         Route::post('departures/{id}/waitlist', [BusController::class, 'waitlist'])->whereUuid('id');
         Route::post('bookings/{id}/pay', [BusBookingController::class, 'pay']);
         Route::post('bookings/{id}/cancel', [BusBookingController::class, 'cancel']);
+        Route::post('bookings/{id}/keep', [BusBookingController::class, 'keep']);
     });
 });

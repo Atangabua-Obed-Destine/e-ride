@@ -105,7 +105,17 @@ class ScheduleService
             return false; // opened at the same moment by another run (unique schedule and date)
         }
         $this->trySetVehicle($departure, $line->vehicle);
+        $this->underClosure($departure);
         return true;
+    }
+
+    /** A departure opened inside a lockdown or ghost town the agency declared: closed (or at risk) at once. */
+    protected function underClosure(BusDeparture $departure): void
+    {
+        $closures = app(ClosureService::class);
+        if ($closure = $closures->closedBy($departure->fresh())) {
+            $closures->applyTo($closure, $departure->fresh(['destination']));
+        }
     }
 
     /** An extra departure, outside the timetable (busy days before a holiday). */

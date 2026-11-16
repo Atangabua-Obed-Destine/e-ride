@@ -85,6 +85,9 @@ class BookingService
         if (!$departure->isOpen() || !$departure->vehicle_id || empty($departure->seat_plan['seats'])) {
             return translate('This departure is not open for booking.');
         }
+        if ($departure->closure_id) {
+            return translate('Sales are stopped: a lockdown may affect this departure. The agency decides soon.');
+        }
         if (now()->gte(self::onlineClosesAt($departure, $agency->rules))) {
             return translate('Booking in the app has closed for this departure. The agency counter may still have seats.');
         }
@@ -319,7 +322,8 @@ class BookingService
             return ['cancellable' => false, 'percent' => 0, 'refund' => 0, 'hours_before' => null, 'paid' => true];
         }
         $hours = now()->diffInMinutes($booking->departure->leavesAt(), true) / 60;
-        $percent = BusSettings::refundPercent($booking->agency->rules ?? [], $hours);
+        // Moved because of a lockdown, or on a departure at risk: everything back, whatever the agency's tiers.
+        $percent = $booking->closure_id || $booking->departure->closure_id ? 100 : BusSettings::refundPercent($booking->agency->rules ?? [], $hours);
         return [
             'cancellable' => true,
             'percent' => $percent,
@@ -422,11 +426,12 @@ class BookingService
     }
 
     /** Ends a held or paid booking: its tickets are cancelled, its seats free, any refund owed recorded. Call inside a transaction. */
-    protected function endBooking(BusBooking $b, string $by, float $refund): void
+    public function endBooking(BusBooking $b, string $by, float $refund): void
     {
         $wasPaid = $b->status === BusBooking::PAID;
         // A counter ticket the agency cancels is paid back in cash, there and then.
-        $cash = $wasPaid && $b->source === BusBooking::COUNTER && $by !== 'passenger';
+        // (A lockdown is different: the passenger is not at the counter, so the refund waits for them.)
+        $cash = $wasPaid && $b->source === BusBooking::COUNTER && !in_array($by, ['passenger', 'closure'], true);
         $refund = $cash ? (float)$b->amount : ($wasPaid ? max(0, min((float)$b->amount, $refund)) : 0);
         $b->fill([
             'status' => BusBooking::CANCELLED,
@@ -446,7 +451,7 @@ class BookingService
     }
 
     /** Frees the seats of a booking that ended without travelling. */
-    protected function release(BusBooking $b): void
+    public function release(BusBooking $b): void
     {
         $ids = BusTicket::where('booking_id', $b->id)->pluck('id');
         BusSeatClaim::whereIn('ticket_id', $ids)->delete();

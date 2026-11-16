@@ -8,6 +8,7 @@ use Modules\BusManagement\Entities\BusDeparture;
 use Modules\BusManagement\Entities\BusTicket;
 use Modules\BusManagement\Lib\BusSettings;
 use Modules\BusManagement\Service\BookingService;
+use Modules\BusManagement\Service\ClosureService;
 use Modules\BusManagement\Service\ScheduleService;
 
 /** What the customer app gets for agencies, departures, seat maps and bookings. Times are ISO 8601 with the offset. */
@@ -172,6 +173,17 @@ class BusPresenter
                 'collected' => $t->collected_at !== null,
             ])->all(),
             'can_pay' => $b->status === BusBooking::ACCEPTED && $b->pay_by?->isFuture(),
+            // Moved off a departure a lockdown stopped: where from, why, and whether the passenger kept it.
+            'moved' => $b->moved_at && $b->status === BusBooking::PAID ? [
+                'from_leaves_at' => \Modules\BusManagement\Entities\BusDeparture::find($b->moved_from_departure_id)?->leavesAt()->toIso8601String(),
+                'reason' => ($c = \Modules\BusManagement\Entities\BusClosure::find($b->closure_id)) ? app(ClosureService::class)->reasonText($c) : null,
+                'kept' => $b->move_kept_at !== null,
+            ] : null,
+            // The departure may not go ahead (a lockdown, not decided yet).
+            'at_risk' => $d?->closure_id && $d->isOpen() && ($c2 = \Modules\BusManagement\Entities\BusClosure::find($d->closure_id)) ? [
+                'reason' => app(ClosureService::class)->reasonText($c2),
+                'decide_by' => $c2->decide_by?->toIso8601String(),
+            ] : null,
             // The person booking's ID, as the agency sees it.
             'booker' => $b->booker_id_number ? [
                 'id_type' => $b->booker_id_type,

@@ -23,7 +23,7 @@ class BusDeparture extends Model
 
     protected $fillable = [
         'agency_id', 'schedule_id', 'destination_id', 'class', 'kind', 'date', 'time', 'vehicle_id', 'seat_plan', 'capacity', 'auto_accept',
-        'status', 'delayed_to', 'boarding_at', 'departed_at', 'cancelled_at', 'cancel_reason',
+        'status', 'delayed_to', 'boarding_at', 'departed_at', 'cancelled_at', 'cancel_reason', 'closure_id',
     ];
 
     protected $casts = [
@@ -65,6 +65,11 @@ class BusDeparture extends Model
     public function leavesAt(): \Illuminate\Support\Carbon
     {
         return \Illuminate\Support\Carbon::parse($this->date->toDateString() . ' ' . ($this->delayed_to ?? $this->time));
+    }
+
+    public function closure(): BelongsTo
+    {
+        return $this->belongsTo(BusClosure::class, 'closure_id');
     }
 
     public function isOpen(): bool

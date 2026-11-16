@@ -98,6 +98,17 @@ class BusBookingController extends BusController
         return $this->show($request, $booking->id);
     }
 
+    /** A booking moved off a lockdown: the passenger keeps the new time. */
+    public function keep(Request $request, string $id): JsonResponse
+    {
+        $booking = $this->mine($request, $id);
+        if ($booking instanceof JsonResponse) {
+            return $booking;
+        }
+        app(\Modules\BusManagement\Service\ClosureService::class)->keep($booking);
+        return $this->show($request, $booking->id);
+    }
+
     private function mine(Request $request, string $id): BusBooking|JsonResponse
     {
         $booking = BusBooking::with(['agency', 'departure.destination', 'departure.vehicle', 'dropPoint', 'tickets'])

@@ -9,6 +9,8 @@ use Illuminate\Support\Carbon;
 use Illuminate\Validation\ValidationException;
 use Modules\BusManagement\Entities\BusAgency;
 use Modules\BusManagement\Entities\BusBooking;
+use Modules\BusManagement\Entities\BusClosure;
+use Modules\BusManagement\Service\ClosureService;
 use Modules\BusManagement\Entities\BusDeparture;
 use Modules\BusManagement\Entities\BusDestination;
 use Modules\BusManagement\Entities\BusSeatClaim;
@@ -56,6 +58,10 @@ class BusController extends Controller
             'answer_minutes' => $settings['answer_minutes'],
             'pay_minutes' => $settings['pay_minutes'],
             'open_days' => $settings['open_days'],
+            // Lockdowns and ghost towns in the coming week, for the bus home.
+            'notices' => $settings['enabled'] ? BusClosure::with('agency')->where('status', BusClosure::ACTIVE)->whereIn('agency_id', $this->live()->select('id'))->get()
+                ->filter(fn(BusClosure $c) => collect(range(0, 6))->contains(fn($i) => ClosureService::onDay($c, today()->addDays($i))))
+                ->map(fn($c) => app(ClosureService::class)->notice($c))->values() : [],
             'routes' => collect($routes)->map(fn($to, $from) => ['from' => $from, 'to' => collect($to)->sortByDesc('departures')->values()])->sortKeys()->values(),
         ]);
     }
@@ -91,8 +97,13 @@ class BusController extends Controller
 
         $days = $base()->whereBetween('date', [today()->toDateString(), today()->addDays(BusSettings::all()['open_days'] - 1)->toDateString()])
             ->selectRaw('date, count(*) as n')->groupBy('date')->pluck('n', 'date');
+        // Lockdowns and ghost towns of these agencies on that day.
+        $notices = BusClosure::with('agency')->where('status', BusClosure::ACTIVE)
+            ->whereIn('agency_id', $this->live()->where('origin_city', $request->input('from'))->select('id'))->get()
+            ->filter(fn(BusClosure $c) => ClosureService::onDay($c, $date))->map(fn($c) => app(ClosureService::class)->notice($c))->values();
         return $this->ok([
             'date' => $date->toDateString(),
+            'notices' => $notices,
             'departures' => $list,
             'days' => collect($days)->map(fn($n, $d) => ['date' => Carbon::parse($d)->toDateString(), 'departures' => (int)$n])->values(),
         ]);
