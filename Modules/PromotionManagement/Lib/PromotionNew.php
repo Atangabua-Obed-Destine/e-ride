@@ -5,6 +5,26 @@ use Illuminate\Support\Facades\Http;
 use Modules\UserManagement\Entities\AppNotification;
 use Illuminate\Support\Facades\Cache;
 
+if (!function_exists('appNotificationData')) {
+    /**
+     * What a stored notification is about, so the notification list can open the
+     * same screen as the push: the ids from the push data (top level or "extra")
+     * and the sender's name for chats.
+     */
+    function appNotificationData(array $notificationData = [], $user_name = null): ?array
+    {
+        $flat = array_merge(is_array($notificationData['extra'] ?? null) ? $notificationData['extra'] : [], $notificationData);
+        $keep = array_filter(array_intersect_key($flat, array_flip([
+            'conversation_id', 'item_code', 'shop_slug', 'order_id', 'booking_id', 'job_code', 'application_id', 'listing_id', 'sender_name',
+        ])), fn($v) => is_scalar($v) && (string)$v !== '');
+        $name = trim((string)($user_name ?? ''));
+        if ($name !== '') {
+            $keep['user_name'] = $name;
+        }
+        return $keep ? array_map('strval', $keep) : null;
+    }
+}
+
 if (!function_exists('sendDeviceNotification')) {
     function sendDeviceNotification($fcm_token, $title, $description, $status, $image = null, $ride_request_id = null, $type = null, $notification_type = null, $action = null, $user_id = null, $user_name = null, array $notificationData = []): bool|string
     {
@@ -17,6 +37,7 @@ if (!function_exists('sendDeviceNotification')) {
                 'type' => $type,
                 'notification_type' => $notification_type,
                 'action' => $action,
+                'data' => appNotificationData($notificationData, $user_name),
                 'is_read' => 0,
             ]);
         }
@@ -70,6 +91,7 @@ if (!function_exists('sendBatchDeviceNotification')) {
                     'type' => $type,
                     'notification_type' => $notificationType,
                     'action' => $action,
+                    'data' => ($d = appNotificationData($notification['notificationData'] ?? [], $notification['user_name'] ?? null)) ? json_encode($d) : null,
                     'is_read' => 0,
                     'created_at' => $now,
                     'updated_at' => $now,

@@ -6491,4 +6491,5 @@
   'Applicants must add' => 'Applicants must add',
   'hired through E-Ride' => 'hired through E-Ride',
   'The selected group is invalid.' => 'The selected group is invalid.',
+  'You got a new message from {userName}.' => 'You got a new message from :userName.',
 );

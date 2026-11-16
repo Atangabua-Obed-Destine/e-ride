@@ -16,6 +16,7 @@ class AppNotification extends Model
         'description',
         'type',
         'notification_type',
+        'data',
         'action',
         'is_read',
         'created_at',
@@ -24,6 +25,7 @@ class AppNotification extends Model
 
     protected $casts = [
         'is_read' => 'boolean',
+        'data' => 'array',
     ];
 
     protected static function newFactory()
