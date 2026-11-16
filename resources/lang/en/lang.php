@@ -6490,4 +6490,5 @@
   'Your GitHub link must be a github.com address.' => 'Your GitHub link must be a github.com address.',
   'Applicants must add' => 'Applicants must add',
   'hired through E-Ride' => 'hired through E-Ride',
+  'The selected group is invalid.' => 'The selected group is invalid.',
 );

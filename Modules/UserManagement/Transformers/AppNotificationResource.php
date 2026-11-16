@@ -25,6 +25,7 @@ class AppNotificationResource extends JsonResource
             'notification_type' => $this->notification_type,
             'action' => $this->action,
             'is_read' => $this->is_read,
+            'group' => \Modules\UserManagement\Lib\NotificationGroups::of($this->type, $this->notification_type, $this->action),
             'created_at' => $this->created_at,
         ];
     }

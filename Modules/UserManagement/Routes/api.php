@@ -137,6 +137,11 @@ Route::group(['prefix' => 'user'], function () {
     Route::controller(AppNotificationController::class)->group(function () {
         Route::put('read-notification',  'readNotification');
     });
+    // Unread counts per part of E-Ride, and "mark all read" (all, or one group).
+    Route::middleware('auth:api')->controller(AppNotificationController::class)->group(function () {
+        Route::get('notification-counts', 'counts');
+        Route::put('read-all-notifications', 'readAll');
+    });
 });
 
 

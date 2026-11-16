@@ -46,6 +46,7 @@ class JobController extends Controller
             'card_can_apply' => (bool)$card?->canApply(),
             'next_steps_unread' => (clone $mine)->where('status', JobApplication::NEXT_STEP)->whereNull('next_step_read_at')->count(),
             'applications_open' => (clone $mine)->whereIn('status', JobApplication::ACTIVE)->count(),
+            'hires_to_confirm' => (clone $mine)->where('status', JobApplication::HIRED)->whereNull('hire_confirmed_at')->count(),
             'employer' => JobPresenter::employer($employer, true),
             'new_applicants' => $employer ? JobApplication::whereIn('job_id', $employer->jobs()->select('id'))->where('status', JobApplication::SENT)->count() : 0,
             'alert_on' => (bool)$this->jobs->alertOf($user)?->enabled,
