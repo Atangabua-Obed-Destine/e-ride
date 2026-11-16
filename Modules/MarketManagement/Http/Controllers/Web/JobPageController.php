@@ -77,7 +77,16 @@ class JobPageController extends MarketPageController
         if (!$path || !is_file($path)) {
             abort(404);
         }
-        return response()->file($path, ['X-Robots-Tag' => 'noindex', 'Cache-Control' => 'private, no-store']);
+        $type = match (strtolower(pathinfo($path, PATHINFO_EXTENSION))) {
+            'm4a', 'mp4', 'aac' => 'audio/mp4',
+            'mp3' => 'audio/mpeg',
+            'ogg', 'oga' => 'audio/ogg',
+            'wav' => 'audio/wav',
+            'webm' => 'audio/webm',
+            '3gp' => 'audio/3gpp',
+            default => 'application/octet-stream',
+        };
+        return response()->file($path, ['Content-Type' => $type, 'X-Robots-Tag' => 'noindex', 'Cache-Control' => 'private, no-store']);
     }
 
     private function jobWords(Request $request): array

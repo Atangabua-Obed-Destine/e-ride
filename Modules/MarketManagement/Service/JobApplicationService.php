@@ -70,7 +70,7 @@ class JobApplicationService
         }
         if ($cv) {
             $old = $card->cv_file;
-            $name = date('Y-m-d') . '-' . bin2hex(random_bytes(8)) . '.' . strtolower($cv->getClientOriginalExtension() ?: 'pdf');
+            $name = date('Y-m-d') . '-' . bin2hex(random_bytes(8)) . '.' . strtolower($cv->extension() ?: ($cv->getClientOriginalExtension() ?: 'pdf'));
             Storage::disk('local')->putFileAs(rtrim(JobWorkCard::CV_DIR, '/'), $cv, $name);
             $card->cv_file = $name;
             $card->cv_name = mb_substr($cv->getClientOriginalName() ?: 'CV', 0, 120);
@@ -89,7 +89,8 @@ class JobApplicationService
                 $this->fail('voice', translate('Keep your voice intro to 30 seconds.'));
             }
             $old = $card->voice_file;
-            $name = date('Y-m-d') . '-' . bin2hex(random_bytes(8)) . '.' . strtolower($voice->getClientOriginalExtension() ?: 'm4a');
+            $ext = strtolower($voice->getClientOriginalExtension() ?: ($voice->extension() ?: 'm4a'));
+            $name = date('Y-m-d') . '-' . bin2hex(random_bytes(8)) . '.' . (in_array($ext, ['m4a', 'mp4', 'aac', 'mp3', 'ogg', 'oga', 'wav', 'webm', '3gp'], true) ? $ext : 'm4a');
             Storage::disk('local')->putFileAs(rtrim(JobWorkCard::VOICE_DIR, '/'), $voice, $name);
             $card->voice_file = $name;
             $card->voice_seconds = max(1, min(JobWorkCard::MAX_VOICE_SECONDS, $seconds ?: 30));
