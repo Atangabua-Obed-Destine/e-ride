@@ -6993,4 +6993,9 @@
   'This cancels the booking and frees its seats.' => 'This cancels the booking and frees its seats.',
   'Mark the bus as departed. {n} passenger(s) not scanned will be marked not on board.' => 'Mark the bus as departed. :n passenger(s) not scanned will be marked not on board.',
   'Say why this departure is cancelled. Passengers see it.' => 'Say why this departure is cancelled. Passengers see it.',
+  'Refused: the saved test key is not a Fapshi sandbox key.' => 'Refused: the saved test key is not a Fapshi sandbox key.',
+  'Testing only' => 'Testing only',
+  'A test agency can use the E-Ride Fapshi sandbox keys: payments are pretend money. Never for a real agency, which connects its own account.' => 'A test agency can use the E-Ride Fapshi sandbox keys: payments are pretend money. Never for a real agency, which connects its own account.',
+  'This agency uses the E-Ride Fapshi sandbox.' => 'This agency uses the E-Ride Fapshi sandbox.',
+  'Use the E-Ride Fapshi sandbox' => 'Use the E-Ride Fapshi sandbox',
 );

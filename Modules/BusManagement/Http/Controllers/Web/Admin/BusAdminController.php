@@ -130,6 +130,14 @@ class BusAdminController extends Controller
         return back();
     }
 
+    /** Testing only: E-Ride's own Fapshi sandbox for a test agency. */
+    public function sandbox(BusAgency $agency): RedirectResponse
+    {
+        [$ok, $message] = $this->agencies->useEridesSandbox($agency);
+        $ok ? Toastr::success($message) : Toastr::error($message);
+        return back();
+    }
+
     /** A statement paid outside the app (bank transfer, cash at the office). */
     public function statementPaid(Request $request, BusStatement $statement): RedirectResponse
     {

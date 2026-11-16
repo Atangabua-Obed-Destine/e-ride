@@ -308,6 +308,33 @@ class AgencyService
     }
 
     /**
+     * Testing only: the agency uses E-Ride's own Fapshi sandbox keys (copied on the server, never shown), so a test
+     * agency can take pretend payments. Refused unless they really are sandbox keys. Returns [ok, message].
+     */
+    public function useEridesSandbox(BusAgency $agency): array
+    {
+        $row = DB::table('settings')->where('key_name', 'fapshi')->where('settings_type', PAYMENT_CONFIG)->first();
+        $values = $row ? (json_decode((string)$row->test_values, true) ?: []) : [];
+        if (!filled($values['api_user'] ?? null) || !filled($values['api_key'] ?? null)) {
+            return [false, translate('E-Ride has no Fapshi sandbox keys saved (Payment Methods, test values).')];
+        }
+        if (!str_starts_with(trim($values['api_key']), 'FAK_TEST_')) {
+            return [false, translate('Refused: the saved test key is not a Fapshi sandbox key.')];
+        }
+        $agency->fapshi = [
+            'api_user' => trim($values['api_user']),
+            'api_key' => trim($values['api_key']),
+            // Webhooks of this sandbox go to E-Ride's own Fapshi webhook, which settles bus payments too.
+            'webhook_secret' => filled($values['webhook_secret'] ?? null) ? trim($values['webhook_secret']) : Str::random(32),
+            'mode' => 'test',
+            'eride_sandbox' => true,
+        ];
+        $agency->fapshi_ok_at = null;
+        $agency->save();
+        return $this->testFapshi($agency->fresh());
+    }
+
+    /**
      * A new agency goes live once it can take money (Fapshi tested) and has a departure open with a bus.
      * A paused agency stays paused: only its reason clearing (or an admin) brings it back.
      */

@@ -110,4 +110,5 @@ Route::group(['prefix' => 'admin/bus', 'as' => 'admin.bus.', 'middleware' => 'ad
     Route::post('{agency}/verify', [BusAdminController::class, 'verify'])->name('verify')->whereUuid('agency');
     Route::post('{agency}/pause', [BusAdminController::class, 'pause'])->name('pause')->whereUuid('agency');
     Route::post('statements/{statement}/paid', [BusAdminController::class, 'statementPaid'])->name('statement.paid')->whereUuid('statement');
+    Route::post('{agency}/sandbox', [BusAdminController::class, 'sandbox'])->name('sandbox')->whereUuid('agency');
 });

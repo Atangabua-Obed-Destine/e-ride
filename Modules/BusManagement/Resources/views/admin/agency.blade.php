@@ -129,6 +129,18 @@
                     @endforelse
                 </div></div>
 
+                @if(!$agency->fapshi_ok_at || ($agency->fapshi['eride_sandbox'] ?? false))
+                <form method="POST" action="{{ route('admin.bus.sandbox', $agency->id) }}" class="card mb-3">
+                    @csrf
+                    <div class="card-body">
+                        <h5 class="mb-1">{{ translate('Testing only') }}</h5>
+                        <p class="fs-12 text-muted">{{ translate('A test agency can use the E-Ride Fapshi sandbox keys: payments are pretend money. Never for a real agency, which connects its own account.') }}</p>
+                        @if($agency->fapshi['eride_sandbox'] ?? false)<div class="fs-12 text-success mb-2">{{ translate('This agency uses the E-Ride Fapshi sandbox.') }}</div>@endif
+                        <button class="btn btn-sm btn-outline-secondary">{{ translate('Use the E-Ride Fapshi sandbox') }}</button>
+                    </div>
+                </form>
+                @endif
+
                 <form method="POST" action="{{ route('admin.bus.pause', $agency->id) }}" class="card">
                     @csrf
                     <div class="card-body">

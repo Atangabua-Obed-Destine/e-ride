@@ -121,6 +121,14 @@ class FapshiController extends Controller
             ->when($transId === '' && $externalId === '', fn($q) => $q->whereRaw('1 = 0'))
             ->first();
         if (!$transaction) {
+            // A bus ticket paid to an agency that uses this same Fapshi account (a test agency on E-Ride's sandbox).
+            $busPayment = class_exists(\Modules\BusManagement\Entities\BusPayment::class) && ($transId !== '' || $externalId !== '')
+                ? \Modules\BusManagement\Entities\BusPayment::query()
+                    ->when($transId !== '', fn($q) => $q->where('trans_id', $transId), fn($q) => $q->where('external_id', $externalId))->first()
+                : null;
+            if ($busPayment) {
+                return response()->json(['ok' => true, 'status' => app(\Modules\BusManagement\Service\BusPaymentService::class)->sync($busPayment)]);
+            }
             Log::info('Fapshi webhook for an unknown transaction', ['trans_id' => $transId, 'external_id' => $externalId]);
             return response()->json(['ok' => true, 'known' => false]);
         }
