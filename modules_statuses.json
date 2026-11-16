@@ -18,5 +18,6 @@
     "StoreManagement": true,
     "PlaceManagement": true,
     "MarketManagement": true,
-    "BusManagement": true
+    "BusManagement": true,
+    "HotelManagement": true
 }

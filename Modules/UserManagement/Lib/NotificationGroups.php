@@ -54,7 +54,7 @@ class NotificationGroups
         if ($nt === 'market' || $type === 'market') {
             return 'market';
         }
-        if ($nt === 'bus' || $type === 'bus') {
+        if (in_array($nt, ['bus', 'hotel'], true) || in_array($type, ['bus', 'hotel'], true)) {
             return 'travel';
         }
         if ($nt === 'listing' || $type === 'listing' || str_starts_with($action, 'listing_')) {
@@ -110,7 +110,7 @@ class NotificationGroups
     /** E-Ride Bus Travel. */
     private static function travel(Builder $q): Builder
     {
-        return $q->where(self::col('notification_type'), 'bus')->orWhere(self::col('type'), 'bus');
+        return $q->whereIn(self::col('notification_type'), ['bus', 'hotel'])->orWhereIn(self::col('type'), ['bus', 'hotel']);
     }
 
     private static function homes(Builder $q): Builder

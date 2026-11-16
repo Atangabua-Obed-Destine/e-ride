@@ -1,0 +1,13 @@
+{
+    "name": "HotelManagement",
+    "alias": "hotelmanagement",
+    "description": "E-Ride hotel partners: verified hotels and guest houses show their rooms and what is free, answer guests in the app, keep rooms for them, and E-Ride takes the guests there. Free for hotels, no payments in E-Ride.",
+    "keywords": [],
+    "priority": 0,
+    "providers": [
+        "Modules\\HotelManagement\\Providers\\HotelManagementServiceProvider"
+    ],
+    "aliases": {},
+    "files": [],
+    "requires": []
+}

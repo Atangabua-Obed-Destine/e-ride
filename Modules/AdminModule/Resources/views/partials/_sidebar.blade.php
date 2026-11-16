@@ -611,6 +611,12 @@
                             <span class="link-title">{{ translate('Bus agencies') }}</span>
                         </a>
                     </li>
+                    <li class="{{ Request::is('admin/hotel-partners*') ? 'active open' : '' }}">
+                        <a href="{{ route('admin.hotel.index') }}">
+                            <i class="bi bi-building"></i>
+                            <span class="link-title">{{ translate('Hotel partners') }}</span>
+                        </a>
+                    </li>
                     <li class="{{ Request::is('admin/id-verification*') ? 'active open' : '' }}">
                         <a href="{{ route('admin.id-verification.index') }}">
                             <i class="bi bi-person-vcard"></i>

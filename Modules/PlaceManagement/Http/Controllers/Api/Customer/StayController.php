@@ -58,7 +58,13 @@ class StayController extends Controller
         $lat = $request->filled('latitude') ? (float)$request->query('latitude') : null;
         $lng = $request->filled('longitude') ? (float)$request->query('longitude') : null;
         $language = substr((string)$request->header('X-Localization', 'en'), 0, 2);
-        return response()->json(responseFormatter(DEFAULT_200, $this->places->explore($category, $lat, $lng, $language)));
+        $result = $this->places->explore($category, $lat, $lng, $language);
+        // Places to stay: partner hotels come first, with their free rooms for the dates (HotelManagement).
+        if ($category === 'stay' && class_exists(\Modules\HotelManagement\Http\Controllers\Api\HotelController::class)) {
+            $result['verified'] = \Modules\HotelManagement\Http\Controllers\Api\HotelController::enrich($result['verified'] ?? [], $request);
+            $result['hotel_partners'] = \Modules\HotelManagement\Lib\HotelSettings::enabled();
+        }
+        return response()->json(responseFormatter(DEFAULT_200, $result));
     }
 
     /**
