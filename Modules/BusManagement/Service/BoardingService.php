@@ -55,13 +55,16 @@ class BoardingService
         if (!$departure->isOpen()) {
             return ['closed', translate('This bus has already left.'), $ticket];
         }
-        return DB::transaction(function () use ($ticket, $byUserId, $departure) {
+        $collectMode = \Modules\BusManagement\Lib\BusSettings::rules($agency->rules)['tickets'] === 'collect';
+        return DB::transaction(function () use ($ticket, $byUserId, $departure, $collectMode) {
             $t = BusTicket::whereKey($ticket->id)->lockForUpdate()->first();
             return match ($t->status) {
                 BusTicket::BOARDED => ['already', translate(key: 'Already on board since {time}. Seat {seat}.', replace: ['time' => $t->boarded_at?->format('H:i'), 'seat' => $t->seat]), $t],
                 BusTicket::HELD => ['not_paid', translate('Not paid yet: this seat is only held.'), $t],
                 BusTicket::CANCELLED, BusTicket::NO_SHOW => ['cancelled', translate('This ticket was cancelled.'), $t],
-                default => (function () use ($t, $byUserId, $departure) {
+                default => $collectMode && $t->collected_at === null
+                    ? ['not_collected', translate(key: 'Seat {seat}: not collected yet. Print the ticket now, then scan it.', replace: ['seat' => $t->seat]), $t]
+                    : (function () use ($t, $byUserId, $departure) {
                     $t->update(['status' => BusTicket::BOARDED, 'boarded_at' => now(), 'boarded_by' => $byUserId]);
                     if ($departure->status === BusDeparture::SCHEDULED) {
                         $departure->update(['status' => BusDeparture::BOARDING, 'boarding_at' => now()]);

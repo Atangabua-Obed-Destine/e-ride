@@ -6,6 +6,7 @@ use Modules\BusManagement\Http\Controllers\Web\Admin\BusAdminController;
 use Modules\BusManagement\Http\Controllers\Web\BusPayController;
 use Modules\BusManagement\Http\Controllers\Web\Partner\AuthController;
 use Modules\BusManagement\Http\Controllers\Web\Partner\BoardingController;
+use Modules\BusManagement\Http\Controllers\Web\Partner\CollectController;
 use Modules\BusManagement\Http\Controllers\Web\Partner\SellController;
 use Modules\BusManagement\Http\Controllers\Web\Partner\TodayController;
 use Modules\BusManagement\Http\Controllers\Web\Partner\DepartureController;
@@ -37,6 +38,9 @@ Route::group(['prefix' => 'partner/bus-agency', 'as' => 'bus-partner.'], functio
         Route::post('boarding/{departure}/undo/{ticket}', [BoardingController::class, 'undo'])->name('boarding.undo')->whereUuid('departure');
         Route::post('boarding/{departure}/start', [BoardingController::class, 'start'])->name('boarding.start')->whereUuid('departure');
         Route::post('boarding/{departure}/departed', [BoardingController::class, 'depart'])->name('boarding.depart')->whereUuid('departure');
+        // Any agent can print tickets (at the counter, and at the bus for a ticket not collected).
+        Route::get('tickets/{code}/print', [SellController::class, 'print'])->name('tickets.print')->where('code', '[A-Z0-9]{6,12}');
+        Route::get('bookings/{booking}/id/{side}', [TodayController::class, 'idPhoto'])->name('bookings.id')->whereUuid('booking')->where('side', 'front|back');
     });
 
     // The manager and the counter agents.
@@ -49,7 +53,8 @@ Route::group(['prefix' => 'partner/bus-agency', 'as' => 'bus-partner.'], functio
         Route::get('sell', [SellController::class, 'index'])->name('sell');
         Route::get('sell/{departure}/seats', [SellController::class, 'seats'])->name('sell.seats')->whereUuid('departure');
         Route::post('sell/{departure}', [SellController::class, 'sell'])->name('sell.submit')->whereUuid('departure')->middleware('throttle:60,1,bus-sell');
-        Route::get('tickets/{code}/print', [SellController::class, 'print'])->name('tickets.print')->where('code', '[A-Z0-9]{6,12}');
+        Route::get('collect', [CollectController::class, 'index'])->name('collect');
+        Route::get('collect/lookup', [CollectController::class, 'lookup'])->name('collect.lookup')->middleware('throttle:120,1,bus-collect');
 
         Route::post('boarding/{departure}/delay', [BoardingController::class, 'delay'])->name('boarding.delay')->whereUuid('departure');
     });

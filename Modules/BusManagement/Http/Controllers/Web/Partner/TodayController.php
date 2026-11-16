@@ -10,7 +10,11 @@ use Illuminate\View\View;
 use Modules\BusManagement\Entities\BusBooking;
 use Modules\BusManagement\Entities\BusDeparture;
 use Modules\BusManagement\Entities\BusTicket;
+use Illuminate\Support\Facades\Storage;
+use Modules\BusManagement\Lib\BusSettings;
 use Modules\BusManagement\Service\BookingService;
+use Modules\UserManagement\Entities\IdVerification;
+use Modules\UserManagement\Service\IdVerificationService;
 use Modules\BusManagement\Service\ScheduleService;
 
 /** Today: seat requests to answer (with a countdown and a ring), seats waiting for payment, refunds owed, today's buses. */
@@ -59,6 +63,7 @@ class TodayController extends Controller
             'asked_at' => $b->created_at?->toIso8601String(),
             'deadline' => ($b->status === BusBooking::REQUESTED ? $b->respond_by : ($b->status === BusBooking::ACCEPTED ? $b->pay_by : $b->refund_due_by))?->toIso8601String(),
             'source' => $b->source,
+            'booker' => self::booker($b),
         ];
 
         return response()->json([
@@ -130,6 +135,44 @@ class TodayController extends Controller
             return response()->json(['ok' => false, 'message' => collect($e->errors())->flatten()->first()], 422);
         }
         return response()->json(['ok' => true, 'message' => $done]);
+    }
+
+    /**
+     * The booker's ID as the agency sees it: the number, E-Ride ID Verified or not, and (when an agent must look
+     * at it) the photos, served through idPhoto().
+     */
+    public static function booker(BusBooking $b): ?array
+    {
+        if (!$b->booker_id_number) {
+            return null;
+        }
+        $check = BookingService::needsIdCheck($b);
+        $hasPhotos = $b->booker_verification_id !== null;
+        return [
+            'type' => $b->booker_id_type === 'passport' ? translate('Passport') : translate('ID card'),
+            'number' => $b->booker_id_number,
+            'verified' => (bool)$b->booker_verified,
+            'check' => $check,
+            'checked' => $b->id_checked_at !== null,
+            // Photos only when an agent has to look: an agency trusting E-Ride sees the badge, the name and the number.
+            'photos' => $hasPhotos && $check ? array_values(array_filter([
+                route('bus-partner.bookings.id', [$b->id, 'front']),
+                IdVerification::whereKey($b->booker_verification_id)->whereNotNull('back_path')->exists() ? route('bus-partner.bookings.id', [$b->id, 'back']) : null,
+            ])) : [],
+        ];
+    }
+
+    /** The booker's ID photo, for this agency's staff, until the day after the trip. */
+    public function idPhoto(Request $request, string $booking, string $side)
+    {
+        $agency = $request->attributes->get('busAgency');
+        $b = BusBooking::with('departure')->where('agency_id', $agency->id)->findOrFail($booking);
+        abort_unless($b->booker_verification_id && in_array($side, ['front', 'back'], true) && BookingService::needsIdCheck($b), 404);
+        abort_if($b->departure && $b->departure->leavesAt()->addDay()->isPast(), 404);
+        $record = IdVerification::find($b->booker_verification_id);
+        $path = $record ? app(IdVerificationService::class)->file($record, $side) : null;
+        abort_unless($path, 404);
+        return Storage::disk(IdVerificationService::DISK)->response($path, null, ['Cache-Control' => 'private, no-store']);
     }
 
     protected function label(?BusDeparture $d): ?string

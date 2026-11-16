@@ -60,6 +60,7 @@
             <div class="b-hint mb-2" id="pickHint">{{ translate('Choose one or more seats on the plan.') }}</div>
             <div id="paxList"></div>
             <div class="row g-2 mt-1">
+                <div class="col-12"><label class="form-label small fw-semibold" for="bookerId">{{ translate('ID number of the person paying (optional)') }}</label><input id="bookerId" class="form-control text-uppercase" maxlength="40" autocomplete="off"></div>
                 <div class="col-sm-7"><label class="form-label small fw-semibold" for="drop">{{ translate('Gets off at') }}</label><select id="drop" class="form-select"></select></div>
                 <div class="col-sm-5"><span class="form-label small fw-semibold d-block">{{ translate('Paid by') }}</span>
                     <div class="seg"><input type="radio" name="method" id="m_cash" value="cash" checked><label for="m_cash">{{ translate('Cash') }}</label><input type="radio" name="method" id="m_momo" value="momo"><label for="m_momo">MoMo</label><input type="radio" name="method" id="m_orange" value="orange"><label for="m_orange">Orange</label></div></div>
@@ -129,8 +130,7 @@
             return '<div class="pax d-flex gap-2 align-items-start" data-seat="' + esc(s) + '"><div class="pax-seat" aria-label="' + T.seat + ' ' + esc(s) + '">' + esc(s) + '</div><div class="row g-2 flex-grow-1">' +
                 '<div class="col-sm-6"><input class="form-control" data-f="name" required maxlength="120" placeholder="' + T.name + '" aria-label="' + T.name + ', ' + T.seat + ' ' + esc(s) + '" value="' + esc(p.name) + '"></div>' +
                 '<div class="col-sm-6"><input class="form-control" data-f="phone" inputmode="tel" maxlength="20" placeholder="' + T.phone + '" aria-label="' + T.phone + '" value="' + esc(p.phone) + '"></div>' +
-                '<div class="col-8"><input class="form-control" data-f="id_number" maxlength="40" placeholder="' + T.id + '" aria-label="' + T.id + '" value="' + esc(p.id_number) + '"></div>' +
-                '<div class="col-4"><input class="form-control" data-f="bags" type="number" min="0" max="9" aria-label="' + T.bags + '" value="' + esc(p.bags != null ? p.bags : rules.free_bags) + '"></div>' +
+                '<div class="col-4"><label class="visually-hidden">' + T.bags + '</label><input class="form-control" data-f="bags" type="number" min="0" max="9" aria-label="' + T.bags + '" title="' + T.bags + '" value="' + esc(p.bags != null ? p.bags : rules.free_bags) + '"></div>' +
                 '</div></div>';
         }).join('');
         var first = box.querySelector('[data-f=name]');
@@ -184,7 +184,8 @@
         busPost(sellUrl.replace('__', dep), {
             seats: picked, drop_point_id: document.getElementById('drop').value,
             method: document.querySelector('input[name=method]:checked').value,
-            passengers: picked.map(function (s) { return {name: pax[s].name, phone: pax[s].phone || null, id_number: pax[s].id_number || null, bags: pax[s].bags != null && pax[s].bags !== '' ? +pax[s].bags : null}; }),
+            booker_id_number: document.getElementById('bookerId').value.trim() || null,
+            passengers: picked.map(function (s) { return {name: pax[s].name, phone: pax[s].phone || null, bags: pax[s].bags != null && pax[s].bags !== '' ? +pax[s].bags : null}; }),
         }).then(function (d) {
             if (!d.ok) { busToast(d.message); load(false); btn.disabled = false; return; }
             document.getElementById('saleForm').hidden = true;
@@ -192,7 +193,7 @@
             document.getElementById('doneText').textContent = d.message;
             document.getElementById('doneCode').textContent = d.code;
             document.getElementById('printBtn').href = d.print;
-            picked = []; pax = {}; drawPax(); load(false);
+            picked = []; pax = {}; drawPax(); load(false); document.getElementById('bookerId').value = '';
             document.getElementById('printBtn').focus();
         }).catch(function () { btn.disabled = false; });
     });

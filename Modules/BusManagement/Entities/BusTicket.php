@@ -17,9 +17,11 @@ class BusTicket extends Model
     public const NO_SHOW = 'no_show';
     public const CANCELLED = 'cancelled';
 
-    protected $fillable = ['code', 'booking_id', 'departure_id', 'seat', 'passenger_name', 'phone', 'id_number', 'bags', 'fare', 'status', 'boarded_at', 'boarded_by'];
+    protected $fillable = ['code', 'booking_id', 'departure_id', 'seat', 'passenger_name', 'phone', 'id_number', 'bags', 'fare', 'status', 'boarded_at', 'boarded_by',
+        'collected_at', 'collected_by', 'print_count', 'last_printed_at'];
 
-    protected $casts = ['fare' => 'float', 'bags' => 'integer', 'boarded_at' => 'datetime'];
+    protected $casts = ['fare' => 'float', 'bags' => 'integer', 'boarded_at' => 'datetime', 'collected_at' => 'datetime', 'print_count' => 'integer',
+        'last_printed_at' => 'datetime'];
 
     public function booking(): BelongsTo
     {

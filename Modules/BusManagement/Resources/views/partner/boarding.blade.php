@@ -107,6 +107,7 @@
 <script>
 (function () {
     var dep = @json($current->id);
+    var collectMode = @json(\Modules\BusManagement\Lib\BusSettings::rules($busAgency->rules)['tickets'] === 'collect');
     var base = @json(url('partner/bus-agency/boarding')) + '/' + dep;
     var T = {
         boarded: @json(translate('On board')), waiting: @json(translate('Not yet')), noShow: @json(translate('Not on board')),
@@ -114,9 +115,10 @@
         empty: @json(translate('No passenger yet.')), noCam: @json(translate('This phone cannot scan here. Type the code under the QR instead.')),
         stop: @json(translate('Stop the camera')), cam: @json(translate('Scan with the camera')),
         delayAsk: @json(translate('New departure time (HH:MM)')), departAsk: @json(translate(key: 'Mark the bus as departed. {n} passenger(s) not scanned will be marked not on board.', replace: ['n' => '{n}'])),
-        cancelAsk: @json(translate('Say why this departure is cancelled. Passengers see it.')), missing: @json(translate(key: '{n} passenger(s) without an ID number on the list.', replace: ['n' => '{n}'])),
+        cancelAsk: @json(translate('Say why this departure is cancelled. Passengers see it.')), missing: @json(translate(key: '{n} booking(s) without an ID number on the list.', replace: ['n' => '{n}'])),
         status: {scheduled: @json(translate('Scheduled')), boarding: @json(translate('Boarding')), departed: @json(translate('Departed')), cancelled: @json(translate('Cancelled'))},
-        delayed: @json(translate('delayed to')), bags: @json(translate('bags')),
+        delayed: @json(translate('delayed to')), bags: @json(translate('bags')), printNow: @json(translate('Print now')),
+        bookerId: @json(translate('Booker ID')), notCollected: @json(translate('Not collected')), print: @json(translate('Print')),
     };
     var data = null, filter = 'all', lastCode = '', lastAt = 0;
     var esc = function (s) { var d = document.createElement('div'); d.textContent = s == null ? '' : String(s); return d.innerHTML; };
@@ -137,8 +139,10 @@
         document.getElementById('manifest').innerHTML = rows.length ? rows.map(function (t) {
             var st = t.status === 'boarded' ? '<span class="b-tag ok">' + T.boarded + ' ' + esc(t.boarded_at || '') + '</span>' : t.status === 'no_show' ? '<span class="b-tag bad">' + T.noShow + '</span>' : '<span class="b-tag mute">' + T.waiting + '</span>';
             return '<div class="m-row is-' + t.status + '"><div class="m-seat">' + esc(t.seat) + '</div><div style="min-width:0"><div class="fw-bold text-truncate">' + esc(t.name) + '</div>' +
-                '<div class="b-hint">' + (t.id_number ? esc(t.id_number) + ' · ' : '') + esc(t.drop_point || '') + ' · ' + (t.source === 'app' ? T.app : T.counter) + (t.bags > 1 ? ' · ' + t.bags + ' ' + T.bags : '') + '</div></div>' +
-                '<div class="d-flex flex-column align-items-end gap-1">' + st + (t.status === 'boarded' && open ? '<button class="btn btn-link btn-sm p-0" data-undo="' + esc(t.code) + '">' + T.undo + '</button>' : '') + '</div></div>';
+                '<div class="b-hint">' + (t.booker_id ? T.bookerId + ' ' + esc(t.booker_id) + ' · ' : '') + esc(t.drop_point || '') + ' · ' + (t.source === 'app' ? T.app : T.counter) + (t.bags > 1 ? ' · ' + t.bags + ' ' + T.bags : '') +
+                (!t.collected && t.status === 'valid' && collectMode ? ' · <span class="text-warning fw-bold">' + T.notCollected + '</span>' : '') + '</div></div>' +
+                '<div class="d-flex flex-column align-items-end gap-1">' + st + (t.status === 'boarded' && open ? '<button class="btn btn-link btn-sm p-0" data-undo="' + esc(t.code) + '">' + T.undo + '</button>' : '') +
+                (open && t.status !== 'no_show' ? '<a class="btn btn-link btn-sm p-0" target="_blank" rel="noopener" href="' + t.print + '">' + T.print + '</a>' : '') + '</div></div>';
         }).join('') : '<div class="b-hint py-2">' + T.empty + '</div>';
     }
     function load() {
@@ -161,7 +165,8 @@
     function flash(d) {
         var cls = d.ok ? 'ok' : (d.result === 'already' ? 'warn' : 'bad');
         var icon = d.ok ? 'bi-check-circle-fill' : (d.result === 'already' ? 'bi-exclamation-circle-fill' : 'bi-x-circle-fill');
-        document.getElementById('flash').innerHTML = '<div class="flash ' + cls + '"><i class="bi ' + icon + '" aria-hidden="true"></i><span>' + esc(d.message) + '</span></div>';
+        document.getElementById('flash').innerHTML = '<div class="flash ' + cls + '"><i class="bi ' + icon + '" aria-hidden="true"></i><span class="flex-grow-1">' + esc(d.message) + '</span>' +
+            (d.print ? '<a class="btn btn-dark btn-sm" target="_blank" rel="noopener" href="' + d.print + '"><i class="bi bi-printer"></i> ' + T.printNow + '</a>' : '') + '</div>';
         beep(d.ok);
     }
     function scan(code) {

@@ -5,6 +5,8 @@
     $nav = array_values(array_filter([
         Route::has('bus-partner.today') && $role !== BusStaff::BOARDING ? ['bus-partner.today', 'bi-bell', translate('Today')] : null,
         Route::has('bus-partner.sell') && $role !== BusStaff::BOARDING ? ['bus-partner.sell', 'bi-ticket-perforated', translate('Quick sell')] : null,
+        Route::has('bus-partner.collect') && $role !== BusStaff::BOARDING && \Modules\BusManagement\Lib\BusSettings::rules($busAgency->rules)['tickets'] === 'collect'
+            ? ['bus-partner.collect', 'bi-printer', translate('Collect')] : null,
         Route::has('bus-partner.boarding') ? ['bus-partner.boarding', 'bi-qr-code-scan', translate('Boarding')] : null,
         ['bus-partner.departures', 'bi-calendar-week', translate('Departures')],
         $role === BusStaff::MANAGER ? ['bus-partner.destinations', 'bi-signpost-split', translate('Destinations')] : null,

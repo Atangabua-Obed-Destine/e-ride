@@ -145,3 +145,9 @@ Route::group(['prefix' => 'user'], function () {
 });
 
 
+
+// E-Ride ID Verified (customer): status, and sending an ID card or passport with a selfie.
+Route::group(['prefix' => 'customer/id-verification', 'middleware' => ['auth:api', 'maintenance_mode']], function () {
+    Route::get('/', [\Modules\UserManagement\Http\Controllers\Api\Customer\IdVerificationController::class, 'show'])->middleware('throttle:60,1,id-verification-read');
+    Route::post('/', [\Modules\UserManagement\Http\Controllers\Api\Customer\IdVerificationController::class, 'submit'])->middleware('throttle:6,1,id-verification-submit');
+});

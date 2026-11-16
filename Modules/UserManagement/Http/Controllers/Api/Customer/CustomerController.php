@@ -39,7 +39,14 @@ class CustomerController extends Controller
 
     public function updateProfile(UserProfileUpdateApiRequest $request): JsonResponse
     {
-        $this->customerService->update(id: $request->user()->id, data: $request->validated());
+        $user = $request->user();
+        $oldName = mb_strtolower(trim($user->first_name . ' ' . $user->last_name));
+        $this->customerService->update(id: $user->id, data: $request->validated());
+        // E-Ride ID Verified is for a name: a new name must be verified again.
+        $fresh = $user->fresh();
+        if ($fresh && mb_strtolower(trim($fresh->first_name . ' ' . $fresh->last_name)) !== $oldName) {
+            app(\Modules\UserManagement\Service\IdVerificationService::class)->nameChanged($fresh);
+        }
         return response()->json(responseFormatter(DEFAULT_UPDATE_200), 200);
     }
 

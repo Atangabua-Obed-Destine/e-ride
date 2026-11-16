@@ -52,7 +52,8 @@ class DestinationController extends Controller
             'extra_bag_fee' => 'required|integer|min:0|max:100000',
             'counter_seats' => 'required|integer|min:0|max:80',
             'online_cutoff_minutes' => 'required|integer|min:0|max:720',
-            'require_id' => 'nullable|boolean',
+            'id_check' => 'nullable|in:eride,agents,number',
+            'tickets' => 'nullable|in:app,collect',
             'tier_full_hours' => 'required|integer|min:0|max:168',
             'tier_half_hours' => 'required|integer|min:0|max:168',
             'tier_half_pct' => 'required|integer|min:0|max:100',
@@ -66,7 +67,9 @@ class DestinationController extends Controller
             'extra_bag_fee' => $data['extra_bag_fee'],
             'counter_seats' => $data['counter_seats'],
             'online_cutoff_minutes' => $data['online_cutoff_minutes'],
-            'require_id' => $request->boolean('require_id'),
+            'require_id' => true,
+            'id_check' => $data['id_check'] ?? BusSettings::rules($agency->rules)['id_check'],
+            'tickets' => $data['tickets'] ?? BusSettings::rules($agency->rules)['tickets'],
             'cancel_tiers' => [[$data['tier_full_hours'], 100], [$data['tier_half_hours'], $data['tier_half_pct']], [0, 0]],
         ]]);
         return redirect()->route('bus-partner.destinations')->with('toast', translate('Booking rules saved. Passengers see them before they book.'));

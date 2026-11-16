@@ -34,7 +34,28 @@
             <div class="col-6"><label class="form-label small fw-semibold" for="counter_seats">{{ translate('Seats kept for the counter') }}</label><input id="counter_seats" type="number" name="counter_seats" class="form-control" min="0" max="80" value="{{ old('counter_seats', $rules['counter_seats']) }}"></div>
             <div class="col-6"><label class="form-label small fw-semibold" for="online_cutoff_minutes">{{ translate('Online sales stop (minutes before)') }}</label><input id="online_cutoff_minutes" type="number" name="online_cutoff_minutes" class="form-control" min="0" max="720" value="{{ old('online_cutoff_minutes', $rules['online_cutoff_minutes']) }}"></div>
         </div>
-        <div class="form-check form-switch mb-3"><input class="form-check-input" type="checkbox" role="switch" id="require_id" name="require_id" value="1" @checked(old('require_id', $rules['require_id']))><label class="form-check-label small fw-semibold" for="require_id">{{ translate('Ask every passenger for their ID card number') }}</label></div>
+        <fieldset class="mb-3">
+            <legend class="fw-semibold small mb-1">{{ translate('The ID of the person booking') }}</legend>
+            <div class="b-hint mb-2">{{ translate('Only the person who books gives an ID, even when booking for others.') }}</div>
+            @foreach([
+                'eride' => [translate('Trust E-Ride ID Verified'), translate('Verified people are accepted as they are. For the others, your agents look at the ID photo before accepting.')],
+                'agents' => [translate('Our agents check the ID photo'), translate('Every request shows the ID photo. An agent checks it before accepting.')],
+                'number' => [translate('ID number only'), translate('No photo: the person types their ID number.')],
+            ] as $value => [$label, $hint])
+                <div class="form-check mb-1"><input class="form-check-input" type="radio" name="id_check" id="idc_{{ $value }}" value="{{ $value }}" @checked(old('id_check', $rules['id_check']) === $value)>
+                    <label class="form-check-label small" for="idc_{{ $value }}"><b>{{ $label }}</b><br><span class="b-hint">{{ $hint }}</span></label></div>
+            @endforeach
+        </fieldset>
+        <fieldset class="mb-3">
+            <legend class="fw-semibold small mb-1">{{ translate('Tickets') }}</legend>
+            @foreach([
+                'app' => [translate('In the app'), translate('Passengers board with the QR code in the E-Ride app.')],
+                'collect' => [translate('Collected at our counter'), translate('Passengers come with their booking code, and you print their tickets at the counter (Collect).')],
+            ] as $value => [$label, $hint])
+                <div class="form-check mb-1"><input class="form-check-input" type="radio" name="tickets" id="tk_{{ $value }}" value="{{ $value }}" @checked(old('tickets', $rules['tickets']) === $value)>
+                    <label class="form-check-label small" for="tk_{{ $value }}"><b>{{ $label }}</b><br><span class="b-hint">{{ $hint }}</span></label></div>
+            @endforeach
+        </fieldset>
         <div class="fw-semibold small mb-2">{{ translate('When a passenger cancels') }}</div>
         <div class="row g-2 mb-2">
             <div class="col-12"><label class="form-label small" for="tier_full_hours">{{ translate('Everything back if they cancel at least this many hours before') }}</label><input id="tier_full_hours" type="number" name="tier_full_hours" class="form-control" min="0" max="168" value="{{ old('tier_full_hours', $full) }}"></div>

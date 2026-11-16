@@ -21,6 +21,7 @@ use Modules\BusManagement\Entities\BusWaitlist;
 use Modules\BusManagement\Lib\BusPush;
 use Modules\BusManagement\Lib\BusSettings;
 use Modules\UserManagement\Entities\User;
+use Modules\UserManagement\Service\IdVerificationService;
 
 /**
  * Seats from the app: the passenger asks, the agency accepts or declines, the passenger pays.
@@ -94,7 +95,9 @@ class BookingService
 
     /**
      * The passenger asks for seats. Holds them at once; auto-accept lines skip the agency's answer.
-     * input: seats[], drop_point_id, passengers[] {name, phone?, id_number?, bags?}, phone (to pay with, optional)
+     * input: seats[], drop_point_id, passengers[] {name, phone?, bags?}, phone (to pay with, optional),
+     * booker_id_number (only when the agency asks for the number alone and the person has no ID on E-Ride).
+     * Only the person booking gives an ID (see bookerId()), even when the seats are for others.
      */
     public function request(User $user, BusDeparture $departure, array $input): BusBooking
     {
@@ -114,7 +117,7 @@ class BookingService
             'passengers' => 'required|array|size:' . max(1, $seatCount),
             'passengers.*.name' => 'required|string|min:2|max:120',
             'passengers.*.phone' => 'nullable|string|max:20',
-            'passengers.*.id_number' => ($rules['require_id'] ? 'required' : 'nullable') . '|string|max:40',
+            'booker_id_number' => ['nullable', 'string', 'min:5', 'max:40', 'regex:/^[A-Za-z0-9 \-\/]+$/'],
             'passengers.*.bags' => 'nullable|integer|min:0|max:5',
             'phone' => 'nullable|string|max:20',
         ], [
@@ -123,9 +126,9 @@ class BookingService
             'passengers.size' => translate('Add one passenger for each seat.'),
             'passengers.*.name.required' => translate('Add the name of every passenger.'),
             'passengers.*.name.min' => translate('Add the name of every passenger.'),
-            'passengers.*.id_number.required' => translate('Add the ID card number of every passenger: the agency needs it for the checkpoint list.'),
         ], ['seats' => translate('Seats'), 'drop_point_id' => translate('Where you get off')])->validate();
 
+        $booker = $this->bookerId($user, $rules['id_check'], $data['booker_id_number'] ?? null);
         $seats = array_map(fn($s) => (string)$s, $data['seats']);
         $planSeats = array_map('strval', $departure->seat_plan['seats'] ?? []);
         if ($bad = array_diff($seats, $planSeats)) {
@@ -157,7 +160,7 @@ class BookingService
                 'seat' => $seat,
                 'passenger_name' => trim($p['name']),
                 'phone' => filled($p['phone'] ?? null) ? trim($p['phone']) : null,
-                'id_number' => filled($p['id_number'] ?? null) ? Str::upper(trim($p['id_number'])) : null,
+                'id_number' => null,
                 'bags' => $bags,
                 'fare' => $fare + max(0, $bags - $rules['free_bags']) * $rules['extra_bag_fee'],
             ];
@@ -165,7 +168,7 @@ class BookingService
 
         $now = now();
         $auto = (bool)$departure->auto_accept;
-        $booking = DB::transaction(function () use ($user, $departure, $agency, $drop, $lines, $data, $now, $auto, $settings) {
+        $booking = DB::transaction(function () use ($user, $departure, $agency, $drop, $lines, $data, $now, $auto, $settings, $booker) {
             // The departure may have been cancelled or changed bus since it was read: check again under its lock.
             $locked = BusDeparture::whereKey($departure->id)->lockForUpdate()->first();
             if (!$locked || !$locked->isOpen() || (string)$locked->vehicle_id !== (string)$departure->vehicle_id) {
@@ -185,7 +188,7 @@ class BookingService
                 'amount' => array_sum(array_column($lines, 'fare')),
                 'commission_pct' => $agency->commission_app_pct,
                 'phone' => filled($data['phone'] ?? null) ? trim($data['phone']) : $user->phone,
-            ]);
+            ] + $booker);
             foreach ($lines as $line) {
                 $ticket = BusTicket::create($line + [
                     'code' => $this->newCode(BusTicket::class, 10),
@@ -199,6 +202,35 @@ class BookingService
         });
 
         return $booking->fresh(['tickets', 'departure', 'agency']);
+    }
+
+    /**
+     * The booker's ID for a booking, as the agency checks it:
+     *   eride / agents  an ID sent to E-Ride (verified, or pending: the agency's agents look at the photo);
+     *   number          the number of an ID sent to E-Ride, or one typed for this booking.
+     */
+    protected function bookerId(User $user, string $check, ?string $typed): array
+    {
+        $id = app(IdVerificationService::class)->usable($user);
+        if (!$id && $check !== 'number') {
+            throw ValidationException::withMessages(['booker_id' => translate('This agency needs your ID: add your ID card or passport (once, from your profile) and book again.')]);
+        }
+        if (!$id && !filled($typed)) {
+            throw ValidationException::withMessages(['booker_id_number' => translate('Add your ID card number: the agency needs it for its passenger list.')]);
+        }
+        return [
+            'booker_id_type' => $id?->doc_type ?? 'id_card',
+            'booker_id_number' => $id?->doc_number ?? Str::upper(preg_replace('/\s+/', '', (string)$typed)),
+            'booker_verification_id' => $id?->id,
+            'booker_verified' => (bool)$id?->isVerified(),
+        ];
+    }
+
+    /** Whether an agent must look at the booker's ID photo before accepting. */
+    public static function needsIdCheck(BusBooking $booking, ?array $rules = null): bool
+    {
+        $check = BusSettings::rules($rules ?? $booking->agency?->rules)['id_check'];
+        return $booking->booker_verification_id !== null && ($check === 'agents' || ($check === 'eride' && !$booking->booker_verified));
     }
 
     /** Takes the seat of a ticket, or fails when someone has it. */
@@ -223,6 +255,10 @@ class BookingService
             }
             if ($b->respond_by && $b->respond_by->lte(now())) {
                 throw ValidationException::withMessages(['booking' => translate('Too late: this request has run out.')]);
+            }
+            if (self::needsIdCheck($b)) {
+                $b->id_checked_by = auth()->id();
+                $b->id_checked_at = now();
             }
             $b->update([
                 'status' => BusBooking::ACCEPTED,
@@ -586,6 +622,34 @@ class BookingService
                 }
             });
         return $closed;
+    }
+
+    /** Tickets printed at the counter: app passengers who have not collected theirs get a reminder 2 hours before. */
+    public function collectReminders(?CarbonInterface $now = null): int
+    {
+        $now ??= now();
+        $sent = 0;
+        BusBooking::with(['agency', 'departure.destination', 'customer', 'tickets'])->where('source', BusBooking::APP)->where('status', BusBooking::PAID)
+            ->whereNull('collect_reminded_at')
+            ->whereIn('departure_id', BusDeparture::whereIn('status', BusDeparture::OPEN)->whereBetween('date', [$now->copy()->subDay()->toDateString(), $now->copy()->addDay()->toDateString()])->select('id'))
+            ->limit(300)->get()
+            ->each(function (BusBooking $b) use ($now, &$sent) {
+                if (BusSettings::rules($b->agency?->rules)['tickets'] !== 'collect' || !$b->departure) {
+                    return;
+                }
+                $leaves = $b->departure->leavesAt();
+                $uncollected = $b->tickets->contains(fn($t) => $t->status === BusTicket::VALID && $t->collected_at === null);
+                if (!$uncollected || $leaves->lte($now) || $leaves->gt($now->copy()->addHours(2))) {
+                    return;
+                }
+                $b->forceFill(['collect_reminded_at' => $now])->save();
+                BusPush::send($b->customer, 'bus_collect_reminder', 'Collect your ticket at {agency}',
+                    'Show code {code} at the counter before {time}. Your bus to {city} leaves at {leaves}.',
+                    ['agency' => $b->agency->name, 'code' => $b->code, 'time' => $leaves->copy()->subMinutes(30)->format('H:i'),
+                        'city' => $b->departure->destination?->city, 'leaves' => $leaves->format('H:i')], ['bus_booking_id' => $b->id]);
+                $sent++;
+            });
+        return $sent;
     }
 
     // ------------------------------------------------------------- waitlist

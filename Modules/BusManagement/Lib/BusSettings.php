@@ -13,6 +13,8 @@ class BusSettings
     /** Cancellation by the passenger, by default: [hours before departure, % back], most generous first. */
     public const DEFAULT_CANCEL_TIERS = [[18, 100], [2, 50], [0, 0]];
 
+    public const ID_CHECKS = ['eride', 'agents', 'number'];
+
     public static function all(): array
     {
         $get = fn(string $key, $default) => businessConfig($key, self::TYPE)?->value ?? $default;
@@ -67,6 +69,11 @@ class BusSettings
             'cancel_tiers' => $tiers ?: self::DEFAULT_CANCEL_TIERS,
             // The ID card number is asked for every passenger (police checkpoint lists).
             'require_id' => (bool)($rules['require_id'] ?? true),
+            // How the booker's ID is checked: eride (trust E-Ride ID Verified; otherwise agents look at the photo),
+            // agents (agents look at the photo every time), number (the number only).
+            'id_check' => in_array($rules['id_check'] ?? null, self::ID_CHECKS, true) ? $rules['id_check'] : 'eride',
+            // app (tickets in the app) | collect (printed at the counter, with the booking code).
+            'tickets' => in_array($rules['tickets'] ?? null, ['app', 'collect'], true) ? $rules['tickets'] : 'app',
         ];
     }
 

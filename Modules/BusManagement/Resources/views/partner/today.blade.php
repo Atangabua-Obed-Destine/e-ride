@@ -21,6 +21,9 @@
     .dep-row:first-child { border-top: 0; }
     .reasons button { margin: 0 6px 6px 0; }
     .empty { text-align: center; padding: 28px 12px; color: var(--muted); }
+    .idbox { border-radius: 12px; padding: 10px; margin: 4px 0 8px; background: #f4f6f6; }
+    .idbox.is-check { background: #fff4e5; }
+    .idbox img { height: 110px; max-width: 100%; border-radius: 8px; border: 1px solid var(--line); object-fit: cover; cursor: zoom-in; }
     .empty i { font-size: 34px; display: block; margin-bottom: 6px; color: #c3cbca; }
 </style>
 @endpush
@@ -66,7 +69,8 @@
 <script>
 (function () {
     var T = {
-        accept: @json(translate('Accept')), decline: @json(translate('Decline')), why: @json(translate('Give a reason. The passenger sees it.')),
+        accept: @json(translate('Accept')), decline: @json(translate('Decline')), acceptChecked: @json(translate('ID checked, accept')),
+        bookerId: @json(translate('ID of the person booking')), verified: @json(translate('E-Ride ID Verified')), lookId: @json(translate('Look at the ID before accepting.')), why: @json(translate('Give a reason. The passenger sees it.')),
         none: @json(translate('No request waiting. New ones ring here and show at the top.')),
         noPay: @json(translate('Nobody is paying right now.')), noRefund: @json(translate('No refund to send.')),
         noBus: @json(translate('No bus today.')), seats: @json(translate('seats')), to: @json(translate('to')),
@@ -119,8 +123,16 @@
 
     function seatChips(b) {
         return b.seats.map(function (s) {
-            return '<span class="seat-chip"><b>' + esc(s.seat) + '</b>' + esc(s.name) + (s.id_number ? ' · ' + esc(s.id_number) : '') + (s.bags > 1 ? ' · ' + s.bags + ' 🧳' : '') + '</span>';
+            return '<span class="seat-chip"><b>' + esc(s.seat) + '</b>' + esc(s.name) + (s.bags > 1 ? ' · ' + s.bags + ' 🧳' : '') + '</span>';
         }).join('');
+    }
+    function idBox(b) {
+        var k = b.booker;
+        if (!k) return '';
+        return '<div class="idbox' + (k.check ? ' is-check' : '') + '"><div class="small fw-bold">' + T.bookerId + '</div>' +
+            '<div>' + esc(k.type) + ' · <b>' + esc(k.number) + '</b> ' + (k.verified ? '<span class="b-tag ok"><i class="bi bi-patch-check-fill"></i>' + T.verified + '</span>' : '') + '</div>' +
+            (k.check && k.photos.length ? '<div class="d-flex gap-2 flex-wrap mt-2">' + k.photos.map(function (u) { return '<a href="' + u + '" target="_blank" rel="noopener"><img src="' + u + '" alt=""></a>'; }).join('') + '</div>' +
+                '<div class="b-hint mt-1">' + T.lookId + '</div>' : '') + '</div>';
     }
     function ring(b) {
         var s = left(b.deadline), frac = Math.min(1, s / answerSeconds), c = 2 * Math.PI * 27;
@@ -136,8 +148,8 @@
             return '<article class="req' + (left(b.deadline) < 120 ? ' is-urgent' : '') + '" data-id="' + b.id + '" data-deadline="' + b.deadline + '">' + ring(b) +
                 '<div class="flex-grow-1" style="min-width:0">' +
                 '<div class="d-flex flex-wrap gap-2 align-items-baseline"><b class="fs-6">' + esc(b.name) + '</b>' + (b.phone ? '<a class="small" href="tel:' + esc(b.phone) + '">' + esc(b.phone) + '</a>' : '') + '<span class="ms-auto fw-bold">' + esc(b.amount) + '</span></div>' +
-                '<div class="small mb-2">' + esc(b.departure) + ' · ' + T.to + ' ' + esc(b.drop_point) + '</div>' + seatChips(b) +
-                '<div class="d-flex flex-wrap gap-2 mt-1" data-actions><button class="btn btn-primary" data-accept>' + T.accept + '</button><button class="btn btn-soft" data-decline>' + T.decline + '</button></div>' +
+                '<div class="small mb-2">' + esc(b.departure) + ' · ' + T.to + ' ' + esc(b.drop_point) + '</div>' + seatChips(b) + idBox(b) +
+                '<div class="d-flex flex-wrap gap-2 mt-1" data-actions><button class="btn btn-primary" data-accept>' + (b.booker && b.booker.check ? T.acceptChecked : T.accept) + '</button><button class="btn btn-soft" data-decline>' + T.decline + '</button></div>' +
                 '<div class="reasons mt-2" data-reasons hidden><div class="small fw-semibold mb-1">' + T.why + '</div>' +
                 REASONS.map(function (r) { return '<button class="btn btn-soft btn-sm" data-reason="' + esc(r) + '">' + esc(r) + '</button>'; }).join('') +
                 '<div class="d-flex gap-2"><input class="form-control form-control-sm" maxlength="200" placeholder="' + T.other + '" aria-label="' + T.other + '" data-other><button class="btn btn-dark btn-sm" data-reason-other>' + T.decline + '</button></div></div>' +

@@ -45,7 +45,8 @@ class BoardingController extends Controller
     {
         $d = $this->find($request, $departure);
         [$result, $message, $ticket] = $this->boarding->scan($request->attributes->get('busAgency'), $d, (string)$request->input('code', ''), auth()->id());
-        return response()->json(['result' => $result, 'ok' => $result === 'boarded', 'message' => $message, 'seat' => $ticket?->seat]);
+        return response()->json(['result' => $result, 'ok' => $result === 'boarded', 'message' => $message, 'seat' => $ticket?->seat,
+            'print' => $result === 'not_collected' && $ticket?->booking ? route('bus-partner.tickets.print', $ticket->booking->code) : null]);
     }
 
     public function undo(Request $request, string $departure, string $ticket): JsonResponse
@@ -109,12 +110,16 @@ class BoardingController extends Controller
             'capacity' => (int)$d->capacity,
             'boarded' => $tickets->where('status', BusTicket::BOARDED)->count(),
             'sold' => $tickets->count(),
-            'missing_ids' => $tickets->whereNull('id_number')->count(),
+            'missing_ids' => $tickets->filter(fn($t) => !$t->booking?->booker_id_number)->pluck('booking_id')->unique()->count(),
             'tickets' => $tickets->map(fn(BusTicket $t) => [
                 'code' => $t->code,
                 'seat' => $t->seat,
                 'name' => $t->passenger_name,
                 'id_number' => $t->id_number,
+                'booker_id' => $t->booking?->booker_id_number,
+                'booking' => $t->booking?->code,
+                'collected' => $t->collected_at !== null,
+                'print' => route('bus-partner.tickets.print', $t->booking?->code ?? 'X'),
                 'phone' => $t->phone,
                 'bags' => $t->bags,
                 'drop_point' => $t->booking?->dropPoint?->name,

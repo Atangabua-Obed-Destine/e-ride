@@ -226,3 +226,13 @@ Route::group(['prefix' => 'admin', 'as' => 'admin.', 'middleware' => 'admin'], f
     });
 });
 
+
+// E-Ride ID Verified (admin): the review queue and how IDs are checked.
+Route::group(['prefix' => 'admin/id-verification', 'as' => 'admin.id-verification.', 'middleware' => 'admin'], function () {
+    $c = \Modules\UserManagement\Http\Controllers\Web\Admin\IdVerificationAdminController::class;
+    Route::get('/', [$c, 'index'])->name('index');
+    Route::post('settings', [$c, 'settings'])->name('settings');
+    Route::get('{record}/file/{side}', [$c, 'file'])->name('file')->whereUuid('record')->where('side', 'front|back|selfie');
+    Route::post('{record}/approve', [$c, 'approve'])->name('approve')->whereUuid('record');
+    Route::post('{record}/refuse', [$c, 'refuse'])->name('refuse')->whereUuid('record');
+});

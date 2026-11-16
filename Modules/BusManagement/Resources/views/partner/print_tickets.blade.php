@@ -23,6 +23,7 @@
         .qr { text-align: center; margin: 8px 0 2px; } .qr svg { width: 38mm; height: 38mm; }
         .code { text-align: center; font-family: ui-monospace, Consolas, monospace; font-size: 14px; letter-spacing: 2px; font-weight: 700; }
         .foot { text-align: center; font-size: 10.5px; color: #555; margin-top: 6px; }
+        .stamp { text-align: center; font-weight: 900; letter-spacing: 3px; border: 2px solid #111; border-radius: 4px; padding: 2px; margin-bottom: 4px; }
         @media print { body { background: #fff; } .bar { display: none; } .t { margin: 0 auto; border-radius: 0; } @page { margin: 4mm; } }
     </style>
 </head>
@@ -31,6 +32,7 @@
 @foreach($booking->tickets->sortBy(fn($t) => (int)$t->seat) as $t)
     @continue(!in_array($t->status, ['valid', 'boarded'], true))
     <section class="t">
+        @if($reprint[$t->id] ?? false)<div class="stamp">{{ translate('REPRINT') }} {{ now()->format('d/m H:i') }}</div>@endif
         <div class="ag">{{ $busAgency->name }}</div>
         <div class="sub">{{ $busAgency->address }}{{ $busAgency->phone ? ' · ' . $busAgency->phone : '' }}</div>
         <div class="route"><span>{{ $busAgency->origin_city }}</span><span>&rarr;</span><span>{{ $d->destination?->city }}</span></div>
@@ -38,6 +40,9 @@
         <table>
             <tr><td>{{ translate('Passenger') }}</td><td>{{ $t->passenger_name }}</td></tr>
             @if($t->id_number)<tr><td>{{ translate('ID') }}</td><td>{{ $t->id_number }}</td></tr>@endif
+            @if($booking->booker_id_number)<tr><td>{{ translate('Booked by (ID)') }}</td><td>{{ $booking->booker_id_number }}</td></tr>@endif
+            @if($booking->booker_id_number)<tr><td>{{ translate('Booked by (ID)') }}</td><td>{{ $booking->booker_id_number }}</td></tr>@endif
+            @if($booking->booker_id_number)<tr><td>{{ translate('Booked by (ID)') }}</td><td>{{ $booking->booker_id_number }}</td></tr>@endif
             <tr><td>{{ translate('Leaves') }}</td><td>{{ $d->leavesAt()->translatedFormat('D j M, H:i') }}</td></tr>
             <tr><td>{{ translate('Gets off at') }}</td><td>{{ $booking->dropPoint?->name }}</td></tr>
             <tr><td>{{ translate('Bus') }}</td><td>{{ ScheduleService::classLabel($d->class) }} · {{ $d->vehicle?->registration }}</td></tr>

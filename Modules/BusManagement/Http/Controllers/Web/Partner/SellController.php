@@ -8,7 +8,9 @@ use Illuminate\Routing\Controller;
 use Illuminate\Validation\ValidationException;
 use Illuminate\View\View;
 use Modules\BusManagement\Entities\BusBooking;
+use Illuminate\Support\Facades\DB;
 use Modules\BusManagement\Entities\BusDeparture;
+use Modules\BusManagement\Entities\BusTicket;
 use Modules\BusManagement\Service\BookingService;
 use Modules\BusManagement\Service\CounterService;
 use SimpleSoftwareIO\QrCode\Facades\QrCode;
@@ -49,7 +51,7 @@ class SellController extends Controller
         $agency = $request->attributes->get('busAgency');
         $d = BusDeparture::where('agency_id', $agency->id)->findOrFail($departure);
         try {
-            $booking = $this->counter->sell($agency, $request->attributes->get('busStaff'), $d, $request->only(['seats', 'drop_point_id', 'passengers', 'method']));
+            $booking = $this->counter->sell($agency, $request->attributes->get('busStaff'), $d, $request->only(['seats', 'drop_point_id', 'passengers', 'method', 'booker_id_number']));
         } catch (ValidationException $e) {
             return response()->json(['ok' => false, 'message' => collect($e->errors())->flatten()->first()], 422);
         }
@@ -67,8 +69,23 @@ class SellController extends Controller
     {
         $agency = $request->attributes->get('busAgency');
         $booking = BusBooking::with(['tickets', 'dropPoint', 'departure.destination', 'departure.vehicle'])->where('agency_id', $agency->id)->where('code', $code)->firstOrFail();
+        abort_unless($booking->status === BusBooking::PAID, 404);
+        // Printing hands the tickets over: they are collected. A second print is stamped REPRINT and counted.
+        $reprint = [];
+        DB::transaction(function () use ($booking, &$reprint) {
+            foreach ($booking->tickets()->whereIn('status', [BusTicket::VALID, BusTicket::BOARDED])->lockForUpdate()->get() as $t) {
+                $reprint[$t->id] = $t->print_count > 0;
+                $t->forceFill([
+                    'print_count' => $t->print_count + 1,
+                    'last_printed_at' => now(),
+                    'collected_at' => $t->collected_at ?? now(),
+                    'collected_by' => $t->collected_by ?? auth()->id(),
+                ])->save();
+            }
+        });
+        $booking->load('tickets');
         $qr = fn(string $ticket) => (string)QrCode::format('svg')->size(150)->margin(0)->errorCorrection('M')->generate('ERIDE-BUS:' . $ticket);
-        return view('busmanagement::partner.print_tickets', compact('booking', 'qr'));
+        return view('busmanagement::partner.print_tickets', compact('booking', 'qr', 'reprint'));
     }
 
     protected function openDepartures($agency)

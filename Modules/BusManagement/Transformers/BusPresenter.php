@@ -39,6 +39,10 @@ class BusPresenter
                     'bag_kg' => $rules['bag_kg'],
                     'extra_bag_fee' => $rules['extra_bag_fee'],
                     'require_id' => $rules['require_id'],
+                    // eride | agents | number: what the person booking must show.
+                    'id_check' => $rules['id_check'],
+                    // app | collect: tickets in the app, or printed at the counter.
+                    'tickets' => $rules['tickets'],
                     'online_cutoff_minutes' => $rules['online_cutoff_minutes'],
                     // [hours before departure, % back], most generous first.
                     'cancel_tiers' => $rules['cancel_tiers'],
@@ -116,6 +120,9 @@ class BusPresenter
     {
         $d = $b->departure;
         $leaves = $d?->leavesAt();
+        $collectMode = BusSettings::rules($b->agency?->rules)['tickets'] === 'collect';
+        $live = $b->tickets->whereIn('status', [BusTicket::VALID, BusTicket::BOARDED]);
+        $collected = $live->isNotEmpty() && $live->every(fn(BusTicket $t) => $t->collected_at !== null);
         return [
             'id' => $b->id,
             'code' => $b->code,
@@ -160,10 +167,25 @@ class BusPresenter
                 'fare' => (float)$t->fare,
                 // held | valid | boarded | no_show | cancelled
                 'status' => $t->status,
-                // What the boarding agent scans; only shown once paid.
-                'qr' => in_array($t->status, [BusTicket::VALID, BusTicket::BOARDED], true) ? 'ERIDE-BUS:' . $t->code : null,
+                // What the boarding agent scans; only shown once paid, and not when the agency prints the tickets.
+                'qr' => in_array($t->status, [BusTicket::VALID, BusTicket::BOARDED], true) && !$collectMode ? 'ERIDE-BUS:' . $t->code : null,
+                'collected' => $t->collected_at !== null,
             ])->all(),
             'can_pay' => $b->status === BusBooking::ACCEPTED && $b->pay_by?->isFuture(),
+            // The person booking's ID, as the agency sees it.
+            'booker' => $b->booker_id_number ? [
+                'id_type' => $b->booker_id_type,
+                'masked_number' => strlen($b->booker_id_number) <= 4 ? $b->booker_id_number
+                    : substr($b->booker_id_number, 0, 2) . str_repeat('•', strlen($b->booker_id_number) - 4) . substr($b->booker_id_number, -2),
+                'verified' => (bool)$b->booker_verified,
+            ] : null,
+            // Tickets printed at the agency counter: the code to show there, and whether they were collected.
+            'collect' => $collectMode && $b->status === BusBooking::PAID ? [
+                'code' => $b->code,
+                'qr' => 'ERIDE-BUS:' . $b->code,
+                'collected' => $collected,
+                'collected_at' => $live->max('collected_at')?->toIso8601String(),
+            ] : null,
             'cancel' => $cancelQuote,
             'created_at' => $b->created_at?->toIso8601String(),
         ];

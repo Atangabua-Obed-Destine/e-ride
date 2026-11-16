@@ -54,6 +54,7 @@ class CounterService
             'passengers.*.id_number' => 'nullable|string|max:40',
             'passengers.*.bags' => 'nullable|integer|min:0|max:9',
             'method' => ['required', Rule::in(self::METHODS)],
+            'booker_id_number' => ['nullable', 'string', 'max:40', 'regex:/^[A-Za-z0-9 \-\/]+$/'],
         ], [
             'passengers.*.name.required' => translate('Add the name of every passenger.'),
             'passengers.*.name.min' => translate('Add the name of every passenger.'),
@@ -99,6 +100,8 @@ class CounterService
                 'payment_method' => $data['method'],
                 'paid_at' => now(),
                 'phone' => $lines[0]['phone'],
+                'booker_id_type' => filled($data['booker_id_number'] ?? null) ? 'id_card' : null,
+                'booker_id_number' => filled($data['booker_id_number'] ?? null) ? Str::upper(preg_replace('/\s+/', '', $data['booker_id_number'])) : null,
             ]);
             foreach ($lines as $line) {
                 $ticket = BusTicket::create([

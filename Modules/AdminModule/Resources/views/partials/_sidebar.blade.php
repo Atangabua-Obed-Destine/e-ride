@@ -611,6 +611,14 @@
                             <span class="link-title">{{ translate('Bus agencies') }}</span>
                         </a>
                     </li>
+                    <li class="{{ Request::is('admin/id-verification*') ? 'active open' : '' }}">
+                        <a href="{{ route('admin.id-verification.index') }}">
+                            <i class="bi bi-person-vcard"></i>
+                            <span class="link-title">{{ translate('ID verification') }}</span>
+                            @php($idPending = \Modules\UserManagement\Entities\IdVerification::where('status', 'pending')->count())
+                            @if($idPending)<span class="badge bg-danger ms-auto">{{ $idPending }}</span>@endif
+                        </a>
+                    </li>
                     <li class="{{ Request::is('admin/places/on-duty*') ? 'active open' : '' }}">
                         <a href="{{ route('admin.place.on-duty') }}">
                             <i class="bi bi-capsule"></i>

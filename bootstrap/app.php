@@ -126,6 +126,8 @@ $app = Application::configure(basePath: dirname(__DIR__))
         $schedule->command('market-orders:tick')->everyMinute()->withoutOverlapping();
         // E-Ride Bus Travel: payments, expiring requests, the timetable opening the coming days.
         $schedule->command('bus:tick')->everyMinute()->withoutOverlapping();
+        // E-Ride ID Verified: documents past their expiry date stop counting.
+        $schedule->call(fn() => app(\Modules\UserManagement\Service\IdVerificationService::class)->expireDue())->name('id-verifications:expire')->dailyAt('01:10')->withoutOverlapping();
         $schedule->command('trip-deposits:tick')->everyFifteenSeconds()->withoutOverlapping();
         // Homes & spaces: the still-available policy, at 8:00 so reminders arrive in the morning.
         $schedule->command('listings:sweep')->dailyAt('08:00')->withoutOverlapping();
