@@ -7149,4 +7149,7 @@
   'No travel: passengers moved' => 'No travel: passengers moved',
   'This lifts it. Departures that have not left go back on sale.' => 'This lifts it. Departures that have not left go back on sale.',
   'Over early: lift' => 'Over early: lift',
+  '{n} departure(s) stop' => ':n departure(s) stop',
+  '{n} passenger(s): {app} in the app, {counter} at the counter' => ':n passenger(s): :app in the app, :counter at the counter',
+  '{n} request(s) waiting will be declined' => ':n request(s) waiting will be declined',
 );

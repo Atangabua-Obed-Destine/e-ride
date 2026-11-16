@@ -124,9 +124,14 @@
 <script>
 (function () {
     var form = document.getElementById('declare'), box = document.getElementById('preview'), timer = null;
-    var T = {departures: @json(translate(key: '{n} departure(s) stop', replace: ['n' => '{n}'])),
-        passengers: @json(translate(key: '{n} passenger(s): {app} in the app, {counter} at the counter', replace: ['n' => '{n}', 'app' => '{app}', 'counter' => '{counter}'])),
-        waiting: @json(translate(key: '{n} request(s) waiting will be declined', replace: ['n' => '{n}'])), none: @json(translate('No departure falls inside. You can still declare it: new departures inside will not be sold.'))};
+    @php
+        $jsTexts = [
+            'departures' => translate(key: '{n} departure(s) stop', replace: ['n' => '{n}']),
+            'passengers' => translate(key: '{n} passenger(s): {app} in the app, {counter} at the counter', replace: ['n' => '{n}', 'app' => '{app}', 'counter' => '{counter}']),
+            'waiting' => translate(key: '{n} request(s) waiting will be declined', replace: ['n' => '{n}']),
+        ];
+    @endphp
+    var T = {departures: @json($jsTexts['departures']), passengers: @json($jsTexts['passengers']), waiting: @json($jsTexts['waiting']), none: @json(translate('No departure falls inside. You can still declare it: new departures inside will not be sold.'))};
     var esc = function (s) { var d = document.createElement('div'); d.textContent = s == null ? '' : String(s); return d.innerHTML; };
     function sync() {
         var rep = form.querySelector('input[name=repeat]:checked').value === '1';
