@@ -20,7 +20,7 @@ class BusBookingController extends BusController
         if (!$departure) {
             return $this->fail('departure', translate('This departure does not exist.'), 404);
         }
-        $input = $request->only(['seats', 'drop_point_id', 'passengers', 'phone']);
+        $input = $request->only(['seats', 'drop_point_id', 'passengers', 'phone', 'booker_id_number']);
         // Multipart clients send arrays as JSON text.
         foreach (['seats', 'passengers'] as $key) {
             if (is_string($input[$key] ?? null)) {
