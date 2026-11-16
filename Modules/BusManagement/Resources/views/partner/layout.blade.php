@@ -58,6 +58,7 @@
         .btn { border-radius: 10px; font-weight: 700; }
         .btn-primary { background: var(--red); border-color: var(--red); }
         .btn-primary:hover, .btn-primary:focus { background: #c41a1a; border-color: #c41a1a; }
+        .btn-primary:disabled, .btn-primary.disabled { background: var(--red); border-color: var(--red); opacity: .45; }
         .btn-dark { background: #1d2d2b; border-color: #1d2d2b; }
         .btn-soft { background: #fff; border-color: #dde3e2; color: var(--ink); }
         .b-card .btn-soft { background: #f4f6f6; border-color: #f4f6f6; }
@@ -85,6 +86,17 @@
         .sp-cabin { display: flex; justify-content: space-between; background: #eef1f0; border-radius: 10px; padding: 6px 8px; margin-bottom: 4px; font-size: 11.5px; font-weight: 700; color: #48615e; }
         .sp-cabin b { color: #1d4ed8; }
         .sp-deck { font-size: 11.5px; font-weight: 700; color: var(--muted); text-align: center; margin: 4px 0; }
+        .sp-seat.st-held { background: #f59e0b; }
+        .sp-seat.st-app { background: #2563eb; }
+        .sp-seat.st-counter { background: #1d2d2b; }
+        .sp-seat.st-boarded { background: #9ca3af; }
+        .sp-seat.st-kept { box-shadow: inset 0 0 0 3px #1d2d2b; }
+        .sp-seat.st-picked { background: var(--red); transform: scale(1.08); }
+        button.sp-seat:disabled { cursor: default; opacity: 1; }
+        button.sp-seat:not(:disabled) { cursor: pointer; }
+        button.sp-seat:focus-visible { outline: 3px solid #111; outline-offset: 1px; }
+        .sp-legend { display: flex; flex-wrap: wrap; gap: 10px; font-size: 12px; color: var(--muted); }
+        .sp-legend i { display: inline-block; width: 14px; height: 14px; border-radius: 4px; vertical-align: -2px; margin-right: 4px; }
         @media (max-width: 575px) { .sp-cell { width: 30px; height: 28px; } }
     </style>
     @stack('head')
@@ -144,6 +156,22 @@
     };
 </script>
 @include('busmanagement::partner._seatplan_js')
+@if(Route::has('bus-partner.today') && $busStaff->role !== \Modules\BusManagement\Entities\BusStaff::BOARDING)
+<script>
+    // The menu badge: seat requests waiting for an answer (Today refreshes it faster itself).
+    window.busSetBadge = function (n) {
+        document.querySelectorAll('[data-requests-badge]').forEach(function (b) { b.textContent = n; b.style.display = n > 0 ? 'inline-flex' : 'none'; });
+        document.title = (n > 0 ? '(' + n + ') ' : '') + document.title.replace(/^\(\d+\) /, '');
+    };
+    if (!window.busTodayPage) {
+        (function poll() {
+            fetch(@json(route('bus-partner.today.feed', ['count' => 1])), {headers: {'Accept': 'application/json'}})
+                .then(function (r) { return r.ok ? r.json() : null; }).then(function (d) { if (d) busSetBadge(d.count); }).catch(function () {})
+                .finally(function () { setTimeout(poll, 30000); });
+        })();
+    }
+</script>
+@endif
 @stack('script')
 @if (session('toast'))
     <script>busToast(@json(session('toast')));</script>

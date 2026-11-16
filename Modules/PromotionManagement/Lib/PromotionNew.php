@@ -229,7 +229,9 @@ function buildDeviceNotificationPayload($fcm_token, $title, $description, $statu
             ]
             // E-Ride Market: the chat, item or shop the push is about (only when present).
             + array_map('strval', array_filter(array_intersect_key($notificationData,
-                array_flip(['conversation_id', 'item_code', 'shop_slug', 'order_id', 'booking_id', 'job_code', 'application_id'])), fn($v) => $v !== null && $v !== '')),
+                array_flip(['conversation_id', 'item_code', 'shop_slug', 'order_id', 'booking_id', 'job_code', 'application_id',
+                    // E-Ride Bus Travel: the booking, or the departure a seat freed up on.
+                    'bus_booking_id', 'bus_departure_id'])), fn($v) => $v !== null && $v !== '')),
             'notification' => [
                 'title' => (string)$title,
                 'body' => (string)$description,

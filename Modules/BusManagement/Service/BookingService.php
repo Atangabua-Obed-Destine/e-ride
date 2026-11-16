@@ -331,7 +331,7 @@ class BookingService
             if (!in_array($b->status, [...BusBooking::HOLDING, BusBooking::PAID], true)) {
                 throw ValidationException::withMessages(['booking' => translate('This booking is already closed.')]);
             }
-            $this->endBooking($b, 'agency', $b->status === BusBooking::PAID && $b->source === BusBooking::APP ? $b->amount : 0);
+            $this->endBooking($b, 'agency', $b->status === BusBooking::PAID ? $b->amount : 0);
             return $b;
         });
         $this->tellCancelled($booking, $reason);
@@ -354,7 +354,7 @@ class BookingService
             $d->update(['status' => BusDeparture::CANCELLED, 'cancelled_at' => now(), 'cancel_reason' => $reason ?: null]);
             $bookings = BusBooking::where('departure_id', $d->id)->whereIn('status', [...BusBooking::HOLDING, BusBooking::PAID])->lockForUpdate()->get();
             foreach ($bookings as $b) {
-                $this->endBooking($b, 'departure', $b->status === BusBooking::PAID && $b->source === BusBooking::APP ? $b->amount : 0);
+                $this->endBooking($b, 'departure', $b->status === BusBooking::PAID ? $b->amount : 0);
             }
             return $bookings;
         });
@@ -389,14 +389,17 @@ class BookingService
     protected function endBooking(BusBooking $b, string $by, float $refund): void
     {
         $wasPaid = $b->status === BusBooking::PAID;
-        $refund = $wasPaid ? max(0, min((float)$b->amount, $refund)) : 0;
+        // A counter ticket the agency cancels is paid back in cash, there and then.
+        $cash = $wasPaid && $b->source === BusBooking::COUNTER && $by !== 'passenger';
+        $refund = $cash ? (float)$b->amount : ($wasPaid ? max(0, min((float)$b->amount, $refund)) : 0);
         $b->fill([
             'status' => BusBooking::CANCELLED,
             'cancelled_at' => now(),
             'cancelled_by' => $by,
             'refund_amount' => $refund,
-            'refund_status' => $refund > 0 ? 'due' : 'none',
-            'refund_due_by' => $refund > 0 ? now()->addHours(BusSettings::all()['refund_hours']) : null,
+            'refund_status' => $refund > 0 ? ($cash ? 'sent' : 'due') : 'none',
+            'refund_due_by' => $refund > 0 && !$cash ? now()->addHours(BusSettings::all()['refund_hours']) : null,
+            'refund_sent_at' => $cash ? now() : null,
         ]);
         if ($wasPaid) {
             // E-Ride takes its commission on what the agency keeps only.
@@ -467,6 +470,51 @@ class BookingService
         } catch (ValidationException) {
             return false;
         }
+    }
+
+    /** The agency sent a refund it owed (Mobile Money reference). */
+    public function markRefundSent(BusAgency $agency, BusBooking $booking, string $reference): BusBooking
+    {
+        $this->own($agency, $booking);
+        $reference = Str::limit(trim($reference), 100, '');
+        if ($reference === '') {
+            throw ValidationException::withMessages(['reference' => translate('Add the Mobile Money reference of the refund.')]);
+        }
+        $booking = DB::transaction(function () use ($booking, $reference) {
+            $b = BusBooking::whereKey($booking->id)->lockForUpdate()->first();
+            if ($b->refund_status !== 'due') {
+                throw ValidationException::withMessages(['booking' => translate('No refund is owed on this booking.')]);
+            }
+            $b->update(['refund_status' => 'sent', 'refund_ref' => $reference, 'refund_sent_at' => now()]);
+            return $b;
+        });
+        BusPush::send($booking->customer, 'bus_refund_sent', '{agency} sent your refund',
+            '{amount} sent to your Mobile Money. Reference {ref}.',
+            ['agency' => $agency->name, 'amount' => getCurrencyFormat($booking->refund_amount), 'ref' => $reference], ['bus_booking_id' => $booking->id]);
+        return $booking->fresh();
+    }
+
+    /**
+     * Every taken seat of a departure, for the agency's screens:
+     * seat => {state: held | app | counter | boarded, name, code, booking}
+     */
+    public static function seatStates(BusDeparture $departure): array
+    {
+        $out = [];
+        BusSeatClaim::where('bus_seat_claims.departure_id', $departure->id)
+            ->join('bus_tickets as t', 't.id', '=', 'bus_seat_claims.ticket_id')
+            ->join('bus_bookings as b', 'b.id', '=', 't.booking_id')
+            ->get(['bus_seat_claims.seat', 't.status as ticket_status', 't.passenger_name', 't.code', 'b.source', 'b.code as booking_code', 'b.status as booking_status'])
+            ->each(function ($row) use (&$out) {
+                $state = match (true) {
+                    $row->ticket_status === BusTicket::BOARDED => 'boarded',
+                    $row->ticket_status === BusTicket::HELD => 'held',
+                    $row->source === BusBooking::COUNTER => 'counter',
+                    default => 'app',
+                };
+                $out[(string)$row->seat] = ['state' => $state, 'name' => $row->passenger_name, 'ticket' => $row->code, 'booking' => $row->booking_code];
+            });
+        return $out;
     }
 
     // ----------------------------------------------------------------- tick

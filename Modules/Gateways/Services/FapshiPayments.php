@@ -316,6 +316,7 @@ class FapshiPayments
             'customerWalletUpdate' => $business . ' wallet top-up',
             'driverDigitalPay' => $business . ' driver payment',
             'listingReservationPaid' => $business . ' reservation, held until move-in',
+            'busStatementPaid' => $business . ' bus agency commission',
             default => $business . ' payment',
         };
         return Str::limit(trim($text), 60, '');

@@ -33,11 +33,49 @@
         <p class="b-hint mt-3 mb-0">{{ translate('Your keys are stored encrypted and only used to start and check the payments of your passengers. Only managers see this page.') }}</p>
     </form>
 
-    <div class="b-card p-3" style="flex:1.3 1 460px;min-width:0">
-        <h2 class="b-h mb-1">{{ translate('E-Ride commission') }}</h2>
-        <p class="b-hint">{{ translate(key: '{app}% of the fare on tickets sold in the E-Ride app, {counter}% on tickets sold at your counter. On the 1st of each month you get a statement listing every ticket. Pay it by the 10th from this page.',
-            replace: ['app' => rtrim(rtrim(number_format($busAgency->commission_app_pct, 2), '0'), '.'), 'counter' => rtrim(rtrim(number_format($busAgency->commission_counter_pct, 2), '0'), '.')]) }}</p>
-        <p class="b-hint mb-0">{{ translate('Refunded tickets do not count. Refunds you owe passengers, and your statements, will show here.') }}</p>
+    <div style="flex:1.3 1 460px;min-width:0" class="d-flex flex-column gap-3">
+        @if($paymentStatus === 'success')<div class="alert alert-success mb-0">{{ translate('Thank you. Your payment to E-Ride was received.') }}</div>@endif
+        @if($paymentStatus === 'fail')<div class="alert alert-danger mb-0">{{ translate('The payment to E-Ride did not go through. Nothing was taken. Try again.') }}</div>@endif
+        @if($refundsDue)
+            <a href="{{ route('bus-partner.today') }}" class="alert alert-warning mb-0 text-decoration-none d-block">{{ translate(key: '{n} refund(s) to send to passengers. Open Today.', replace: ['n' => $refundsDue]) }}</a>
+        @endif
+        <div class="b-card p-3">
+            <h2 class="b-h mb-1">{{ translate('E-Ride commission') }}</h2>
+            <p class="b-hint">{{ translate(key: '{app}% of the fare on tickets sold in the E-Ride app, {counter}% on tickets sold at your counter. On the 1st of each month you get a statement listing every ticket. Pay it by day {day} from this page.',
+                replace: ['app' => rtrim(rtrim(number_format($busAgency->commission_app_pct, 2), '0'), '.'), 'counter' => rtrim(rtrim(number_format($busAgency->commission_counter_pct, 2), '0'), '.'),
+                    'day' => \Modules\BusManagement\Lib\BusSettings::all()['statement_due_day']]) }}</p>
+            <div class="rounded-3 p-3" style="background:#f4f6f6">
+                <div class="small fw-bold mb-1">{{ translate(key: '{month} so far', replace: ['month' => now()->translatedFormat('F')]) }}</div>
+                <div class="d-flex flex-wrap gap-4">
+                    <div><div class="b-hint">{{ translate('App tickets') }}</div><b>{{ $thisMonth['app']['tickets'] }}</b> · {{ getCurrencyFormat($thisMonth['app']['commission']) }}</div>
+                    <div><div class="b-hint">{{ translate('Counter tickets') }}</div><b>{{ $thisMonth['counter']['tickets'] }}</b> · {{ getCurrencyFormat($thisMonth['counter']['commission']) }}</div>
+                    <div><div class="b-hint">{{ translate('Commission') }}</div><b class="fs-5">{{ getCurrencyFormat($thisMonth['total']) }}</b></div>
+                </div>
+            </div>
+            <p class="b-hint mt-2 mb-0">{{ translate('Refunded money does not count. Counted by the date of the departure.') }}</p>
+        </div>
+        <div class="b-card p-3">
+            <h2 class="b-h mb-2">{{ translate('Statements') }}</h2>
+            @forelse($statements as $s)
+                @php $late = $s->status === 'due' && $s->due_on->lt(today()); @endphp
+                <div class="d-flex flex-wrap align-items-center gap-2 py-2 border-top">
+                    <div class="flex-grow-1" style="min-width:150px"><b>{{ $s->month->translatedFormat('F Y') }}</b>
+                        <div class="b-hint">{{ translate(key: '{app} app and {counter} counter tickets', replace: ['app' => $s->app_tickets, 'counter' => $s->counter_tickets]) }}</div></div>
+                    <b>{{ getCurrencyFormat($s->total) }}</b>
+                    @if($s->status === 'paid')
+                        <span class="b-tag ok">{{ translate('Paid') }}</span>
+                    @else
+                        <span class="b-tag {{ $late ? 'bad' : 'warn' }}">{{ $late ? translate(key: 'Late since {date}', replace: ['date' => $s->due_on->translatedFormat('j M')]) : translate(key: 'Due {date}', replace: ['date' => $s->due_on->translatedFormat('j M')]) }}</span>
+                    @endif
+                    <a class="btn btn-soft btn-sm" href="{{ route('bus-partner.payments.statement', $s->id) }}">{{ translate('Details') }}</a>
+                    @if($s->status === 'due')
+                        <form method="POST" action="{{ route('bus-partner.payments.statement.pay', $s->id) }}" class="m-0">@csrf<button class="btn btn-primary btn-sm">{{ translate('Pay with Mobile Money') }}</button></form>
+                    @endif
+                </div>
+            @empty
+                <div class="b-hint">{{ translate('Your first statement arrives on the 1st of next month.') }}</div>
+            @endforelse
+        </div>
     </div>
 </div>
 @endsection

@@ -109,6 +109,26 @@
                 </div></div>
 
                 @if(!$checking)
+                <div class="card mb-3"><div class="card-body">
+                    <h5 class="mb-1">{{ translate('Commission statements') }}</h5>
+                    <p class="fs-12 text-muted">{{ translate(key: 'This month so far: {total} ({app} app and {counter} counter tickets).', replace: ['total' => getCurrencyFormat($thisMonth['total']), 'app' => $thisMonth['app']['tickets'], 'counter' => $thisMonth['counter']['tickets']]) }}</p>
+                    @forelse($statements as $s)
+                        <div class="py-2 border-top">
+                            <div class="d-flex align-items-center gap-2"><span class="flex-grow-1 fw-semibold">{{ $s->month->translatedFormat('F Y') }}</span><b>{{ getCurrencyFormat($s->total) }}</b>
+                                @if($s->status === 'paid')<span class="badge bg-success-subtle text-success-emphasis">{{ translate('Paid') }}</span>
+                                @else<span class="badge {{ $s->due_on->lt(today()) ? 'bg-danger-subtle text-danger-emphasis' : 'bg-warning-subtle text-warning-emphasis' }}">{{ translate(key: 'Due {date}', replace: ['date' => $s->due_on->format('d M')]) }}</span>@endif</div>
+                            <div class="fs-12 text-muted">{{ translate(key: '{app} app and {counter} counter tickets', replace: ['app' => $s->app_tickets, 'counter' => $s->counter_tickets]) }}{{ $s->reference ? ' · ' . $s->reference : '' }}</div>
+                            @if($s->status === 'due')
+                                <form method="POST" action="{{ route('admin.bus.statement.paid', $s->id) }}" class="d-flex gap-2 mt-1">@csrf
+                                    <input name="reference" class="form-control form-control-sm" required maxlength="100" placeholder="{{ translate('Payment reference') }}" aria-label="{{ translate('Payment reference') }}">
+                                    <button class="btn btn-sm btn-outline-success text-nowrap">{{ translate('Mark paid') }}</button></form>
+                            @endif
+                        </div>
+                    @empty
+                        <div class="fs-12 text-muted">{{ translate('No statement yet. The first comes on the 1st of next month.') }}</div>
+                    @endforelse
+                </div></div>
+
                 <form method="POST" action="{{ route('admin.bus.pause', $agency->id) }}" class="card">
                     @csrf
                     <div class="card-body">

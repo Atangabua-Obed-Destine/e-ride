@@ -29,7 +29,7 @@
             <div class="card-header"><h5 class="mb-0">{{ translate('Agencies on E-Ride') }}</h5></div>
             <div class="table-responsive">
                 <table class="table table-borderless align-middle mb-0">
-                    <thead class="table-light"><tr><th>{{ translate('Agency') }}</th><th>{{ translate('Status') }}</th><th>{{ translate('From') }}</th><th>{{ translate('Fapshi') }}</th><th>{{ translate('Open departures') }}</th><th>{{ translate('App tickets this month') }}</th><th>{{ translate('Commission app / counter') }}</th><th></th></tr></thead>
+                    <thead class="table-light"><tr><th>{{ translate('Agency') }}</th><th>{{ translate('Status') }}</th><th>{{ translate('From') }}</th><th>{{ translate('Fapshi') }}</th><th>{{ translate('Open departures') }}</th><th>{{ translate('App tickets this month') }}</th><th>{{ translate('Commission app / counter') }}</th><th>{{ translate('Owed to E-Ride') }}</th><th></th></tr></thead>
                     <tbody>
                     @forelse($agencies as $a)
                         <tr>
@@ -40,10 +40,11 @@
                             <td>{{ $openDepartures[$a->id] ?? 0 }}</td>
                             <td>{{ $appTickets[$a->id] ?? 0 }}</td>
                             <td>{{ $pct($a->commission_app_pct) }} / {{ $pct($a->commission_counter_pct) }}</td>
+                            <td>@if($o = $owed->get($a->id)){{ getCurrencyFormat($o->total) }}@if(\Illuminate\Support\Carbon::parse($o->due_on)->lt(today()))<div class="fs-12 text-danger">{{ translate('Late') }}</div>@endif @else<span class="text-muted">0</span>@endif</td>
                             <td class="text-end"><a class="btn btn-sm {{ $a->status === BusAgency::CHECKING ? 'btn-primary' : 'btn-outline-primary' }}" href="{{ route('admin.bus.show', $a->id) }}">{{ $a->status === BusAgency::CHECKING ? translate('Continue checking') : translate('Open') }}</a></td>
                         </tr>
                     @empty
-                        <tr><td colspan="8" class="text-muted">{{ translate('No agency yet. Load the Google bus agencies below and start with one.') }}</td></tr>
+                        <tr><td colspan="9" class="text-muted">{{ translate('No agency yet. Load the Google bus agencies below and start with one.') }}</td></tr>
                     @endforelse
                     </tbody>
                 </table>

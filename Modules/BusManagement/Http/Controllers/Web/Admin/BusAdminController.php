@@ -13,8 +13,10 @@ use Modules\BusManagement\Entities\BusAgency;
 use Modules\BusManagement\Entities\BusBooking;
 use Modules\BusManagement\Entities\BusDeparture;
 use Modules\BusManagement\Entities\BusStaff;
+use Modules\BusManagement\Entities\BusStatement;
 use Modules\BusManagement\Lib\BusSettings;
 use Modules\BusManagement\Service\AgencyService;
+use Modules\BusManagement\Service\StatementService;
 use Modules\PlaceManagement\Service\Interfaces\PlaceServiceInterface;
 use Symfony\Component\HttpFoundation\StreamedResponse;
 
@@ -39,7 +41,9 @@ class BusAdminController extends Controller
         $google = $request->boolean('load') ? $this->places->googlePreview($lat, $lng, 'bus') : false;
         $known = $agencies->pluck('id', 'google_place_id');
         $settings = BusSettings::all();
-        return view('busmanagement::admin.agencies', compact('agencies', 'appTickets', 'openDepartures', 'google', 'known', 'settings', 'lat', 'lng'));
+        $owed = BusStatement::where('status', BusStatement::DUE)->selectRaw('agency_id, sum(total) as total, min(due_on) as due_on')
+            ->groupBy('agency_id')->get()->keyBy('agency_id');
+        return view('busmanagement::admin.agencies', compact('agencies', 'appTickets', 'openDepartures', 'google', 'known', 'settings', 'lat', 'lng', 'owed'));
     }
 
     public function start(Request $request): RedirectResponse
@@ -57,7 +61,9 @@ class BusAdminController extends Controller
         $agency->loadCount(['vehicles', 'destinations', 'schedules']);
         $managers = BusStaff::with('user')->where('agency_id', $agency->id)->where('role', BusStaff::MANAGER)->get();
         $settings = BusSettings::all();
-        return view('busmanagement::admin.agency', compact('agency', 'managers', 'settings'));
+        $statements = BusStatement::where('agency_id', $agency->id)->orderByDesc('month')->limit(12)->get();
+        $thisMonth = app(StatementService::class)->totals($agency, now()->startOfMonth());
+        return view('busmanagement::admin.agency', compact('agency', 'managers', 'settings', 'statements', 'thisMonth'));
     }
 
     public function details(Request $request, BusAgency $agency): RedirectResponse
@@ -121,6 +127,15 @@ class BusAdminController extends Controller
             return back()->withErrors($e->errors());
         }
         Toastr::success($data['paused'] ? translate('Online booking paused. Their counter keeps working.') : translate('Online booking back on.'));
+        return back();
+    }
+
+    /** A statement paid outside the app (bank transfer, cash at the office). */
+    public function statementPaid(Request $request, BusStatement $statement): RedirectResponse
+    {
+        $data = $request->validate(['reference' => 'required|string|max:100']);
+        app(StatementService::class)->markPaid($statement, $data['reference'], auth()->id());
+        Toastr::success(translate('Statement marked paid.'));
         return back();
     }
 

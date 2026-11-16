@@ -48,9 +48,8 @@ class BusPartner
     public static function home(string $role): string
     {
         return match ($role) {
-            BusStaff::MANAGER => 'bus-partner.departures',
-            BusStaff::COUNTER => 'bus-partner.departures',
-            default => 'bus-partner.departures',
+            BusStaff::MANAGER, BusStaff::COUNTER => 'bus-partner.today',
+            default => 'bus-partner.boarding',
         };
     }
 }

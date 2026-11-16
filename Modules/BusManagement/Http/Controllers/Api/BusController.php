@@ -25,15 +25,29 @@ class BusController extends Controller
     {
     }
 
-    /** Whether bus booking is on, its numbers, and every "from" city with its destinations. */
+    /**
+     * Whether bus booking is on, its numbers, and every "from" city with its destinations:
+     * the lowest fare to each, and how many departures it has in the coming week.
+     */
     public function meta(): JsonResponse
     {
         $settings = BusSettings::all();
         $routes = [];
         if ($settings['enabled']) {
-            BusDestination::where('active', true)->whereIn('agency_id', $this->live()->select('id'))->with('agency:id,origin_city')->get()
-                ->each(function (BusDestination $d) use (&$routes) {
-                    $routes[$d->agency->origin_city][$d->city] = true;
+            $live = $this->live()->pluck('origin_city', 'id');
+            $departures = BusDeparture::whereIn('agency_id', $live->keys())->whereIn('status', BusDeparture::OPEN)->whereNotNull('vehicle_id')
+                ->whereBetween('date', [today()->toDateString(), today()->addDays(6)->toDateString()])
+                ->selectRaw('destination_id, count(*) as n')->groupBy('destination_id')->pluck('n', 'destination_id');
+            BusDestination::with(['dropPoints' => fn($q) => $q->where('active', true)])->where('active', true)->whereIn('agency_id', $live->keys())->get()
+                ->each(function (BusDestination $d) use (&$routes, $live, $departures) {
+                    $from = $live[$d->agency_id];
+                    $fares = $d->dropPoints->flatMap(fn($p) => array_filter([$p->fareFor('classic'), $p->fareFor('vip'), $p->fareFor('executive')]));
+                    $row = $routes[$from][$d->city] ?? ['city' => $d->city, 'from_fare' => null, 'departures' => 0];
+                    if ($fares->isNotEmpty()) {
+                        $row['from_fare'] = $row['from_fare'] === null ? $fares->min() : min($row['from_fare'], $fares->min());
+                    }
+                    $row['departures'] += (int)($departures[$d->id] ?? 0);
+                    $routes[$from][$d->city] = $row;
                 });
         }
         return $this->ok([
@@ -42,7 +56,7 @@ class BusController extends Controller
             'answer_minutes' => $settings['answer_minutes'],
             'pay_minutes' => $settings['pay_minutes'],
             'open_days' => $settings['open_days'],
-            'routes' => collect($routes)->map(fn($to, $from) => ['from' => $from, 'to' => collect(array_keys($to))->sort()->values()])->sortKeys()->values(),
+            'routes' => collect($routes)->map(fn($to, $from) => ['from' => $from, 'to' => collect($to)->sortByDesc('departures')->values()])->sortKeys()->values(),
         ]);
     }
 
@@ -91,7 +105,14 @@ class BusController extends Controller
             return $this->ok([]);
         }
         $agencies = $this->live()->with(['destinations' => fn($q) => $q->where('active', true)->orderBy('sort')])->orderBy('name')->get();
-        return $this->ok($agencies->map(fn(BusAgency $a) => BusPresenter::agency($a) + ['destinations' => $a->destinations->pluck('city')->values()])->values());
+        $next = BusDeparture::whereIn('agency_id', $agencies->pluck('id'))->whereIn('status', BusDeparture::OPEN)->whereNotNull('vehicle_id')
+            ->whereBetween('date', [today()->toDateString(), today()->addDays(2)->toDateString()])->orderBy('date')->orderBy('time')->get()
+            ->filter(fn($d) => $d->leavesAt()->isFuture())->groupBy('agency_id')->map(fn($list) => $list->first()->leavesAt()->toIso8601String());
+        return $this->ok($agencies->map(fn(BusAgency $a) => BusPresenter::agency($a) + [
+            'destinations' => $a->destinations->pluck('city')->values(),
+            'address' => $a->address, 'lat' => $a->lat, 'lng' => $a->lng, 'phone' => $a->phone,
+            'next_departure' => $next[$a->id] ?? null,
+        ])->values());
     }
 
     /** An agency: its details, rules, destinations with fares, and the next departures. */

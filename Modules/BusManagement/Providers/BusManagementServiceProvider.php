@@ -27,6 +27,8 @@ class BusManagementServiceProvider extends ServiceProvider
         if (!defined('DOMAIN_POINTED_DIRECTORY')) {
             define('DOMAIN_POINTED_DIRECTORY', 'public');
         }
+        // The statement payment hook (busStatementPaid), called by name by the gateways.
+        require_once module_path($this->moduleName, 'Lib/bus_helpers.php');
         $this->app->register(RouteServiceProvider::class);
     }
 }

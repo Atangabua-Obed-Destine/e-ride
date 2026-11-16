@@ -5,6 +5,9 @@ use App\Http\Middleware\VerifyCsrfToken;
 use Modules\BusManagement\Http\Controllers\Web\Admin\BusAdminController;
 use Modules\BusManagement\Http\Controllers\Web\BusPayController;
 use Modules\BusManagement\Http\Controllers\Web\Partner\AuthController;
+use Modules\BusManagement\Http\Controllers\Web\Partner\BoardingController;
+use Modules\BusManagement\Http\Controllers\Web\Partner\SellController;
+use Modules\BusManagement\Http\Controllers\Web\Partner\TodayController;
 use Modules\BusManagement\Http\Controllers\Web\Partner\DepartureController;
 use Modules\BusManagement\Http\Controllers\Web\Partner\DestinationController;
 use Modules\BusManagement\Http\Controllers\Web\Partner\FleetController;
@@ -26,6 +29,29 @@ Route::group(['prefix' => 'partner/bus-agency', 'as' => 'bus-partner.'], functio
     // Everyone at the agency.
     Route::middleware(BusPartner::class)->group(function () {
         Route::get('departures', [DepartureController::class, 'index'])->name('departures');
+
+        Route::get('boarding', [BoardingController::class, 'index'])->name('boarding');
+        Route::get('boarding/{departure}/manifest', [BoardingController::class, 'manifest'])->name('boarding.manifest')->whereUuid('departure');
+        Route::get('boarding/{departure}/print', [BoardingController::class, 'print'])->name('boarding.print')->whereUuid('departure');
+        Route::post('boarding/{departure}/scan', [BoardingController::class, 'scan'])->name('boarding.scan')->whereUuid('departure')->middleware('throttle:120,1,bus-scan');
+        Route::post('boarding/{departure}/undo/{ticket}', [BoardingController::class, 'undo'])->name('boarding.undo')->whereUuid('departure');
+        Route::post('boarding/{departure}/start', [BoardingController::class, 'start'])->name('boarding.start')->whereUuid('departure');
+        Route::post('boarding/{departure}/departed', [BoardingController::class, 'depart'])->name('boarding.depart')->whereUuid('departure');
+    });
+
+    // The manager and the counter agents.
+    Route::middleware(BusPartner::class . ':manager,counter')->group(function () {
+        Route::get('today', [TodayController::class, 'index'])->name('today');
+        Route::get('today/feed', [TodayController::class, 'feed'])->name('today.feed');
+        Route::post('bookings/{booking}/accept', [TodayController::class, 'accept'])->name('bookings.accept')->whereUuid('booking');
+        Route::post('bookings/{booking}/decline', [TodayController::class, 'decline'])->name('bookings.decline')->whereUuid('booking');
+
+        Route::get('sell', [SellController::class, 'index'])->name('sell');
+        Route::get('sell/{departure}/seats', [SellController::class, 'seats'])->name('sell.seats')->whereUuid('departure');
+        Route::post('sell/{departure}', [SellController::class, 'sell'])->name('sell.submit')->whereUuid('departure')->middleware('throttle:60,1,bus-sell');
+        Route::get('tickets/{code}/print', [SellController::class, 'print'])->name('tickets.print')->where('code', '[A-Z0-9]{6,12}');
+
+        Route::post('boarding/{departure}/delay', [BoardingController::class, 'delay'])->name('boarding.delay')->whereUuid('departure');
     });
 
     // The manager only.
@@ -41,9 +67,16 @@ Route::group(['prefix' => 'partner/bus-agency', 'as' => 'bus-partner.'], functio
         Route::post('departures/extra', [DepartureController::class, 'extra'])->name('departures.extra');
         Route::post('departures/{departure}/bus', [DepartureController::class, 'vehicle'])->name('departures.vehicle')->whereUuid('departure');
 
+        Route::post('bookings/{booking}/cancel', [TodayController::class, 'cancel'])->name('bookings.cancel')->whereUuid('booking');
+        Route::post('bookings/{booking}/refund-sent', [TodayController::class, 'refundSent'])->name('bookings.refund')->whereUuid('booking');
+        Route::post('boarding/{departure}/cancel', [BoardingController::class, 'cancel'])->name('boarding.cancel')->whereUuid('departure');
+
         Route::get('payments', [PaymentController::class, 'index'])->name('payments');
         Route::post('payments/fapshi', [PaymentController::class, 'saveFapshi'])->name('payments.fapshi')->middleware('throttle:20,1,bus-fapshi');
         Route::post('payments/test', [PaymentController::class, 'testFapshi'])->name('payments.test')->middleware('throttle:20,1,bus-fapshi');
+        Route::get('payments/statements/{statement}', [PaymentController::class, 'statement'])->name('payments.statement')->whereUuid('statement');
+        Route::get('payments/statements/{statement}/csv', [PaymentController::class, 'csv'])->name('payments.statement.csv')->whereUuid('statement');
+        Route::post('payments/statements/{statement}/pay', [PaymentController::class, 'pay'])->name('payments.statement.pay')->whereUuid('statement')->middleware('throttle:10,1,bus-statement-pay');
 
         Route::get('staff', [StaffController::class, 'index'])->name('staff');
         Route::post('staff', [StaffController::class, 'store'])->name('staff.store');
@@ -76,4 +109,5 @@ Route::group(['prefix' => 'admin/bus', 'as' => 'admin.bus.', 'middleware' => 'ad
     Route::get('{agency}/licence', [BusAdminController::class, 'licenceFile'])->name('licence.file')->whereUuid('agency');
     Route::post('{agency}/verify', [BusAdminController::class, 'verify'])->name('verify')->whereUuid('agency');
     Route::post('{agency}/pause', [BusAdminController::class, 'pause'])->name('pause')->whereUuid('agency');
+    Route::post('statements/{statement}/paid', [BusAdminController::class, 'statementPaid'])->name('statement.paid')->whereUuid('statement');
 });

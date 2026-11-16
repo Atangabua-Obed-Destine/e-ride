@@ -128,7 +128,8 @@ class AgencyService
             }
             $agency->update(['status' => BusAgency::PAUSED, 'pause_reason' => $reason, 'pause_note' => $note]);
         } elseif ($agency->status === BusAgency::PAUSED) {
-            $agency->update(['status' => $agency->fapshi_ok_at ? BusAgency::LIVE : BusAgency::SETUP, 'pause_reason' => null, 'pause_note' => null]);
+            // Back to setting up: it goes live by itself when Fapshi works and a departure is open.
+            $agency->update(['status' => BusAgency::SETUP, 'pause_reason' => null, 'pause_note' => null]);
             $this->refreshStatus($agency);
         }
         return $agency->fresh();
