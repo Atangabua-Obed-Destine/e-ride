@@ -29,7 +29,7 @@ class JobApplicationService
         return JobWorkCard::where('user_id', $user->id)->first();
     }
 
-    public function saveCard(User $user, array $data, ?UploadedFile $cv, bool $removeCv): JobWorkCard
+    public function saveCard(User $user, array $data, ?UploadedFile $cv, bool $removeCv, ?UploadedFile $voice = null, bool $removeVoice = false): JobWorkCard
     {
         $card = $this->cardOf($user) ?: new JobWorkCard(['user_id' => $user->id]);
         $f = array_intersect_key($data, array_flip(['name', 'area_label', 'languages', 'headline', 'education']));
@@ -50,6 +50,9 @@ class JobApplicationService
                 }
             }
             $f['experience'] = $out;
+        }
+        if (array_key_exists('links', $data)) {
+            $f['links'] = $this->cleanLinks($this->list($data['links']));
         }
         if (array_key_exists('looking_for', $data)) {
             $f['looking_for'] = array_values(array_intersect(JobPost::TYPES, $this->list($data['looking_for'])));
@@ -75,8 +78,58 @@ class JobApplicationService
                 Storage::disk('local')->delete(JobWorkCard::CV_DIR . $old);
             }
         }
+        if ($removeVoice && $card->voice_file) {
+            Storage::disk('local')->delete(JobWorkCard::VOICE_DIR . $card->voice_file);
+            $card->voice_file = null;
+            $card->voice_seconds = null;
+        }
+        if ($voice) {
+            $seconds = (int)($data['voice_seconds'] ?? 0);
+            if ($seconds > JobWorkCard::MAX_VOICE_SECONDS) {
+                $this->fail('voice', translate('Keep your voice intro to 30 seconds.'));
+            }
+            $old = $card->voice_file;
+            $name = date('Y-m-d') . '-' . bin2hex(random_bytes(8)) . '.' . strtolower($voice->getClientOriginalExtension() ?: 'm4a');
+            Storage::disk('local')->putFileAs(rtrim(JobWorkCard::VOICE_DIR, '/'), $voice, $name);
+            $card->voice_file = $name;
+            $card->voice_seconds = max(1, min(JobWorkCard::MAX_VOICE_SECONDS, $seconds ?: 30));
+            if ($old) {
+                Storage::disk('local')->delete(JobWorkCard::VOICE_DIR . $old);
+            }
+        }
         $card->save();
         return $card->fresh();
+    }
+
+    /**
+     * Professional links: a known type and a web address. LinkedIn and GitHub must point to their sites.
+     * @return array<int, array{type: string, url: string}>
+     */
+    private function cleanLinks(array $links): array
+    {
+        $out = [];
+        foreach (array_slice($links, 0, JobWorkCard::MAX_LINKS) as $l) {
+            $type = (string)($l['type'] ?? '');
+            $url = trim(mb_substr((string)($l['url'] ?? ''), 0, 300));
+            if ($url === '') {
+                continue;
+            }
+            if (!preg_match('#^https?://#i', $url)) {
+                $url = 'https://' . $url;
+            }
+            $host = strtolower((string)parse_url($url, PHP_URL_HOST));
+            if (!in_array($type, JobWorkCard::LINK_TYPES, true) || $host === '' || !filter_var($url, FILTER_VALIDATE_URL)) {
+                $this->fail('links', translate('This link does not look right: :url', ['url' => $url]));
+            }
+            if ($type === 'linkedin' && !str_ends_with($host, 'linkedin.com')) {
+                $this->fail('links', translate('Your LinkedIn link must be a linkedin.com address.'));
+            }
+            if ($type === 'github' && !str_ends_with($host, 'github.com')) {
+                $this->fail('links', translate('Your GitHub link must be a github.com address.'));
+            }
+            $out[] = ['type' => $type, 'url' => $url];
+        }
+        return $out;
     }
 
     // --------------------------------------------------------- applying
@@ -93,6 +146,11 @@ class JobApplicationService
         $card = $this->cardOf($user);
         if (!$card || !$card->canApply()) {
             $this->fail('card', translate('Finish your Work Card first: your name, and your skills or experience.'));
+        }
+        $missing = array_values(array_diff($job->requiredLinks(), $card->linkTypes()));
+        if ($missing) {
+            $this->fail('links', translate('This job asks for your :links link. Add it to your Work Card, then apply.',
+                ['links' => implode(', ', array_map(fn($t) => translate('link_' . $t), $missing))]));
         }
         $existing = JobApplication::where('job_id', $job->id)->where('user_id', $user->id)->first();
         if ($existing && $existing->status !== JobApplication::WITHDRAWN) {
@@ -158,7 +216,7 @@ class JobApplicationService
     public function applicants(JobPost $job, string $tab): Collection
     {
         $statuses = match ($tab) {
-            'shortlist' => [JobApplication::SHORTLISTED, JobApplication::NEXT_STEP],
+            'shortlist' => [JobApplication::SHORTLISTED, JobApplication::NEXT_STEP, JobApplication::HIRED],
             'other' => [JobApplication::NOT_SELECTED, JobApplication::CLOSED],
             default => [JobApplication::SENT, JobApplication::SEEN],
         };
@@ -221,7 +279,8 @@ class JobApplicationService
      * The way forward, in the employer's words: an interview day, time and place, a call, what to bring.
      * Sending again replaces it (a new time). E-Ride does not run the interview.
      */
-    public function sendNextStep(User $employerUser, JobApplication $application, string $message, ?string $at, ?string $place): JobApplication
+    public function sendNextStep(User $employerUser, JobApplication $application, string $message, ?string $at, ?string $place,
+                                 ?float $lat = null, ?float $lng = null): JobApplication
     {
         $this->asEmployer($employerUser, $application);
         $this->expect($application, [JobApplication::SENT, JobApplication::SEEN, JobApplication::SHORTLISTED, JobApplication::NEXT_STEP]);
@@ -240,12 +299,64 @@ class JobApplicationService
         $again = $application->status === JobApplication::NEXT_STEP;
         $application->update([
             'status' => JobApplication::NEXT_STEP, 'next_step' => $message, 'next_step_at' => $when, 'next_step_place' => $place ? trim(mb_substr($place, 0, 191)) : null,
+            'next_step_lat' => $lat !== null && $lng !== null ? $lat : null, 'next_step_lng' => $lat !== null && $lng !== null ? $lng : null,
             'next_step_sent_at' => now(), 'next_step_read_at' => null, 'seen_at' => $application->seen_at ?? now(),
             'shortlisted_at' => $application->shortlisted_at ?? now(),
         ]);
         MarketPush::send($application->user, 'job_next_step', $again ? 'New next step from {employer}' : 'Next step from {employer}',
             $when ? '{job}: {when}. Open it for the details.' : '{job}: open it for the details.',
             $this->words($application) + ['when' => $when?->translatedFormat('D j M, H:i') ?? ''], $this->data($application));
+        return $application;
+    }
+
+    /**
+     * The employer says this person got the job. The person confirms in their app (so an employer
+     * cannot invent hires). With $closeJob, the job closes as filled and the others are told kindly.
+     */
+    public function hire(User $employerUser, JobApplication $application, bool $closeJob): JobApplication
+    {
+        $this->asEmployer($employerUser, $application);
+        $this->expect($application, [JobApplication::SENT, JobApplication::SEEN, JobApplication::SHORTLISTED, JobApplication::NEXT_STEP]);
+        DB::transaction(function () use ($application) {
+            $application->update(['status' => JobApplication::HIRED, 'hired_at' => now(), 'hire_confirmed_at' => null, 'hire_declined_at' => null,
+                'decided_at' => now(), 'seen_at' => $application->seen_at ?? now(), 'shortlisted_at' => $application->shortlisted_at ?? now()]);
+            JobPost::whereKey($application->job_id)->increment('hired_count');
+        });
+        MarketPush::send($application->user, 'job_hired', '{employer} says you got the job', '{job}: is that right? Confirm it in the app.',
+            $this->words($application), $this->data($application));
+        if ($closeJob) {
+            app(JobService::class)->close($application->job->fresh('employer'), 'filled');
+        }
+        return $application;
+    }
+
+    /** The person answers: yes, I got the job (counts for the employer), or no (back to where it was). */
+    public function answerHire(User $user, JobApplication $application, bool $yes): JobApplication
+    {
+        $this->asApplicant($user, $application);
+        if ($application->status !== JobApplication::HIRED || $application->hire_confirmed_at) {
+            $this->fail('application', translate('This application has changed. Pull to refresh.'));
+        }
+        $employer = $application->job?->employer;
+        $name = $this->cardOf($user)?->name ?? trim($user->first_name . ' ' . $user->last_name);
+        if ($yes) {
+            DB::transaction(function () use ($application, $employer) {
+                $application->update(['hire_confirmed_at' => now()]);
+                if ($employer) {
+                    JobEmployer::whereKey($employer->id)->increment('hires_count');
+                }
+            });
+            MarketPush::send($employer?->user, 'job_hire_confirmed', '{name} confirmed', 'Hired for {job} through E-Ride.',
+                $this->words($application) + ['name' => $name], $this->data($application));
+        } else {
+            DB::transaction(function () use ($application) {
+                $application->update(['status' => $application->next_step ? JobApplication::NEXT_STEP : JobApplication::SHORTLISTED,
+                    'hire_declined_at' => now(), 'hired_at' => null]);
+                JobPost::whereKey($application->job_id)->where('hired_count', '>', 0)->decrement('hired_count');
+            });
+            MarketPush::send($employer?->user, 'job_hire_declined', '{name} says no', '{name} says they were not hired for {job}. Talk to them if this is a mistake.',
+                $this->words($application) + ['name' => $name], $this->data($application));
+        }
         return $application;
     }
 

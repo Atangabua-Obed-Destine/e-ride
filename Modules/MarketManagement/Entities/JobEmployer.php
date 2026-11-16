@@ -34,7 +34,7 @@ class JobEmployer extends Model
 
     protected $fillable = [
         'user_id', 'kind', 'name', 'about', 'logo', 'area_label', 'lat', 'lng', 'address', 'doc_type', 'doc_file',
-        'status', 'review_note', 'reviewed_by', 'verified_at', 'jobs_posted',
+        'status', 'review_note', 'reviewed_by', 'verified_at', 'jobs_posted', 'hires_count',
     ];
 
     protected $casts = [
@@ -42,6 +42,7 @@ class JobEmployer extends Model
         'lng' => 'float',
         'verified_at' => 'datetime',
         'jobs_posted' => 'integer',
+        'hires_count' => 'integer',
     ];
 
     public function user(): BelongsTo

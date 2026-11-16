@@ -35,13 +35,15 @@ class JobPost extends Model
         'code', 'employer_id', 'category', 'type', 'title', 'description', 'requirements', 'skills', 'pay_min', 'pay_max', 'pay_period',
         'schedule', 'places', 'area_label', 'lat', 'lng', 'address', 'questions', 'status', 'review_note', 'flags', 'reviewed_by',
         'submitted_at', 'reviewed_at', 'live_at', 'closes_at', 'closed_at', 'closed_reason', 'applications_count', 'views', 'alerted',
-        'report_count',
+        'report_count', 'required_links', 'hired_count',
     ];
 
     protected $casts = [
         'skills' => 'array',
         'questions' => 'array',
         'flags' => 'array',
+        'required_links' => 'array',
+        'hired_count' => 'integer',
         'pay_min' => 'float',
         'pay_max' => 'float',
         'lat' => 'float',
@@ -77,6 +79,12 @@ class JobPost extends Model
     public function isPublic(): bool
     {
         return in_array($this->status, [self::LIVE, self::CLOSED], true);
+    }
+
+    /** @return string[] link types an applicant must have on their Work Card */
+    public function requiredLinks(): array
+    {
+        return array_values(array_intersect(JobWorkCard::LINK_TYPES, (array)($this->required_links ?? [])));
     }
 
     /** @return string[] */

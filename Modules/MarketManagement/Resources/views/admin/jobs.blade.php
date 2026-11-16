@@ -85,6 +85,9 @@
                             <div class="mt-3 fs-13" style="white-space:pre-line">{{ $open->description }}</div>
                             @if($open->requirements)<div class="mt-2 fs-13"><b>{{ translate('Requirements') }}</b><div style="white-space:pre-line">{{ $open->requirements }}</div></div>@endif
                             @if($open->skills)<div class="mt-2 d-flex flex-wrap gap-1">@foreach($open->skills as $s)<span class="badge bg-light text-dark">{{ $s }}</span>@endforeach</div>@endif
+                            @if($open->requiredLinks())
+                                <div class="mt-2 fs-13"><b>{{ translate('Applicants must add') }}</b>: {{ collect($open->requiredLinks())->map(fn($t) => translate('link_' . $t))->join(', ') }}</div>
+                            @endif
                             @if($open->questionList())
                                 <div class="mt-2 fs-13"><b>{{ translate('Questions for applicants') }}</b><ul class="mb-0 ps-3">@foreach($open->questionList() as $q)<li>{{ $q }}</li>@endforeach</ul></div>
                             @endif

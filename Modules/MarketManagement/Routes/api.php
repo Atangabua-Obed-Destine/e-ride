@@ -117,6 +117,8 @@ Route::group(['prefix' => 'customer/jobs', 'middleware' => ['auth:api', 'mainten
         Route::post('employer/applications/{id}/shortlist', [\Modules\MarketManagement\Http\Controllers\Api\JobEmployerController::class, 'shortlist']);
         Route::post('employer/applications/{id}/not-selected', [\Modules\MarketManagement\Http\Controllers\Api\JobEmployerController::class, 'notSelected']);
         Route::post('employer/applications/{id}/next-step', [\Modules\MarketManagement\Http\Controllers\Api\JobEmployerController::class, 'nextStep']);
+        Route::post('employer/applications/{id}/hire', [\Modules\MarketManagement\Http\Controllers\Api\JobEmployerController::class, 'hire']);
+        Route::post('applications/{id}/hire-answer', [\Modules\MarketManagement\Http\Controllers\Api\JobController::class, 'answerHire']);
     });
     Route::post('jobs/{code}/report', [\Modules\MarketManagement\Http\Controllers\Api\JobController::class, 'report'])->where('code', '[a-z0-9]+')
         ->middleware('throttle:10,1,jobs-report');

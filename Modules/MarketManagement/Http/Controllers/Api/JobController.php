@@ -38,6 +38,7 @@ class JobController extends Controller
             'periods' => JobPost::PERIODS,
             'report_reasons' => JobReport::REASONS,
             'doc_types' => JobEmployer::DOC_TYPES,
+            'link_types' => JobWorkCard::LINK_TYPES,
             'max_questions' => JobPost::MAX_QUESTIONS,
             'review_hours' => $settings['review_hours'],
             'stale_days' => $settings['stale_days'],
@@ -134,8 +135,14 @@ class JobController extends Controller
             // A PDF, or a photo of a paper CV.
             'cv' => 'nullable|file|mimes:pdf,jpg,jpeg,png,webp|max:' . min(10240, convertBytesToKiloBytes(maxUploadSize('file'))),
             'remove_cv' => 'nullable|boolean',
+            'links' => 'nullable',
+            // The 30-second voice intro, as the phone records it.
+            'voice' => 'nullable|file|mimes:m4a,mp4,aac,mp3,mpga,ogg,oga,wav,webm,3gp|max:4096',
+            'voice_seconds' => 'nullable|integer|min:1|max:60',
+            'remove_voice' => 'nullable|boolean',
         ]);
-        $card = $this->applications->saveCard($request->user(), $request->except(['cv', 'remove_cv']), $request->file('cv'), $request->boolean('remove_cv'));
+        $card = $this->applications->saveCard($request->user(), $request->except(['cv', 'remove_cv', 'voice', 'remove_voice']), $request->file('cv'),
+            $request->boolean('remove_cv'), $request->file('voice'), $request->boolean('remove_voice'));
         return response()->json(responseFormatter(DEFAULT_200, ['card' => JobPresenter::card($card)]));
     }
 
@@ -168,6 +175,18 @@ class JobController extends Controller
             return $application;
         }
         $this->applications->markNextStepRead($request->user(), $application);
+        return response()->json(responseFormatter(DEFAULT_200, JobPresenter::forApplicant($application->fresh(['job.employer']))));
+    }
+
+    /** yes=1: I got the job; yes=0: I did not. */
+    public function answerHire(Request $request, string $id): JsonResponse
+    {
+        $request->validate(['yes' => 'required|boolean']);
+        $application = $this->mine($request, $id);
+        if ($application instanceof JsonResponse) {
+            return $application;
+        }
+        $this->applications->answerHire($request->user(), $application, $request->boolean('yes'));
         return response()->json(responseFormatter(DEFAULT_200, JobPresenter::forApplicant($application->fresh(['job.employer']))));
     }
 

@@ -107,7 +107,7 @@ class JobEmployerController extends Controller
             'applicants' => $this->applications->applicants($job, $request->input('tab', 'new'))->map(fn($a) => JobPresenter::forEmployer($a))->all(),
             'counts' => [
                 'new' => (int)($counts[JobApplication::SENT] ?? 0) + (int)($counts[JobApplication::SEEN] ?? 0),
-                'shortlist' => (int)($counts[JobApplication::SHORTLISTED] ?? 0) + (int)($counts[JobApplication::NEXT_STEP] ?? 0),
+                'shortlist' => (int)($counts[JobApplication::SHORTLISTED] ?? 0) + (int)($counts[JobApplication::NEXT_STEP] ?? 0) + (int)($counts[JobApplication::HIRED] ?? 0),
                 'other' => (int)($counts[JobApplication::NOT_SELECTED] ?? 0) + (int)($counts[JobApplication::CLOSED] ?? 0),
             ],
         ]));
@@ -137,9 +137,18 @@ class JobEmployerController extends Controller
 
     public function nextStep(Request $request, string $id): JsonResponse
     {
-        $request->validate(['message' => 'required|string|max:1000', 'at' => 'nullable|date_format:Y-m-d H:i', 'place' => 'nullable|string|max:191']);
+        $request->validate(['message' => 'required|string|max:1000', 'at' => 'nullable|date_format:Y-m-d H:i', 'place' => 'nullable|string|max:191',
+            'lat' => 'nullable|numeric|between:-90,90', 'lng' => 'nullable|numeric|between:-180,180']);
         return $this->act($request, $id, fn($a) => $this->applications->sendNextStep($request->user(), $a, $request->input('message'),
-            $request->input('at'), $request->input('place')));
+            $request->input('at'), $request->input('place'), $request->filled('lat') ? (float)$request->input('lat') : null,
+            $request->filled('lng') ? (float)$request->input('lng') : null));
+    }
+
+    /** close=1: the job is filled, close it and tell the others kindly. */
+    public function hire(Request $request, string $id): JsonResponse
+    {
+        $request->validate(['close' => 'nullable|boolean']);
+        return $this->act($request, $id, fn($a) => $this->applications->hire($request->user(), $a, $request->boolean('close')));
     }
 
     // --------------------------------------------------------- helpers
@@ -198,6 +207,7 @@ class JobEmployerController extends Controller
             'lng' => 'nullable|numeric|between:-180,180',
             'address' => 'nullable|string|max:191',
             'questions' => 'nullable',
+            'required_links' => 'nullable',
         ];
     }
 

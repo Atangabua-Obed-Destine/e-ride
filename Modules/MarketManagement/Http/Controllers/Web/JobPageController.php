@@ -69,6 +69,17 @@ class JobPageController extends MarketPageController
         ]);
     }
 
+    /** The voice intro, only through a signed link that expires. */
+    public function voice(Request $request, string $card): BinaryFileResponse|Response
+    {
+        $card = JobWorkCard::find($card);
+        $path = $card?->voicePath();
+        if (!$path || !is_file($path)) {
+            abort(404);
+        }
+        return response()->file($path, ['X-Robots-Tag' => 'noindex', 'Cache-Control' => 'private, no-store']);
+    }
+
     private function jobWords(Request $request): array
     {
         $t = $this->words($request);

@@ -46,6 +46,7 @@ Route::middleware('throttle:120,1,jobs-page')->group(function () {
     Route::get('j/{code}', [\Modules\MarketManagement\Http\Controllers\Web\JobPageController::class, 'job'])->where('code', '[a-z0-9]+')->name('jobs.page');
     Route::get('j/{code}/app', [\Modules\MarketManagement\Http\Controllers\Web\JobPageController::class, 'getApp'])->where('code', '[a-z0-9]+')->name('jobs.get-app');
     Route::get('jobs/cv/{card}', [\Modules\MarketManagement\Http\Controllers\Web\JobPageController::class, 'cv'])->middleware('signed')->name('jobs.cv');
+    Route::get('jobs/voice/{card}', [\Modules\MarketManagement\Http\Controllers\Web\JobPageController::class, 'voice'])->middleware('signed')->name('jobs.voice');
 });
 
 /*

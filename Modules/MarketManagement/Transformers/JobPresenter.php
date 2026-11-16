@@ -26,6 +26,7 @@ class JobPresenter
             'area' => $e->area_label,
             'about' => $e->about,
             'since' => $e->verified_at?->toIso8601String(),
+            'hires' => (int)$e->hires_count,
         ];
         if ($mine) {
             $out += [
@@ -75,6 +76,7 @@ class JobPresenter
                 'requirements' => $job->requirements,
                 'skills' => array_values((array)($job->skills ?? [])),
                 'questions' => $job->questionList(),
+                'required_links' => $job->requiredLinks(),
                 'lat' => $job->lat,
                 'lng' => $job->lng,
                 'address' => $job->address,
@@ -86,6 +88,7 @@ class JobPresenter
         if ($mine) {
             $out += [
                 'views' => $job->views,
+                'hired' => $job->hired_count,
                 'alerted' => $job->alerted,
                 'review_note' => $job->review_note,
                 'submitted_at' => $job->submitted_at?->toIso8601String(),
@@ -115,6 +118,10 @@ class JobPresenter
             'cv_url' => $cv ? $card->cvUrl() : null,
             'cv_name' => $card->cv_name,
             'has_cv' => (bool)$card->cv_file,
+            'voice_url' => $cv ? $card->voiceUrl() : null,
+            'voice_seconds' => $card->voice_seconds,
+            'has_voice' => (bool)$card->voice_file,
+            'links' => array_values((array)($card->links ?? [])),
             'percent' => $card->percent(),
             'can_apply' => $card->canApply(),
         ];
@@ -137,6 +144,10 @@ class JobPresenter
             'next_step_place' => $a->next_step_place,
             'next_step_sent_at' => $a->next_step_sent_at?->toIso8601String(),
             'next_step_unread' => $a->status === JobApplication::NEXT_STEP && !$a->next_step_read_at,
+            'next_step_lat' => $a->next_step_lat,
+            'next_step_lng' => $a->next_step_lng,
+            'hired_at' => $a->hired_at?->toIso8601String(),
+            'hire_confirmed' => (bool)$a->hire_confirmed_at,
             'closed_reason' => $a->closed_reason,
             'sent_at' => $a->created_at?->toIso8601String(),
             'seen_at' => $a->seen_at?->toIso8601String(),
@@ -159,7 +170,12 @@ class JobPresenter
             'answers' => array_values((array)($a->answers ?? [])),
             'fit' => $a->fit ?? null,
             'has_cv' => (bool)$card?->cv_file,
+            'has_voice' => (bool)$card?->voice_file,
+            'voice_seconds' => $card?->voice_seconds,
+            'links' => count((array)($card?->links ?? [])),
             'has_message' => (bool)$a->message,
+            'hired_at' => $a->hired_at?->toIso8601String(),
+            'hire_confirmed' => (bool)$a->hire_confirmed_at,
             'next_step_read' => $a->status === JobApplication::NEXT_STEP ? (bool)$a->next_step_read_at : null,
             'sent_at' => $a->created_at?->toIso8601String(),
         ];
@@ -173,8 +189,11 @@ class JobPresenter
                 'next_step' => $a->next_step,
                 'next_step_at' => $a->next_step_at?->toIso8601String(),
                 'next_step_place' => $a->next_step_place,
+                'next_step_lat' => $a->next_step_lat,
+                'next_step_lng' => $a->next_step_lng,
                 'next_step_sent_at' => $a->next_step_sent_at?->toIso8601String(),
-                'job' => $a->job ? ['code' => $a->job->code, 'title' => $a->job->title] : null,
+                'job' => $a->job ? ['code' => $a->job->code, 'title' => $a->job->title, 'places' => $a->job->places, 'hired' => $a->job->hired_count,
+                    'status' => $a->job->status, 'lat' => $a->job->lat, 'lng' => $a->job->lng, 'address' => $a->job->address ?? $a->job->area_label] : null,
             ];
         }
         return $out;

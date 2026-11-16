@@ -159,7 +159,8 @@ class JobService
         $waiting = JobApplication::with('user')->where('job_id', $job->id)->whereIn('status', JobApplication::WAITING)->get();
         foreach ($waiting as $application) {
             $application->update(['status' => JobApplication::CLOSED, 'closed_reason' => 'job_closed', 'decided_at' => now()]);
-            MarketPush::send($application->user, 'job_application_closed', '{job} is closed', 'Thank you for applying. Keep going: new jobs come every day.',
+            MarketPush::send($application->user, 'job_application_closed', $reason === 'filled' ? '{job} is filled' : '{job} is closed',
+                $reason === 'filled' ? 'Thank you for applying. The job is filled. Keep going: new jobs come every day.' : 'Thank you for applying. Keep going: new jobs come every day.',
                 ['job' => $job->title], ['job_code' => $job->code, 'application_id' => $application->id]);
         }
         if ($tellEmployer) {
@@ -441,6 +442,10 @@ class JobService
         if (array_key_exists('skills', $data)) {
             $skills = is_array($data['skills']) ? $data['skills'] : (json_decode((string)$data['skills'], true) ?: array_filter(explode(',', (string)$data['skills'])));
             $f['skills'] = array_values(array_unique(array_filter(array_map(fn($s) => trim(mb_substr((string)$s, 0, 40)), array_slice($skills, 0, JobPost::MAX_SKILLS)))));
+        }
+        if (array_key_exists('required_links', $data)) {
+            $req = is_array($data['required_links']) ? $data['required_links'] : (json_decode((string)$data['required_links'], true) ?: array_filter(explode(',', (string)$data['required_links'])));
+            $f['required_links'] = array_values(array_intersect(\Modules\MarketManagement\Entities\JobWorkCard::LINK_TYPES, $req));
         }
         if (array_key_exists('questions', $data)) {
             $questions = is_array($data['questions']) ? $data['questions'] : (json_decode((string)$data['questions'], true) ?: []);

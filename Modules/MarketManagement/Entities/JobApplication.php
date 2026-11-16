@@ -22,16 +22,19 @@ class JobApplication extends Model
     public const NEXT_STEP = 'next_step';
     public const NOT_SELECTED = 'not_selected';
     public const WITHDRAWN = 'withdrawn';
+    /** The employer says this person got the job; the person confirms (or says no). */
+    public const HIRED = 'hired';
     /** The job closed, or nobody answered in time: a kind note, nobody waits forever. */
     public const CLOSED = 'closed';
 
     /** Still waiting for the employer. */
     public const WAITING = [self::SENT, self::SEEN, self::SHORTLISTED];
-    public const ACTIVE = [self::SENT, self::SEEN, self::SHORTLISTED, self::NEXT_STEP];
+    public const ACTIVE = [self::SENT, self::SEEN, self::SHORTLISTED, self::NEXT_STEP, self::HIRED];
 
     protected $fillable = [
         'job_id', 'user_id', 'answers', 'message', 'share_phone', 'status', 'employer_note', 'next_step', 'next_step_at', 'next_step_place',
         'next_step_sent_at', 'next_step_read_at', 'seen_at', 'shortlisted_at', 'decided_at', 'closed_reason',
+        'next_step_lat', 'next_step_lng', 'hired_at', 'hire_confirmed_at', 'hire_declined_at',
     ];
 
     protected $casts = [
@@ -43,6 +46,11 @@ class JobApplication extends Model
         'seen_at' => 'datetime',
         'shortlisted_at' => 'datetime',
         'decided_at' => 'datetime',
+        'next_step_lat' => 'float',
+        'next_step_lng' => 'float',
+        'hired_at' => 'datetime',
+        'hire_confirmed_at' => 'datetime',
+        'hire_declined_at' => 'datetime',
     ];
 
     public function job(): BelongsTo
