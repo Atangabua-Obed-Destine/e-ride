@@ -158,7 +158,7 @@ class ScheduleService
                 $departure->update(['vehicle_id' => null, 'seat_plan' => null, 'capacity' => 0]);
                 return $departure;
             }
-            if ($vehicle->agency_id !== $departure->agency_id) {
+            if ((string)$vehicle->agency_id !== (string)$departure->agency_id) {
                 throw ValidationException::withMessages(['vehicle_id' => translate('This bus is not yours.')]);
             }
             $this->checkVehicle($vehicle, $departure->class);

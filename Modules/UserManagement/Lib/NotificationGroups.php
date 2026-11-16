@@ -15,7 +15,7 @@ use Illuminate\Support\Facades\DB;
  */
 class NotificationGroups
 {
-    public const GROUPS = ['trips', 'market', 'jobs', 'homes', 'food', 'safety', 'wallet', 'other'];
+    public const GROUPS = ['trips', 'travel', 'market', 'jobs', 'homes', 'food', 'safety', 'wallet', 'other'];
 
     private const SAFETY_TYPES = ['safety', 'safety_alert', 'safety_reward', 'danger_report'];
     private const TRIP_TYPES = ['trip', 'parcel', 'ride_request', 'auto_arrival', 'chatting', 'review', 'lost_item', 'driver'];
@@ -29,6 +29,7 @@ class NotificationGroups
             'jobs' => $query->where(fn($q) => self::jobs($q)),
             'safety' => $query->where(fn($q) => self::safety($q)),
             'market' => $query->where(fn($q) => self::market($q))->whereNot(fn($q) => self::jobs($q))->whereNot(fn($q) => self::safety($q)),
+            'travel' => $query->where(fn($q) => self::travel($q))->whereNot(fn($q) => self::claimedBefore($q, 'travel')),
             'homes' => $query->where(fn($q) => self::homes($q))->whereNot(fn($q) => self::claimedBefore($q, 'homes')),
             'food' => $query->where(fn($q) => self::food($q))->whereNot(fn($q) => self::claimedBefore($q, 'food')),
             'trips' => $query->where(fn($q) => self::trips($q))->whereNot(fn($q) => self::claimedBefore($q, 'trips')),
@@ -53,6 +54,9 @@ class NotificationGroups
         if ($nt === 'market' || $type === 'market') {
             return 'market';
         }
+        if ($nt === 'bus' || $type === 'bus') {
+            return 'travel';
+        }
         if ($nt === 'listing' || $type === 'listing' || str_starts_with($action, 'listing_')) {
             return 'homes';
         }
@@ -69,7 +73,7 @@ class NotificationGroups
     }
 
     // The checks, in the order of() runs them.
-    private const ORDER = ['jobs', 'safety', 'market', 'homes', 'food', 'trips', 'wallet'];
+    private const ORDER = ['jobs', 'safety', 'market', 'travel', 'homes', 'food', 'trips', 'wallet'];
 
     /** Rows that a group earlier in the order already claims. */
     private static function claimedBefore(Builder $q, string $group): Builder
@@ -101,6 +105,12 @@ class NotificationGroups
     private static function market(Builder $q): Builder
     {
         return $q->where(self::col('notification_type'), 'market')->orWhere(self::col('type'), 'market');
+    }
+
+    /** E-Ride Bus Travel. */
+    private static function travel(Builder $q): Builder
+    {
+        return $q->where(self::col('notification_type'), 'bus')->orWhere(self::col('type'), 'bus');
     }
 
     private static function homes(Builder $q): Builder

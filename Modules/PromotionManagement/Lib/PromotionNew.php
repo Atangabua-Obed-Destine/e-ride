@@ -16,6 +16,7 @@ if (!function_exists('appNotificationData')) {
         $flat = array_merge(is_array($notificationData['extra'] ?? null) ? $notificationData['extra'] : [], $notificationData);
         $keep = array_filter(array_intersect_key($flat, array_flip([
             'conversation_id', 'item_code', 'shop_slug', 'order_id', 'booking_id', 'job_code', 'application_id', 'listing_id', 'sender_name',
+            'bus_booking_id', 'bus_departure_id',
         ])), fn($v) => is_scalar($v) && (string)$v !== '');
         $name = trim((string)($user_name ?? ''));
         if ($name !== '') {

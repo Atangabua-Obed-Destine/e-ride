@@ -17,12 +17,12 @@
 <div class="main-content">
     <div class="container-fluid">
         <h2 class="fs-22 mb-1">{{ translate('Bus agencies') }}</h2>
-        <p class="fs-13 text-muted mb-3">{{ translate('Agencies start from their Google listing. E-Ride checks them, then opens their partner portal. Passengers pay each agency through its own Fapshi account; E-Ride bills a % commission every month.') }}</p>
+        <p class="fs-13 text-muted mb-3">{{ translate('Agencies start from their Google listing. E-Ride checks them, then opens their partner portal. Passengers pay each agency through its own Fapshi account. E-Ride bills a % commission every month.') }}</p>
         @if ($errors->any())
             <div class="alert alert-danger"><ul class="mb-0 ps-3">@foreach ($errors->all() as $error)<li>{{ $error }}</li>@endforeach</ul></div>
         @endif
         @if(!$settings['enabled'])
-            <div class="alert alert-warning">{{ translate('Bus booking is off in the app. Agencies can still be verified and set up; turn it on in the settings below when the first one is ready.') }}</div>
+            <div class="alert alert-warning">{{ translate('Bus booking is off in the app. Agencies can still be verified and set up. Turn it on in the settings below when the first one is ready.') }}</div>
         @endif
 
         <div class="card mb-3">
@@ -119,7 +119,7 @@
                         <div class="col-md-6 col-xl-4"><label class="form-label" for="bs_{{ $key }}">{{ translate($label) }}</label><input id="bs_{{ $key }}" type="number" name="{{ $key }}" class="form-control" min="{{ $min }}" max="{{ $max }}" step="{{ $step }}" value="{{ $settings[$key] }}" required></div>
                     @endforeach
                 </div>
-                <p class="fs-12 text-muted mt-3 mb-0">{{ translate('New agencies start with the default commissions; each agency can have its own, on its page.') }}</p>
+                <p class="fs-12 text-muted mt-3 mb-0">{{ translate('New agencies start with the default commissions. Each agency can have its own, on its page.') }}</p>
             </div>
             <div class="card-footer text-end"><button class="btn btn-primary">{{ translate('Save') }}</button></div>
         </form>

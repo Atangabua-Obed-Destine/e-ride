@@ -227,7 +227,7 @@ class AgencyService
 
     protected function own(BusAgency $agency, BusStaff $staff): void
     {
-        if ($staff->agency_id !== $agency->id) {
+        if ((string)$staff->agency_id !== (string)$agency->id) {
             abort(404);
         }
     }

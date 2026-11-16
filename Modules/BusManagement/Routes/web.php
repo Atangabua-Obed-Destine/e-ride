@@ -1,7 +1,9 @@
 <?php
 
 use Illuminate\Support\Facades\Route;
+use App\Http\Middleware\VerifyCsrfToken;
 use Modules\BusManagement\Http\Controllers\Web\Admin\BusAdminController;
+use Modules\BusManagement\Http\Controllers\Web\BusPayController;
 use Modules\BusManagement\Http\Controllers\Web\Partner\AuthController;
 use Modules\BusManagement\Http\Controllers\Web\Partner\DepartureController;
 use Modules\BusManagement\Http\Controllers\Web\Partner\DestinationController;
@@ -48,6 +50,18 @@ Route::group(['prefix' => 'partner/bus-agency', 'as' => 'bus-partner.'], functio
         Route::post('staff/{staff}/toggle', [StaffController::class, 'toggle'])->name('staff.toggle')->whereNumber('staff');
         Route::post('staff/{staff}/password', [StaffController::class, 'password'])->name('staff.password')->whereNumber('staff');
     });
+});
+
+// Mobile money for tickets, at each agency's own Fapshi. None of the URLs before the end contain "success" or
+// "fail": the app's payment screen closes on the first one that does.
+Route::group(['prefix' => 'bus', 'as' => 'bus.'], function () {
+    Route::post('fapshi/{code}', [BusPayController::class, 'webhook'])->name('fapshi.webhook')->where('code', '[a-z0-9]{8,24}')
+        ->withoutMiddleware([VerifyCsrfToken::class])->middleware('throttle:120,1,bus-webhook');
+    Route::get('pay/{reference}/return', [BusPayController::class, 'return'])->name('pay.return')->where('reference', 'bus-[A-Za-z0-9-]{3,60}');
+    Route::get('pay/{reference}/check', [BusPayController::class, 'check'])->name('pay.check')->where('reference', 'bus-[A-Za-z0-9-]{3,60}')
+        ->middleware('throttle:30,1,bus-pay-check');
+    Route::get('pay/{reference}/{outcome}', [BusPayController::class, 'end'])->name('pay.end')->where('reference', 'bus-[A-Za-z0-9-]{3,60}')
+        ->where('outcome', 'success|fail');
 });
 
 // E-Ride admin (sidebar "Bus agencies").
