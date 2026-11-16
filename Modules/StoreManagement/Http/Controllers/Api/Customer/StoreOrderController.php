@@ -11,6 +11,7 @@ use Illuminate\Validation\Rule;
 use Illuminate\Validation\ValidationException;
 use Modules\StoreManagement\Entities\Store;
 use Modules\StoreManagement\Entities\StoreOrder;
+use Modules\StoreManagement\Entities\StoreReview;
 use Modules\StoreManagement\Lib\StoreSettings;
 use Modules\StoreManagement\Service\Interfaces\StoreOrderServiceInterface;
 use Modules\StoreManagement\Transformers\StorePresenter;
@@ -121,6 +122,17 @@ class StoreOrderController extends Controller
         return response()->json(array_merge(responseFormatter(DEFAULT_200, $orders->items()), [
             'total_size' => $orders->total(), 'limit' => $limit, 'offset' => $offset,
         ]));
+    }
+
+    /** What needs the customer in Food & Shops, for the red count on Home: delivered orders not rated yet. */
+    public function attention(): JsonResponse
+    {
+        $toRate = StoreOrder::where('customer_id', auth('api')->id())
+            ->where('status', StoreOrder::DELIVERED)
+            ->where('delivered_at', '>', now()->subDays(StoreReview::MAX_DAYS_TO_REVIEW))
+            ->whereDoesntHave('review')
+            ->count();
+        return response()->json(responseFormatter(DEFAULT_200, ['to_rate' => $toRate]));
     }
 
     public function show(StoreOrder $order): JsonResponse

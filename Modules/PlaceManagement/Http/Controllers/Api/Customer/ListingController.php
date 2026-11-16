@@ -11,6 +11,7 @@ use Illuminate\Validation\ValidationException;
 use Modules\PlaceManagement\Entities\Listing;
 use Modules\PlaceManagement\Entities\ListingAlert;
 use Modules\PlaceManagement\Entities\ListingReport;
+use Modules\PlaceManagement\Entities\ListingReservation;
 use Modules\PlaceManagement\Entities\ListingVisit;
 use Modules\PlaceManagement\Lib\ListingSettings;
 use Modules\PlaceManagement\Service\ListingService;
@@ -50,7 +51,35 @@ class ListingController extends Controller
             'ban_days' => $settings['ban_days'],
             'landmark_name' => $settings['landmark_name'] ?: null,
             'cannot_list_reason' => $this->listings->cannotListReason($request->user()),
+            'attention' => $this->attention($request->user()->id),
         ]));
+    }
+
+    /**
+     * What needs the person in Homes, for the red counts. As an owner: visits to answer, someone
+     * taking the place, a reservation to accept, changes asked by E-Ride, a place to confirm. As a
+     * seeker: a new time to answer, a reservation to pay, a recent visit to rate.
+     */
+    private function attention(string $userId): array
+    {
+        $owner = ListingVisit::where('owner_id', $userId)
+                ->where(fn($q) => $q->where('status', ListingVisit::REQUESTED)
+                    ->orWhere(fn($t) => $t->where('taking', true)->whereIn('status', [ListingVisit::ACCEPTED, ListingVisit::DONE])
+                        ->whereHas('listing', fn($l) => $l->where('status', Listing::LIVE))))
+                ->count()
+            + ListingReservation::where('owner_id', $userId)->where('status', ListingReservation::HELD)->count()
+            + Listing::where('owner_id', $userId)
+                ->where(fn($q) => $q->where('status', Listing::CHANGES)
+                    ->orWhere(fn($l) => $l->where('status', Listing::LIVE)->where('reminder_stage', '>=', 2)))
+                ->count();
+        $seeker = ListingVisit::where('seeker_id', $userId)
+                ->where(fn($q) => $q->where('status', ListingVisit::PROPOSED)
+                    ->orWhere(fn($r) => $r->whereIn('status', [ListingVisit::ACCEPTED, ListingVisit::DONE])->whereNull('outcome')
+                        ->whereDate('visit_date', '<=', today())->whereDate('visit_date', '>=', today()->subDays(14))))
+                ->count()
+            + ListingReservation::where('seeker_id', $userId)->where('status', ListingReservation::AWAITING)
+                ->where(fn($q) => $q->whereNull('pay_due_at')->orWhere('pay_due_at', '>', now()))->count();
+        return ['owner' => $owner, 'seeker' => $seeker];
     }
 
     public function index(Request $request): JsonResponse

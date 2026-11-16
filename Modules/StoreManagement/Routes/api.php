@@ -12,6 +12,7 @@ Route::group(['prefix' => 'customer', 'middleware' => ['auth:api', 'maintenance_
     Route::post('store-orders/quote', [StoreOrderController::class, 'quote'])->middleware('throttle:30,1,store-quote');
     Route::post('store-orders', [StoreOrderController::class, 'place'])->middleware('throttle:10,1,store-order');
     Route::get('store-orders', [StoreOrderController::class, 'index']);
+    Route::get('store-orders/attention', [StoreOrderController::class, 'attention']);
     Route::get('store-orders/{order}', [StoreOrderController::class, 'show']);
     Route::put('store-orders/{order}/cancel', [StoreOrderController::class, 'cancel']);
     Route::post('store-orders/{order}/review', [StoreOrderController::class, 'review'])->middleware('throttle:10,1,store-review');
