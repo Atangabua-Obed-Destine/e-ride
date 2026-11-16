@@ -605,6 +605,12 @@
                             <span class="link-title">{{ translate('E-Ride Jobs') }}</span>
                         </a>
                     </li>
+                    <li class="{{ Request::is('admin/bus*') ? 'active open' : '' }}">
+                        <a href="{{ route('admin.bus.index') }}">
+                            <i class="bi bi-bus-front"></i>
+                            <span class="link-title">{{ translate('Bus agencies') }}</span>
+                        </a>
+                    </li>
                     <li class="{{ Request::is('admin/places/on-duty*') ? 'active open' : '' }}">
                         <a href="{{ route('admin.place.on-duty') }}">
                             <i class="bi bi-capsule"></i>

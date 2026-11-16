@@ -17,5 +17,6 @@
     "AiModule": true,
     "StoreManagement": true,
     "PlaceManagement": true,
-    "MarketManagement": true
+    "MarketManagement": true,
+    "BusManagement": true
 }

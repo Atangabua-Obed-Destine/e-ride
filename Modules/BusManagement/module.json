@@ -1,0 +1,13 @@
+{
+    "name": "BusManagement",
+    "alias": "busmanagement",
+    "description": "E-Ride Bus Travel: verified bus agencies sell seats in the app and at their counter from one partner portal; passengers pay the agency through its own Fapshi account.",
+    "keywords": [],
+    "priority": 0,
+    "providers": [
+        "Modules\\BusManagement\\Providers\\BusManagementServiceProvider"
+    ],
+    "aliases": {},
+    "files": [],
+    "requires": []
+}
