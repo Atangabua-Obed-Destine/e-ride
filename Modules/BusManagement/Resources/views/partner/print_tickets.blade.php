@@ -41,8 +41,6 @@
             <tr><td>{{ translate('Passenger') }}</td><td>{{ $t->passenger_name }}</td></tr>
             @if($t->id_number)<tr><td>{{ translate('ID') }}</td><td>{{ $t->id_number }}</td></tr>@endif
             @if($booking->booker_id_number)<tr><td>{{ translate('Booked by (ID)') }}</td><td>{{ $booking->booker_id_number }}</td></tr>@endif
-            @if($booking->booker_id_number)<tr><td>{{ translate('Booked by (ID)') }}</td><td>{{ $booking->booker_id_number }}</td></tr>@endif
-            @if($booking->booker_id_number)<tr><td>{{ translate('Booked by (ID)') }}</td><td>{{ $booking->booker_id_number }}</td></tr>@endif
             <tr><td>{{ translate('Leaves') }}</td><td>{{ $d->leavesAt()->translatedFormat('D j M, H:i') }}</td></tr>
             <tr><td>{{ translate('Gets off at') }}</td><td>{{ $booking->dropPoint?->name }}</td></tr>
             <tr><td>{{ translate('Bus') }}</td><td>{{ ScheduleService::classLabel($d->class) }} · {{ $d->vehicle?->registration }}</td></tr>
