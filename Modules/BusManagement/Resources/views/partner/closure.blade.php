@@ -41,7 +41,7 @@
                 <div class="d-flex justify-content-between py-1 border-top small"><span>{{ $d->leavesAt()->translatedFormat('D j M, H:i') }} · {{ $d->destination?->city }}</span>
                     <span class="b-tag {{ $closure->isAtRisk() && $d->isOpen() ? 'warn' : ($statusTag[$d->status][0] ?? 'mute') }}">{{ $closure->isAtRisk() && $d->isOpen() ? translate('At risk') : ($statusTag[$d->status][1] ?? $d->status) }}</span></div>
             @empty
-                <div class="b-hint">{{ translate('No departure inside yet. New ones that fall inside are stopped by themselves.') }}</div>
+                <div class="b-hint">{{ $closure->status === \Modules\BusManagement\Entities\BusClosure::LIFTED ? translate('Lifted: its departures are on sale again.') : translate('No departure inside yet. New ones that fall inside are stopped by themselves.') }}</div>
             @endforelse
         </div>
     </div>

@@ -7152,4 +7152,5 @@
   '{n} departure(s) stop' => ':n departure(s) stop',
   '{n} passenger(s): {app} in the app, {counter} at the counter' => ':n passenger(s): :app in the app, :counter at the counter',
   '{n} request(s) waiting will be declined' => ':n request(s) waiting will be declined',
+  'Lifted: its departures are on sale again.' => 'Lifted: its departures are on sale again.',
 );
