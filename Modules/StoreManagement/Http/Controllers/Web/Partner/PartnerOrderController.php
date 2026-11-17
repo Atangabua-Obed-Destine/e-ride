@@ -56,6 +56,8 @@ class PartnerOrderController extends Controller
             ->whereIn('store_id', $this->kitchenIds($request))
             ->where(function ($q) {
                 $q->whereIn('status', StoreOrder::ACTIVE)
+                    // Confirmed, waiting for the customer to pay.
+                    ->orWhere(fn($w) => $w->where('status', StoreOrder::AWAITING_PAYMENT)->whereNotNull('confirmed_at'))
                     ->orWhere(fn($w) => $w->whereIn('status', StoreOrder::FINAL)->where('updated_at', '>=', now()->subHours(3)));
             })
             ->orderBy('placed_at')
@@ -82,20 +84,55 @@ class PartnerOrderController extends Controller
         return view('storemanagement::partner.history', compact('orders', 'rating'));
     }
 
+    /** Confirm a new order (the customer then pays), or accept an older paid one. */
     public function accept(Request $request, StoreOrder $order): JsonResponse
     {
         $data = $request->validate(['prep_minutes' => 'required|integer|min:5|max:180']);
         $before = $this->own($request, $order)->status;
         $order = $this->orders->accept($order, (int)$data['prep_minutes']);
-        return $this->answer($order, StoreOrder::PLACED, $before);
+        return $this->answer($order, in_array($before, [StoreOrder::AWAITING_CONFIRMATION, StoreOrder::PLACED], true) ? $before : StoreOrder::AWAITING_CONFIRMATION, $before);
     }
 
+    /** Decline a new order, or cancel one before it is paid. */
     public function reject(Request $request, StoreOrder $order): JsonResponse
     {
         $data = $request->validate(['reason' => 'required|string|max:200']);
         $before = $this->own($request, $order)->status;
-        $order = $this->orders->reject($order, $data['reason']);
-        return $this->answer($order, StoreOrder::PLACED, $before);
+        try {
+            $order = $this->orders->reject($order, $data['reason']);
+        } catch (ValidationException $e) {
+            return response()->json(['ok' => false, 'message' => collect($e->errors())->flatten()->first()], 422);
+        }
+        return response()->json([
+            'ok' => in_array($order->status, [StoreOrder::REJECTED], true),
+            'message' => $order->status === StoreOrder::REJECTED ? null : translate('This order changed in the meantime. The board has been refreshed.'),
+            'order' => $this->present($order->fresh(['items', 'store', 'trip.driver', 'trip.vehicle']), StoreSettings::all()['partner_response_minutes']),
+        ], $order->status === StoreOrder::REJECTED ? 200 : 409);
+    }
+
+    /** Dishes that can be offered instead, for the "Suggest changes" sheet. */
+    public function swaps(Request $request, StoreOrder $order): JsonResponse
+    {
+        $this->own($request, $order);
+        return response()->json(['ok' => true, 'items' => $this->orders->swapOptions($order)]);
+    }
+
+    /** Suggest changes: per order line a quantity (0 = remove) and maybe a dish to offer instead. */
+    public function propose(Request $request, StoreOrder $order): JsonResponse
+    {
+        $data = $request->validate([
+            'changes' => 'required|array|max:50',
+            'changes.*.quantity' => 'required|integer|min:0|max:' . \Modules\StoreManagement\Service\StoreOrderService::MAX_QTY,
+            'changes.*.swap_item_id' => 'nullable|uuid',
+            'note' => 'nullable|string|max:300',
+        ]);
+        $this->own($request, $order);
+        try {
+            $order = $this->orders->proposeChanges($order, $data['changes'], $data['note'] ?? null);
+        } catch (ValidationException $e) {
+            return response()->json(['ok' => false, 'message' => collect($e->errors())->flatten()->first()], 422);
+        }
+        return response()->json(['ok' => true, 'order' => $this->present($order->fresh(['items', 'store', 'trip.driver', 'trip.vehicle']), StoreSettings::all()['partner_response_minutes'])]);
     }
 
     public function ready(Request $request, StoreOrder $order): JsonResponse
@@ -120,6 +157,16 @@ class PartnerOrderController extends Controller
         ], $ok ? 200 : 409);
     }
 
+    /** "6 77 12 34 56" or "+237677123456" to "237677123456" for wa.me. */
+    protected function whatsappNumber(?string $phone): ?string
+    {
+        $digits = preg_replace('/\D+/', '', (string)$phone);
+        if ($digits === '') {
+            return null;
+        }
+        return strlen($digits) === 9 ? '237' . $digits : $digits;
+    }
+
     protected function present(StoreOrder $o, int $responseMinutes): array
     {
         $trip = $o->trip;
@@ -132,14 +179,23 @@ class PartnerOrderController extends Controller
             'status' => $o->status,
             // Which kitchen cooks it, on an owner's board with several branches.
             'branch' => $o->store && ($o->store->isBranch() || $o->store->branch_name) ? \Modules\StoreManagement\Lib\StoreBranches::label($o->store) : null,
-            'items' => $o->items->map(fn($i) => ['name' => $i->name, 'quantity' => $i->quantity, 'line_total' => $i->line_total])->values(),
+            'items' => $o->items->map(fn($i) => ['item_id' => $i->store_item_id, 'name' => $i->name, 'quantity' => $i->quantity, 'unit_price' => $i->unit_price, 'line_total' => $i->line_total])->values(),
             'items_count' => (int)$o->items->sum('quantity'),
             'items_subtotal' => $o->items_subtotal,
             'items_subtotal_text' => getCurrencyFormat($o->items_subtotal),
             'note' => $o->note,
             'customer_name' => $o->receiver_name,
             'placed_at' => $o->placed_at?->toIso8601String(),
-            'respond_by' => $o->status === StoreOrder::PLACED && $o->placed_at ? $o->placed_at->copy()->addMinutes($responseMinutes)->toIso8601String() : null,
+            'respond_by' => in_array($o->status, [StoreOrder::AWAITING_CONFIRMATION, StoreOrder::PLACED], true) && $o->placed_at ? $o->placed_at->copy()->addMinutes($responseMinutes)->toIso8601String() : null,
+            'answer_by' => $o->status === StoreOrder::CHANGES_PROPOSED && $o->proposed_at ? $o->proposed_at->copy()->addMinutes(\Modules\StoreManagement\Service\StoreOrderService::ANSWER_MINUTES)->toIso8601String() : null,
+            'pay_by' => $o->isConfirmedUnpaid() ? $o->pay_by?->toIso8601String() : null,
+            'paid' => $o->payment_status === StoreOrder::PAID,
+            'proposal' => $o->status === StoreOrder::CHANGES_PROPOSED ? $o->proposal : null,
+            // Call or WhatsApp the customer while the order is open; hidden once it is over.
+            'customer_phone' => $o->isActive() ? $o->receiver_phone : null,
+            'whatsapp' => $o->isActive() ? $this->whatsappNumber($o->receiver_phone) : null,
+            // Only before payment: a paid order goes ahead, no refunds.
+            'can_cancel' => in_array($o->status, [StoreOrder::CHANGES_PROPOSED], true) || $o->isConfirmedUnpaid(),
             'prep_minutes' => $o->prep_minutes,
             'ready_at' => $o->ready_at?->toIso8601String(),
             'picked_up_at' => $o->picked_up_at?->toIso8601String(),

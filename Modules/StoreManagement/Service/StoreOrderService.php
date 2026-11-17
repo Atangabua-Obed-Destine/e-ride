@@ -54,6 +54,10 @@ class StoreOrderService extends BaseService implements StoreOrderServiceInterfac
     use Payment;
 
     public const UNPAID_EXPIRY_MINUTES = 30;
+    /** After the restaurant confirms, the customer pays within this. */
+    public const PAY_MINUTES = 10;
+    /** The customer answers suggested changes within this. */
+    public const ANSWER_MINUTES = 10;
     public const QUOTE_MINUTES = 15;
     public const MAX_QTY = 50;
     public const ADMIN_ALERT_AFTER_ATTEMPTS = 3;
@@ -255,7 +259,9 @@ class StoreOrderService extends BaseService implements StoreOrderServiceInterfac
                 'customer_id' => $customer->id,
                 'store_id' => $store->id,
                 'zone_id' => $quote['delivery']['zone_id'],
-                'status' => StoreOrder::AWAITING_PAYMENT,
+                // Sent to the restaurant: the customer pays once it is confirmed.
+                'status' => StoreOrder::AWAITING_CONFIRMATION,
+                'placed_at' => now(),
                 'items_subtotal' => $quote['items_subtotal'],
                 'delivery_fee' => $quote['delivery_fee'],
                 'total' => $quote['total'],
@@ -272,13 +278,156 @@ class StoreOrderService extends BaseService implements StoreOrderServiceInterfac
                 'prep_minutes' => $store->default_prep_minutes,
             ]);
             $order->items()->createMany($quote['items']);
+            DB::afterCommit(function () use ($order) {
+                $this->notifyCustomer($order, 'sent');
+                $this->alertPartner($order);
+            });
             return $order;
         });
 
-        if ($input['payment_method'] === 'wallet') {
-            $order = $this->payWithWallet($order);
-        }
         return $order->fresh(['items', 'store']);
+    }
+
+    /**
+     * Pay a confirmed order: from the wallet now, or a gateway link (null for
+     * the wallet). The kitchen starts when the payment lands (markPaid).
+     *
+     * @throws ValidationException
+     */
+    public function payConfirmed(StoreOrder $order, string $method): ?string
+    {
+        if (!$order->isConfirmedUnpaid() || $order->payment_status !== StoreOrder::UNPAID) {
+            throw ValidationException::withMessages(['order' => translate('This order is not waiting for payment.')]);
+        }
+        if ($order->pay_by && $order->pay_by->isPast()) {
+            throw ValidationException::withMessages(['order' => translate('The time to pay for this order is over. Please order again.')]);
+        }
+        $order->payment_method = $method;
+        $order->save();
+        if ($method === 'wallet') {
+            $this->payWithWallet($order);
+            return null;
+        }
+        // Opened in the app's payment webview, which redirects to the gateway.
+        return route('store-order.pay', ['order' => $order->id, 'payment_method' => $method]);
+    }
+
+    /* ------------------------------------------------------------ before payment */
+
+    /**
+     * Dishes the restaurant can offer instead: on its menu and available at
+     * this kitchen right now.
+     */
+    public function swapOptions(StoreOrder $order): array
+    {
+        $kitchen = $order->store;
+        $brand = $kitchen->brand()->load(['categories', 'items']);
+        $brand->linkMenu();
+        $states = $kitchen->stateMap();
+        return $brand->items
+            ->filter(fn(StoreItem $i) => $i->menuState(null, $states->get($i->id)) === StoreItem::AVAILABLE)
+            ->map(fn(StoreItem $i) => ['id' => $i->id, 'name' => $i->name, 'price' => $i->price, 'price_text' => getCurrencyFormat($i->price)])
+            ->values()->all();
+    }
+
+    /**
+     * The restaurant suggests changes. $changes, one per order line in order:
+     * ['quantity' => n] (0 = removed) and optionally ['swap_item_id' => id]
+     * to offer another dish instead. The customer then accepts or cancels.
+     *
+     * @throws ValidationException
+     */
+    public function proposeChanges(StoreOrder $order, array $changes, ?string $note): StoreOrder
+    {
+        return $this->locked($order, function (StoreOrder $order) use ($changes, $note) {
+            if ($order->status !== StoreOrder::AWAITING_CONFIRMATION) {
+                throw ValidationException::withMessages(['order' => translate('This order changed in the meantime. The board has been refreshed.')]);
+            }
+            $swaps = collect($this->swapOptions($order))->keyBy('id');
+            $lines = [];
+            $changed = false;
+            foreach ($order->items()->orderBy('id')->get()->values() as $i => $line) {
+                $c = $changes[$i] ?? [];
+                $qty = max(0, min(self::MAX_QTY, (int)($c['quantity'] ?? $line->quantity)));
+                $swapId = $c['swap_item_id'] ?? null;
+                $entry = ['was_name' => $line->name, 'was_quantity' => $line->quantity];
+                if ($swapId && $swapId !== $line->store_item_id) {
+                    $swap = $swaps->get($swapId);
+                    if (!$swap) {
+                        throw ValidationException::withMessages(['order' => translate('That dish is not available to offer right now.')]);
+                    }
+                    $qty = max(1, $qty);
+                    $entry += ['change' => 'swapped', 'store_item_id' => $swap['id'], 'name' => $swap['name'], 'unit_price' => round($swap['price'], 2), 'quantity' => $qty];
+                } elseif ($qty === 0) {
+                    $entry += ['change' => 'removed', 'store_item_id' => $line->store_item_id, 'name' => $line->name, 'unit_price' => $line->unit_price, 'quantity' => 0];
+                } else {
+                    $entry += ['change' => $qty < $line->quantity ? 'reduced' : ($qty > $line->quantity ? 'increased' : 'same'),
+                        'store_item_id' => $line->store_item_id, 'name' => $line->name, 'unit_price' => $line->unit_price, 'quantity' => $qty];
+                }
+                $entry['line_total'] = round($entry['unit_price'] * $entry['quantity'], 2);
+                $changed = $changed || $entry['change'] !== 'same';
+                $lines[] = $entry;
+            }
+            if (!$changed) {
+                throw ValidationException::withMessages(['order' => translate('Nothing was changed. Confirm the order as it is, or decline it.')]);
+            }
+            if (!collect($lines)->contains(fn($l) => $l['quantity'] > 0)) {
+                throw ValidationException::withMessages(['order' => translate('Every dish was removed. Decline the order instead, with a reason.')]);
+            }
+            $subtotal = round(collect($lines)->sum('line_total'), 2);
+            $order->proposal = [
+                'lines' => $lines,
+                'note' => $note ? mb_substr(trim($note), 0, 300) : null,
+                'items_subtotal' => $subtotal,
+                'total' => round($subtotal + $order->delivery_fee, 2),
+            ];
+            $order->proposed_at = now();
+            $order->status = StoreOrder::CHANGES_PROPOSED;
+            $order->save();
+            DB::afterCommit(fn() => $this->notifyCustomer($order, 'changes'));
+            return $order;
+        });
+    }
+
+    /**
+     * The customer's answer to suggested changes: accept (the order becomes the
+     * proposal and waits for payment) or refuse (cancelled, nothing was paid).
+     *
+     * @throws ValidationException
+     */
+    public function answerChanges(StoreOrder $order, bool $accept): StoreOrder
+    {
+        return $this->locked($order, function (StoreOrder $order) use ($accept) {
+            if ($order->status !== StoreOrder::CHANGES_PROPOSED || !$order->proposal) {
+                throw ValidationException::withMessages(['order' => translate('These changes are no longer open.')]);
+            }
+            if (!$accept) {
+                $order->status = StoreOrder::CANCELLED;
+                $order->cancelled_at = now();
+                $order->cancelled_by = 'customer';
+                $order->cancel_reason = translate('The customer did not accept the changes.');
+                $order->save();
+                return $order;
+            }
+            $lines = collect($order->proposal['lines'])->filter(fn($l) => $l['quantity'] > 0);
+            $order->items()->delete();
+            $order->items()->createMany($lines->map(fn($l) => [
+                'store_item_id' => $l['store_item_id'], 'name' => $l['name'], 'unit_price' => $l['unit_price'],
+                'quantity' => $l['quantity'], 'line_total' => $l['line_total'],
+            ])->values()->all());
+            $order->items_subtotal = $order->proposal['items_subtotal'];
+            $order->total = $order->proposal['total'];
+            $this->markConfirmed($order);
+            $order->save();
+            return $order;
+        });
+    }
+
+    protected function markConfirmed(StoreOrder $order): void
+    {
+        $order->status = StoreOrder::AWAITING_PAYMENT;
+        $order->confirmed_at = now();
+        $order->pay_by = now()->addMinutes(self::PAY_MINUTES);
     }
 
     public function payWithWallet(StoreOrder $order): StoreOrder
@@ -364,10 +513,23 @@ class StoreOrderService extends BaseService implements StoreOrderServiceInterfac
 
     protected function markPaid(StoreOrder $order, string $method): StoreOrder
     {
-        $order->status = StoreOrder::PLACED;
         $order->payment_status = StoreOrder::PAID;
         $order->payment_method = $method;
         $order->paid_at = now();
+        if ($order->confirmed_at) {
+            // Confirmed before payment: the kitchen starts now.
+            $order->status = StoreOrder::ACCEPTED;
+            $order->accepted_at = now();
+            $order->ready_at = now()->addMinutes(max(5, (int)$order->prep_minutes));
+            $order->save();
+            DB::afterCommit(fn() => $this->notifyCustomer($order, 'accepted'));
+            if ((int)$order->prep_minutes <= StoreSettings::all()['rider_lead_minutes']) {
+                $this->requestRiderLocked($order);
+            }
+            return $order;
+        }
+        // Older flow: paid first, the store accepts after.
+        $order->status = StoreOrder::PLACED;
         $order->placed_at = now();
         $order->save();
         DB::afterCommit(function () use ($order) {
@@ -382,10 +544,18 @@ class StoreOrderService extends BaseService implements StoreOrderServiceInterfac
     public function accept(StoreOrder $order, int $prepMinutes): StoreOrder
     {
         return $this->locked($order, function (StoreOrder $order) use ($prepMinutes) {
+            $prepMinutes = max(5, min(180, $prepMinutes));
+            // Confirmed before payment: the customer pays, then the kitchen starts.
+            if ($order->status === StoreOrder::AWAITING_CONFIRMATION) {
+                $order->prep_minutes = $prepMinutes;
+                $this->markConfirmed($order);
+                $order->save();
+                DB::afterCommit(fn() => $this->notifyCustomer($order, 'confirmed'));
+                return $order;
+            }
             if ($order->status !== StoreOrder::PLACED) {
                 return $order;
             }
-            $prepMinutes = max(5, min(180, $prepMinutes));
             $order->status = StoreOrder::ACCEPTED;
             $order->prep_minutes = $prepMinutes;
             $order->accepted_at = now();
@@ -400,13 +570,27 @@ class StoreOrderService extends BaseService implements StoreOrderServiceInterfac
         });
     }
 
+    /**
+     * The restaurant declines or cancels, only before payment: nothing to refund.
+     * A paid order goes ahead (the restaurant confirmed it before the customer paid).
+     * Older pay-first orders (placed) are still refunded when declined.
+     *
+     * @throws ValidationException when the order is already paid
+     */
     public function reject(StoreOrder $order, string $reason, string $by = 'partner'): StoreOrder
     {
         return $this->locked($order, function (StoreOrder $order) use ($reason, $by) {
-            if ($order->status !== StoreOrder::PLACED) {
+            $open = in_array($order->status, [StoreOrder::AWAITING_CONFIRMATION, StoreOrder::CHANGES_PROPOSED, StoreOrder::PLACED], true)
+                || $order->isConfirmedUnpaid();
+            if (!$open) {
+                if ($order->payment_status === StoreOrder::PAID && $by === 'partner') {
+                    throw ValidationException::withMessages(['order' => translate('This order is paid, so it can no longer be cancelled. Call the customer, or E-Ride support if there is a real problem.')]);
+                }
                 return $order;
             }
-            $this->refundOrder($order, $order->total);
+            if ($order->status === StoreOrder::PLACED && $order->payment_status === StoreOrder::PAID) {
+                $this->refundOrder($order, $order->total);
+            }
             $order->status = StoreOrder::REJECTED;
             $order->cancelled_at = now();
             $order->cancelled_by = $by;
@@ -420,7 +604,7 @@ class StoreOrderService extends BaseService implements StoreOrderServiceInterfac
     public function cancelByCustomer(StoreOrder $order): StoreOrder
     {
         return $this->locked($order, function (StoreOrder $order) {
-            if (!in_array($order->status, [StoreOrder::AWAITING_PAYMENT, StoreOrder::PLACED], true)) {
+            if (!in_array($order->status, [StoreOrder::AWAITING_CONFIRMATION, StoreOrder::CHANGES_PROPOSED, StoreOrder::AWAITING_PAYMENT, StoreOrder::PLACED], true)) {
                 throw ValidationException::withMessages(['order' => translate('The store has already started on this order, so it can no longer be cancelled here. Contact support if there is a problem.')]);
             }
             if ($order->payment_status === StoreOrder::PAID) {
@@ -718,22 +902,46 @@ class StoreOrderService extends BaseService implements StoreOrderServiceInterfac
         $counts = ['expired' => 0, 'timed_out' => 0, 'riders' => 0, 'synced' => 0];
         $settings = StoreSettings::all();
 
+        // Not paid in time: confirmed orders by pay_by, older ones after 30 minutes.
         StoreOrder::where('status', StoreOrder::AWAITING_PAYMENT)
-            ->where('created_at', '<', now()->subMinutes(self::UNPAID_EXPIRY_MINUTES))
+            ->where(fn($q) => $q->where('pay_by', '<', now())
+                ->orWhere(fn($w) => $w->whereNull('pay_by')->where('created_at', '<', now()->subMinutes(self::UNPAID_EXPIRY_MINUTES))))
             ->pluck('id')->each(function ($id) use (&$counts) {
                 $this->locked(StoreOrder::find($id), function (StoreOrder $order) use (&$counts) {
-                    if ($order->status === StoreOrder::AWAITING_PAYMENT) {
+                    if ($order->status === StoreOrder::AWAITING_PAYMENT && $order->payment_status === StoreOrder::UNPAID) {
                         $order->status = StoreOrder::EXPIRED;
                         $order->cancelled_at = now();
                         $order->cancelled_by = 'system';
+                        $order->cancel_reason = $order->confirmed_at ? translate('Not paid in time.') : null;
                         $order->save();
                         $counts['expired']++;
+                        if ($order->confirmed_at) {
+                            DB::afterCommit(fn() => $this->notifyCustomer($order, 'unpaid'));
+                        }
                     }
                     return $order;
                 });
             });
 
-        StoreOrder::where('status', StoreOrder::PLACED)
+        // Suggested changes the customer did not answer.
+        StoreOrder::where('status', StoreOrder::CHANGES_PROPOSED)
+            ->where('proposed_at', '<', now()->subMinutes(self::ANSWER_MINUTES))
+            ->pluck('id')->each(function ($id) use (&$counts) {
+                $this->locked(StoreOrder::find($id), function (StoreOrder $order) use (&$counts) {
+                    if ($order->status === StoreOrder::CHANGES_PROPOSED) {
+                        $order->status = StoreOrder::EXPIRED;
+                        $order->cancelled_at = now();
+                        $order->cancelled_by = 'system';
+                        $order->cancel_reason = translate('The customer did not answer the changes in time.');
+                        $order->save();
+                        $counts['expired']++;
+                        DB::afterCommit(fn() => $this->notifyCustomer($order, 'changes_expired'));
+                    }
+                    return $order;
+                });
+            });
+
+        StoreOrder::whereIn('status', [StoreOrder::AWAITING_CONFIRMATION, StoreOrder::PLACED])
             ->where('placed_at', '<', now()->subMinutes($settings['partner_response_minutes']))
             ->get()->each(function (StoreOrder $order) use (&$counts) {
                 $this->reject($order, translate('The store did not respond in time.'), 'timeout');
@@ -825,13 +1033,39 @@ class StoreOrderService extends BaseService implements StoreOrderServiceInterfac
                     translate(key: '{store} is preparing your order', replace: ['store' => $store], locale: $locale),
                     translate(key: 'Ready in about {minutes} min. A rider will bring it to you.', replace: ['minutes' => $order->prep_minutes], locale: $locale),
                 ],
+                'sent' => [
+                    translate(key: 'Order sent to {store}', replace: ['store' => $store], locale: $locale),
+                    translate(key: 'They will confirm it in a few minutes. You pay after they confirm.', locale: $locale),
+                ],
+                'confirmed' => [
+                    translate(key: '{store} confirmed your order', replace: ['store' => $store], locale: $locale),
+                    translate(key: 'Pay within {minutes} minutes and they start cooking.', replace: ['minutes' => self::PAY_MINUTES], locale: $locale),
+                ],
+                'changes' => [
+                    translate(key: '{store} suggests changes to your order', replace: ['store' => $store], locale: $locale),
+                    translate(key: 'Something is not available. Open the order to accept the changes or cancel, within {minutes} minutes.', replace: ['minutes' => self::ANSWER_MINUTES], locale: $locale),
+                ],
+                'unpaid' => [
+                    translate(key: 'Your order was not paid in time', locale: $locale),
+                    translate(key: 'Nothing was charged. You can order again whenever you like.', locale: $locale),
+                ],
+                'changes_expired' => [
+                    translate(key: 'Your order was closed', locale: $locale),
+                    translate(key: 'You did not answer the changes from {store} in time. Nothing was charged.', replace: ['store' => $store], locale: $locale),
+                ],
                 'rejected', 'timeout' => [
                     translate(key: '{store} could not take your order', replace: ['store' => $store], locale: $locale),
-                    translate(key: '{amount} has been refunded to your E-Ride wallet.', replace: ['amount' => $amount], locale: $locale),
+                    $order->refunded_amount > 0
+                        ? translate(key: '{amount} has been refunded to your E-Ride wallet.', replace: ['amount' => $amount], locale: $locale)
+                        : ($order->cancel_reason && $event === 'rejected'
+                            ? translate(key: 'Reason: {reason}. Nothing was charged.', replace: ['reason' => $order->cancel_reason], locale: $locale)
+                            : translate(key: 'Nothing was charged. Try another restaurant or branch.', locale: $locale)),
                 ],
                 'cancelled' => [
                     translate(key: 'Your order was cancelled', locale: $locale),
-                    translate(key: '{amount} has been refunded to your E-Ride wallet.', replace: ['amount' => $amount], locale: $locale),
+                    $order->refunded_amount > 0
+                        ? translate(key: '{amount} has been refunded to your E-Ride wallet.', replace: ['amount' => $amount], locale: $locale)
+                        : translate(key: 'Nothing was charged.', locale: $locale),
                 ],
                 'rider_assigned' => [
                     translate(key: '{rider} is collecting your order', replace: ['rider' => $rider], locale: $locale),

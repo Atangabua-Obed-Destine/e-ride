@@ -13,6 +13,18 @@ interface StoreOrderServiceInterface extends BaseServiceInterface
     /** Prices, delivery fee and problems for a cart. Never trusts client amounts. */
     public function quote(Store $store, array $lines, array $drop): array;
 
+    /** Pay a confirmed order: wallet now (returns null) or a payment page URL for a gateway. */
+    public function payConfirmed(StoreOrder $order, string $method): ?string;
+
+    /** Dishes the restaurant can offer instead, available at the order's kitchen now. */
+    public function swapOptions(StoreOrder $order): array;
+
+    /** The restaurant suggests changes; one entry per order line: quantity (0 = removed), swap_item_id. */
+    public function proposeChanges(StoreOrder $order, array $changes, ?string $note): StoreOrder;
+
+    /** The customer accepts the suggested changes (then pays) or refuses them (cancelled). */
+    public function answerChanges(StoreOrder $order, bool $accept): StoreOrder;
+
     /** Delivery fee from this kitchen to a point, or null when it can't deliver there. */
     public function deliveryFee(Store $store, float $lat, float $lng): ?float;
 

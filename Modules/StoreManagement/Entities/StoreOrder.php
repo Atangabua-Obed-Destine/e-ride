@@ -19,7 +19,14 @@ class StoreOrder extends Model
 {
     use HasUuid;
 
+    // Sent, the restaurant confirms, suggests changes or declines (nothing paid yet).
+    public const AWAITING_CONFIRMATION = 'awaiting_confirmation';
+    // The restaurant suggested changes: the customer accepts (then pays) or cancels.
+    public const CHANGES_PROPOSED = 'changes_proposed';
+    // Confirmed (confirmed_at set): the customer pays by pay_by, then the kitchen starts.
+    // Older orders without confirmed_at were paid before the store saw them.
     public const AWAITING_PAYMENT = 'awaiting_payment';
+    // Older flow only: paid, waiting for the store to accept.
     public const PLACED = 'placed';
     public const ACCEPTED = 'accepted';
     public const RIDER_REQUESTED = 'rider_requested';
@@ -31,7 +38,9 @@ class StoreOrder extends Model
     public const DELIVERY_FAILED = 'delivery_failed';
 
     /** Partner still has to act or is cooking: shown on the portal board. */
-    public const ACTIVE = [self::PLACED, self::ACCEPTED, self::RIDER_REQUESTED, self::PICKED_UP];
+    public const ACTIVE = [self::AWAITING_CONFIRMATION, self::CHANGES_PROPOSED, self::PLACED, self::ACCEPTED, self::RIDER_REQUESTED, self::PICKED_UP];
+    /** Before payment: the restaurant and the customer are still agreeing on the order. */
+    public const BEFORE_PAYMENT = [self::AWAITING_CONFIRMATION, self::CHANGES_PROPOSED, self::AWAITING_PAYMENT];
     public const FINAL = [self::DELIVERED, self::REJECTED, self::CANCELLED, self::EXPIRED, self::DELIVERY_FAILED];
 
     public const UNPAID = 'unpaid';
@@ -44,7 +53,7 @@ class StoreOrder extends Model
         'drop_address', 'drop_latitude', 'drop_longitude', 'receiver_name', 'receiver_phone', 'note',
         'delivery_quote', 'quote_expires_at', 'prep_minutes', 'ready_at', 'trip_request_id', 'rider_attempts',
         'partner_earning', 'placed_at', 'accepted_at', 'rider_requested_at', 'picked_up_at', 'delivered_at',
-        'cancelled_at', 'cancelled_by', 'cancel_reason',
+        'cancelled_at', 'cancelled_by', 'cancel_reason', 'confirmed_at', 'pay_by', 'proposal', 'proposed_at',
     ];
 
     protected $casts = [
@@ -69,6 +78,10 @@ class StoreOrder extends Model
         'picked_up_at' => 'datetime',
         'delivered_at' => 'datetime',
         'cancelled_at' => 'datetime',
+        'confirmed_at' => 'datetime',
+        'pay_by' => 'datetime',
+        'proposal' => 'array',
+        'proposed_at' => 'datetime',
     ];
 
     protected static function boot()
@@ -91,7 +104,7 @@ class StoreOrder extends Model
 
     public function items(): HasMany
     {
-        return $this->hasMany(StoreOrderItem::class);
+        return $this->hasMany(StoreOrderItem::class)->orderBy('id');
     }
 
     public function trip(): BelongsTo
@@ -114,7 +127,13 @@ class StoreOrder extends Model
 
     public function isActive(): bool
     {
-        return in_array($this->status, self::ACTIVE, true);
+        return in_array($this->status, self::ACTIVE, true) || $this->isConfirmedUnpaid();
+    }
+
+    /** Confirmed by the restaurant, waiting for the customer to pay. */
+    public function isConfirmedUnpaid(): bool
+    {
+        return $this->status === self::AWAITING_PAYMENT && $this->confirmed_at !== null;
     }
 
     /** "2x Jollof rice, 1x Chapman" */

@@ -163,11 +163,45 @@ class StoreOrderController extends Controller
         ]));
     }
 
+    /**
+     * Pay a confirmed order. Wallet: paid now, the kitchen starts. Gateway:
+     * pay_url to open in the payment webview.
+     */
+    public function payment(Request $request, StoreOrder $order): JsonResponse
+    {
+        abort_unless($order->customer_id === auth('api')->id(), 404);
+        $gateways = collect(app(\Modules\BusinessManagement\Http\Controllers\Api\Customer\ConfigController::class)->getPaymentMethods())->pluck('gateway')->all();
+        $data = $request->validate(['payment_method' => ['required', 'string', Rule::in(array_merge(['wallet'], $gateways))]]);
+        try {
+            $payUrl = $this->orders->payConfirmed($order, $data['payment_method']);
+        } catch (ValidationException $e) {
+            return $this->problem(collect($e->errors())->flatten()->first());
+        }
+        return response()->json(responseFormatter(DEFAULT_200, [
+            'order' => StorePresenter::order($order->fresh()->load(['store', 'items'])),
+            'pay_url' => $payUrl,
+        ]));
+    }
+
+    /** The customer's answer to changes the restaurant suggested. */
+    public function changes(Request $request, StoreOrder $order): JsonResponse
+    {
+        abort_unless($order->customer_id === auth('api')->id(), 404);
+        $data = $request->validate(['accept' => 'required|boolean']);
+        try {
+            $order = $this->orders->answerChanges($order, (bool)$data['accept']);
+        } catch (ValidationException $e) {
+            return $this->problem(collect($e->errors())->flatten()->first());
+        }
+        return response()->json(responseFormatter(DEFAULT_200, StorePresenter::order($order->fresh()->load(['store', 'items']))));
+    }
+
     /** Opened in the app's payment webview (no auth header there, like ride/digital-payment). */
     public function pay(Request $request, StoreOrder $order): RedirectResponse|JsonResponse
     {
         $method = (string)$request->query('payment_method', '');
-        if ($order->status !== StoreOrder::AWAITING_PAYMENT || $order->payment_status !== StoreOrder::UNPAID) {
+        if ($order->status !== StoreOrder::AWAITING_PAYMENT || $order->payment_status !== StoreOrder::UNPAID
+            || ($order->pay_by && $order->pay_by->isPast())) {
             return redirect()->route($order->payment_status === StoreOrder::PAID ? 'payment-success' : 'payment-fail');
         }
         try {
@@ -183,7 +217,8 @@ class StoreOrderController extends Controller
         $offset = max(1, (int)$request->query('offset', 1));
         $orders = StoreOrder::with(['store', 'items', 'review'])
             ->where('customer_id', auth('api')->id())
-            ->where('status', '!=', StoreOrder::AWAITING_PAYMENT)
+            // Older pay-first orders never paid are left out; confirmed ones waiting for payment are shown.
+            ->where(fn($q) => $q->where('status', '!=', StoreOrder::AWAITING_PAYMENT)->orWhereNotNull('confirmed_at'))
             ->latest()
             ->paginate(perPage: $limit, page: $offset);
         $orders->setCollection($orders->getCollection()->map(fn($o) => StorePresenter::order($o, false)));

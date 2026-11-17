@@ -156,7 +156,15 @@ class StorePresenter
                 'rider_rating' => $riderReview?->rating,
             ] : null,
             'cancel_reason' => $order->cancel_reason,
-            'can_cancel' => in_array($order->status, [StoreOrder::AWAITING_PAYMENT, StoreOrder::PLACED], true),
+            'can_cancel' => in_array($order->status, [StoreOrder::AWAITING_CONFIRMATION, StoreOrder::CHANGES_PROPOSED, StoreOrder::AWAITING_PAYMENT, StoreOrder::PLACED], true),
+            // Confirm before payment: who has to act, and by when.
+            'respond_by' => in_array($order->status, [StoreOrder::AWAITING_CONFIRMATION, StoreOrder::PLACED], true) && $order->placed_at
+                ? $order->placed_at->copy()->addMinutes(\Modules\StoreManagement\Lib\StoreSettings::all()['partner_response_minutes'])->toIso8601String() : null,
+            'answer_by' => $order->status === StoreOrder::CHANGES_PROPOSED && $order->proposed_at
+                ? $order->proposed_at->copy()->addMinutes(\Modules\StoreManagement\Service\StoreOrderService::ANSWER_MINUTES)->toIso8601String() : null,
+            'pay_by' => $order->isConfirmedUnpaid() ? $order->pay_by?->toIso8601String() : null,
+            'confirmed_at' => $order->confirmed_at?->toIso8601String(),
+            'proposal' => $order->status === StoreOrder::CHANGES_PROPOSED ? $order->proposal : null,
             'created_at' => $order->created_at?->toIso8601String(),
             'timeline' => [
                 'placed_at' => $order->placed_at?->toIso8601String(),

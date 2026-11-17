@@ -53,6 +53,24 @@
     .live { font-size: 12px; color: var(--muted); display: flex; align-items: center; gap: 6px; }
     .live b { width: 7px; height: 7px; border-radius: 50%; background: var(--ok); display: inline-block; }
     .live.is-off b { background: var(--red); }
+    .o.is-waiting { border-style: dashed; }
+    .o__contact { display: flex; gap: 8px; }
+    .o__contact a { flex: 1; min-height: 42px; display: flex; align-items: center; justify-content: center; gap: 6px; border-radius: 12px; font-weight: 700; font-size: 14px; text-decoration: none; border: 1px solid var(--line); color: var(--ink); background: #fff; }
+    .o__contact a.wa { color: #128c4a; border-color: #b8e6cb; background: #f2fbf6; }
+    .o__cancel { background: none; border: 0; color: var(--muted); font-size: 13px; text-decoration: underline; padding: 0; align-self: center; }
+    .o__wait { background: #f4f4f6; border-radius: 12px; padding: 10px 12px; font-size: 14px; font-weight: 600; }
+    .o__paid { font-size: 12px; font-weight: 800; color: var(--ok); background: rgba(18, 161, 80, .12); border-radius: 999px; padding: 2px 9px; }
+    .chg li s { color: var(--muted); }
+    .chg .tag-chg { font-size: 11px; font-weight: 800; border-radius: 999px; padding: 1px 7px; margin-left: auto; white-space: nowrap; }
+    .tag-chg.removed { background: #fde8e8; color: var(--red); }
+    .tag-chg.reduced, .tag-chg.increased { background: #fff3d6; color: #8a5a00; }
+    .tag-chg.swapped { background: #e7f0ff; color: #1d4ed8; }
+    .cm-row { border: 1px solid var(--line); border-radius: 12px; padding: 10px; display: grid; gap: 8px; }
+    .cm-row.is-removed { opacity: .55; }
+    .cm-top { display: flex; align-items: center; gap: 8px; font-weight: 700; }
+    .cm-qty { margin-left: auto; display: flex; align-items: center; gap: 6px; }
+    .cm-qty button { width: 36px; height: 36px; border-radius: 10px; border: 1px solid var(--line); background: #fff; font-weight: 900; font-size: 18px; line-height: 1; }
+    .cm-qty b { min-width: 22px; text-align: center; }
 </style>
 @endpush
 
@@ -78,11 +96,11 @@
         <div class="modal-dialog modal-dialog-centered">
             <div class="modal-content" style="border-radius: 18px">
                 <div class="modal-header border-0 pb-0">
-                    <h5 class="modal-title fw-bold">{{ translate('Decline this order') }}</h5>
+                    <h5 class="modal-title fw-bold" data-reject-title>{{ translate('Decline this order') }}</h5>
                     <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="{{ translate('Close') }}"></button>
                 </div>
                 <div class="modal-body">
-                    <p class="text-muted fs-14">{{ translate('The customer is refunded straight away. Tell them why:') }}</p>
+                    <p class="text-muted fs-14" data-reject-hint>{{ translate('Nothing was paid yet. Tell the customer why:') }}</p>
                     <div class="d-grid gap-2" data-reasons>
                         @foreach([translate('Too busy right now'), translate('An item is sold out'), translate('We are closing soon')] as $reason)
                             <button type="button" class="btn btn-outline-secondary text-start" data-reason="{{ $reason }}">{{ $reason }}</button>
@@ -90,6 +108,27 @@
                         <input type="text" class="form-control" maxlength="200" placeholder="{{ translate('Other reason') }}" data-reason-other>
                         <button type="button" class="btn btn-primary" data-reason-send>{{ translate('Decline order') }}</button>
                     </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="modal fade" id="changes-modal" tabindex="-1" aria-hidden="true">
+        <div class="modal-dialog modal-dialog-centered modal-dialog-scrollable">
+            <div class="modal-content" style="border-radius: 18px">
+                <div class="modal-header border-0 pb-0">
+                    <h5 class="modal-title fw-bold">{{ translate('Suggest changes') }}</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="{{ translate('Close') }}"></button>
+                </div>
+                <div class="modal-body">
+                    <p class="text-muted fs-14">{{ translate('Lower a quantity, remove a dish, or offer another one instead. The customer sees the new total and accepts or cancels. Nothing is paid until they accept.') }}</p>
+                    <div class="d-grid gap-2" data-cm-rows></div>
+                    <label class="form-label fw-bold mt-3 mb-1" style="font-size:14px">{{ translate('Message to the customer (optional)') }}</label>
+                    <textarea class="form-control" rows="2" maxlength="300" data-cm-note placeholder="{{ translate('Ex: No plantains today, we can do rice instead.') }}"></textarea>
+                </div>
+                <div class="modal-footer border-0 pt-0">
+                    <div class="w-100 d-flex justify-content-between fw-bold mb-1" style="font-size:15px"><span>{{ translate('New food total') }}</span><span data-cm-total></span></div>
+                    <button type="button" class="btn btn-primary w-100" style="min-height:50px" data-cm-send>{{ translate('Send to the customer') }}</button>
                 </div>
             </div>
         </div>
@@ -131,6 +170,32 @@
         declined: @json(translate('Order declined, the customer is refunded')),
         riderCalled: @json(translate('Looking for a rider now')),
         failedSave: @json(translate('Could not save. Check your connection and try again.')),
+        confirm: @json(translate('Confirm')),
+        suggest: @json(translate('Change')),
+        confirmed: @json(translate('Order confirmed. The customer pays, then you start cooking.')),
+        waiting: @json(translate('Waiting for the customer')),
+        payIn: @json(translate('Pays within')),
+        answerIn: @json(translate('Answers within')),
+        waitPay: @json(translate('Confirmed. Waiting for the customer to pay. Do not start cooking yet.')),
+        waitAnswer: @json(translate('Changes sent. Waiting for the customer to accept them.')),
+        paidStart: @json(translate('is paid: start cooking')),
+        paid: @json(translate('Paid')),
+        call: @json(translate('Call')),
+        whatsapp: @json(translate('WhatsApp')),
+        cancelOrder: @json(translate('Cancel this order')),
+        cancelTitle: @json(translate('Cancel this order')),
+        declineTitle: @json(translate('Decline this order')),
+        hintUnpaid: @json(translate('Nothing was paid yet. Tell the customer why:')),
+        hintPaid: @json(translate('The customer is refunded to their E-Ride wallet straight away. Tell them why:')),
+        cancelled2: @json(translate('Order cancelled')),
+        changesSent: @json(translate('Changes sent to the customer')),
+        keep: @json(translate('Keep')),
+        offer: @json(translate('Offer instead')),
+        removed: @json(translate('Removed')),
+        reduced: @json(translate('Fewer')),
+        increased: @json(translate('More')),
+        swapped: @json(translate('Instead')),
+        loading: @json(translate('Loading')),
         items: @json(translate('items')).toLowerCase(),
         item: @json(translate('item')).toLowerCase(),
     };
@@ -139,12 +204,14 @@
         accept: @json(route('partner.orders.accept', ['order' => '__ID__'])),
         reject: @json(route('partner.orders.reject', ['order' => '__ID__'])),
         ready: @json(route('partner.orders.ready', ['order' => '__ID__'])),
+        swaps: @json(route('partner.orders.swaps', ['order' => '__ID__'])),
+        propose: @json(route('partner.orders.propose', ['order' => '__ID__'])),
     };
     var defaultPrep = {{ (int)$store->default_prep_minutes }};
     var board = document.querySelector('[data-board]');
     var badge = document.querySelector('[data-new-badge]');
     var live = document.querySelector('[data-live]');
-    var seen = null, orders = [], serverOffset = 0, prepChoice = {}, rejecting = null, rendered = {};
+    var seen = null, orders = [], serverOffset = 0, prepChoice = {}, rejecting = null, rendered = {}, lastStatus = {};
 
     /* ---------- sound: a loud two-tone alarm that repeats until someone acts */
     var ctx = null, ringing = null;
@@ -204,32 +271,62 @@
             (o.rider.pickup_code ? '<div class="o__code"><b>' + esc(o.rider.pickup_code) + '</b><small>' + T.pickupCode + '</small></div>' : '') + '</div>' +
             '<div class="o__state"><i class="bi bi-geo-alt"></i>' + T.riderComing + '</div>';
     }
+    function contactHtml(o) {
+        if (!o.customer_phone) return '';
+        var wa = o.whatsapp ? '<a class="wa" target="_blank" rel="noopener" href="https://wa.me/' + esc(o.whatsapp) + '?text=' + encodeURIComponent('E-Ride #' + o.ref + ': ') + '"><i class="bi bi-whatsapp"></i>' + T.whatsapp + '</a>' : '';
+        return '<div class="o__contact"><a href="tel:' + esc(o.customer_phone) + '"><i class="bi bi-telephone"></i>' + T.call + '</a>' + wa + '</div>';
+    }
+    function proposalHtml(o) {
+        var p = o.proposal;
+        if (!p) return '';
+        return '<ul class="o__items chg">' + p.lines.map(function (l) {
+            var tag = l.change === 'same' ? '' : '<span class="tag-chg ' + l.change + '">' + (T[l.change] || l.change) + '</span>';
+            var text = l.change === 'swapped'
+                ? '<s>' + l.was_quantity + 'x ' + esc(l.was_name) + '</s> ' + l.quantity + 'x ' + esc(l.name)
+                : (l.change === 'removed' ? '<s>' + l.was_quantity + 'x ' + esc(l.name) + '</s>'
+                    : (l.change === 'same' ? l.quantity + 'x ' + esc(l.name) : '<s>' + l.was_quantity + 'x</s> ' + l.quantity + 'x ' + esc(l.name)));
+            return '<li><span>' + text + '</span>' + tag + '</li>';
+        }).join('') + '</ul>' + (p.note ? '<div class="o__note">' + esc(p.note) + '</div>' : '');
+    }
     function card(o) {
         var head = '<div class="o__head"><span class="o__ref">#' + o.ref + '</span>' + (o.branch ? '<span class="o__branch"><i class="bi bi-shop"></i> ' + esc(o.branch) + '</span>' : '') + '<span class="o__who">' + esc(o.customer_name) + ' · ' + count(o.items_count) + '</span>';
-        if (o.status === 'placed' && o.respond_by) {
-            var left = new Date(o.respond_by).getTime() - now();
-            head += '<span class="o__timer ' + (left < 90000 ? 'is-hot' : '') + '" data-countdown="' + o.respond_by + '">' + T.respondIn + ' ' + mmss(left) + '</span>';
+        var due = o.respond_by || o.answer_by || o.pay_by;
+        var dueLabel = o.respond_by ? T.respondIn : (o.answer_by ? T.answerIn : T.payIn);
+        if (due) {
+            var left = new Date(due).getTime() - now();
+            head += '<span class="o__timer ' + (o.respond_by && left < 90000 ? 'is-hot' : '') + '" data-countdown="' + due + '" data-label="' + esc(dueLabel) + '" data-hot="' + (o.respond_by ? 1 : 0) + '">' + dueLabel + ' ' + mmss(left) + '</span>';
         } else if (o.status === 'accepted' && o.ready_at) {
             var late = new Date(o.ready_at).getTime() < now();
             head += '<span class="o__timer ' + (late ? 'is-hot' : 'is-ok') + '">' + (late ? T.late : T.readyAt + ' ' + clock(o.ready_at)) + '</span>';
         }
         head += '</div>';
-        var body = itemsHtml(o), actions = '';
-        if (o.status === 'placed') {
+        var body = o.status === 'changes_proposed' ? proposalHtml(o) : itemsHtml(o), actions = '';
+        var isNew = o.status === 'awaiting_confirmation' || o.status === 'placed';
+        if (isNew) {
             var p = prepChoice[o.id] || defaultPrep;
             var opts = [10, 15, 20, 30, 45, 60];
             if (opts.indexOf(defaultPrep) < 0) opts.splice(2, 0, defaultPrep);
+            // A new order is confirmed before payment, and can be changed; an older paid one is only accepted.
+            var fresh = o.status === 'awaiting_confirmation';
             actions = '<div class="fw-bold" style="font-size:13px">' + T.readyIn + '</div><div class="prep">' +
                 opts.map(function (m) { return '<button type="button" class="' + (m === p ? 'is-on' : '') + '" data-prep="' + m + '" data-id="' + o.id + '">' + m + '</button>'; }).join('') +
                 '</div><div class="o__actions"><button type="button" class="btn btn-outline-secondary" data-reject="' + o.id + '">' + T.decline + '</button>' +
-                '<button type="button" class="btn btn-primary" style="flex:2" data-accept="' + o.id + '">' + T.accept + ' · ' + p + ' min</button></div>';
+                (fresh ? '<button type="button" class="btn btn-outline-dark" data-change="' + o.id + '"><i class="bi bi-pencil"></i> ' + T.suggest + '</button>' : '') +
+                '<button type="button" class="btn btn-primary" style="flex:2" data-accept="' + o.id + '">' + (fresh ? T.confirm : T.accept) + ' · ' + p + ' min</button></div>';
+        } else if (o.status === 'changes_proposed') {
+            actions = '<div class="o__wait"><i class="bi bi-hourglass-split"></i> ' + T.waitAnswer + '</div>';
+        } else if (o.status === 'awaiting_payment') {
+            actions = '<div class="o__wait"><i class="bi bi-hourglass-split"></i> ' + T.waitPay + '</div>';
         } else if (o.status === 'accepted') {
             actions = '<button type="button" class="btn btn-primary w-100" style="min-height:52px" data-ready="' + o.id + '"><i class="bi bi-bell"></i> ' + T.ready + '</button>';
         } else if (o.status === 'rider_requested' || o.status === 'picked_up') {
             actions = riderHtml(o);
         }
+        if (o.paid && !isNew) head = head.replace('</div>', '') + '<span class="o__paid">' + T.paid + '</span></div>';
+        var extra = contactHtml(o) + (o.can_cancel && !isNew ? '<button type="button" class="o__cancel" data-cancel="' + o.id + '">' + T.cancelOrder + '</button>' : '');
         var arrived = !rendered[o.id + o.status];
-        return '<article class="o ' + (o.status === 'placed' ? 'is-new' : '') + (arrived ? ' is-arrived' : '') + '" data-order="' + o.id + '">' + head + body + actions + '</article>';
+        var cls = isNew ? 'is-new' : (o.status === 'changes_proposed' || o.status === 'awaiting_payment' ? 'is-waiting' : '');
+        return '<article class="o ' + cls + (arrived ? ' is-arrived' : '') + '" data-order="' + o.id + '">' + head + body + actions + extra + '</article>';
     }
     function doneRow(o) {
         var map = {delivered: ['ok', T.delivered], rejected: ['no', T.rejected], cancelled: ['no', T.cancelled], expired: ['no', T.expired], delivery_failed: ['no', T.failed]};
@@ -242,8 +339,9 @@
     }
     function render() {
         var by = function (s) { return orders.filter(function (o) { return s.indexOf(o.status) >= 0; }); };
-        var fresh = by(['placed']);
+        var fresh = by(['awaiting_confirmation', 'placed']);
         var html = lane('is-new', T.newOrders, fresh, card) +
+            lane('', T.waiting, by(['changes_proposed', 'awaiting_payment']), card) +
             lane('', T.preparing, by(['accepted']), card) +
             lane('', T.rider, by(['rider_requested']), card) +
             lane('', T.onTheWay, by(['picked_up']), card) +
@@ -266,7 +364,17 @@
             .then(function (d) {
                 failures = 0; live.classList.remove('is-off'); live.querySelector('[data-live-label]').textContent = T.live;
                 serverOffset = new Date(d.server_time).getTime() - Date.now();
-                var ids = d.orders.filter(function (o) { return o.status === 'placed'; }).map(function (o) { return o.id; });
+                var ids = d.orders.filter(function (o) { return o.status === 'placed' || o.status === 'awaiting_confirmation'; }).map(function (o) { return o.id; });
+                // Paid since the last look: the kitchen can start now.
+                d.orders.forEach(function (o) {
+                    var was = lastStatus[o.id];
+                    if (was === 'awaiting_payment' && o.status === 'accepted') {
+                        beep();
+                        partnerToast('#' + o.ref + ' ' + T.paidStart);
+                        if ('Notification' in window && Notification.permission === 'granted' && document.hidden) new Notification('#' + o.ref + ' ' + T.paidStart, {tag: 'erp-paid-' + o.id});
+                    }
+                    lastStatus[o.id] = o.status;
+                });
                 if (seen !== null) {
                     var arrived = ids.filter(function (id) { return seen.indexOf(id) < 0; });
                     if (arrived.length && 'Notification' in window && Notification.permission === 'granted' && document.hidden) {
@@ -287,8 +395,8 @@
     setInterval(function () {
         document.querySelectorAll('[data-countdown]').forEach(function (el) {
             var left = new Date(el.dataset.countdown).getTime() - now();
-            el.textContent = T.respondIn + ' ' + mmss(left);
-            el.classList.toggle('is-hot', left < 90000);
+            el.textContent = (el.dataset.label || T.respondIn) + ' ' + mmss(left);
+            el.classList.toggle('is-hot', el.dataset.hot === '1' && left < 90000);
         });
     }, 1000);
 
@@ -309,15 +417,88 @@
         var t = e.target.closest('button');
         if (!t) return;
         if (t.dataset.prep) { prepChoice[t.dataset.id] = parseInt(t.dataset.prep, 10); render(); return; }
-        if (t.dataset.accept) { t.disabled = true; act('accept', t.dataset.accept, {prep_minutes: prepChoice[t.dataset.accept] || defaultPrep}, T.accepted); return; }
+        if (t.dataset.accept) {
+            t.disabled = true;
+            var o0 = orders.find(function (o) { return o.id === t.dataset.accept; });
+            act('accept', t.dataset.accept, {prep_minutes: prepChoice[t.dataset.accept] || defaultPrep}, o0 && o0.status === 'awaiting_confirmation' ? T.confirmed : T.accepted);
+            return;
+        }
+        if (t.dataset.change) { openChanges(t.dataset.change); return; }
+        if (t.dataset.cancel) { openReject(t.dataset.cancel, true); return; }
         if (t.dataset.ready) { t.disabled = true; act('ready', t.dataset.ready, {}, T.riderCalled); return; }
-        if (t.dataset.reject) { rejecting = t.dataset.reject; ring(false); bootstrap.Modal.getOrCreateInstance(document.getElementById('reject-modal')).show(); }
+        if (t.dataset.reject) { openReject(t.dataset.reject, false); }
     });
+    function openReject(id, cancelling) {
+        rejecting = id; ring(false);
+        var o = orders.find(function (x) { return x.id === id; }) || {};
+        var m = document.getElementById('reject-modal');
+        m.querySelector('[data-reject-title]').textContent = cancelling ? T.cancelTitle : T.declineTitle;
+        m.querySelector('[data-reject-hint]').textContent = o.paid ? T.hintPaid : T.hintUnpaid;
+        m.dataset.okText = cancelling ? T.cancelled2 : T.declined;
+        bootstrap.Modal.getOrCreateInstance(m).show();
+    }
+
+    /* ---------- suggest changes: per dish fewer, none, or another dish instead */
+    var cmEl = document.getElementById('changes-modal'), cmOrder = null, cmRows = [], cmSwaps = [];
+    function money(n) { return Math.round(n).toLocaleString('en-US').replace(/,/g, ' ') + ' FCFA'; }
+    function cmPrice(r) {
+        if (r.swap) { var s = cmSwaps.find(function (x) { return x.id === r.swap; }); return s ? s.price : r.unit_price; }
+        return r.unit_price;
+    }
+    function cmRender() {
+        var box = cmEl.querySelector('[data-cm-rows]');
+        box.innerHTML = cmRows.map(function (r, i) {
+            var options = '<option value="">' + T.keep + ': ' + esc(r.name) + '</option>' + cmSwaps.filter(function (s) { return s.id !== r.item_id; }).map(function (s) {
+                return '<option value="' + s.id + '"' + (r.swap === s.id ? ' selected' : '') + '>' + esc(s.name) + ' · ' + esc(s.price_text) + '</option>';
+            }).join('');
+            return '<div class="cm-row' + (r.quantity === 0 ? ' is-removed' : '') + '">' +
+                '<div class="cm-top"><span>' + esc(r.name) + '</span><div class="cm-qty">' +
+                '<button type="button" data-cm-minus="' + i + '" aria-label="-">−</button><b>' + r.quantity + '</b>' +
+                '<button type="button" data-cm-plus="' + i + '" aria-label="+">+</button></div></div>' +
+                '<select class="form-select form-select-sm" data-cm-swap="' + i + '" aria-label="' + esc(T.offer) + '">' + options + '</select></div>';
+        }).join('');
+        var total = cmRows.reduce(function (sum, r) { return sum + cmPrice(r) * r.quantity; }, 0);
+        cmEl.querySelector('[data-cm-total]').textContent = money(total);
+    }
+    function openChanges(id) {
+        var o = orders.find(function (x) { return x.id === id; });
+        if (!o) return;
+        ring(false); silencedUntil = Date.now() + 120000;
+        cmOrder = id;
+        cmRows = o.items.map(function (i) { return {name: i.name, item_id: i.item_id, quantity: i.quantity, unit_price: i.unit_price, swap: ''}; });
+        cmSwaps = [];
+        cmEl.querySelector('[data-cm-note]').value = '';
+        cmEl.querySelector('[data-cm-rows]').innerHTML = '<div class="text-muted">' + T.loading + '…</div>';
+        bootstrap.Modal.getOrCreateInstance(cmEl).show();
+        fetch(url('swaps', id), {headers: {'Accept': 'application/json'}}).then(function (r) { return r.json(); })
+            .then(function (d) { cmSwaps = d.items || []; cmRender(); })
+            .catch(function () { cmRender(); });
+    }
+    cmEl.addEventListener('click', function (e) {
+        var b = e.target.closest('button');
+        if (!b) return;
+        if (b.dataset.cmMinus) { var r = cmRows[+b.dataset.cmMinus]; r.quantity = Math.max(0, r.quantity - 1); cmRender(); }
+        if (b.dataset.cmPlus) { var r2 = cmRows[+b.dataset.cmPlus]; r2.quantity = Math.min(50, r2.quantity + 1); cmRender(); }
+    });
+    cmEl.addEventListener('change', function (e) {
+        if (e.target.dataset.cmSwap) { var r = cmRows[+e.target.dataset.cmSwap]; r.swap = e.target.value; if (r.swap && r.quantity === 0) r.quantity = 1; cmRender(); }
+    });
+    cmEl.querySelector('[data-cm-send]').addEventListener('click', function () {
+        if (!cmOrder) return;
+        var id = cmOrder;
+        bootstrap.Modal.getInstance(cmEl).hide();
+        act('propose', id, {
+            changes: cmRows.map(function (r) { return {quantity: r.quantity, swap_item_id: r.swap || null}; }),
+            note: cmEl.querySelector('[data-cm-note]').value.trim()
+        }, T.changesSent);
+        cmOrder = null;
+    });
+    cmEl.addEventListener('hidden.bs.modal', function () { render(); });
     var modalEl = document.getElementById('reject-modal');
     function sendReject(reason) {
         if (!rejecting || !reason) return;
         bootstrap.Modal.getInstance(modalEl).hide();
-        act('reject', rejecting, {reason: reason}, T.declined);
+        act('reject', rejecting, {reason: reason}, modalEl.dataset.okText || T.declined);
         rejecting = null;
     }
     modalEl.querySelectorAll('[data-reason]').forEach(function (b) { b.addEventListener('click', function () { sendReject(b.dataset.reason); }); });
