@@ -37,9 +37,16 @@ class StoreController extends Controller
         return view('storemanagement::admin.stores.index', compact('stores', 'filters'));
     }
 
-    public function create(): View
+    /** ?parent= starts a new branch of that main store, with its name, type and usual times. */
+    public function create(Request $request): View
     {
-        return view('storemanagement::admin.stores.form', ['store' => new Store(['is_open' => true, 'default_prep_minutes' => 20, 'type' => 'restaurant'])]);
+        $parent = $request->filled('parent') ? Store::whereNull('parent_id')->find($request->query('parent')) : null;
+        $store = new Store($parent ? [
+            'parent_id' => $parent->id, 'name' => $parent->name, 'type' => $parent->type, 'description' => $parent->description,
+            'is_open' => true, 'default_prep_minutes' => $parent->default_prep_minutes, 'min_order_amount' => $parent->min_order_amount,
+            'opening_hours' => $parent->opening_hours,
+        ] : ['is_open' => true, 'default_prep_minutes' => 20, 'type' => 'restaurant']);
+        return view('storemanagement::admin.stores.form', compact('store'));
     }
 
     public function store(StoreSaveRequest $request): RedirectResponse
@@ -89,14 +96,21 @@ class StoreController extends Controller
         return redirect()->route('admin.store.index');
     }
 
-    public function menu(Store $store): View
+    /** A branch's menu is its brand's: open the brand's Today page on this branch. */
+    public function menu(Request $request, Store $store): View|RedirectResponse
     {
-        $store->load(['categories', 'items']);
-        return view('storemanagement::admin.stores.menu', compact('store'));
+        if ($store->isBranch()) {
+            return redirect()->route('admin.store.menu', ['store' => $store->parent_id, 'view' => 'today', 'kitchen' => $store->id]);
+        }
+        return view('storemanagement::admin.stores.menu', $this->menuPage($request));
     }
 
-    public function payouts(Store $store): View
+    public function payouts(Store $store): View|RedirectResponse
     {
+        // Payouts go to the brand's owner.
+        if ($store->isBranch()) {
+            return redirect()->route('admin.store.payouts', $store->parent_id);
+        }
         $payouts = $store->payouts()->with('author')->latest()->paginate(20);
         $balance = $store->balance();
         $deliveredCount = $store->orders()->where('status', \Modules\StoreManagement\Entities\StoreOrder::DELIVERED)->count();

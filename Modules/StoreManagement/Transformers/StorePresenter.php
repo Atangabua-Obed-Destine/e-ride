@@ -10,15 +10,19 @@ use Modules\StoreManagement\Entities\StoreOrder;
 /** JSON shapes for the customer app (mirrored by its Dart models). */
 class StorePresenter
 {
+    /** A kitchen as the app shows it: the brand's name, photos and rating, this kitchen's place and hours. */
     public static function store(Store $store, ?float $lat = null, ?float $lng = null): array
     {
         $now = now();
         $hours = $store->hoursFor($now);
+        $brand = $store->brand();
         return [
             'id' => $store->id,
-            'name' => $store->name,
-            'type' => $store->type,
-            'description' => $store->description,
+            'brand_id' => $brand->id,
+            'branch_name' => $store->branch_name,
+            'name' => $brand->name,
+            'type' => $brand->type,
+            'description' => $brand->description ?: $store->description,
             'logo' => $store->logoUrl(),
             'cover' => $store->coverUrl(),
             'address' => $store->address,
@@ -29,7 +33,7 @@ class StorePresenter
             'today_hours' => $hours ? ['open' => $hours[0], 'close' => $hours[1]] : null,
             'prep_minutes' => $store->default_prep_minutes,
             'min_order_amount' => $store->min_order_amount,
-            ...$store->ratingSummary(),
+            ...$brand->brandRatingSummary(),
             'distance_km' => ($lat !== null && $lng !== null) ? round(self::distanceKm($lat, $lng, $store->latitude, $store->longitude), 1) : null,
         ];
     }
@@ -40,12 +44,19 @@ class StorePresenter
      * section, kind "not_today", so customers know when to come back.
      * is_available = can be ordered right now (older apps grey out the rest).
      */
-    public static function menu(Store $store, ?Carbon $at = null): array
+    /**
+     * @param Store $store the brand (owns the menu), with categories and items
+     * @param Store|null $kitchen the kitchen serving the customer (defaults to the brand)
+     * @param callable|null $elsewhere StoreBranches::elsewhereFinder, for dishes this kitchen can't serve now
+     */
+    public static function menu(Store $store, ?Carbon $at = null, ?Store $kitchen = null, ?callable $elsewhere = null): array
     {
         $at = $at ?? now();
         $store->linkMenu();
-        $item = function (StoreItem $i) use ($at) {
-            $state = $i->menuState($at);
+        $states = ($kitchen ?? $store)->stateMap();
+        $stateOf = fn(StoreItem $i) => $i->menuState($at, $states->get($i->id));
+        $item = function (StoreItem $i) use ($at, $stateOf, $elsewhere) {
+            $state = $stateOf($i);
             $window = $i->effectiveWindow();
             return [
                 'id' => $i->id,
@@ -59,11 +70,18 @@ class StorePresenter
                 'served_from' => $window[0] ?? null,
                 'served_until' => $window[1] ?? null,
                 'category_id' => $i->store_menu_category_id,
+                // Sold out here or not made here, but available now at another open branch.
+                'elsewhere' => $elsewhere && in_array($state, [StoreItem::SOLD_OUT, StoreItem::NOT_HERE], true) ? $elsewhere($i) : null,
             ];
         };
-        $states = $store->items->mapWithKeys(fn(StoreItem $i) => [$i->id => $i->menuState($at)]);
-        $today = $store->items->filter(fn($i) => !in_array($states[$i->id], [StoreItem::HIDDEN, StoreItem::NOT_TODAY], true));
-        $later = $store->items->filter(fn($i) => $states[$i->id] === StoreItem::NOT_TODAY);
+        $itemStates = $store->items->mapWithKeys(fn(StoreItem $i) => [$i->id => $stateOf($i)]);
+        // A dish this branch doesn't make is listed only when another branch has it now.
+        $notHereShown = $elsewhere
+            ? $store->items->filter(fn($i) => $itemStates[$i->id] === StoreItem::NOT_HERE && $elsewhere($i))->pluck('id')->all()
+            : [];
+        $today = $store->items->filter(fn($i) => !in_array($itemStates[$i->id], [StoreItem::HIDDEN, StoreItem::NOT_TODAY, StoreItem::NOT_HERE], true)
+            || in_array($i->id, $notHereShown, true));
+        $later = $store->items->filter(fn($i) => $itemStates[$i->id] === StoreItem::NOT_TODAY);
 
         $categories = $store->categories->where('is_active', true)->values();
         $known = $categories->pluck('id')->all();
@@ -99,7 +117,7 @@ class StorePresenter
             'payment_method' => $order->payment_method,
             'store' => $order->store ? [
                 'id' => $order->store->id,
-                'name' => $order->store->name,
+                'name' => $order->store->displayName(),
                 'logo' => $order->store->logoUrl(),
                 'phone' => $order->store->phone,
             ] : null,

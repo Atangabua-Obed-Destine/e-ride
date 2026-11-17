@@ -35,8 +35,7 @@ class PortalController extends Controller
 
     public function menu(Request $request): View
     {
-        $store = $this->menuStore($request)->load(['categories', 'items']);
-        return view('storemanagement::partner.menu', compact('store'));
+        return view('storemanagement::partner.menu', $this->menuPage($request));
     }
 
     public function profile(Request $request): View
@@ -64,14 +63,18 @@ class PortalController extends Controller
         return back();
     }
 
+    /** The owner sees every branch and the balance (payouts go to the owner); a branch sees its own orders. */
     public function earnings(Request $request): View
     {
         $store = $this->menuStore($request);
-        $orders = $store->orders()->where('status', StoreOrder::DELIVERED)->latest('delivered_at')->paginate(20);
-        $payouts = $store->payouts()->latest()->limit(20)->get();
-        $balance = $store->balance();
-        $today = (float)$store->orders()->where('status', StoreOrder::DELIVERED)->whereDate('delivered_at', today())->sum('partner_earning');
-        $week = (float)$store->orders()->where('status', StoreOrder::DELIVERED)->where('delivered_at', '>=', now()->startOfWeek())->sum('partner_earning');
-        return view('storemanagement::partner.earnings', compact('store', 'orders', 'payouts', 'balance', 'today', 'week'));
+        $ids = $store->isBranch() ? [$store->id] : $store->kitchens()->pluck('id')->all();
+        $delivered = fn() => StoreOrder::with('store.parent')->whereIn('store_id', $ids)->where('status', StoreOrder::DELIVERED);
+        $orders = $delivered()->latest('delivered_at')->paginate(20);
+        $payouts = $store->isBranch() ? collect() : $store->payouts()->latest()->limit(20)->get();
+        $balance = $store->isBranch() ? null : $store->balance();
+        $today = (float)$delivered()->whereDate('delivered_at', today())->sum('partner_earning');
+        $week = (float)$delivered()->where('delivered_at', '>=', now()->startOfWeek())->sum('partner_earning');
+        $showBranch = count($ids) > 1;
+        return view('storemanagement::partner.earnings', compact('store', 'orders', 'payouts', 'balance', 'today', 'week', 'showBranch'));
     }
 }

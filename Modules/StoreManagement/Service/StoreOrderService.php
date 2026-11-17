@@ -75,8 +75,10 @@ class StoreOrderService extends BaseService implements StoreOrderServiceInterfac
             $problems[] = translate('Ordering is not available right now.');
         }
         if (!$store->isOpenNow()) {
-            $problems[] = translate(key: '{store} is closed right now.', replace: ['store' => $store->name]);
+            $problems[] = translate(key: '{store} is closed right now.', replace: ['store' => $store->displayName()]);
         }
+        // The brand's menu, this kitchen's switches.
+        $kitchenStates = $store->stateMap();
 
         // Merge duplicate lines, clamp quantities, keep only this store's items.
         $wanted = [];
@@ -88,13 +90,17 @@ class StoreOrderService extends BaseService implements StoreOrderServiceInterfac
             }
             $wanted[$id] = min(self::MAX_QTY, ($wanted[$id] ?? 0) + $qty);
         }
-        $items = StoreItem::with('category')->where('store_id', $store->id)->whereIn('id', array_keys($wanted))->get()->keyBy('id');
+        $items = StoreItem::with('category')->where('store_id', $store->brand()->id)->whereIn('id', array_keys($wanted))->get()->keyBy('id');
         $resolved = [];
         foreach ($wanted as $id => $qty) {
             $item = $items->get($id);
-            $state = $item?->menuState() ?? StoreItem::HIDDEN;
+            $state = $item?->menuState(null, $kitchenStates->get($item->id)) ?? StoreItem::HIDDEN;
             if ($state === StoreItem::HIDDEN) {
                 $problems[] = translate('An item in your cart is no longer on the menu.');
+                continue;
+            }
+            if ($state === StoreItem::NOT_HERE) {
+                $problems[] = translate(key: '{item} is not made at {store}.', replace: ['item' => $item->name, 'store' => $store->displayName()]);
                 continue;
             }
             if ($state === StoreItem::SOLD_OUT) {
@@ -122,7 +128,7 @@ class StoreOrderService extends BaseService implements StoreOrderServiceInterfac
         }
         $subtotal = round(array_sum(array_column($resolved, 'line_total')), 2);
         if ($store->min_order_amount > 0 && $subtotal < $store->min_order_amount) {
-            $problems[] = translate(key: 'The minimum order at {store} is {amount}.', replace: ['store' => $store->name, 'amount' => getCurrencyFormat($store->min_order_amount)]);
+            $problems[] = translate(key: 'The minimum order at {store} is {amount}.', replace: ['store' => $store->displayName(), 'amount' => getCurrencyFormat($store->min_order_amount)]);
         }
 
         $delivery = null;
@@ -149,6 +155,16 @@ class StoreOrderService extends BaseService implements StoreOrderServiceInterfac
             'prep_minutes' => $store->default_prep_minutes,
             'delivery' => $delivery,
         ];
+    }
+
+    /** Delivery fee from this kitchen to a point, or null when it can't deliver there. */
+    public function deliveryFee(Store $store, float $lat, float $lng): ?float
+    {
+        try {
+            return $this->deliveryQuote($store, $lat, $lng)['fee'];
+        } catch (ValidationException) {
+            return null;
+        }
     }
 
     /**
@@ -499,7 +515,7 @@ class StoreOrderService extends BaseService implements StoreOrderServiceInterfac
         // Capped so the PREPAID warning and store phone survive the 255-char note limit.
         $summary = mb_strimwidth($order->load('items')->itemsSummary(), 0, 140, '...');
         $pickupNote = translate(key: '{store} order #{ref}: {items}. PREPAID, do not collect money.', replace: [
-            'store' => $store->name, 'ref' => $order->ref_id, 'items' => $summary,
+            'store' => $store->displayName(), 'ref' => $order->ref_id, 'items' => $summary,
         ]);
         // The driver's call button reaches the customer; at pickup they need the store.
         if ($store->phone) {
@@ -513,7 +529,7 @@ class StoreOrderService extends BaseService implements StoreOrderServiceInterfac
             'pickup_coordinates' => new Point($store->latitude, $store->longitude),
             'destination_coordinates' => new Point($order->drop_latitude, $order->drop_longitude),
             'customer_request_coordinates' => new Point($store->latitude, $store->longitude),
-            'pickup_address' => $store->name . ', ' . $store->address,
+            'pickup_address' => $store->displayName() . ', ' . $store->address,
             'destination_address' => $order->drop_address,
             'intermediate_coordinates' => '[]',
             'intermediate_addresses' => null,
@@ -537,7 +553,7 @@ class StoreOrderService extends BaseService implements StoreOrderServiceInterfac
             'payer' => 'sender',
             'weight' => $quote['weight'] ?? StoreSettings::all()['parcel_weight'],
             'parcel_category_id' => $quote['parcel_category_id'] ?? StoreSettings::all()['parcel_category_id'],
-            'sender_name' => $store->name,
+            'sender_name' => $store->displayName(),
             'sender_phone' => $store->phone,
             'sender_address' => $store->address,
             'receiver_name' => $order->receiver_name,
@@ -796,7 +812,7 @@ class StoreOrderService extends BaseService implements StoreOrderServiceInterfac
             if (!$customer?->fcm_token) {
                 return;
             }
-            $store = $order->store?->name ?? '';
+            $store = $order->store?->displayName() ?? '';
             $locale = $customer->current_language_key;
             $amount = getCurrencyFormat($order->refunded_amount ?: $order->total);
             $rider = trim((string)$order->trip?->driver?->first_name) ?: translate(key: 'Your rider', locale: $locale);
@@ -894,7 +910,7 @@ class StoreOrderService extends BaseService implements StoreOrderServiceInterfac
         try {
             $message = translate(key: 'E-Ride: new order #{ref} for {store}, {count} items, {amount}. Accept it in the partner portal: {url}', replace: [
                 'ref' => $order->ref_id,
-                'store' => $store->name,
+                'store' => $store->displayName(),
                 'count' => (int)$order->items()->sum('quantity'),
                 'amount' => getCurrencyFormat($order->items_subtotal),
                 'url' => route('partner.orders'),

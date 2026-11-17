@@ -30,8 +30,12 @@ interface StoreServiceInterface extends BaseServiceInterface
 
     public function deleteItem(Store $store, string $id): void;
 
-    /** available, sold_out (today only, back at midnight) or hidden. */
-    public function setItemState(Store $store, string $id, string $state): StoreItem;
+    /**
+     * One dish's switch at one kitchen: available, sold_out (today only, back
+     * at midnight), not_here (this branch doesn't make it); or for the whole
+     * menu: hidden (every branch) and on_menu.
+     */
+    public function setItemState(Store $kitchen, string $id, string $state): StoreItem;
 
     public function recordPayout(Store $store, array $data, ?string $adminId): StorePayout;
 }

@@ -57,8 +57,15 @@
                                         <div class="d-flex align-items-center gap-2">
                                             <img src="{{ $store->logoUrl() ?? dynamicAsset('public/assets/admin-module/img/media/upload-file.png') }}" width="40" height="40" class="rounded object-fit-cover" alt="">
                                             <div>
-                                                <div class="fw-semibold">{{ $store->name }}</div>
-                                                <div class="fs-12 text-muted">{{ translate($store->type) }} · {{ $store->phone }}</div>
+                                                @if($store->parent_id)
+                                                    <div class="fw-semibold"><span class="text-muted">↳</span> {{ $store->branch_name }}</div>
+                                                    <div class="fs-12 text-muted">{{ translate('Branch_of') }} {{ $store->parent?->name }} · {{ $store->phone }}</div>
+                                                @else
+                                                    <div class="fw-semibold">{{ $store->displayName() }}</div>
+                                                    <div class="fs-12 text-muted">{{ translate($store->type) }} · {{ $store->phone }}
+                                                        @if($store->branches_count) · {{ $store->branches_count + 1 }} {{ translate('branches') }}@endif
+                                                    </div>
+                                                @endif
                                             </div>
                                         </div>
                                     </td>
@@ -70,7 +77,7 @@
                                         @endif
                                     </td>
                                     <td class="fs-12">{{ $store->owner?->email }}</td>
-                                    <td class="text-center">{{ $store->items_count }}</td>
+                                    <td class="text-center">{{ $store->parent_id ? '-' : $store->items_count }}</td>
                                     <td class="text-center">{{ $store->delivered_orders_count }}</td>
                                     <td class="text-center text-nowrap">
                                         @if($store->reviews_count)

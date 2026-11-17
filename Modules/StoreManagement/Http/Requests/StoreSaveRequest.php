@@ -40,6 +40,15 @@ class StoreSaveRequest extends FormRequest
             'payout_name' => 'nullable|string|max:120',
             'logo' => $image,
             'cover' => $image,
+            // A branch of a main store; a store that has branches can't become one.
+            'parent_id' => ['nullable', 'uuid', Rule::exists('stores', 'id')->whereNull('parent_id')->whereNull('deleted_at'),
+                Rule::notIn(array_filter([$store?->id])),
+                function ($attr, $value, $fail) use ($store) {
+                    if ($value && $store && Store::where('parent_id', $store->id)->exists()) {
+                        $fail(translate('This store has branches, so it cannot be a branch itself.'));
+                    }
+                }],
+            'branch_name' => 'nullable|string|max:60|required_with:parent_id',
             'owner_name' => 'required|string|max:120',
             'owner_email' => ['required', 'email', 'max:191', Rule::unique('users', 'email')->ignore($ownerId)],
             'password' => [$store ? 'nullable' : 'required', 'string', 'min:8', 'max:100'],

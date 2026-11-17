@@ -10,6 +10,7 @@ use Illuminate\Support\Str;
 use MatanYadaev\EloquentSpatial\Objects\Point;
 use Modules\StoreManagement\Entities\Store;
 use Modules\StoreManagement\Entities\StoreItem;
+use Modules\StoreManagement\Entities\StoreItemState;
 use Modules\StoreManagement\Entities\StoreMenuCategory;
 use Modules\StoreManagement\Entities\StorePayout;
 use Modules\StoreManagement\Repository\StoreRepositoryInterface;
@@ -19,6 +20,9 @@ use Modules\ZoneManagement\Service\Interfaces\ZoneServiceInterface;
 
 class StoreService extends BaseService implements StoreServiceInterface
 {
+    /** Menu switch for a brand with branches: back on the menu at every branch. */
+    public const ON_MENU = 'on_menu';
+
     public function __construct(
         protected StoreRepositoryInterface $storeRepository,
         protected ZoneServiceInterface $zoneService,
@@ -38,7 +42,10 @@ class StoreService extends BaseService implements StoreServiceInterface
                     ->orWhere('phone', 'like', '%' . $filters['search'] . '%'));
             })
             ->when(in_array($filters['status'] ?? 'all', ['active', 'inactive'], true), fn($q) => $q->where('is_active', $filters['status'] === 'active'))
-            ->orderBy('sort')->orderBy('name')
+            ->with('parent')->withCount('branches')
+            ->orderByRaw('COALESCE((SELECT p.name FROM stores p WHERE p.id = stores.parent_id), stores.name)')
+            ->orderByRaw('stores.parent_id IS NOT NULL')
+            ->orderBy('branch_name')
             ->paginate($perPage)
             ->appends($filters);
     }
@@ -172,13 +179,30 @@ class StoreService extends BaseService implements StoreServiceInterface
         $store->items()->findOrFail($id)->delete();
     }
 
-    public function setItemState(Store $store, string $id, string $state): StoreItem
+    public function setItemState(Store $kitchen, string $id, string $state): StoreItem
     {
-        $item = $store->items()->findOrFail($id);
-        $item->is_available = $state !== StoreItem::HIDDEN;
-        // Sold out today: back on by itself at midnight.
-        $item->sold_out_until = $state === StoreItem::SOLD_OUT ? now()->addDay()->startOfDay() : null;
-        $item->save();
+        $brand = $kitchen->brand();
+        $item = $brand->items()->findOrFail($id);
+        // A store without branches has one switch: Hidden is the menu's, the rest its kitchen's.
+        $single = !$kitchen->isBranch() && !$brand->branches()->exists();
+        DB::transaction(function () use ($kitchen, $item, $state, $single) {
+            if (in_array($state, [StoreItem::HIDDEN, self::ON_MENU], true) || $single) {
+                $item->is_available = $state !== StoreItem::HIDDEN;
+                $item->save();
+            }
+            if (in_array($state, [StoreItem::HIDDEN, self::ON_MENU], true)) {
+                return;
+            }
+            $row = StoreItemState::firstOrNew(['store_id' => $kitchen->id, 'store_item_id' => $item->id]);
+            if ($state === StoreItem::AVAILABLE) {
+                $row->exists && $row->delete();
+                return;
+            }
+            // Sold out today: back on by itself at midnight.
+            $row->sold_out_until = $state === StoreItem::SOLD_OUT ? now()->addDay()->startOfDay() : null;
+            $row->not_here = $state === StoreItem::NOT_HERE;
+            $row->save();
+        });
         return $item;
     }
 
@@ -209,9 +233,13 @@ class StoreService extends BaseService implements StoreServiceInterface
     {
         $latitude = (float)$data['latitude'];
         $longitude = (float)$data['longitude'];
+        // A branch carries its brand's name and type.
+        $parent = !empty($data['parent_id']) ? Store::whereNull('parent_id')->find($data['parent_id']) : null;
         return [
-            'name' => trim($data['name']),
-            'type' => in_array($data['type'] ?? '', Store::TYPES, true) ? $data['type'] : 'restaurant',
+            'parent_id' => $parent?->id,
+            'branch_name' => filled($data['branch_name'] ?? null) ? trim($data['branch_name']) : null,
+            'name' => $parent ? $parent->name : trim($data['name']),
+            'type' => $parent ? $parent->type : (in_array($data['type'] ?? '', Store::TYPES, true) ? $data['type'] : 'restaurant'),
             'phone' => trim($data['phone']),
             'whatsapp' => $data['whatsapp'] ?? null,
             'address' => trim($data['address']),

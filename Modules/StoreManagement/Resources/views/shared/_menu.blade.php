@@ -1,9 +1,11 @@
 {{--
     Menu editor shared by the admin panel and the partner portal.
-    Needs: $store (with categories, items), $routePrefix ('admin.store.' or 'partner.'),
+    Needs: $store (the brand: categories, items), $routePrefix ('admin.store.' or 'partner.'),
     $routeBase (route params, e.g. ['store' => $store] or []).
-    Two views (?view=): "today" (the morning check: what is served today, with
-    its switch) and "full" (edit everything, serving times included).
+    Optional: $kitchens (kitchens this page may switch), $kitchen (the one shown),
+    $canEditMenu (false for a branch login), $hasBranches.
+    Two views (?view=): "today" (the morning check at one kitchen: what is served
+    today, with its switch) and "full" (edit the menu, serving times included).
 --}}
 @php
     use Modules\StoreManagement\Entities\Store;
@@ -12,7 +14,14 @@
     $r = fn(string $name, array $params = []) => route($routePrefix . $name, array_merge($routeBase, $params));
     $store->linkMenu();
     $now = now();
-    $view = request('view') === 'full' || $store->items->isEmpty() ? 'full' : (request('view') === 'today' ? 'today' : ($defaultView ?? 'today'));
+    $kitchens = $kitchens ?? collect([$store]);
+    $kitchen = $kitchen ?? $store;
+    $canEditMenu = $canEditMenu ?? true;
+    $hasBranches = $hasBranches ?? false;
+    $kitchenStates = $kitchen->stateMap();
+    $view = !$canEditMenu ? 'today'
+        : (request('view') === 'full' || $store->items->isEmpty() ? 'full' : (request('view') === 'today' ? 'today' : ($defaultView ?? 'today')));
+    $pageUrl = fn(array $q) => request()->url() . '?' . http_build_query($q);
     $dayNames = ['mon' => translate('Mon'), 'tue' => translate('Tue'), 'wed' => translate('Wed'), 'thu' => translate('Thu'), 'fri' => translate('Fri'), 'sat' => translate('Sat'), 'sun' => translate('Sun')];
     // "Mon, Thu · 18:00 to 22:00", "Every day", or "" when nothing is set.
     $when = function (?array $days, ?array $window, bool $sayEveryDay = false) use ($dayNames) {
@@ -27,7 +36,16 @@
         }
         return implode(' · ', $parts);
     };
-    $stateLabels = [StoreItem::AVAILABLE => translate('Available'), StoreItem::SOLD_OUT => translate('Sold_out_today'), StoreItem::HIDDEN => translate('Hidden')];
+    // The switch: at one kitchen (Today, or a store without branches), or the whole menu (Full, with branches).
+    $kitchenLabels = $hasBranches
+        ? [StoreItem::AVAILABLE => translate('Available'), StoreItem::SOLD_OUT => translate('Sold_out_today'), StoreItem::NOT_HERE => translate('Not_at_this_branch')]
+        : [StoreItem::AVAILABLE => translate('Available'), StoreItem::SOLD_OUT => translate('Sold_out_today'), StoreItem::HIDDEN => translate('Hidden')];
+    $menuLabels = ['on_menu' => translate('On_the_menu'), StoreItem::HIDDEN => translate('Hidden_at_all_branches')];
+    $brandSwitch = $hasBranches && $view === 'full';
+    $stateLabels = $brandSwitch ? $menuLabels : $kitchenLabels;
+    $stateOf = fn(StoreItem $item) => $brandSwitch
+        ? ($item->is_available ? 'on_menu' : StoreItem::HIDDEN)
+        : $item->switchState($kitchenStates->get($item->id), $now);
 
     $sections = $store->categories->map(fn($c) => ['category' => $c, 'items' => $store->items->where('store_menu_category_id', $c->id)]);
     $known = $store->categories->pluck('id')->all();
@@ -37,8 +55,9 @@
     }
     if ($view === 'today') {
         // Served today (day of the week), in sections that are not hidden.
+        // With branches, a dish hidden from the whole menu is not a branch's to switch.
         $sections = $sections->filter(fn($s) => !$s['category'] || $s['category']->is_active)
-            ->map(fn($s) => ['category' => $s['category'], 'items' => $s['items']->filter(fn($i) => $i->servedOn($now))])
+            ->map(fn($s) => ['category' => $s['category'], 'items' => $s['items']->filter(fn($i) => $i->servedOn($now) && (!$hasBranches || $i->is_available))])
             ->filter(fn($s) => $s['items']->isNotEmpty());
         $todayIds = $sections->flatMap(fn($s) => $s['items']->pluck('id'));
         $notToday = $store->items->count() - $todayIds->count();
@@ -49,7 +68,11 @@
     .menu-state { width: auto; min-width: 150px; font-weight: 600; }
     .menu-state[data-state="available"] { color: #12804a; border-color: #9fd8b8; background-color: #f0faf4; }
     .menu-state[data-state="sold_out"] { color: #b45309; border-color: #f3c98b; background-color: #fff8ec; }
-    .menu-state[data-state="hidden"] { color: #6b7280; background-color: #f3f4f6; }
+    .menu-state[data-state="hidden"], .menu-state[data-state="not_here"] { color: #6b7280; background-color: #f3f4f6; }
+    .menu-state[data-state="on_menu"] { color: #12804a; border-color: #9fd8b8; background-color: #f0faf4; }
+    .menu-kitchens { display: flex; flex-wrap: wrap; gap: 6px; }
+    .menu-kitchens a { border: 1px solid #d1d5db; border-radius: 999px; padding: 5px 14px; font-size: 14px; font-weight: 600; color: #374151; text-decoration: none; background: #fff; }
+    .menu-kitchens a.active { background: #111827; color: #fff; border-color: #111827; }
     .menu-row.is-off { opacity: .6; }
     .menu-when { font-size: 12px; color: #6b7280; }
     .menu-when i { font-size: 11px; }
@@ -64,15 +87,17 @@
     <div class="d-flex flex-wrap gap-2 align-items-center justify-content-between mb-3">
         <ul class="nav nav-pills">
             <li class="nav-item">
-                <a class="nav-link {{ $view === 'today' ? 'active' : '' }} {{ $store->items->isEmpty() ? 'disabled' : '' }}" href="{{ request()->url() }}?view=today">
+                <a class="nav-link {{ $view === 'today' ? 'active' : '' }} {{ $store->items->isEmpty() ? 'disabled' : '' }}" href="{{ $pageUrl(['view' => 'today', 'kitchen' => $kitchen->id]) }}">
                     <i class="bi bi-calendar-check"></i> {{ translate('Today') }}
                 </a>
             </li>
-            <li class="nav-item">
-                <a class="nav-link {{ $view === 'full' ? 'active' : '' }}" href="{{ request()->url() }}?view=full">
-                    <i class="bi bi-list-ul"></i> {{ translate('Full_menu') }}
-                </a>
-            </li>
+            @if($canEditMenu)
+                <li class="nav-item">
+                    <a class="nav-link {{ $view === 'full' ? 'active' : '' }}" href="{{ $pageUrl(['view' => 'full']) }}">
+                        <i class="bi bi-list-ul"></i> {{ translate('Full_menu') }}
+                    </a>
+                </li>
+            @endif
         </ul>
         @if($view === 'full')
             <button type="button" class="btn btn-primary" data-menu-item-new><i class="bi bi-plus-lg"></i> {{ translate('Add_item') }}</button>
@@ -81,9 +106,36 @@
 
     @if($view === 'today')
         <div class="mb-3">
-            <div class="fw-bold fs-5">{{ $dayNames[Store::DAYS[$now->dayOfWeekIso - 1]] }} {{ $now->format('d/m') }}</div>
-            <div class="text-muted fs-14">{{ translate('What customers can order today. Set a dish to Sold out today when it runs out: it comes back by itself tomorrow.') }}</div>
+            @if($kitchens->count() > 1)
+                <div class="menu-kitchens mb-2" aria-label="{{ translate('Branch') }}">
+                    @foreach($kitchens as $k)
+                        <a href="{{ $pageUrl(['view' => 'today', 'kitchen' => $k->id]) }}" class="{{ $k->id === $kitchen->id ? 'active' : '' }}">
+                            <i class="bi bi-shop"></i> {{ $k->branch_name ?: $k->brand()->name }}
+                        </a>
+                    @endforeach
+                </div>
+            @endif
+            <div class="fw-bold fs-5">
+                {{ $dayNames[Store::DAYS[$now->dayOfWeekIso - 1]] }} {{ $now->format('d/m') }}
+                @if($hasBranches) · {{ $kitchen->branch_name ?: $kitchen->brand()->name }}@endif
+            </div>
+            <div class="text-muted fs-14">
+                @if($hasBranches)
+                    {{ translate('What customers can order from this branch today. Sold out today comes back by itself tomorrow. Not at this branch: customers see which other branch has it.') }}
+                @else
+                    {{ translate('What customers can order today. Set a dish to Sold out today when it runs out: it comes back by itself tomorrow.') }}
+                @endif
+            </div>
         </div>
+    @elseif($hasBranches)
+        <div class="alert alert-light border fs-14 mb-3">
+            <i class="bi bi-diagram-3"></i> {{ translate('This menu is shared by all branches. Each branch marks its own dishes Sold out today or Not at this branch on its Today page.') }}
+        </div>
+        <form action="{{ $r('menu.category.save') }}" method="POST" class="d-flex gap-2 mb-3" style="max-width: 420px">
+            @csrf
+            <input type="text" name="name" class="form-control" required maxlength="80" placeholder="{{ translate('New_section,_e.g._Rice_dishes') }}">
+            <button type="submit" class="btn btn-outline-primary text-nowrap">{{ translate('Add_section') }}</button>
+        </form>
     @else
         <form action="{{ $r('menu.category.save') }}" method="POST" class="d-flex gap-2 mb-3" style="max-width: 420px">
             @csrf
@@ -145,8 +197,8 @@
             </div>
             <div class="list-group list-group-flush">
                 @forelse($section['items'] as $item)
-                    @php($state = $item->switchState($now))
-                    <div class="list-group-item menu-row d-flex align-items-center gap-3 py-3 {{ $state === StoreItem::AVAILABLE ? '' : 'is-off' }}">
+                    @php($state = $stateOf($item))
+                    <div class="list-group-item menu-row d-flex align-items-center gap-3 py-3 {{ in_array($state, [StoreItem::AVAILABLE, 'on_menu'], true) ? '' : 'is-off' }}">
                         @if($item->imageUrl())
                             <img src="{{ $item->imageUrl() }}" width="56" height="56" class="rounded object-fit-cover flex-shrink-0" alt="">
                         @else
@@ -165,7 +217,7 @@
                             </div>
                         </div>
                         <div class="d-flex flex-column align-items-end gap-2 flex-shrink-0">
-                            <select class="form-select form-select-sm menu-state" data-state="{{ $state }}" data-menu-state="{{ $r('menu.item.availability', ['item' => $item->id]) }}" aria-label="{{ translate('Availability') }}: {{ $item->name }}">
+                            <select class="form-select form-select-sm menu-state" data-state="{{ $state }}" data-kitchen="{{ $brandSwitch ? '' : $kitchen->id }}" data-menu-state="{{ $r('menu.item.availability', ['item' => $item->id]) }}" aria-label="{{ translate('Availability') }}: {{ $item->name }}">
                                 @foreach($stateLabels as $value => $text)
                                     <option value="{{ $value }}" {{ $state === $value ? 'selected' : '' }}>{{ $text }}</option>
                                 @endforeach
@@ -194,9 +246,13 @@
     @endforeach
 
     @if($view === 'today' && $notToday > 0)
-        <a href="{{ request()->url() }}?view=full" class="d-block text-center text-muted fs-14 py-2">
-            {{ translate('Not_served_today') }}: {{ $notToday }} · {{ translate('See_the_full_menu') }}
-        </a>
+        @if($canEditMenu)
+            <a href="{{ $pageUrl(['view' => 'full']) }}" class="d-block text-center text-muted fs-14 py-2">
+                {{ translate('Not_served_today') }}: {{ $notToday }} · {{ translate('See_the_full_menu') }}
+            </a>
+        @else
+            <div class="text-center text-muted fs-14 py-2">{{ translate('Not_served_today') }}: {{ $notToday }}</div>
+        @endif
     @endif
 </div>
 
@@ -353,12 +409,12 @@
             fetch(select.dataset.menuState, {
                 method: 'POST',
                 headers: {'X-CSRF-TOKEN': token, 'Accept': 'application/json', 'Content-Type': 'application/json'},
-                body: JSON.stringify({state: select.value})
+                body: JSON.stringify({state: select.value, kitchen: select.dataset.kitchen || null})
             }).then(function (r) { if (!r.ok) throw r; return r.json(); })
               .then(function (d) {
                   select.dataset.state = d.state;
                   select.value = d.state;
-                  select.closest('.menu-row').classList.toggle('is-off', d.state !== 'available');
+                  select.closest('.menu-row').classList.toggle('is-off', d.state !== 'available' && d.state !== 'on_menu');
               })
               .catch(function () { select.value = before; alert(@json(translate('Could not save. Check your connection and try again.'))); })
               .finally(function () { select.disabled = false; });

@@ -13,6 +13,9 @@ interface StoreOrderServiceInterface extends BaseServiceInterface
     /** Prices, delivery fee and problems for a cart. Never trusts client amounts. */
     public function quote(Store $store, array $lines, array $drop): array;
 
+    /** Delivery fee from this kitchen to a point, or null when it can't deliver there. */
+    public function deliveryFee(Store $store, float $lat, float $lng): ?float;
+
     /** Creates an order awaiting payment; pays at once when the method is wallet. */
     public function place(User $customer, Store $store, array $input): StoreOrder;
 

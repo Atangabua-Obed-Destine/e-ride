@@ -27,10 +27,17 @@ class PartnerOrderController extends Controller
         return $request->attributes->get('partnerStore');
     }
 
+    /** Kitchens on this board: a branch its own, the owner (main store) every branch. */
+    protected function kitchenIds(Request $request): array
+    {
+        $store = $this->store($request);
+        return $store->isBranch() ? [$store->id] : $store->kitchens()->pluck('id')->all();
+    }
+
     /** Only this partner's orders, never another store's. */
     protected function own(Request $request, StoreOrder $order): StoreOrder
     {
-        abort_unless($order->store_id === $this->store($request)->id, 404);
+        abort_unless(in_array($order->store_id, $this->kitchenIds($request), true), 404);
         return $order;
     }
 
@@ -45,8 +52,8 @@ class PartnerOrderController extends Controller
     public function feed(Request $request): JsonResponse
     {
         $store = $this->store($request);
-        $orders = StoreOrder::with(['items', 'trip.driver', 'trip.vehicle'])
-            ->where('store_id', $store->id)
+        $orders = StoreOrder::with(['items', 'store', 'trip.driver', 'trip.vehicle'])
+            ->whereIn('store_id', $this->kitchenIds($request))
             ->where(function ($q) {
                 $q->whereIn('status', StoreOrder::ACTIVE)
                     ->orWhere(fn($w) => $w->whereIn('status', StoreOrder::FINAL)->where('updated_at', '>=', now()->subHours(3)));
@@ -66,12 +73,12 @@ class PartnerOrderController extends Controller
     public function history(Request $request): View
     {
         $store = $this->store($request);
-        $orders = StoreOrder::with(['items', 'review'])
-            ->where('store_id', $store->id)
+        $orders = StoreOrder::with(['items', 'review', 'store'])
+            ->whereIn('store_id', $this->kitchenIds($request))
             ->where('status', '!=', StoreOrder::AWAITING_PAYMENT)
             ->latest('placed_at')
             ->paginate(25);
-        $rating = $store->ratingSummary();
+        $rating = $store->brandRatingSummary();
         return view('storemanagement::partner.history', compact('orders', 'rating'));
     }
 
@@ -98,13 +105,13 @@ class PartnerOrderController extends Controller
         } catch (ValidationException $e) {
             return response()->json(['ok' => false, 'message' => collect($e->errors())->flatten()->first()], 422);
         }
-        return response()->json(['ok' => true, 'order' => $this->present($order->fresh(['items', 'trip.driver', 'trip.vehicle']), StoreSettings::all()['partner_response_minutes'])]);
+        return response()->json(['ok' => true, 'order' => $this->present($order->fresh(['items', 'store', 'trip.driver', 'trip.vehicle']), StoreSettings::all()['partner_response_minutes'])]);
     }
 
     /** Says so when the order had already moved on (another tap, a timeout). */
     protected function answer(StoreOrder $order, string $expectedBefore, ?string $statusBefore = null): JsonResponse
     {
-        $order = $order->fresh(['items', 'trip.driver', 'trip.vehicle']);
+        $order = $order->fresh(['items', 'store', 'trip.driver', 'trip.vehicle']);
         $ok = ($statusBefore ?? $expectedBefore) === $expectedBefore && $order->status !== $expectedBefore;
         return response()->json([
             'ok' => $ok,
@@ -123,6 +130,8 @@ class PartnerOrderController extends Controller
             'id' => $o->id,
             'ref' => $o->ref_id,
             'status' => $o->status,
+            // Which kitchen cooks it, on an owner's board with several branches.
+            'branch' => $o->store && ($o->store->isBranch() || $o->store->branch_name) ? \Modules\StoreManagement\Lib\StoreBranches::label($o->store) : null,
             'items' => $o->items->map(fn($i) => ['name' => $i->name, 'quantity' => $i->quantity, 'line_total' => $i->line_total])->values(),
             'items_count' => (int)$o->items->sum('quantity'),
             'items_subtotal' => $o->items_subtotal,

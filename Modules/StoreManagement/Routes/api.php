@@ -9,6 +9,7 @@ use Modules\StoreManagement\Http\Controllers\Api\Customer\StoreOrderController;
 Route::group(['prefix' => 'customer', 'middleware' => ['auth:api', 'maintenance_mode']], function () {
     Route::get('stores', [StoreOrderController::class, 'stores']);
     Route::get('stores/{store}', [StoreOrderController::class, 'store']);
+    Route::get('stores/{store}/branches', [StoreOrderController::class, 'branches']);
     Route::post('store-orders/quote', [StoreOrderController::class, 'quote'])->middleware('throttle:30,1,store-quote');
     Route::post('store-orders', [StoreOrderController::class, 'place'])->middleware('throttle:10,1,store-order');
     Route::get('store-orders', [StoreOrderController::class, 'index']);

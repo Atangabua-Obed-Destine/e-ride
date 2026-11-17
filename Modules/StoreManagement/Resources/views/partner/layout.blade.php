@@ -59,7 +59,7 @@
 <header class="p-top">
     <img class="p-top__logo" src="{{ $partnerStore->logoUrl() ?? dynamicAsset('public/assets/admin-module/img/favicon.png') }}" alt="">
     <div class="p-top__name text-truncate">
-        {{ $partnerStore->name }}
+        {{ $partnerStore->displayName() }}
         <small>{{ translate('E-Ride Partner') }}</small>
     </div>
     <button type="button" class="p-open {{ $partnerStore->is_open ? 'is-open' : 'is-closed' }}" data-open-toggle data-url="{{ route('partner.store.open') }}" data-open="{{ $partnerStore->is_open ? 1 : 0 }}" aria-pressed="{{ $partnerStore->is_open ? 'true' : 'false' }}">

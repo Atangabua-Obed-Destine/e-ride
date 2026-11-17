@@ -8,12 +8,18 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Database\Eloquent\SoftDeletes;
 use Illuminate\Support\Carbon;
+use Illuminate\Support\Collection;
 use Modules\UserManagement\Entities\User;
 use Modules\ZoneManagement\Entities\Zone;
 
 /**
- * A partner restaurant or shop. Its owner logs into the /partner portal with
- * the linked user (user_type partner).
+ * A partner restaurant or shop: one kitchen at one address. Its staff log into
+ * the /partner portal with the linked user (user_type partner).
+ *
+ * Branches: a store with parent_id is a branch of that main store (the brand).
+ * The brand owns the menu, photos and rating; each kitchen (the main store and
+ * its branches) has its own location, hours, open switch, orders and login, and
+ * its own switches per dish (StoreItemState). The main store's login is the owner.
  */
 class Store extends Model
 {
@@ -25,7 +31,7 @@ class Store extends Model
     protected $fillable = [
         'user_id', 'name', 'slug', 'type', 'phone', 'whatsapp', 'address', 'latitude', 'longitude', 'zone_id',
         'logo', 'cover', 'description', 'opening_hours', 'is_open', 'default_prep_minutes', 'min_order_amount',
-        'is_active', 'sort', 'payout_method', 'payout_number', 'payout_name',
+        'is_active', 'sort', 'payout_method', 'payout_number', 'payout_name', 'parent_id', 'branch_name',
     ];
 
     protected $casts = [
@@ -38,6 +44,64 @@ class Store extends Model
         'min_order_amount' => 'float',
         'sort' => 'integer',
     ];
+
+    public function parent(): BelongsTo
+    {
+        return $this->belongsTo(Store::class, 'parent_id');
+    }
+
+    public function branches(): HasMany
+    {
+        return $this->hasMany(Store::class, 'parent_id')->orderBy('branch_name');
+    }
+
+    /** This kitchen's switches per dish (sold out today, not made here). */
+    public function itemStates(): HasMany
+    {
+        return $this->hasMany(StoreItemState::class);
+    }
+
+    /** The brand: the main store, which owns the menu. Itself for a main store. */
+    public function brand(): Store
+    {
+        return $this->parent_id ? ($this->parent ?? $this) : $this;
+    }
+
+    public function isBranch(): bool
+    {
+        return (bool)$this->parent_id;
+    }
+
+    /** Every kitchen of the brand: the main store first, then its branches. */
+    public function kitchens(bool $activeOnly = false): Collection
+    {
+        $brand = $this->brand();
+        $all = collect([$brand])->merge($brand->relationLoaded('branches') ? $brand->branches : $brand->branches()->get());
+        return ($activeOnly ? $all->filter(fn(Store $k) => $k->is_active) : $all)->values();
+    }
+
+    /** "Romz · Mile 6" for a kitchen with a branch name, else the brand name. */
+    public function displayName(): string
+    {
+        $name = $this->brand()->name;
+        return $this->branch_name ? $name . ' · ' . $this->branch_name : $name;
+    }
+
+    /** This kitchen's switches, keyed by dish id. */
+    public function stateMap(): Collection
+    {
+        return StoreItemState::where('store_id', $this->id)->get()->keyBy('store_item_id');
+    }
+
+    /** Rating across every kitchen of the brand: customers judge the brand. */
+    public function brandRatingSummary(): array
+    {
+        $ids = $this->kitchens()->pluck('id');
+        $q = StoreReview::whereIn('store_id', $ids)->where('is_hidden', false);
+        $count = (clone $q)->count();
+        $avg = $count ? (clone $q)->avg('rating') : null;
+        return ['rating' => $avg !== null ? round((float)$avg, 1) : null, 'rating_count' => $count];
+    }
 
     public function owner(): BelongsTo
     {
@@ -85,12 +149,12 @@ class Store extends Model
 
     public function logoUrl(): ?string
     {
-        return $this->logo ? dynamicStorage('storage/app/public/store/logo') . '/' . $this->logo : null;
+        return $this->logo ? dynamicStorage('storage/app/public/store/logo') . '/' . $this->logo : ($this->parent_id ? $this->brand()->logoUrl() : null);
     }
 
     public function coverUrl(): ?string
     {
-        return $this->cover ? dynamicStorage('storage/app/public/store/cover') . '/' . $this->cover : null;
+        return $this->cover ? dynamicStorage('storage/app/public/store/cover') . '/' . $this->cover : ($this->parent_id ? $this->brand()->coverUrl() : null);
     }
 
     /** Today's hours as [open, close] ("08:00", "22:00"), or null when closed all day. */
@@ -136,11 +200,12 @@ class Store extends Model
         return $this;
     }
 
-    /** Partner's unpaid balance: delivered food earnings minus recorded payouts. */
+    /** The brand's unpaid balance: delivered food earnings at every kitchen minus payouts (paid to the owner). */
     public function balance(): float
     {
-        $earned = (float)$this->orders()->where('status', StoreOrder::DELIVERED)->sum('partner_earning');
-        $paid = (float)$this->payouts()->sum('amount');
+        $brand = $this->brand();
+        $earned = (float)StoreOrder::whereIn('store_id', $brand->kitchens()->pluck('id'))->where('status', StoreOrder::DELIVERED)->sum('partner_earning');
+        $paid = (float)$brand->payouts()->sum('amount');
         return round($earned - $paid, 2);
     }
 }

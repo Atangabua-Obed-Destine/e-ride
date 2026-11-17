@@ -12,6 +12,7 @@ use Illuminate\Validation\ValidationException;
 use Modules\StoreManagement\Entities\Store;
 use Modules\StoreManagement\Entities\StoreOrder;
 use Modules\StoreManagement\Entities\StoreReview;
+use Modules\StoreManagement\Lib\StoreBranches;
 use Modules\StoreManagement\Lib\StoreSettings;
 use Modules\StoreManagement\Service\Interfaces\StoreOrderServiceInterface;
 use Modules\StoreManagement\Transformers\StorePresenter;
@@ -31,36 +32,103 @@ class StoreOrderController extends Controller
             return response()->json(responseFormatter(DEFAULT_200, ['stores' => [], 'enabled' => false]));
         }
         $zoneId = $request->header('zoneId');
-        $stores = Store::where('is_active', 1)
-            ->withAvg('reviews', 'rating')->withCount('reviews')
-            ->whereNotNull('zone_id')
-            ->when($zoneId, fn($q) => $q->where('zone_id', $zoneId))
+        // One card per brand, showing the branch that would serve this customer.
+        $stores = Store::where('is_active', 1)->whereNull('parent_id')
+            ->with('branches')
             ->orderBy('sort')->orderBy('name')
             ->get()
-            ->map(fn(Store $s) => StorePresenter::store($s, $lat, $lng))
+            ->map(function (Store $brand) use ($lat, $lng, $zoneId) {
+                $kitchens = $brand->kitchens(true)->filter(fn(Store $k) => $k->zone_id && (!$zoneId || $k->zone_id === $zoneId));
+                if ($kitchens->isEmpty()) {
+                    return null;
+                }
+                $pick = StoreBranches::pick($brand, $lat, $lng, null, $zoneId);
+                return StorePresenter::store($pick['kitchen'], $lat, $lng) + [
+                    // The app opens the brand; the menu call picks the branch again.
+                    'id' => $brand->id,
+                    'branch_count' => $pick['options']->count(),
+                ];
+            })
+            ->filter()
             // Open first, then nearest.
             ->sortBy(fn($s) => [$s['open_now'] ? 0 : 1, $s['distance_km'] ?? 0])
             ->values();
         return response()->json(responseFormatter(DEFAULT_200, ['stores' => $stores, 'enabled' => true, 'label' => StoreSettings::all()['service_label']]));
     }
 
+    /**
+     * A brand's menu as served by one of its kitchens. {store} is the brand or
+     * one of its branches (taken as the preferred branch); ?branch= is the
+     * branch the customer chose. The answer says which branch and why.
+     */
     public function store(Request $request, Store $store): JsonResponse
     {
-        abort_unless($store->is_active && StoreSettings::enabled(), 404);
-        $store->load(['categories', 'items']);
+        $brand = $store->brand();
+        abort_unless($brand->is_active && StoreSettings::enabled(), 404);
         $lat = $request->filled('latitude') ? (float)$request->query('latitude') : null;
         $lng = $request->filled('longitude') ? (float)$request->query('longitude') : null;
+        $preferred = $request->query('branch') ?: ($store->isBranch() ? $store->id : null);
+        $pick = StoreBranches::pick($brand, $lat, $lng, $preferred);
+        $kitchen = $pick['kitchen'];
+        $many = $pick['options']->count() > 1;
+        $brand->load(['categories', 'items']);
+        $at = now();
         return response()->json(responseFormatter(DEFAULT_200, [
-            'store' => StorePresenter::store($store, $lat, $lng),
-            'menu' => StorePresenter::menu($store),
+            'store' => StorePresenter::store($kitchen, $lat, $lng),
+            'branch' => $many ? [
+                'id' => $kitchen->id,
+                'name' => StoreBranches::label($kitchen),
+                'address' => $kitchen->address,
+                'distance_km' => $pick['options']->firstWhere('kitchen.id', $kitchen->id)['distance_km'] ?? null,
+                'delivery_fee' => ($lat !== null && $lng !== null && $kitchen->isOpenNow($at)) ? $this->orders->deliveryFee($kitchen, $lat, $lng) : null,
+                'reason' => $pick['reason'],
+                'skipped' => $pick['skipped'],
+                'count' => $pick['options']->count(),
+            ] : null,
+            'branches' => $many ? $this->branchOptions($pick['options'], $kitchen) : [],
+            'menu' => StorePresenter::menu($brand, $at, $kitchen, $many ? StoreBranches::elsewhereFinder($pick['options'], $kitchen, $at) : null),
         ]));
+    }
+
+    /** Every branch of a brand for the "Choose a branch" sheet, with delivery fees to this address. */
+    public function branches(Request $request, Store $store): JsonResponse
+    {
+        $brand = $store->brand();
+        abort_unless($brand->is_active && StoreSettings::enabled(), 404);
+        $lat = $request->filled('latitude') ? (float)$request->query('latitude') : null;
+        $lng = $request->filled('longitude') ? (float)$request->query('longitude') : null;
+        $pick = StoreBranches::pick($brand, $lat, $lng, $request->query('branch'));
+        return response()->json(responseFormatter(DEFAULT_200, [
+            'branches' => $this->branchOptions($pick['options'], $pick['kitchen'], $lat, $lng),
+        ]));
+    }
+
+    protected function branchOptions($options, Store $chosen, ?float $lat = null, ?float $lng = null): array
+    {
+        $now = now();
+        return $options->map(function ($o) use ($chosen, $lat, $lng, $now) {
+            /** @var Store $k */
+            $k = $o['kitchen'];
+            $hours = $k->hoursFor($now);
+            return [
+                'id' => $k->id,
+                'name' => StoreBranches::label($k),
+                'address' => $k->address,
+                'distance_km' => $o['distance_km'],
+                'open_now' => $o['open'],
+                'delivers' => $o['delivers'],
+                'today_hours' => $hours ? ['open' => $hours[0], 'close' => $hours[1]] : null,
+                'delivery_fee' => ($lat !== null && $lng !== null && $o['open'] && $o['delivers']) ? $this->orders->deliveryFee($k, $lat, $lng) : null,
+                'selected' => $k->id === $chosen->id,
+            ];
+        })->values()->all();
     }
 
     public function quote(Request $request): JsonResponse
     {
         $data = $this->validateCart($request);
         $store = Store::where('is_active', 1)->find($data['store_id']);
-        if (!$store) {
+        if (!$store || !$store->brand()->is_active) {
             return $this->problem(translate('This store is not available.'));
         }
         $quote = $this->orders->quote($store, $data['items'], ['latitude' => $data['drop_latitude'], 'longitude' => $data['drop_longitude']]);
@@ -79,7 +147,7 @@ class StoreOrderController extends Controller
             'payment_method' => ['required', 'string', Rule::in(array_merge(['wallet'], $gateways))],
         ]);
         $store = Store::where('is_active', 1)->find($data['store_id']);
-        if (!$store) {
+        if (!$store || !$store->brand()->is_active) {
             return $this->problem(translate('This store is not available.'));
         }
         try {

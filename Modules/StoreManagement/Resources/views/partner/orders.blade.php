@@ -20,6 +20,7 @@
     @keyframes pop { from { transform: scale(.97); opacity: .4 } to { transform: none; opacity: 1 } }
     .o__head { display: flex; align-items: baseline; gap: 8px; }
     .o__ref { font-weight: 900; font-size: 20px; letter-spacing: -.01em; }
+        .o__branch { font-size: 12px; font-weight: 700; background: #111114; color: #fff; border-radius: 999px; padding: 2px 9px; white-space: nowrap; }
     .o__who { color: var(--muted); font-size: 13px; }
     .o__timer { margin-left: auto; font-weight: 800; font-size: 13px; font-variant-numeric: tabular-nums; padding: 3px 9px; border-radius: 999px; background: #f0f0f3; }
     .o__timer.is-hot { background: var(--red); color: #fff; }
@@ -204,7 +205,7 @@
             '<div class="o__state"><i class="bi bi-geo-alt"></i>' + T.riderComing + '</div>';
     }
     function card(o) {
-        var head = '<div class="o__head"><span class="o__ref">#' + o.ref + '</span><span class="o__who">' + esc(o.customer_name) + ' · ' + count(o.items_count) + '</span>';
+        var head = '<div class="o__head"><span class="o__ref">#' + o.ref + '</span>' + (o.branch ? '<span class="o__branch"><i class="bi bi-shop"></i> ' + esc(o.branch) + '</span>' : '') + '<span class="o__who">' + esc(o.customer_name) + ' · ' + count(o.items_count) + '</span>';
         if (o.status === 'placed' && o.respond_by) {
             var left = new Date(o.respond_by).getTime() - now();
             head += '<span class="o__timer ' + (left < 90000 ? 'is-hot' : '') + '" data-countdown="' + o.respond_by + '">' + T.respondIn + ' ' + mmss(left) + '</span>';

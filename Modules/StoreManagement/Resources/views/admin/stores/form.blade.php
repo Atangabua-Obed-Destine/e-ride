@@ -111,6 +111,40 @@
                     </div>
 
                     <div class="col-lg-5">
+                        @php($mainStores = \Modules\StoreManagement\Entities\Store::whereNull('parent_id')->when($store->exists, fn($q) => $q->where('id', '!=', $store->id))->orderBy('name')->get(['id', 'name']))
+                        @php($ownBranches = $store->exists ? $store->branches()->get() : collect())
+                        <div class="card mb-3">
+                            <div class="card-body">
+                                <h5 class="mb-1">{{ translate('Branches') }}</h5>
+                                <p class="fs-12 text-muted">{{ translate('A restaurant with several kitchens: the main store holds the menu, photos and rating. Each branch has its own address, hours, orders and login.') }}</p>
+                                @if($ownBranches->isNotEmpty())
+                                    <div class="mb-2 fs-14">{{ translate('Main store of') }}:
+                                        @foreach($ownBranches as $b)
+                                            <a href="{{ route('admin.store.edit', $b) }}" class="badge bg-light text-dark text-decoration-none">{{ $b->branch_name }}</a>
+                                        @endforeach
+                                    </div>
+                                @else
+                                    <div class="mb-3">
+                                        <label class="form-label">{{ translate('Branch_of') }}</label>
+                                        <select name="parent_id" class="form-select">
+                                            <option value="">{{ translate('None:_its_own_store') }}</option>
+                                            @foreach($mainStores as $main)
+                                                <option value="{{ $main->id }}" {{ old('parent_id', $store->parent_id) === $main->id ? 'selected' : '' }}>{{ $main->name }}</option>
+                                            @endforeach
+                                        </select>
+                                    </div>
+                                @endif
+                                <div class="mb-2">
+                                    <label class="form-label">{{ translate('Branch_name') }}</label>
+                                    <input type="text" name="branch_name" class="form-control" maxlength="60" value="{{ old('branch_name', $store->branch_name) }}" placeholder="{{ translate('Ex: Mile 6') }}">
+                                    <div class="fs-12 text-muted mt-1">{{ translate('Needed for a branch. For the main store, its own branch name once it has branches.') }}</div>
+                                </div>
+                                @if($store->exists && !$store->parent_id)
+                                    <a href="{{ route('admin.store.create', ['parent' => $store->id]) }}" class="btn btn-sm btn-outline-primary"><i class="bi bi-plus-lg"></i> {{ translate('Add_a_branch') }}</a>
+                                @endif
+                            </div>
+                        </div>
+
                         <div class="card mb-3">
                             <div class="card-body">
                                 <h5 class="mb-3">{{ translate('Status') }}</h5>
