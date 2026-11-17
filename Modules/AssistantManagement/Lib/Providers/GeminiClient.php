@@ -4,38 +4,75 @@ namespace Modules\AssistantManagement\Lib\Providers;
 
 use Illuminate\Http\Client\ConnectionException;
 use Illuminate\Http\Client\Response;
+use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Http;
 
 /**
  * Google Gemini (generateContent), asked for a JSON answer.
  *
- * When the chosen model is overloaded (503/500) or too slow, it tries a light
- * stable model once before giving up, so one busy model does not silence the
- * assistant. Both tries together stay inside the app's 30 second wait.
+ * Free-tier traffic is the first Google turns away when a model is overloaded
+ * (503), so one busy model should not silence the assistant: it tries the
+ * admin's model, then light stable models, all inside one time budget that
+ * fits the app's 30 second wait. The model that answered last goes first, and
+ * a model that just failed rests for a minute.
  */
 class GeminiClient implements ChatProvider
 {
-    public const BACKUP_MODEL = 'gemini-3.5-flash-lite';
+    public const BACKUP_MODELS = ['gemini-3.5-flash-lite', 'gemini-2.5-flash-lite'];
+    public const BUDGET_SECONDS = 25;
+    public const TRY_SECONDS = 12;
+    protected const GOOD = 'assistant_gemini_good';
+    protected const REST = 'assistant_gemini_rest_';
 
     public function complete(string $system, string $user, string $key, string $model): string
     {
         if ($key === '') {
             throw new ProviderUnavailable('Gemini: no API key', 1800);
         }
-        $backup = $model !== self::BACKUP_MODEL;
-        try {
-            return $this->once($system, $user, $key, $model, $backup ? 13 : 25);
-        } catch (ProviderUnavailable $e) {
-            if (!$backup || !$e->busy) {
-                throw $e;
+        $deadline = microtime(true) + self::BUDGET_SECONDS;
+        $first = null;
+        foreach ($this->order($model) as $m) {
+            $left = (int)floor($deadline - microtime(true));
+            if ($left < 4) {
+                break;
             }
             try {
-                return $this->once($system, $user, $key, self::BACKUP_MODEL, 13);
-            } catch (ProviderUnavailable $second) {
-                // A backup that is refused (unknown model, say) should not hide why the main one failed.
-                throw $second->busy ? $second : $e;
+                $text = $this->once($system, $user, $key, $m, min(self::TRY_SECONDS, $left));
+                Cache::put(self::GOOD, $m, 600);
+                return $text;
+            } catch (ProviderUnavailable $e) {
+                if (!$e->busy) {
+                    // A refused backup (unknown model, say) is skipped; a refused key or quota stops here.
+                    if ($m !== $model && str_contains($e->getMessage(), 'request refused')) {
+                        Cache::put(self::REST . $m, true, 3600);
+                        continue;
+                    }
+                    throw $e;
+                }
+                Cache::put(self::REST . $m, true, 60);
+                $first ??= $e;
             }
         }
+        $e = new ProviderUnavailable($first?->getMessage() ?? 'Gemini: all models resting', 20);
+        $e->busy = true;
+        throw $e;
+    }
+
+    /** The admin's model, then the backups; the last one that answered first; resting ones last. */
+    protected function order(string $model): array
+    {
+        $models = $this->models($model);
+        $good = Cache::get(self::GOOD);
+        if ($good && in_array($good, $models, true)) {
+            $models = array_values(array_unique(array_merge([$good], $models)));
+        }
+        $awake = array_values(array_filter($models, fn($m) => !Cache::has(self::REST . $m)));
+        return $awake ?: $models;
+    }
+
+    protected function models(string $model): array
+    {
+        return array_values(array_unique(array_merge([$model], self::BACKUP_MODELS)));
     }
 
     protected function once(string $system, string $user, string $key, string $model, int $timeout): string
@@ -81,7 +118,7 @@ class GeminiClient implements ChatProvider
         throw self::busy('Gemini: error ' . $r->status() . ' (' . $model . ')', 60);
     }
 
-    /** Overloaded, slow or empty: worth trying the backup model. */
+    /** Overloaded, slow or empty: worth trying another model. */
     protected static function busy(string $message, int $retryAfter): ProviderUnavailable
     {
         $e = new ProviderUnavailable($message, $retryAfter);
