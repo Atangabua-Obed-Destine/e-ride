@@ -2,6 +2,7 @@
 
 use Illuminate\Support\Facades\Route;
 use Modules\UserManagement\Http\Controllers\Api\AppNotificationController;
+use Modules\UserManagement\Http\Controllers\Api\Customer\ActivityController;
 use Modules\UserManagement\Http\Controllers\Api\Customer\AddressController;
 use Modules\UserManagement\Http\Controllers\Api\Customer\CustomerController;
 use Modules\UserManagement\Http\Controllers\Api\Customer\CustomerLevelController;
@@ -20,6 +21,8 @@ use Modules\UserManagement\Http\Controllers\Api\User\LocationController;
 
 Route::group(['prefix' => 'customer'], function () {
     Route::group(['middleware' => ['auth:api', 'maintenance_mode']], function () {
+        // Everything in progress or needing the customer, for the app's floating button.
+        Route::get('activity', [ActivityController::class, 'index']);
         Route::group(['prefix' => 'loyalty-points'], function () {
             Route::controller(LoyaltyPointController::class)->group(function () {
                 Route::get('list', 'index');
