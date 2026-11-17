@@ -126,6 +126,16 @@ class Store extends Model
         return $time >= $hours[0] && $time <= $hours[1];
     }
 
+    /** Points each loaded item at its loaded section, so menu checks need no extra queries. */
+    public function linkMenu(): self
+    {
+        $categories = $this->categories->keyBy('id');
+        foreach ($this->items as $item) {
+            $item->setRelation('category', $item->store_menu_category_id ? $categories->get($item->store_menu_category_id) : null);
+        }
+        return $this;
+    }
+
     /** Partner's unpaid balance: delivered food earnings minus recorded payouts. */
     public function balance(): float
     {

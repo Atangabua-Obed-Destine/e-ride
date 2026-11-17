@@ -88,16 +88,25 @@ class StoreOrderService extends BaseService implements StoreOrderServiceInterfac
             }
             $wanted[$id] = min(self::MAX_QTY, ($wanted[$id] ?? 0) + $qty);
         }
-        $items = StoreItem::where('store_id', $store->id)->whereIn('id', array_keys($wanted))->get()->keyBy('id');
+        $items = StoreItem::with('category')->where('store_id', $store->id)->whereIn('id', array_keys($wanted))->get()->keyBy('id');
         $resolved = [];
         foreach ($wanted as $id => $qty) {
             $item = $items->get($id);
-            if (!$item) {
+            $state = $item?->menuState() ?? StoreItem::HIDDEN;
+            if ($state === StoreItem::HIDDEN) {
                 $problems[] = translate('An item in your cart is no longer on the menu.');
                 continue;
             }
-            if (!$item->is_available) {
-                $problems[] = translate(key: '{item} is sold out.', replace: ['item' => $item->name]);
+            if ($state === StoreItem::SOLD_OUT) {
+                $problems[] = translate(key: '{item} is sold out today.', replace: ['item' => $item->name]);
+                continue;
+            }
+            if ($state === StoreItem::LATER) {
+                $problems[] = translate(key: '{item} is served from {time}.', replace: ['item' => $item->name, 'time' => $item->effectiveWindow()[0]]);
+                continue;
+            }
+            if ($state === StoreItem::NOT_TODAY) {
+                $problems[] = translate(key: '{item} is not served right now.', replace: ['item' => $item->name]);
                 continue;
             }
             $resolved[] = [

@@ -30,7 +30,8 @@ interface StoreServiceInterface extends BaseServiceInterface
 
     public function deleteItem(Store $store, string $id): void;
 
-    public function setItemAvailability(Store $store, string $id, bool $available): StoreItem;
+    /** available, sold_out (today only, back at midnight) or hidden. */
+    public function setItemState(Store $store, string $id, string $state): StoreItem;
 
     public function recordPayout(Store $store, array $data, ?string $adminId): StorePayout;
 }

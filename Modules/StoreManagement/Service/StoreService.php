@@ -111,12 +111,18 @@ class StoreService extends BaseService implements StoreServiceInterface
 
     public function saveCategory(Store $store, array $data, ?string $id = null): StoreMenuCategory
     {
-        $category = $id ? $store->categories()->findOrFail($id) : new StoreMenuCategory(['store_id' => $store->id]);
-        $category->fill([
-            'name' => trim($data['name']),
-            'sort' => (int)($data['sort'] ?? $category->sort ?? 0),
-            'is_active' => (bool)($data['is_active'] ?? true),
-        ]);
+        $category = $id ? $store->categories()->findOrFail($id) : new StoreMenuCategory(['store_id' => $store->id, 'is_active' => true]);
+        // Only what the form sent: renaming a section keeps its switch and serving times.
+        $category->name = trim($data['name']);
+        if (array_key_exists('sort', $data)) {
+            $category->sort = (int)$data['sort'];
+        }
+        if (array_key_exists('is_active', $data)) {
+            $category->is_active = (bool)$data['is_active'];
+        }
+        if (!empty($data['schedule'])) {
+            $category->fill($this->servingTimes($data));
+        }
         $category->store_id = $store->id;
         $category->save();
         return $category;
@@ -144,9 +150,15 @@ class StoreService extends BaseService implements StoreServiceInterface
             'name' => trim($data['name']),
             'description' => $data['description'] ?? null,
             'price' => round((float)$data['price'], 2),
-            'is_available' => (bool)($data['is_available'] ?? true),
             'sort' => (int)($data['sort'] ?? $item->sort ?? 0),
         ]);
+        // A new item is on the menu; editing keeps the switch unless the form sends it.
+        if (array_key_exists('is_available', $data) || !$item->exists) {
+            $item->is_available = (bool)($data['is_available'] ?? true);
+        }
+        if (!empty($data['schedule'])) {
+            $item->fill($this->servingTimes($data));
+        }
         $item->store_id = $store->id;
         if (!empty($data['image'])) {
             $item->image = fileUploader('store/item/', APPLICATION_IMAGE_FORMAT, $data['image'], $item->image);
@@ -160,12 +172,25 @@ class StoreService extends BaseService implements StoreServiceInterface
         $store->items()->findOrFail($id)->delete();
     }
 
-    public function setItemAvailability(Store $store, string $id, bool $available): StoreItem
+    public function setItemState(Store $store, string $id, string $state): StoreItem
     {
         $item = $store->items()->findOrFail($id);
-        $item->is_available = $available;
+        $item->is_available = $state !== StoreItem::HIDDEN;
+        // Sold out today: back on by itself at midnight.
+        $item->sold_out_until = $state === StoreItem::SOLD_OUT ? now()->addDay()->startOfDay() : null;
         $item->save();
         return $item;
+    }
+
+    /** served_days[] and served_from/served_until from a menu form, ready to fill. */
+    protected function servingTimes(array $data): array
+    {
+        $allDay = empty($data['served_from']) || empty($data['served_until']);
+        return [
+            'served_days' => StoreItem::daysToMask($data['served_days'] ?? null),
+            'served_from' => $allDay ? null : $data['served_from'],
+            'served_until' => $allDay ? null : $data['served_until'],
+        ];
     }
 
     public function recordPayout(Store $store, array $data, ?string $adminId): StorePayout

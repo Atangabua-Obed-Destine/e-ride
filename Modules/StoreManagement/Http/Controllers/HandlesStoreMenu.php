@@ -6,6 +6,7 @@ use Brian2694\Toastr\Facades\Toastr;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Modules\StoreManagement\Entities\Store;
+use Modules\StoreManagement\Entities\StoreItem;
 use Modules\StoreManagement\Http\Requests\MenuCategoryRequest;
 use Modules\StoreManagement\Http\Requests\MenuItemRequest;
 use Modules\StoreManagement\Service\Interfaces\StoreServiceInterface;
@@ -48,13 +49,13 @@ trait HandlesStoreMenu
         return back();
     }
 
-    /** Sold-out switch. JSON for the in-page toggle, a redirect otherwise. */
+    /** Available / Sold out today / Hidden. JSON for the in-page control, a redirect otherwise. */
     public function itemAvailability(Request $request)
     {
-        $request->validate(['is_available' => 'required|boolean']);
-        $item = $this->storeService()->setItemAvailability($this->menuStore($request), $request->route('item'), $request->boolean('is_available'));
+        $request->validate(['state' => 'required|in:' . implode(',', [StoreItem::AVAILABLE, StoreItem::SOLD_OUT, StoreItem::HIDDEN])]);
+        $item = $this->storeService()->setItemState($this->menuStore($request), $request->route('item'), $request->input('state'));
         if ($request->expectsJson()) {
-            return response()->json(['ok' => true, 'is_available' => $item->is_available]);
+            return response()->json(['ok' => true, 'state' => $item->switchState()]);
         }
         return back();
     }

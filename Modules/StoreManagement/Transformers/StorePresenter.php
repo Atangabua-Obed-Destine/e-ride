@@ -2,6 +2,7 @@
 
 namespace Modules\StoreManagement\Transformers;
 
+use Illuminate\Support\Carbon;
 use Modules\StoreManagement\Entities\Store;
 use Modules\StoreManagement\Entities\StoreItem;
 use Modules\StoreManagement\Entities\StoreOrder;
@@ -33,27 +34,51 @@ class StorePresenter
         ];
     }
 
-    public static function menu(Store $store): array
+    /**
+     * Today's menu. Hidden items (and hidden sections) are left out; items not
+     * served right now (another day, or finished for today) move to a last
+     * section, kind "not_today", so customers know when to come back.
+     * is_available = can be ordered right now (older apps grey out the rest).
+     */
+    public static function menu(Store $store, ?Carbon $at = null): array
     {
-        $item = fn(StoreItem $i) => [
-            'id' => $i->id,
-            'name' => $i->name,
-            'description' => $i->description,
-            'price' => $i->price,
-            'image' => $i->imageUrl(),
-            'is_available' => $i->is_available,
-            'category_id' => $i->store_menu_category_id,
-        ];
+        $at = $at ?? now();
+        $store->linkMenu();
+        $item = function (StoreItem $i) use ($at) {
+            $state = $i->menuState($at);
+            $window = $i->effectiveWindow();
+            return [
+                'id' => $i->id,
+                'name' => $i->name,
+                'description' => $i->description,
+                'price' => $i->price,
+                'image' => $i->imageUrl(),
+                'is_available' => $state === StoreItem::AVAILABLE,
+                'state' => $state,
+                'served_days' => StoreItem::maskToDays($i->effectiveDayMask()),
+                'served_from' => $window[0] ?? null,
+                'served_until' => $window[1] ?? null,
+                'category_id' => $i->store_menu_category_id,
+            ];
+        };
+        $states = $store->items->mapWithKeys(fn(StoreItem $i) => [$i->id => $i->menuState($at)]);
+        $today = $store->items->filter(fn($i) => !in_array($states[$i->id], [StoreItem::HIDDEN, StoreItem::NOT_TODAY], true));
+        $later = $store->items->filter(fn($i) => $states[$i->id] === StoreItem::NOT_TODAY);
+
         $categories = $store->categories->where('is_active', true)->values();
         $known = $categories->pluck('id')->all();
         $sections = $categories->map(fn($c) => [
             'id' => $c->id,
+            'kind' => 'section',
             'name' => $c->name,
-            'items' => $store->items->where('store_menu_category_id', $c->id)->map($item)->values(),
+            'items' => $today->where('store_menu_category_id', $c->id)->map($item)->values(),
         ])->filter(fn($s) => count($s['items']) > 0)->values()->all();
-        $loose = $store->items->filter(fn($i) => !$i->store_menu_category_id || !in_array($i->store_menu_category_id, $known))->map($item)->values();
+        $loose = $today->filter(fn($i) => !$i->store_menu_category_id || !in_array($i->store_menu_category_id, $known))->map($item)->values();
         if ($loose->isNotEmpty()) {
-            $sections[] = ['id' => null, 'name' => count($sections) ? translate('Other') : translate('Menu'), 'items' => $loose];
+            $sections[] = ['id' => null, 'kind' => 'section', 'name' => count($sections) ? translate('Other') : translate('Menu'), 'items' => $loose];
+        }
+        if ($later->isNotEmpty()) {
+            $sections[] = ['id' => null, 'kind' => 'not_today', 'name' => translate('Not served right now'), 'items' => $later->map($item)->values()];
         }
         return $sections;
     }
