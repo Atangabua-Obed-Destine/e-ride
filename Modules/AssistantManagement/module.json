@@ -1,0 +1,13 @@
+{
+    "name": "AssistantManagement",
+    "alias": "assistantmanagement",
+    "description": "Ask E-Ride: the customer app's assistant (answers with buttons into the app, from a knowledge pack the admin edits), the help sheets the same pack feeds, and the AI providers it falls back across.",
+    "keywords": [],
+    "priority": 0,
+    "providers": [
+        "Modules\\AssistantManagement\\Providers\\AssistantManagementServiceProvider"
+    ],
+    "aliases": {},
+    "files": [],
+    "requires": []
+}

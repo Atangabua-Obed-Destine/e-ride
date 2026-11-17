@@ -617,6 +617,12 @@
                             <span class="link-title">{{ translate('Hotel partners') }}</span>
                         </a>
                     </li>
+                    <li class="{{ Request::is('admin/assistant*') ? 'active open' : '' }}">
+                        <a href="{{ route('admin.assistant.index') }}">
+                            <i class="bi bi-stars"></i>
+                            <span class="link-title">{{ translate('Ask E-Ride') }}</span>
+                        </a>
+                    </li>
                     <li class="{{ Request::is('admin/id-verification*') ? 'active open' : '' }}">
                         <a href="{{ route('admin.id-verification.index') }}">
                             <i class="bi bi-person-vcard"></i>

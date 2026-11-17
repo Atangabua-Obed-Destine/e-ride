@@ -19,5 +19,6 @@
     "PlaceManagement": true,
     "MarketManagement": true,
     "BusManagement": true,
-    "HotelManagement": true
+    "HotelManagement": true,
+    "AssistantManagement": true
 }

@@ -28,7 +28,12 @@ class ActivityController extends Controller
 {
     public function index(Request $request): JsonResponse
     {
-        $userId = $request->user()->id;
+        return response()->json(responseFormatter(DEFAULT_200, ['items' => $this->itemsFor($request->user()->id)]));
+    }
+
+    /** The customer's activity items (also read by Ask E-Ride, so it can talk about them). */
+    public function itemsFor(string $userId): array
+    {
         $items = [];
         foreach (['food', 'bus', 'hotel'] as $service) {
             try {
@@ -38,7 +43,7 @@ class ActivityController extends Controller
                 report($e);
             }
         }
-        return response()->json(responseFormatter(DEFAULT_200, ['items' => $items]));
+        return $items;
     }
 
     protected function item(string $kind, string $id, string $group, ?Carbon $deadline, ?Carbon $at, array $params = []): array
