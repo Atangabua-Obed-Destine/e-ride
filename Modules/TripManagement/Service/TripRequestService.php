@@ -1237,7 +1237,11 @@ class TripRequestService extends BaseService implements TripRequestServiceInterf
 
     public function getPopularTips()
     {
-        return $this->tripRequestRepository->getPopularTips();
+        // Counts every trip with a tip, and the app asks on every launch: once an hour is plenty.
+        // 0 stands for "no tips yet": the cache does not keep null.
+        $tips = \Illuminate\Support\Facades\Cache::remember('customer_popular_tips', 3600,
+            fn () => $this->tripRequestRepository->getPopularTips()?->tips ?? 0);
+        return $tips ? (object)['tips' => $tips] : null;
     }
 
     public function sendParcelTrackingLinkToReceiver($user, $message): bool

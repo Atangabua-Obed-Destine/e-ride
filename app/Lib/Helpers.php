@@ -288,18 +288,12 @@ if (!function_exists('stepValue')) {
 if (!function_exists('businessConfig')) {
     function businessConfig(string $key, ?string $settingsType = null): ?BusinessSetting
     {
+        // All settings in one query per request, not one query per lookup.
         try {
-            $config = BusinessSetting::query()
-                ->where('key_name', $key)
-                ->when($settingsType, function ($query) use ($settingsType) {
-                    $query->where('settings_type', $settingsType);
-                })
-                ->first();
+            return \App\Lib\BusinessSettingCache::find($key, $settingsType ?: null);
         } catch (Exception) {
             return null;
         }
-
-        return (isset($config)) ? $config : null;
     }
 }
 
