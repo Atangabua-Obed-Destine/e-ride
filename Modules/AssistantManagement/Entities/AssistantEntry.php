@@ -13,7 +13,7 @@ class AssistantEntry extends Model
 {
     use HasUuid;
 
-    protected $fillable = ['help_key', 'service', 'tip_action', 'tip_label_en', 'tip_label_fr', 'search_words',
+    protected $fillable = ['audience', 'help_key', 'service', 'tip_action', 'tip_label_en', 'tip_label_fr', 'search_words',
         'title_en', 'title_fr', 'body_en', 'body_fr', 'is_active', 'sort'];
 
     protected $casts = ['is_active' => 'boolean', 'sort' => 'integer'];

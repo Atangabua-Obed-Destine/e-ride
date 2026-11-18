@@ -60,6 +60,13 @@ class PaymentController extends Controller
 
             return response()->json(responseFormatter(DEFAULT_PAID_200));
         }
+        // Ways to pay turned off by the admin. A trip booked with cash before cash was
+        // turned off can still be settled in cash, so its driver is never stuck.
+        $method = $request->payment_method;
+        $bookedWithCash = $method === 'cash' && $trip->payment_method === 'cash';
+        if (!\Modules\TripManagement\Lib\PaymentWays::allows($method) && !$bookedWithCash) {
+            return response()->json(responseFormatter(DEFAULT_400, errors: [['error_code' => 'payment_method', 'message' => \Modules\TripManagement\Lib\PaymentWays::refusal($method)]]), 403);
+        }
 
         $tips = 0;
         if (!is_null($request->tips) && $request->payment_method == 'wallet') {

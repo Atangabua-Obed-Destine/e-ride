@@ -41,7 +41,8 @@ class AssistantAdminController extends Controller
             'unhelpful' => (clone $today)->where('helped', false)->count(),
             'by_provider' => (clone $today)->whereNotNull('provider')->selectRaw('provider, count(*) as n')->groupBy('provider')->pluck('n', 'provider')->all(),
         ];
-        $entries = AssistantEntry::orderBy('sort')->get();
+        // Customers' entries first, then the drivers'.
+        $entries = AssistantEntry::orderByRaw("audience = 'driver'")->orderBy('sort')->get();
         $tipButtons = self::tipButtons();
         return view('assistantmanagement::admin.index', compact('settings', 'questions', 'stats', 'entries', 'filter', 'tipButtons'));
     }
@@ -109,6 +110,7 @@ class AssistantAdminController extends Controller
     public function saveEntry(Request $request, ?AssistantEntry $entry = null): RedirectResponse
     {
         $data = $request->validate([
+            'audience' => 'required|in:customer,driver',
             'help_key' => 'nullable|string|max:40|alpha_dash|unique:assistant_entries,help_key' . ($entry?->id ? ',' . $entry->id : ''),
             'service' => 'nullable|string|max:40',
             'title_en' => 'required|string|max:120',

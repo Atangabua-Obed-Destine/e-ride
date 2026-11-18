@@ -17,7 +17,7 @@ class AssistantQuestion extends Model
     public const LIMITED = 'limited';
     public const BUSY = 'busy';
 
-    protected $fillable = ['user_id', 'question', 'screen', 'language', 'status', 'provider', 'reply', 'actions', 'helped', 'ms'];
+    protected $fillable = ['user_id', 'audience', 'question', 'screen', 'language', 'status', 'provider', 'reply', 'actions', 'helped', 'ms'];
 
     protected $casts = ['actions' => 'array', 'helped' => 'boolean', 'ms' => 'integer'];
 

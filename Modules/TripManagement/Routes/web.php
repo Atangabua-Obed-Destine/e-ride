@@ -2,6 +2,7 @@
 
 use Illuminate\Support\Facades\Route;
 use Modules\TripManagement\Http\Controllers\Web\BookingDepositController;
+use Modules\TripManagement\Http\Controllers\Web\PaymentWaysController;
 use Modules\TripManagement\Http\Controllers\Web\DriverReportController;
 use Modules\TripManagement\Http\Controllers\Web\HealthRideAdminController;
 use Modules\TripManagement\Http\Controllers\Web\LostItemAdminController;
@@ -47,6 +48,12 @@ Route::group(['prefix' => 'admin', 'as' => 'admin.', 'middleware' => 'admin'], f
         Route::get('/', [BookingDepositController::class, 'index'])->name('index');
         Route::get('settings', [BookingDepositController::class, 'settings'])->name('settings');
         Route::put('settings', [BookingDepositController::class, 'updateSettings'])->name('settings.update');
+    });
+
+    // Ways to pay: cash and the E-Ride wallet on or off (Mobile Money is always on).
+    Route::group(['prefix' => 'payment-ways', 'as' => 'payment-ways.'], function () {
+        Route::get('/', [PaymentWaysController::class, 'index'])->name('index');
+        Route::put('/', [PaymentWaysController::class, 'update'])->name('update');
     });
 
     Route::group(['prefix' => 'move', 'as' => 'move.'], function () {

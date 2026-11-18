@@ -164,6 +164,19 @@ class TripRequestController extends Controller
             ]);
         }
 
+        // Ways to pay: the admin may turn cash and the wallet off (Trip management >
+        // Ways to pay). A move is paid to the driver directly, so it is left out.
+        if (!$isMove && !$request->trip_request_id) {
+            $method = $request->payment_method ?: 'cash';
+            if (!\Modules\TripManagement\Lib\PaymentWays::allows($method)) {
+                return response()->json(responseFormatter(DEFAULT_400, errors: [['error_code' => 'payment_method', 'message' => \Modules\TripManagement\Lib\PaymentWays::refusal($method)]]), 403);
+            }
+            // The receiver pays a parcel on delivery, in cash.
+            if ($request->type == PARCEL && $request->payer == RECEIVER && !\Modules\TripManagement\Lib\PaymentWays::cash()) {
+                return response()->json(responseFormatter(DEFAULT_400, errors: [['error_code' => 'payment_method', 'message' => translate('The receiver cannot pay on delivery. The sender pays in the app with Mobile Money.')]]), 403);
+            }
+        }
+
         // Health ride: an urgent ride to care. Normal fare, no surge, no bidding, now only, a few a day.
         $isHealth = $request->type == RIDE_REQUEST && !$request->trip_request_id && filter_var($request->input('health_ride'), FILTER_VALIDATE_BOOLEAN);
         if ($isHealth && ($problem = app(\Modules\TripManagement\Service\HealthRideService::class)->problem(auth('api')->id(), $isMove, $request->ride_request_type, (bool)$request['bid'], $request['scheduled_at']))) {

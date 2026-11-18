@@ -115,11 +115,12 @@
                 <p class="fs-12 text-muted">{{ translate('Short, plain facts about how E-Ride works. Ask E-Ride answers only from these. An entry with a help key also shows as the info sheet on that screen of the app; each line of its text becomes a step. An entry with a card button also shows on Home as a "Did you know?" card: its title, the first line of its text and the button. The app shows customers the cards for services they have not tried yet, one at a time.') }}</p>
                 <div class="table-responsive">
                     <table class="table align-middle">
-                        <thead class="table-light"><tr><th>{{ translate('Entry') }}</th><th>{{ translate('Service') }}</th><th>{{ translate('Help key') }}</th><th>{{ translate('Home card') }}</th><th class="text-center">{{ translate('Active') }}</th><th></th></tr></thead>
+                        <thead class="table-light"><tr><th>{{ translate('Entry') }}</th><th>{{ translate('For') }}</th><th>{{ translate('Service') }}</th><th>{{ translate('Help key') }}</th><th>{{ translate('Home card') }}</th><th class="text-center">{{ translate('Active') }}</th><th></th></tr></thead>
                         <tbody>
                         @foreach($entries as $e)
                             <tr>
                                 <td><div class="fw-semibold">{{ $e->title_en }}</div><div class="fs-12 text-muted">{{ $e->title_fr }}</div></td>
+                                <td>@if($e->audience === 'driver')<span class="badge bg-dark">{{ translate('Drivers') }}</span>@else<span class="badge bg-light text-dark">{{ translate('Customers') }}</span>@endif</td>
                                 <td>{{ $e->service }}</td>
                                 <td>@if($e->help_key)<code>{{ $e->help_key }}</code>@else<span class="text-muted">-</span>@endif</td>
                                 <td class="fs-12">@if($e->tip_action)<span class="badge bg-primary-subtle text-primary">{{ $tipButtons[$e->tip_action] ?? $e->tip_action }}</span>@else<span class="text-muted">-</span>@endif
@@ -127,7 +128,7 @@
                                 <td class="text-center">{!! $e->is_active ? '<i class="bi bi-check-circle-fill text-success"></i>' : '<i class="bi bi-dash-circle text-muted"></i>' !!}</td>
                                 <td class="text-end text-nowrap">
                                     <button type="button" class="btn btn-sm btn-light" data-entry-edit data-action="{{ route('admin.assistant.entry.save', $e->id) }}"
-                                            data-entry="{{ json_encode($e->only(['help_key', 'service', 'tip_action', 'tip_label_en', 'tip_label_fr', 'search_words', 'title_en', 'title_fr', 'body_en', 'body_fr', 'sort', 'is_active'])) }}"><i class="bi bi-pencil"></i></button>
+                                            data-entry="{{ json_encode($e->only(['audience', 'help_key', 'service', 'tip_action', 'tip_label_en', 'tip_label_fr', 'search_words', 'title_en', 'title_fr', 'body_en', 'body_fr', 'sort', 'is_active'])) }}"><i class="bi bi-pencil"></i></button>
                                     <form action="{{ route('admin.assistant.entry.delete', $e->id) }}" method="POST" class="d-inline" onsubmit='return confirm(@json(translate("Remove this entry?")))'>
                                         @csrf @method('DELETE')
                                         <button type="submit" class="btn btn-sm btn-light text-danger"><i class="bi bi-trash"></i></button>
@@ -156,7 +157,7 @@
                         <tbody>
                         @forelse($questions as $q)
                             <tr>
-                                <td style="max-width: 280px">{{ $q->question }}</td>
+                                <td style="max-width: 280px">@if($q->audience === 'driver')<span class="badge bg-dark me-1">{{ translate('Driver') }}</span>@endif{{ $q->question }}</td>
                                 <td style="max-width: 320px" class="fs-12">{{ $q->reply }}
                                     @if($q->actions)<div class="mt-1">@foreach($q->actions as $a)<span class="badge bg-light text-dark me-1">{{ $a['label'] ?? $a['type'] }}</span>@endforeach</div>@endif
                                 </td>
@@ -187,6 +188,12 @@
                         <div class="col-md-6"><label class="form-label">{{ translate('Title (French)') }} *</label><input name="title_fr" class="form-control" required maxlength="120"></div>
                         <div class="col-md-6"><label class="form-label">{{ translate('Text (English)') }} *</label><textarea name="body_en" class="form-control" rows="5" required maxlength="2000"></textarea><div class="fs-12 text-muted">{{ translate('One fact or step per line.') }}</div></div>
                         <div class="col-md-6"><label class="form-label">{{ translate('Text (French)') }} *</label><textarea name="body_fr" class="form-control" rows="5" required maxlength="2000"></textarea></div>
+                        <div class="col-md-4"><label class="form-label">{{ translate('For') }}</label>
+                            <select name="audience" class="form-select">
+                                <option value="customer">{{ translate('Customers (customer app)') }}</option>
+                                <option value="driver">{{ translate('Drivers (driver app)') }}</option>
+                            </select>
+                            <div class="fs-12 text-muted">{{ translate('Ask E-Ride answers each app from its own entries. Driver help keys are shown in the driver app.') }}</div></div>
                         <div class="col-md-4"><label class="form-label">{{ translate('Service') }}</label><input name="service" class="form-control" maxlength="40" placeholder="food, bus, rides…"></div>
                         <div class="col-md-4"><label class="form-label">{{ translate('Help key') }}</label><input name="help_key" class="form-control" maxlength="40" placeholder="food_pay"><div class="fs-12 text-muted">{{ translate('Only for an info sheet on an app screen.') }}</div></div>
                         <div class="col-md-2"><label class="form-label">{{ translate('Order') }}</label><input name="sort" type="number" class="form-control"></div>
@@ -223,7 +230,7 @@
         form.reset();
         form.action = action;
         if (e) {
-            ['title_en', 'title_fr', 'body_en', 'body_fr', 'service', 'help_key', 'tip_action', 'tip_label_en', 'tip_label_fr', 'search_words', 'sort'].forEach(function (k) { form[k].value = e[k] == null ? '' : e[k]; });
+            ['audience', 'title_en', 'title_fr', 'body_en', 'body_fr', 'service', 'help_key', 'tip_action', 'tip_label_en', 'tip_label_fr', 'search_words', 'sort'].forEach(function (k) { form[k].value = e[k] == null ? '' : e[k]; });
             form.querySelector('input[type=checkbox][name=is_active]').checked = !!e.is_active;
         }
         modal.show();

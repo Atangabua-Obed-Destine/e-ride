@@ -44,6 +44,22 @@ class AssistantService
         'support' => ['service' => null, 'what' => 'E-Ride support on WhatsApp'],
     ];
 
+    /** Buttons the driver app knows how to open. */
+    public const DRIVER_ACTIONS = [
+        'home' => ['service' => null, 'what' => 'Home, where the driver goes online or offline'],
+        'requests' => ['service' => null, 'what' => 'ride requests waiting for a driver'],
+        'trips' => ['service' => null, 'what' => "the driver's trip history"],
+        'wallet' => ['service' => null, 'what' => 'earnings, balance, cash to pay E-Ride, withdrawals'],
+        'withdraw_info' => ['service' => null, 'what' => 'Mobile Money details for withdrawals'],
+        'face_verify' => ['service' => null, 'what' => 'verify their face with a selfie'],
+        'vehicle' => ['service' => null, 'what' => "the driver's vehicle details"],
+        'availability' => ['service' => null, 'what' => 'when the driver is available'],
+        'lost_items' => ['service' => null, 'what' => 'items customers left in the car'],
+        'safety' => ['service' => null, 'what' => 'safety settings and emergency contacts'],
+        'leaderboard' => ['service' => null, 'what' => 'the drivers leaderboard'],
+        'support' => ['service' => null, 'what' => 'E-Ride support on WhatsApp'],
+    ];
+
     public const MAX_REPLY = 400;
 
     /**
@@ -66,6 +82,9 @@ class AssistantService
     /** @var array<string, ChatProvider> */
     protected array $clients;
 
+    /** Who is asking: a customer or a driver (each has its own knowledge and buttons). */
+    protected string $audience = 'customer';
+
     public function __construct()
     {
         $this->clients = ['gemini' => new GeminiClient(), 'grok' => new GrokClient()];
@@ -78,9 +97,9 @@ class AssistantService
     }
 
     /** Info sheets for the app, by help key, in the customer's language. */
-    public function helpSheets(string $lang): array
+    public function helpSheets(string $lang, string $audience = 'customer'): array
     {
-        return AssistantEntry::where('is_active', true)->whereNotNull('help_key')->orderBy('sort')->get()
+        return AssistantEntry::where('is_active', true)->where('audience', $audience)->whereNotNull('help_key')->orderBy('sort')->get()
             ->map(fn(AssistantEntry $e) => [
                 'key' => $e->help_key,
                 'title' => $e->title($lang),
@@ -91,7 +110,7 @@ class AssistantService
     /** "Did you know?" cards for Home: a headline, one line, and the button. The app picks which to show. */
     public function tips(string $lang): array
     {
-        return AssistantEntry::where('is_active', true)->whereNotNull('tip_action')->orderBy('sort')->get()
+        return AssistantEntry::where('is_active', true)->where('audience', 'customer')->whereNotNull('tip_action')->orderBy('sort')->get()
             ->filter(fn(AssistantEntry $e) => self::validTipAction($e->tip_action))
             ->map(function (AssistantEntry $e) use ($lang) {
                 [$type, $id] = array_pad(explode(':', $e->tip_action, 2), 2, null);
@@ -112,7 +131,7 @@ class AssistantService
      */
     public function searchWords(): array
     {
-        return AssistantEntry::where('is_active', true)->whereNotNull('search_words')->orderBy('sort')->get()
+        return AssistantEntry::where('is_active', true)->where('audience', 'customer')->whereNotNull('search_words')->orderBy('sort')->get()
             ->map(function (AssistantEntry $e) {
                 $target = self::validTipAction($e->tip_action) ? $e->tip_action : (self::SERVICE_ACTIONS[$e->service] ?? null);
                 $words = collect(preg_split('/[,\n]+/', (string)$e->search_words))
@@ -129,8 +148,9 @@ class AssistantService
      * @param array $services the services switched on in the customer's app (ride, food, bus...)
      * @return array{id: ?string, status: string, reply: string, actions: array}
      */
-    public function ask(User $user, string $question, ?string $screen, string $lang, array $services): array
+    public function ask(User $user, string $question, ?string $screen, string $lang, array $services, string $audience = 'customer'): array
     {
+        $this->audience = $audience === 'driver' ? 'driver' : 'customer';
         $settings = AssistantSettings::all();
         $lang = $lang === 'fr' ? 'fr' : 'en';
         $question = self::clean($question);
@@ -147,9 +167,16 @@ class AssistantService
             return $this->finish($user, $question, $screen, $lang, AssistantQuestion::BUSY, null, self::say('busy', $lang), [self::support($lang)], $started);
         }
 
-        $activity = app(ActivityController::class)->itemsFor($user->id);
-        $services = array_values(array_intersect($services, array_filter(array_column(self::ACTIONS, 'service'))));
-        $system = $this->systemPrompt($services, $activity, $screen);
+        if ($this->audience === 'driver') {
+            // Drivers: the driver knowledge and the driver app's buttons; no customer activity.
+            $activity = [];
+            $services = [];
+            $system = $this->driverPrompt($screen);
+        } else {
+            $activity = app(ActivityController::class)->itemsFor($user->id);
+            $services = array_values(array_intersect($services, array_filter(array_column(self::ACTIONS, 'service'))));
+            $system = $this->systemPrompt($services, $activity, $screen);
+        }
 
         foreach ($settings['providers'] as $p) {
             if (!$p['enabled'] || $p['key'] === '' || Cache::has('assistant_skip_' . $p['name'])) {
@@ -200,8 +227,7 @@ class AssistantService
 
     protected function systemPrompt(array $services, array $activity, ?string $screen): string
     {
-        $facts = AssistantEntry::where('is_active', true)->orderBy('sort')->get()
-            ->map(fn(AssistantEntry $e) => '## ' . $e->title_en . "\n" . $e->body_en)->implode("\n\n");
+        $facts = $this->facts('customer');
         $buttons = collect(self::ACTIONS)
             ->filter(fn($a) => $a['service'] === null || in_array($a['service'], $services, true))
             ->map(fn($a, $type) => '- ' . $type . ': ' . $a['what'])->implode("\n");
@@ -235,6 +261,39 @@ FACTS
 PROMPT;
     }
 
+    /** The knowledge pack for customers or for drivers, as the prompt's FACTS. */
+    protected function facts(string $audience): string
+    {
+        return AssistantEntry::where('is_active', true)->where('audience', $audience)->orderBy('sort')->get()
+            ->map(fn(AssistantEntry $e) => '## ' . $e->title_en . "\n" . $e->body_en)->implode("\n\n");
+    }
+
+    protected function driverPrompt(?string $screen): string
+    {
+        $facts = $this->facts('driver');
+        $buttons = collect(self::DRIVER_ACTIONS)->map(fn($a, $type) => '- ' . $type . ': ' . $a['what'])->implode("\n");
+        return <<<PROMPT
+You are "Ask E-Ride", the helper inside the E-Ride DRIVER app in Cameroon. You help drivers understand how driving with E-Ride works: going online, requests, trips, deposits, earnings and withdrawals, safety.
+
+RULES
+- Answer only from FACTS below. If they do not cover the question, set "answered" to false and say support can help.
+- Never invent prices, commissions, amounts, times, places, people or promises. You cannot do anything yourself: you only offer buttons that open the app.
+- Reply in the driver's language (English, French or Cameroonian Pidgin), in one or two short sentences, at most 280 characters, plain text, no emoji, no markdown.
+- Money problems, a blocked account, complaints, accidents or danger: answered false, and offer the "support" button.
+- Offer 1 to 3 buttons, only of the types in BUTTONS, with labels of 2 to 4 words in the driver's language. Every answer about a screen carries the button that opens it. Give no button only when nothing in BUTTONS fits.
+- Answer with JSON only: {"reply": "...", "answered": true, "actions": [{"type": "...", "label": "..."}]}
+
+BUTTONS
+{$buttons}
+
+SCREEN THE DRIVER IS ON: {$screen}
+TIME NOW: {$this->now()}
+
+FACTS
+{$facts}
+PROMPT;
+    }
+
     protected function now(): string
     {
         return now()->format('l j F Y, H:i');
@@ -255,7 +314,7 @@ PROMPT;
         $actions = [];
         foreach ((array)($data['actions'] ?? []) as $a) {
             $type = is_array($a) ? ($a['type'] ?? null) : null;
-            $spec = self::ACTIONS[$type] ?? null;
+            $spec = ($this->audience === 'driver' ? self::DRIVER_ACTIONS : self::ACTIONS)[$type] ?? null;
             if (!$spec || ($spec['service'] !== null && !in_array($spec['service'], $services, true))) {
                 continue;
             }
@@ -289,7 +348,7 @@ PROMPT;
         $id = null;
         if ($log) {
             $q = AssistantQuestion::create([
-                'user_id' => $user->id, 'question' => $question, 'screen' => $screen ? mb_substr($screen, 0, 80) : null, 'language' => $lang,
+                'user_id' => $user->id, 'audience' => $this->audience, 'question' => $question, 'screen' => $screen ? mb_substr($screen, 0, 80) : null, 'language' => $lang,
                 'status' => $status, 'provider' => $provider, 'reply' => $reply, 'actions' => $actions,
                 'ms' => (int)round((microtime(true) - $started) * 1000),
             ]);

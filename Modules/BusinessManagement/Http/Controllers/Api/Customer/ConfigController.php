@@ -148,6 +148,9 @@ class ConfigController extends Controller
             'currency_decimal_point' => $info->firstWhere('key_name', 'currency_decimal_point')?->value ?? null,
             'trip_request_active_time' => (int)$info->firstWhere('key_name', 'trip_request_active_time')?->value ?? 10,
             // Booking deposit, paid after a driver accepts (amounts are per trip).
+            // Ways to pay (Trip management > Ways to pay): Mobile Money is always on.
+            'payment_cash_status' => \Modules\TripManagement\Lib\PaymentWays::cash(),
+            'payment_wallet_status' => \Modules\TripManagement\Lib\PaymentWays::wallet(),
             'booking_deposit_status' => \Modules\TripManagement\Lib\DepositSettings::enabled(),
             'booking_deposit_window_minutes' => \Modules\TripManagement\Lib\DepositSettings::all()['window_minutes'],
             'booking_deposit_free_cancel_seconds' => \Modules\TripManagement\Lib\DepositSettings::all()['free_cancel_seconds'],

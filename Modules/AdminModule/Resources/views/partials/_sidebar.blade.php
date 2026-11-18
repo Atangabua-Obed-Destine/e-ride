@@ -225,6 +225,12 @@
                             <span class="link-title">{{ translate('Booking_Deposits') }}</span>
                         </a>
                     </li>
+                    <li class="{{ Request::is('admin/payment-ways*') ? 'active open' : '' }}">
+                        <a href="{{ route('admin.payment-ways.index') }}">
+                            <i class="bi bi-cash-coin"></i>
+                            <span class="link-title">{{ translate('Ways_to_pay') }}</span>
+                        </a>
+                    </li>
                     <li class="{{ Request::is('admin/move*') ? 'active open' : '' }}">
                         <a href="{{ route('admin.move.index') }}">
                             <i class="bi bi-truck"></i>
