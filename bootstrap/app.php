@@ -84,6 +84,8 @@ $app = Application::configure(basePath: dirname(__DIR__))
             // Custom middlewares
             'admin'=>AdminMiddleware::class,
             'maintenance_mode' => MaintenanceModeMiddleware::class,
+            // One change at a time per trip (accept, cancel, start, complete, pay).
+            'trip.lock' => \App\Http\Middleware\TripStateLock::class,
         ]);
     })
     ->withExceptions(function (Exceptions $exceptions) {

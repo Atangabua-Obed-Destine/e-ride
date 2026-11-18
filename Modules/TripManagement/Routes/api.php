@@ -26,23 +26,23 @@ Route::group(['prefix' => 'customer', 'middleware' => ['auth:api', 'maintenance_
     Route::group(['prefix' => 'ride'], function () {
         Route::controller(NewCustomerTripController::class)->group(function () {
             Route::post('get-estimated-fare', 'getEstimatedFare');
-            Route::post('create', 'createRideRequest');
+            Route::post('create', 'createRideRequest')->middleware('trip.lock:customer');
             Route::put('ignore-bidding', 'ignoreBidding');
             Route::get('bidding-list/{trip_request_id}', 'biddingList');
-            Route::put('update-status/{trip_request_id}', 'rideStatusUpdate');
+            Route::put('update-status/{trip_request_id}', 'rideStatusUpdate')->middleware('trip.lock');
             Route::get('details/{trip_request_id}', 'rideDetails');
             Route::get('list', 'rideList');
             Route::get('final-fare', 'finalFareCalculation');
-            Route::post('trip-action', 'requestAction');
+            Route::post('trip-action', 'requestAction')->middleware('trip.lock');
             Route::get('ride-resume-status', 'rideResumeStatus');
             Route::put('arrival-time', 'arrivalTime');
             Route::put('coordinate-arrival', 'coordinateArrival');
             Route::get('ongoing-parcel-list', 'pendingParcelList');
             Route::get('unpaid-parcel-list', 'unpaidParcelRequest');
-            Route::put('received-returning-parcel/{trip_request_id}', 'receivedReturningParcel');
+            Route::put('received-returning-parcel/{trip_request_id}', 'receivedReturningParcel')->middleware('trip.lock');
 
             // edit schedule trip
-            Route::put('edit-scheduled-trip/{trip_request_id}', 'editScheduledTrip');
+            Route::put('edit-scheduled-trip/{trip_request_id}', 'editScheduledTrip')->middleware('trip.lock');
             // pending ride list
             Route::get('pending-ride-list', 'pendingRideList');
         });
@@ -50,7 +50,7 @@ Route::group(['prefix' => 'customer', 'middleware' => ['auth:api', 'maintenance_
         // Share trip: the live link, and stop sharing.
         Route::post('{tripId}/share', [TripShareController::class, 'share'])->middleware('throttle:30,1,trip-share');
         Route::delete('{tripId}/share', [TripShareController::class, 'stop'])->middleware('throttle:10,1,trip-share-stop');
-        Route::get('payment', [PaymentController::class, 'payment']);
+        Route::get('payment', [PaymentController::class, 'payment'])->middleware('trip.lock');
         Route::get('digital-payment', [PaymentController::class, 'digitalPayment'])->withoutMiddleware('auth:api');
 
         // Booking deposit, paid after a driver accepts.
@@ -118,7 +118,7 @@ Route::group(['prefix' => 'driver', 'middleware' => ['auth:api', 'maintenance_mo
     Route::post('lost-items/{id}/action', [DriverLostItemController::class, 'act'])->middleware('throttle:20,1,lost-item');
     Route::group(['prefix' => 'ride', 'middleware' => ['auth:api', 'maintenance_mode']], function () {
         Route::get('final-fare', [NewCustomerTripController::class, 'finalFareCalculation']);
-        Route::get('payment', [PaymentController::class, 'payment']);
+        Route::get('payment', [PaymentController::class, 'payment'])->middleware('trip.lock');
 
 
         #### NEW DRIVER TRIP CONTROLLER ####
@@ -132,17 +132,17 @@ Route::group(['prefix' => 'driver', 'middleware' => ['auth:api', 'maintenance_mo
             Route::get('ongoing-parcel-list', 'pendingParcelList');
             Route::get('unpaid-parcel-list', 'unpaidParcelRequest');
             Route::put('resend-otp', 'resendOtp');
-            Route::post('match-otp', 'matchOtp');
+            Route::post('match-otp', 'matchOtp')->middleware('trip.lock');
             Route::post('track-location', 'trackLocation');
             Route::get('details/{ride_request_id}', 'rideDetails');
             Route::get('pending-ride-list', 'pendingRideList');
-            Route::put('returned-parcel', 'returnedParcel');
+            Route::put('returned-parcel', 'returnedParcel')->middleware('trip.lock');
             Route::get('overview', 'tripOverview');
             Route::post('ignore-trip-notification', 'ignoreTripNotification');
-            Route::put('update-status', 'rideStatusUpdate');
-            Route::post('trip-action', 'requestAction');
-            Route::post('bid', 'bid');
-            Route::put('update-to-out-for-pickup/{tripId}', 'updateToOutForPickup');
+            Route::put('update-status', 'rideStatusUpdate')->middleware('trip.lock');
+            Route::post('trip-action', 'requestAction')->middleware('trip.lock:driver');
+            Route::post('bid', 'bid')->middleware('trip.lock');
+            Route::put('update-to-out-for-pickup/{tripId}', 'updateToOutForPickup')->middleware('trip.lock');
         });
     });
     Route::group(['prefix' => 'safety-alert'], function () {

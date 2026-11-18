@@ -925,6 +925,9 @@ class TripRequestController extends Controller
         }
 
         $trip = $this->tripRequestService->findOneBy(criteria: ['id' => $request->trip_request_id], relations: ['driver.vehicle.category', 'coordinate']);
+        if (!$trip) {
+            return response()->json(responseFormatter(constant: TRIP_REQUEST_404), 403);
+        }
         $user_status = $user->driverDetails->availability_status;
         if ($user_status == 'unavailable' || !$user->driverDetails->is_online) {
             return response()->json(responseFormatter(constant: DRIVER_UNAVAILABLE_403), 403);
@@ -935,9 +938,6 @@ class TripRequestController extends Controller
         if (in_array($trip->current_status, [ACCEPTED, OUT_FOR_PICKUP]) && $trip->driver_id == $user->id) {
 
             return response()->json(responseFormatter(DEFAULT_UPDATE_200));
-        }
-        if (!$trip) {
-            return response()->json(responseFormatter(constant: TRIP_REQUEST_404), 403);
         }
         if ($trip->driver_id && $trip->driver_id != $user->id) {
             return response()->json(responseFormatter(TRIP_REQUEST_DRIVER_403), 403);
@@ -1018,8 +1018,20 @@ class TripRequestController extends Controller
         if (!($user_status == 'available' || $user_status == 'on_bidding')) {
             return response()->json(responseFormatter(DRIVER_403), 403);
         }
-        if ($trip->current_status === "cancelled") {
+        if ($trip->current_status !== PENDING) {
             return response()->json(responseFormatter(DRIVER_REQUEST_ACCEPT_TIMEOUT_408), 403);
+        }
+        // One regular ride at a time: the pending list already hides new ones while a
+        // pickup is under way, but an old notification or a double tap could still accept.
+        if ($trip->type == RIDE_REQUEST && $trip->ride_request_type != SCHEDULED
+            && \Modules\TripManagement\Entities\TripRequest::where('driver_id', $user->id)
+                ->where('type', RIDE_REQUEST)->where('ride_request_type', '!=', SCHEDULED)
+                ->whereIn('current_status', [ACCEPTED, OUT_FOR_PICKUP])
+                ->where('id', '!=', $trip->id)->exists()) {
+            return response()->json(responseFormatter(constant: [
+                'response_code' => 'trip_cannot_be_accepted_403',
+                'message' => translate(key: 'Finish picking up your current customer first.', locale: $user?->current_language_key),
+            ]), 403);
         }
         $bid_on_fare = get_cache('bid_on_fare') ?? 0;
         $attributes = [
@@ -1036,17 +1048,10 @@ class TripRequestController extends Controller
                 return response()->json(responseFormatter(constant: BIDDING_SUBMITTED_403), 403);
             }
             if ($trip->estimated_fare != $trip->actual_fare) {
-                $this->fareBiddingService->create(data: [
-                    'trip_request_id' => $request['trip_request_id'],
-                    'driver_id' => $user->id,
-                    'customer_id' => $trip->customer_id,
-                    'bid_fare' => $trip->actual_fare
-                ]);
                 $attributes['actual_fare'] = $trip->actual_fare;
             }
 
         }
-        Cache::put($trip->id, ACCEPTED, now()->addHour());
         $driverArrivalTime = getRoutes(
             originCoordinates: [
                 $trip->coordinate->pickup_coordinates->latitude,
@@ -1064,6 +1069,42 @@ class TripRequestController extends Controller
                 'message' => translate('No available route from your current location to the pickup address.')]), 403);
         }
         $attributes['driver_arrival_time'] = (double)($driverArrivalTime[0]['duration']) / 60;
+        DB::beginTransaction();
+        try {
+            $lockedTrip = $this->tripRequestService->getLockedTrip(data: ['id' => $request->trip_request_id]);
+
+            // Read again under the row lock: another driver may have won it, or the
+            // customer cancelled, while the route was being asked for.
+            if (!$lockedTrip) {
+                DB::rollBack();
+                return response()->json(responseFormatter(constant: TRIP_REQUEST_404), 403);
+            }
+            if ($lockedTrip->driver_id) {
+                DB::rollBack();
+                return response()->json(responseFormatter(constant: TRIP_REQUEST_DRIVER_403), 403);
+            }
+            if ($lockedTrip->current_status !== PENDING) {
+                DB::rollBack();
+                return response()->json(responseFormatter(DRIVER_REQUEST_ACCEPT_TIMEOUT_408), 403);
+            }
+
+            // The customer's raised fare, kept as this driver's bid (only once the trip is really theirs).
+            if ($bid_on_fare && $lockedTrip->estimated_fare != $lockedTrip->actual_fare) {
+                $this->fareBiddingService->create(data: [
+                    'trip_request_id' => $request['trip_request_id'],
+                    'driver_id' => $user->id,
+                    'customer_id' => $lockedTrip->customer_id,
+                    'bid_fare' => $lockedTrip->actual_fare
+                ]);
+            }
+            $trip = $this->tripRequestService->updateTripRequestAction(attributes: $attributes, trip: $lockedTrip);
+            DB::commit();
+        } catch (\Exception $exception) {
+            DB::rollBack();
+            throw $exception;
+        }
+        Cache::put($trip->id, ACCEPTED, now()->addHour());
+
         $data = $this->tempTripNotificationService->getData(data: ['trip_request_id' => $request->trip_request_id]);
         if (!empty($data)) {
             $push = getNotification('another_driver_assigned');
@@ -1089,24 +1130,6 @@ class TripRequestController extends Controller
             }
 
             $this->tempTripNotificationService->deleteBy(criteria: ['trip_request_id' => $request->trip_request_id, 'user_id' => $user->id]);
-        }
-        DB::beginTransaction();
-        try {
-            $lockedTrip = $this->tripRequestService->getLockedTrip(data: ['id' => $request->trip_request_id]);
-
-            if (!$lockedTrip) {
-                return response()->json(responseFormatter(constant: TRIP_REQUEST_404), 403);
-            }
-
-            if ($lockedTrip->driver_id) {
-                return response()->json(responseFormatter(constant: TRIP_REQUEST_DRIVER_403), 403);
-            }
-
-            $trip = $this->tripRequestService->updateTripRequestAction(attributes: $attributes, trip: $lockedTrip);
-            DB::commit();
-        } catch (\Exception $exception) {
-            DB::rollBack();
-            throw $exception;
         }
 
         if ($trip->type == PARCEL && $trip->parcelUserInfo?->firstWhere('user_type', RECEIVER)?->contact_number && businessConfig('parcel_tracking_message')?->value && businessConfig('parcel_tracking_status')?->value && businessConfig('parcel_tracking_status')?->value == 1) {
