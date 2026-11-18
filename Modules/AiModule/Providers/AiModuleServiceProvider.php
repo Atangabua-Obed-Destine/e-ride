@@ -66,6 +66,11 @@ class AiModuleServiceProvider extends ServiceProvider
         $viewPath = resource_path('views/modules/' . $this->moduleNameLower);
 
         $sourcePath = module_path($this->moduleName, 'Resources/views');
+        // This module has no views: registering the missing folder made
+        // `php artisan view:cache` fail on deploy.
+        if (!is_dir($sourcePath)) {
+            return;
+        }
 
         $this->publishes([
             $sourcePath => $viewPath

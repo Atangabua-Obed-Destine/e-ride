@@ -116,29 +116,39 @@ $app = Application::configure(basePath: dirname(__DIR__))
     })
     // Laravel 12 never loads app/Console/Kernel.php, so its schedule() was dead code. Keep this list in sync with it.
     ->withSchedule(function (Schedule $schedule) {
-        $schedule->command('trip-request:cancel')->everyMinute()->withoutOverlapping();
-        $schedule->command('app:process-scheduled-trips')->everyMinute()->withoutOverlapping();
-        $schedule->command('driver:resume-paused')->everyMinute()->withoutOverlapping();
-        $schedule->command('driver:sync-availability')->everyMinute()->withoutOverlapping();
-        $schedule->command('app:process-late-return-penalty-notifications')->everyMinute()->withoutOverlapping();
-        $schedule->command('fapshi:reconcile')->everyTwoMinutes()->withoutOverlapping();
-        $schedule->command('store-orders:tick')->everyMinute()->withoutOverlapping();
-        $schedule->command('market-orders:tick')->everyMinute()->withoutOverlapping();
+        // Each job runs inside the scheduler's own process. As separate
+        // `php artisan` processes, every one loaded the whole application
+        // first: about twenty start-ups a minute on a one-core server, taking
+        // the CPU from customers' requests. A failing job is reported and the
+        // others still run, as before.
+        $job = fn (string $command) => $schedule
+            ->call(fn () => \Illuminate\Support\Facades\Artisan::call($command))
+            ->name($command)
+            ->withoutOverlapping();
+
+        $job('trip-request:cancel')->everyMinute();
+        $job('app:process-scheduled-trips')->everyMinute();
+        $job('driver:resume-paused')->everyMinute();
+        $job('driver:sync-availability')->everyMinute();
+        $job('app:process-late-return-penalty-notifications')->everyMinute();
+        $job('fapshi:reconcile')->everyTwoMinutes();
+        $job('store-orders:tick')->everyMinute();
+        $job('market-orders:tick')->everyMinute();
         // E-Ride Bus Travel: payments, expiring requests, the timetable opening the coming days.
-        $schedule->command('bus:tick')->everyMinute()->withoutOverlapping();
-        $schedule->command('hotel:tick')->everyMinute()->withoutOverlapping();
+        $job('bus:tick')->everyMinute();
+        $job('hotel:tick')->everyMinute();
         // E-Ride ID Verified: documents past their expiry date stop counting.
         $schedule->call(fn() => app(\Modules\UserManagement\Service\IdVerificationService::class)->expireDue())->name('id-verifications:expire')->dailyAt('01:10')->withoutOverlapping();
-        $schedule->command('trip-deposits:tick')->everyFifteenSeconds()->withoutOverlapping();
+        $job('trip-deposits:tick')->everyFifteenSeconds();
         // Homes & spaces: the still-available policy, at 8:00 so reminders arrive in the morning.
-        $schedule->command('listings:sweep')->dailyAt('08:00')->withoutOverlapping();
-        $schedule->command('listings:visit-soon')->everyTenMinutes()->withoutOverlapping();
-        $schedule->command('listing-reservations:tick')->everyMinute()->withoutOverlapping();
+        $job('listings:sweep')->dailyAt('08:00');
+        $job('listings:visit-soon')->everyTenMinutes();
+        $job('listing-reservations:tick')->everyMinute();
         // Area pause: planned pauses start and are announced on time; danger reports fade.
-        $schedule->command('safety:tick')->everyMinute()->withoutOverlapping();
-        $schedule->command('trip-checkins:tick')->everyMinute()->withoutOverlapping();
-        $schedule->command('lost-items:tick')->everyFiveMinutes()->withoutOverlapping();
-        $schedule->command('scheduled-rides:tick')->everyMinute()->withoutOverlapping();
+        $job('safety:tick')->everyMinute();
+        $job('trip-checkins:tick')->everyMinute();
+        $job('lost-items:tick')->everyFiveMinutes();
+        $job('scheduled-rides:tick')->everyMinute();
     })
     ->create();
 
