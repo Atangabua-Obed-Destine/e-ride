@@ -1,7 +1,6 @@
 <?php
 
 return [
-    App\Providers\TmpProbeProvider::class,
     /*
     |--------------------------------------------------------------------------
     | Application Service Providers
