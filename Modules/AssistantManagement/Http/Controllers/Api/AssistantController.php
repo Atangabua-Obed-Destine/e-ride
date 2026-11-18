@@ -20,12 +20,17 @@ class AssistantController extends Controller
         return str_starts_with(strtolower((string)$request->header('X-Localization', app()->getLocale())), 'fr') ? 'fr' : 'en';
     }
 
-    /** Whether Ask E-Ride is on, and every info sheet by key, in the customer's language. */
+    /**
+     * Whether Ask E-Ride is on, every info sheet by key, the "Did you know?"
+     * cards and the admin's words for the smart search, in the customer's language.
+     */
     public function help(Request $request): JsonResponse
     {
         return response()->json(responseFormatter(DEFAULT_200, [
             'assistant' => AssistantSettings::enabled(),
             'sheets' => $this->assistant->helpSheets($this->lang($request)),
+            'tips' => $this->assistant->tips($this->lang($request)),
+            'search_words' => $this->assistant->searchWords(),
         ]));
     }
 

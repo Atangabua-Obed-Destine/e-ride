@@ -112,20 +112,22 @@
                     <h5 class="mb-0 flex-grow-1">{{ translate('Knowledge pack') }}</h5>
                     <button type="button" class="btn btn-primary btn-sm" data-entry-new><i class="bi bi-plus-lg"></i> {{ translate('Add an entry') }}</button>
                 </div>
-                <p class="fs-12 text-muted">{{ translate('Short, plain facts about how E-Ride works. Ask E-Ride answers only from these. An entry with a help key also shows as the info sheet on that screen of the app; each line of its text becomes a step.') }}</p>
+                <p class="fs-12 text-muted">{{ translate('Short, plain facts about how E-Ride works. Ask E-Ride answers only from these. An entry with a help key also shows as the info sheet on that screen of the app; each line of its text becomes a step. An entry with a card button also shows on Home as a "Did you know?" card: its title, the first line of its text and the button. The app shows customers the cards for services they have not tried yet, one at a time.') }}</p>
                 <div class="table-responsive">
                     <table class="table align-middle">
-                        <thead class="table-light"><tr><th>{{ translate('Entry') }}</th><th>{{ translate('Service') }}</th><th>{{ translate('Help key') }}</th><th class="text-center">{{ translate('Active') }}</th><th></th></tr></thead>
+                        <thead class="table-light"><tr><th>{{ translate('Entry') }}</th><th>{{ translate('Service') }}</th><th>{{ translate('Help key') }}</th><th>{{ translate('Home card') }}</th><th class="text-center">{{ translate('Active') }}</th><th></th></tr></thead>
                         <tbody>
                         @foreach($entries as $e)
                             <tr>
                                 <td><div class="fw-semibold">{{ $e->title_en }}</div><div class="fs-12 text-muted">{{ $e->title_fr }}</div></td>
                                 <td>{{ $e->service }}</td>
                                 <td>@if($e->help_key)<code>{{ $e->help_key }}</code>@else<span class="text-muted">-</span>@endif</td>
+                                <td class="fs-12">@if($e->tip_action)<span class="badge bg-primary-subtle text-primary">{{ $tipButtons[$e->tip_action] ?? $e->tip_action }}</span>@else<span class="text-muted">-</span>@endif
+                                    @if($e->search_words)<div class="text-muted mt-1" title="{{ $e->search_words }}"><i class="bi bi-search"></i> {{ \Illuminate\Support\Str::limit($e->search_words, 40) }}</div>@endif</td>
                                 <td class="text-center">{!! $e->is_active ? '<i class="bi bi-check-circle-fill text-success"></i>' : '<i class="bi bi-dash-circle text-muted"></i>' !!}</td>
                                 <td class="text-end text-nowrap">
                                     <button type="button" class="btn btn-sm btn-light" data-entry-edit data-action="{{ route('admin.assistant.entry.save', $e->id) }}"
-                                            data-entry="{{ json_encode($e->only(['help_key', 'service', 'title_en', 'title_fr', 'body_en', 'body_fr', 'sort', 'is_active'])) }}"><i class="bi bi-pencil"></i></button>
+                                            data-entry="{{ json_encode($e->only(['help_key', 'service', 'tip_action', 'tip_label_en', 'tip_label_fr', 'search_words', 'title_en', 'title_fr', 'body_en', 'body_fr', 'sort', 'is_active'])) }}"><i class="bi bi-pencil"></i></button>
                                     <form action="{{ route('admin.assistant.entry.delete', $e->id) }}" method="POST" class="d-inline" onsubmit='return confirm(@json(translate("Remove this entry?")))'>
                                         @csrf @method('DELETE')
                                         <button type="submit" class="btn btn-sm btn-light text-danger"><i class="bi bi-trash"></i></button>
@@ -189,6 +191,20 @@
                         <div class="col-md-4"><label class="form-label">{{ translate('Help key') }}</label><input name="help_key" class="form-control" maxlength="40" placeholder="food_pay"><div class="fs-12 text-muted">{{ translate('Only for an info sheet on an app screen.') }}</div></div>
                         <div class="col-md-2"><label class="form-label">{{ translate('Order') }}</label><input name="sort" type="number" class="form-control"></div>
                         <div class="col-md-2 d-flex align-items-end"><label class="d-flex align-items-center gap-2 mb-2"><input type="hidden" name="is_active" value="0"><input type="checkbox" name="is_active" value="1" checked> {{ translate('Active') }}</label></div>
+
+                        <div class="col-12"><hr class="my-1"><h6 class="mb-0">{{ translate('"Did you know?" card on Home') }}</h6>
+                            <div class="fs-12 text-muted">{{ translate('Optional. Keep the title short (it is the headline) and put one sentence on the first line of the text.') }}</div></div>
+                        <div class="col-md-4"><label class="form-label">{{ translate('Card button') }}</label>
+                            <select name="tip_action" class="form-select">
+                                <option value="">{{ translate('No card') }}</option>
+                                @foreach($tipButtons as $value => $label)<option value="{{ $value }}">{{ $label }}</option>@endforeach
+                            </select></div>
+                        <div class="col-md-4"><label class="form-label">{{ translate('Button text (English)') }}</label><input name="tip_label_en" class="form-control" maxlength="40" placeholder="See buses"></div>
+                        <div class="col-md-4"><label class="form-label">{{ translate('Button text (French)') }}</label><input name="tip_label_fr" class="form-control" maxlength="40" placeholder="Voir les bus"></div>
+
+                        <div class="col-12"><label class="form-label">{{ translate('Search words') }}</label>
+                            <textarea name="search_words" class="form-control" rows="2" maxlength="1500" placeholder="eru, achu, koki, poulet DG"></textarea>
+                            <div class="fs-12 text-muted">{{ translate('Optional, separated by commas. When a customer types one of these in the search of the app, it suggests the card button of this entry (or its service). English, French and Pidgin words are already known: add local words, dishes and names.') }}</div></div>
                     </div>
                 </div>
                 <div class="modal-footer"><button type="button" class="btn btn-light" data-bs-dismiss="modal">{{ translate('Cancel') }}</button><button type="submit" class="btn btn-primary">{{ translate('Save') }}</button></div>
@@ -207,7 +223,7 @@
         form.reset();
         form.action = action;
         if (e) {
-            ['title_en', 'title_fr', 'body_en', 'body_fr', 'service', 'help_key', 'sort'].forEach(function (k) { form[k].value = e[k] == null ? '' : e[k]; });
+            ['title_en', 'title_fr', 'body_en', 'body_fr', 'service', 'help_key', 'tip_action', 'tip_label_en', 'tip_label_fr', 'search_words', 'sort'].forEach(function (k) { form[k].value = e[k] == null ? '' : e[k]; });
             form.querySelector('input[type=checkbox][name=is_active]').checked = !!e.is_active;
         }
         modal.show();

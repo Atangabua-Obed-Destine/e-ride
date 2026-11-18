@@ -42,7 +42,25 @@ class AssistantAdminController extends Controller
             'by_provider' => (clone $today)->whereNotNull('provider')->selectRaw('provider, count(*) as n')->groupBy('provider')->pluck('n', 'provider')->all(),
         ];
         $entries = AssistantEntry::orderBy('sort')->get();
-        return view('assistantmanagement::admin.index', compact('settings', 'questions', 'stats', 'entries', 'filter'));
+        $tipButtons = self::tipButtons();
+        return view('assistantmanagement::admin.index', compact('settings', 'questions', 'stats', 'entries', 'filter', 'tipButtons'));
+    }
+
+    /** The buttons a "Did you know?" card can carry, for the form's list: services, then each Explore category. */
+    protected static function tipButtons(): array
+    {
+        $buttons = [
+            'ride' => translate('Book a ride'), 'ride_later' => translate('Book a ride for later'), 'health_ride' => translate('Health ride'),
+            'parcel' => translate('Send a parcel'), 'move' => translate('Move (truck)'), 'food' => translate('Food & Shops'),
+            'bus' => translate('Bus tickets'), 'market' => translate('Market'), 'jobs' => translate('Jobs'),
+            'explore' => translate('Explore'), 'id_verify' => translate('E-Ride ID verification'),
+        ];
+        if (class_exists(\Modules\PlaceManagement\Entities\PlaceCategory::class)) {
+            foreach (\Modules\PlaceManagement\Entities\PlaceCategory::where('is_active', true)->orderBy('sort')->get() as $c) {
+                $buttons['explore:' . $c->key] = translate('Explore') . ': ' . $c->name;
+            }
+        }
+        return $buttons;
     }
 
     public function settings(Request $request): RedirectResponse
@@ -98,10 +116,21 @@ class AssistantAdminController extends Controller
             'body_en' => 'required|string|max:2000',
             'body_fr' => 'required|string|max:2000',
             'sort' => 'nullable|integer',
+            // "Did you know?" card on Home: the button it carries, and its label.
+            'tip_action' => ['nullable', 'string', 'max:40', function ($attribute, $value, $fail) {
+                if (!AssistantService::validTipAction($value)) {
+                    $fail(translate('Choose a button for the card.'));
+                }
+            }],
+            'tip_label_en' => 'nullable|required_with:tip_action|string|max:40',
+            'tip_label_fr' => 'nullable|required_with:tip_action|string|max:40',
+            'search_words' => 'nullable|string|max:1500',
         ]);
         $entry = $entry ?? new AssistantEntry();
         $entry->fill($data + ['is_active' => $request->boolean('is_active', true)]);
         $entry->help_key = filled($data['help_key'] ?? null) ? $data['help_key'] : null;
+        $entry->tip_action = filled($data['tip_action'] ?? null) ? $data['tip_action'] : null;
+        $entry->search_words = filled($data['search_words'] ?? null) ? trim($data['search_words']) : null;
         $entry->save();
         Toastr::success(translate('Knowledge entry saved'));
         return back();

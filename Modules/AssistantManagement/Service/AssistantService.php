@@ -46,6 +46,23 @@ class AssistantService
 
     public const MAX_REPLY = 400;
 
+    /**
+     * Buttons a "Did you know?" card may carry: a service, or one Explore
+     * category as "explore:<key>" (pharmacy, health, bank, stay, homes...).
+     */
+    public const TIP_ACTIONS = ['ride', 'ride_later', 'health_ride', 'parcel', 'move', 'food', 'bus', 'hotels', 'explore', 'market', 'jobs', 'id_verify'];
+
+    /** Where an entry's search words lead when it has no tip button: its service's screen. */
+    public const SERVICE_ACTIONS = [
+        'rides' => 'ride', 'ride' => 'ride', 'parcel' => 'parcel', 'move' => 'move', 'food' => 'food', 'bus' => 'bus',
+        'hotels' => 'explore:stay', 'explore' => 'explore', 'market' => 'market', 'jobs' => 'jobs', 'account' => 'id_verify',
+    ];
+
+    public static function validTipAction(?string $action): bool
+    {
+        return $action !== null && (in_array($action, self::TIP_ACTIONS, true) || preg_match('/^explore:[a-z_]{2,30}$/', $action) === 1);
+    }
+
     /** @var array<string, ChatProvider> */
     protected array $clients;
 
@@ -69,6 +86,43 @@ class AssistantService
                 'title' => $e->title($lang),
                 'steps' => array_values(array_filter(array_map('trim', preg_split('/\R/', $e->body($lang))))),
             ])->values()->all();
+    }
+
+    /** "Did you know?" cards for Home: a headline, one line, and the button. The app picks which to show. */
+    public function tips(string $lang): array
+    {
+        return AssistantEntry::where('is_active', true)->whereNotNull('tip_action')->orderBy('sort')->get()
+            ->filter(fn(AssistantEntry $e) => self::validTipAction($e->tip_action))
+            ->map(function (AssistantEntry $e) use ($lang) {
+                [$type, $id] = array_pad(explode(':', $e->tip_action, 2), 2, null);
+                $label = trim((string)($lang === 'fr' ? $e->tip_label_fr : $e->tip_label_en));
+                return array_filter([
+                    'key' => $e->id,
+                    'service' => $e->service,
+                    'title' => $e->title($lang),
+                    'body' => trim(preg_split('/\R/', trim($e->body($lang)))[0] ?? ''),
+                    'action' => array_filter(['type' => $type, 'id' => $id, 'label' => $label !== '' ? $label : $e->title($lang)], fn($v) => $v !== null),
+                ], fn($v) => $v !== null);
+            })->values()->all();
+    }
+
+    /**
+     * Words the admin added so the app's search finds a service: each set leads
+     * to the entry's tip button, or else its service's screen.
+     */
+    public function searchWords(): array
+    {
+        return AssistantEntry::where('is_active', true)->whereNotNull('search_words')->orderBy('sort')->get()
+            ->map(function (AssistantEntry $e) {
+                $target = self::validTipAction($e->tip_action) ? $e->tip_action : (self::SERVICE_ACTIONS[$e->service] ?? null);
+                $words = collect(preg_split('/[,\n]+/', (string)$e->search_words))
+                    ->map(fn($w) => mb_strtolower(trim($w)))->filter(fn($w) => mb_strlen($w) >= 2)->unique()->take(60)->values()->all();
+                if ($target === null || $words === []) {
+                    return null;
+                }
+                [$type, $id] = array_pad(explode(':', $target, 2), 2, null);
+                return array_filter(['type' => $type, 'id' => $id, 'words' => $words], fn($v) => $v !== null);
+            })->filter()->values()->all();
     }
 
     /**
