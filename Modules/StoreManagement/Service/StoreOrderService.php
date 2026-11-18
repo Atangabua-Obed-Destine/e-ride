@@ -4,6 +4,7 @@ namespace Modules\StoreManagement\Service;
 
 use App\Jobs\ProcessPushNotifications;
 use App\Service\BaseService;
+use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Validation\ValidationException;
@@ -624,13 +625,40 @@ class StoreOrderService extends BaseService implements StoreOrderServiceInterfac
             if (in_array($order->status, StoreOrder::FINAL, true) || $order->status === StoreOrder::PICKED_UP) {
                 throw ValidationException::withMessages(['order' => translate('This order can no longer be cancelled.')]);
             }
-            $trip = $order->trip_request_id ? TripRequest::find($order->trip_request_id) : null;
-            if ($trip && !in_array($trip->current_status, [PENDING, CANCELLED], true)) {
+            // Locked: a rider accepting at this moment either wins (and the cancel is
+            // refused) or finds the trip cancelled.
+            $trip = $order->trip_request_id ? TripRequest::whereKey($order->trip_request_id)->lockForUpdate()->first() : null;
+            if ($trip && ($trip->driver_id || !in_array($trip->current_status, [PENDING, CANCELLED], true))) {
                 throw ValidationException::withMessages(['order' => translate('A rider has already accepted this delivery. Ask the rider to cancel it first.')]);
             }
             if ($trip && $trip->current_status === PENDING) {
                 $trip->update(['current_status' => CANCELLED]);
                 $trip->tripStatus()->update([CANCELLED => now()]);
+                // The riders it was offered to stop ringing.
+                $tripId = $trip->id;
+                DB::afterCommit(function () use ($tripId) {
+                    $trip = TripRequest::find($tripId);
+                    $offers = \Modules\TripManagement\Entities\TempTripNotification::with('user')->where('trip_request_id', $tripId)->get();
+                    if (checkReverbConnection()) {
+                        foreach ($offers as $offer) {
+                            try {
+                                $offer->user && \App\Events\CustomerTripCancelledEvent::broadcast($offer->user, $trip);
+                            } catch (\Throwable) {
+                            }
+                        }
+                    }
+                    $push = getNotification('customer_canceled_trip');
+                    foreach ($offers as $offer) {
+                        if ($offer->user?->fcm_token) {
+                            sendDeviceNotification(fcm_token: $offer->user->fcm_token,
+                                title: translate(key: $push['title'], locale: $offer->user->current_language_key),
+                                description: textVariableDataFormat(value: $push['description'], tripId: $trip->ref_id, sentTime: pushSentTime($trip->updated_at), locale: $offer->user->current_language_key),
+                                status: $push['status'], ride_request_id: $trip->id, type: $trip->type,
+                                notification_type: 'parcel', action: $push['action'], user_id: $offer->user->id);
+                        }
+                    }
+                    \Modules\TripManagement\Entities\TempTripNotification::where('trip_request_id', $tripId)->delete();
+                });
             }
             if ($refund && $order->payment_status === StoreOrder::PAID) {
                 $this->refundOrder($order, $order->total);
@@ -753,8 +781,13 @@ class StoreOrderService extends BaseService implements StoreOrderServiceInterfac
         $order->rider_requested_at = now();
         $order->save();
 
-        if ($order->rider_attempts === self::ADMIN_ALERT_AFTER_ATTEMPTS) {
+        // From the third try on, every try: the order is paid and the food is waiting.
+        if ($order->rider_attempts >= self::ADMIN_ALERT_AFTER_ATTEMPTS) {
             $this->alertAdmin($order, 'store_order_no_rider');
+        }
+        if ($order->rider_attempts === self::ADMIN_ALERT_AFTER_ATTEMPTS) {
+            $orderForPush = $order;
+            DB::afterCommit(fn() => $this->notifyCustomer($orderForPush, 'still_looking'));
         }
 
         $tripId = $trip->id;
@@ -820,7 +853,10 @@ class StoreOrderService extends BaseService implements StoreOrderServiceInterfac
 
             switch ($trip->current_status) {
                 case ACCEPTED:
-                    if ($order->status === StoreOrder::RIDER_REQUESTED) {
+                case OUT_FOR_PICKUP:
+                    // Once per rider: this runs every minute while the rider is on the way.
+                    if ($order->status === StoreOrder::RIDER_REQUESTED && $trip->driver_id
+                        && Cache::add('store-order-rider-told:' . $order->id . ':' . $trip->driver_id, 1, now()->addDay())) {
                         DB::afterCommit(fn() => $this->notifyCustomer($order, 'rider_assigned'));
                     }
                     break;
@@ -1070,6 +1106,10 @@ class StoreOrderService extends BaseService implements StoreOrderServiceInterfac
                 'rider_assigned' => [
                     translate(key: '{rider} is collecting your order', replace: ['rider' => $rider], locale: $locale),
                     translate(key: 'They will pick it up at {store} and bring it to you.', replace: ['store' => $store], locale: $locale),
+                ],
+                'still_looking' => [
+                    translate(key: 'Still finding a rider for your order', locale: $locale),
+                    translate(key: 'Riders are busy right now. We keep looking and our team is following your order.', locale: $locale),
                 ],
                 'picked_up' => [
                     translate(key: 'Your {store} order is on the way', replace: ['store' => $store], locale: $locale),

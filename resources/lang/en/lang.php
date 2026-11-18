@@ -7632,4 +7632,7 @@
   'Customers (customer app)' => 'Customers (customer app)',
   'Drivers (driver app)' => 'Drivers (driver app)',
   'Ask E-Ride answers each app from its own entries. Driver help keys are shown in the driver app.' => 'Ask E-Ride answers each app from its own entries. Driver help keys are shown in the driver app.',
+  'The trip request has already been expired' => 'The trip request has already been expired',
+  'Customer just declined a request.' => 'Customer just declined a request.',
+  'This guest is already in, or the room was let go.' => 'This guest is already in, or the room was let go.',
 );

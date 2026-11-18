@@ -18,8 +18,10 @@ class AnotherDriverTripAcceptedChannel
     /**
      * Authenticate the user's access to the channel.
      */
-    public function join(User $user, $id,$userId): array|bool
+    public function join(User $user, $id, $userId): array|bool
     {
-        return $user->id == $userId && $user->id == TempTripNotification::where(['trip_request_id'=>$id,'user_id'=>$userId])->first()->user_id;
+        // Any driver can hear that a trip offered to drivers is taken; the offer
+        // row may be gone already (accepted, or not inserted yet).
+        return $user->id == $userId && $user->user_type == 'driver';
     }
 }

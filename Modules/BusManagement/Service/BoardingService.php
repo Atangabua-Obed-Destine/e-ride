@@ -95,7 +95,9 @@ class BoardingService
             if (!$d->isOpen()) {
                 throw ValidationException::withMessages(['departure' => translate('This bus has already left or was cancelled.')]);
             }
-            BusBooking::where('departure_id', $d->id)->whereIn('status', BusBooking::HOLDING)->get()
+            // Locked, so a payment settling at this very moment either lands first
+            // (the booking is PAID and keeps its seats) or waits and finds it ended.
+            BusBooking::where('departure_id', $d->id)->whereIn('status', BusBooking::HOLDING)->lockForUpdate()->get()
                 ->each(function (BusBooking $b) {
                     $b->update(['status' => BusBooking::EXPIRED]);
                     BusTicket::where('booking_id', $b->id)->update(['status' => BusTicket::CANCELLED]);

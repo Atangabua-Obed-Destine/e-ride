@@ -551,6 +551,10 @@ class TripRequestController extends Controller
         if (!$user->is_active) {
             return response()->json(responseFormatter(ACCOUNT_SUSPEND_OR_PAUSE), 403);
         }
+        // Paused (cash limit, safety): no requests to show, since accepting is refused.
+        if ($user->driverDetails->isCurrentlyPaused()) {
+            return response()->json(responseFormatter(constant: DEFAULT_200, content: [], limit: $request->limit, offset: $request->offset));
+        }
 
         if (!$this->driverAvailabilityScheduleService->isAvailableNow($user->id)) {
             return response()->json(responseFormatter(DRIVER_SCHEDULE_UNAVAILABLE_403), 403);
@@ -892,7 +896,7 @@ class TripRequestController extends Controller
         if (checkReverbConnection()) {
             try {
                 $request->status == COMPLETED && DriverTripCompletedEvent::broadcast($trip);
-                $request->status == CANCELLED && DriverTripCancelledEvent::broadcast($trip);
+                $request->status == CANCELLED && DriverTripCancelledEvent::broadcast($trip, $rebookedTrip?->id);
             } catch (\Exception $exception) {
 
             }

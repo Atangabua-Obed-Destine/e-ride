@@ -30,9 +30,9 @@ Route::group(['prefix' => 'customer', 'middleware' => ['auth:api', 'maintenance_
             Route::put('ignore-bidding', 'ignoreBidding');
             Route::get('bidding-list/{trip_request_id}', 'biddingList');
             Route::put('update-status/{trip_request_id}', 'rideStatusUpdate')->middleware('trip.lock');
-            Route::get('details/{trip_request_id}', 'rideDetails');
+            Route::get('details/{trip_request_id}', 'rideDetails')->middleware('trip.lock');
             Route::get('list', 'rideList');
-            Route::get('final-fare', 'finalFareCalculation');
+            Route::get('final-fare', 'finalFareCalculation')->middleware('trip.lock');
             Route::post('trip-action', 'requestAction')->middleware('trip.lock');
             Route::get('ride-resume-status', 'rideResumeStatus');
             Route::put('arrival-time', 'arrivalTime');
@@ -117,7 +117,7 @@ Route::group(['prefix' => 'driver', 'middleware' => ['auth:api', 'maintenance_mo
     Route::get('lost-items/{id}', [DriverLostItemController::class, 'show']);
     Route::post('lost-items/{id}/action', [DriverLostItemController::class, 'act'])->middleware('throttle:20,1,lost-item');
     Route::group(['prefix' => 'ride', 'middleware' => ['auth:api', 'maintenance_mode']], function () {
-        Route::get('final-fare', [NewCustomerTripController::class, 'finalFareCalculation']);
+        Route::get('final-fare', [NewCustomerTripController::class, 'finalFareCalculation'])->middleware('trip.lock');
         Route::get('payment', [PaymentController::class, 'payment'])->middleware('trip.lock');
 
 
@@ -134,7 +134,7 @@ Route::group(['prefix' => 'driver', 'middleware' => ['auth:api', 'maintenance_mo
             Route::put('resend-otp', 'resendOtp');
             Route::post('match-otp', 'matchOtp')->middleware('trip.lock');
             Route::post('track-location', 'trackLocation');
-            Route::get('details/{ride_request_id}', 'rideDetails');
+            Route::get('details/{ride_request_id}', 'rideDetails')->middleware('trip.lock');
             Route::get('pending-ride-list', 'pendingRideList');
             Route::put('returned-parcel', 'returnedParcel')->middleware('trip.lock');
             Route::get('overview', 'tripOverview');

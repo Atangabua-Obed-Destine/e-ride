@@ -621,10 +621,13 @@ class TripRequestRepository extends BaseRepository implements TripRequestReposit
             ->where(fn($query) => $query->whereNotIn('current_status', ['completed', 'cancelled'])
                 ->orWhere(fn($query) => $query->whereNotNull('driver_id')
                     ->whereHas('fee', function ($query) {
-                        $query->where('cancelled_by', '!=', 'driver');
+                        // A completed trip has no cancelled_by (NULL), and NULL != 'driver' is not true in SQL.
+                        $query->where(fn($q) => $q->whereNull('cancelled_by')->orWhere('cancelled_by', '!=', 'driver'));
                     })
                     ->whereIn('current_status', ['completed', 'cancelled'])
                     ->where('payment_status', 'unpaid')
+                    // Recent only: an old abandoned trip must not block a customer for ever.
+                    ->where('updated_at', '>', now()->subDay())
                 ))
             ->when(!empty($criteria), function ($whereQuery) use ($criteria) {
                 $whereQuery->where($criteria);
@@ -681,10 +684,13 @@ class TripRequestRepository extends BaseRepository implements TripRequestReposit
         ->where(fn($query) => $query->whereNotIn('current_status', ['completed', 'cancelled'])
         ->orWhere(fn($query) => $query->whereNotNull('driver_id')
             ->whereHas('fee', function ($query) {
-                $query->where('cancelled_by', '!=', 'driver');
+                // A completed trip has no cancelled_by (NULL), and NULL != 'driver' is not true in SQL.
+                        $query->where(fn($q) => $q->whereNull('cancelled_by')->orWhere('cancelled_by', '!=', 'driver'));
             })
             ->whereIn('current_status', ['completed', 'cancelled'])
             ->where('payment_status', 'unpaid')
+            // Recent only: an old abandoned trip must not block a customer for ever.
+            ->where('updated_at', '>', now()->subDay())
         ));
         if ($limit) {
             return !empty($appends) ? $model->paginate(perPage: $limit, page: $offset ?? 1)->appends($appends) : $model->paginate(perPage: $limit, page: $offset ?? 1);
@@ -841,10 +847,13 @@ class TripRequestRepository extends BaseRepository implements TripRequestReposit
             ->where(fn($query) => $query->whereNotIn('current_status', ['completed', 'cancelled'])
                 ->orWhere(fn($query) => $query->whereNotNull('driver_id')
                     ->whereHas('fee', function ($query) {
-                        $query->where('cancelled_by', '!=', 'driver');
+                        // A completed trip has no cancelled_by (NULL), and NULL != 'driver' is not true in SQL.
+                        $query->where(fn($q) => $q->whereNull('cancelled_by')->orWhere('cancelled_by', '!=', 'driver'));
                     })
                     ->whereIn('current_status', ['completed', 'cancelled'])
                     ->where('payment_status', 'unpaid')
+                    // Recent only: an old abandoned trip must not block a customer for ever.
+                    ->where('updated_at', '>', now()->subDay())
                 ))
 
             ->exists();

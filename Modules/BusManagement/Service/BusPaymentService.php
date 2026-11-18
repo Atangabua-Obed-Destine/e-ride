@@ -36,6 +36,22 @@ class BusPaymentService
      */
     public function start(BusBooking $booking): array
     {
+        // One Pay tap at a time per booking: a second tap (or a retry after a
+        // timeout) waits for the first, then finds its link and reuses it.
+        $lock = 'eride:bus-pay:' . $booking->id;
+        $got = DB::selectOne('SELECT GET_LOCK(?, 20) AS l', [$lock]);
+        if ((int)($got->l ?? 0) !== 1) {
+            return ['error' => translate('This payment is starting. Please wait a moment and try again.')];
+        }
+        try {
+            return $this->startLocked($booking);
+        } finally {
+            DB::selectOne('SELECT RELEASE_LOCK(?) AS l', [$lock]);
+        }
+    }
+
+    protected function startLocked(BusBooking $booking): array
+    {
         foreach ($this->openAttempts($booking) as $attempt) {
             $this->sync($attempt);
         }

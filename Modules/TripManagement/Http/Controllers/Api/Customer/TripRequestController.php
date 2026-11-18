@@ -116,6 +116,17 @@ class TripRequestController extends Controller
 
         if ($request->trip_request_id) {
             $save_trip = $this->tripRequestService->findOneBy(criteria: ['id' => $request['trip_request_id']]);
+            // A new fare only while the trip still waits for a driver: never on one
+            // a driver has just accepted at the old price.
+            if (!$save_trip || $save_trip->customer_id != auth('api')->id()) {
+                return response()->json(responseFormatter(TRIP_REQUEST_404), 403);
+            }
+            if ($save_trip->driver_id || $save_trip->current_status !== PENDING) {
+                return response()->json(responseFormatter(constant: [
+                    'response_code' => 'trip_not_pending_403',
+                    'message' => translate('This trip already has a driver or has ended.'),
+                ]), 403);
+            }
             $pickup_point = $save_trip->coordinate->pickup_coordinates;
             $destination_point = $save_trip->coordinate->destination_coordinates;
         } else {
@@ -722,15 +733,35 @@ class TripRequestController extends Controller
 
         $trip = $this->tripRequestService->findOneBy(['id' => $request->trip_request_id], relations: ['coordinate']);
         $driver = $this->userService->findOneBy(criteria: ['id' => $request->driver_id], relations: ['vehicle', 'driverDetails', 'lastLocations']);
-        if (Cache::get($request['trip_request_id']) == ACCEPTED && $trip->driver_id == $driver->id) {
-            return response()->json(responseFormatter(DEFAULT_UPDATE_200));
+        if (!$trip || $trip->customer_id != auth('api')->id()) {
+            return response()->json(responseFormatter(constant: TRIP_REQUEST_404), 403);
+        }
+        if (!$driver || !$driver->driverDetails) {
+            return response()->json(responseFormatter(constant: DRIVER_403), 403);
+        }
+        // Tapped twice: the first tap already gave the trip to this driver.
+        if ($trip->driver_id && $trip->driver_id == $driver->id) {
+            return response()->json(responseFormatter(BIDDING_ACTION_200));
+        }
+        if ($request['action'] == ACCEPTED && ($trip->driver_id || $trip->current_status !== PENDING)) {
+            return response()->json(responseFormatter(constant: [
+                'response_code' => 'trip_not_pending_403',
+                'message' => translate('This trip already has a driver or has ended.'),
+            ]), 403);
         }
         $user_status = $driver->driverDetails->availability_status;
         if ($user_status != 'on_bidding' && $user_status != 'available') {
             return response()->json(responseFormatter(constant: DRIVER_403), 403);
         }
-        if (!$trip) {
-            return response()->json(responseFormatter(constant: TRIP_REQUEST_404), 403);
+        // The driver may have taken another customer since the offer.
+        if ($request['action'] == ACCEPTED && $trip->type == RIDE_REQUEST && $trip->ride_request_type != SCHEDULED
+            && \Modules\TripManagement\Entities\TripRequest::where('driver_id', $driver->id)
+                ->where('type', RIDE_REQUEST)->where('ride_request_type', '!=', SCHEDULED)
+                ->whereIn('current_status', [ACCEPTED, OUT_FOR_PICKUP])->exists()) {
+            return response()->json(responseFormatter(constant: [
+                'response_code' => 'driver_busy_403',
+                'message' => translate('This driver has just taken another trip. Choose another offer.'),
+            ]), 403);
         }
         if (!$driver->vehicle) {
             return response()->json(responseFormatter(constant: DEFAULT_404), 403);
@@ -755,30 +786,12 @@ class TripRequestController extends Controller
         ];
 
         if ($request['action'] == ACCEPTED) {
-            DB::beginTransaction();
-            Cache::put($trip->id, ACCEPTED, now()->addHour());
-            $this->rejectedDriverRequestService->deleteBy(criteria: ['trip_request_id' => $trip->id]);
             if (get_cache('bid_on_fare') ?? 0) {
                 $tripBidding = $this->fareBiddingService->findOneBy(criteria: ['trip_request_id' => $request->trip_request_id, 'is_ignored' => 0, 'driver_id' => $request->driver_id]);
                 if (isset($tripBidding)) {
                     $attributes['actual_fare'] = $tripBidding->bid_fare;
                     $attributes['estimated_fare'] = $tripBidding->bid_fare;
                 }
-            }
-            $data = $this->tempTripNotificationService->getBy(criteria: ['trip_request_id' => $request->trip_request_id, ['user_id', '!=', $driver->id]], relations: ['user']);
-            $push = getNotification('another_driver_assigned');
-            if (!empty($data)) {
-                $notification['title'] = $push['title'];
-                $notification['description'] = $push['description'];
-                $notification['status'] = $push['status'];
-                $notification['ride_request_id'] = $trip->id;
-                $notification['type'] = $trip->type;
-                $notification['notification_type'] = 'trip';
-                $notification['action'] = $push['action'];
-                $notification['replace'] = ['tripId' => $trip->ref_id];
-
-                dispatch(new SendPushNotificationJob($notification, $data))->onQueue('high');
-                $this->tempTripNotificationService->deleteBy(criteria: ['trip_request_id' => $trip->id]);
             }
 
             $driver_arrival_time = getRoutes(
@@ -798,18 +811,59 @@ class TripRequestController extends Controller
             if ($trip->type == 'ride_request') {
                 $attributes['driver_arrival_time'] = (double)($driver_arrival_time[0]['duration']) / 60;
             }
-            $this->tripRequestService->update(id: $trip->id, data: $attributes);
-            $trip->refresh();
-            $this->tripRequestService->update(id: $trip->id, data: ['discount_id' => null, 'discount_amount' => null]);
-            $trip->tripStatus()->update([$attributes['current_status'] => now()]);
-            $trip->time()->update(['driver_arrival_time' => $attributes['driver_arrival_time']]);
-            DB::commit();
-            if (get_cache('bid_on_fare') ?? 0) {
-                $acceptDriverBid = $this->fareBiddingService->findOneBy(criteria: ['trip_request_id' => $request['trip_request_id'], 'driver_id' => $request['driver_id']]);
-                $all_bidding = $this->fareBiddingService->getBy(criteria: ['trip_request_id' => $request['trip_request_id'], ['id', '!=', $acceptDriverBid->id]]);
-                if ($all_bidding->isNotEmpty()) {
-                    $this->fareBiddingService->deleteBy(criteria: ['trip_request_id' => $request['trip_request_id'], ['id' => $all_bidding->id]]);
+            DB::beginTransaction();
+            try {
+                // Read again under the row lock: a driver may have accepted it directly,
+                // or the trip ended, while the route was being asked for.
+                $locked = $this->tripRequestService->getLockedTrip(data: ['id' => $trip->id]);
+                if (!$locked || $locked->driver_id || $locked->current_status !== PENDING) {
+                    DB::rollBack();
+                    return response()->json(responseFormatter(constant: [
+                        'response_code' => 'trip_not_pending_403',
+                        'message' => translate('This trip already has a driver or has ended.'),
+                    ]), 403);
                 }
+                $this->tripRequestService->update(id: $trip->id, data: $attributes);
+                $trip->refresh();
+                $this->tripRequestService->update(id: $trip->id, data: ['discount_id' => null, 'discount_amount' => null]);
+                $trip->tripStatus()->update([$attributes['current_status'] => now()]);
+                $trip->time()->update(['driver_arrival_time' => $attributes['driver_arrival_time'] ?? null]);
+                DB::commit();
+            } catch (\Throwable $e) {
+                DB::rollBack();
+                throw $e;
+            }
+            Cache::put($trip->id, ACCEPTED, now()->addHour());
+            $this->rejectedDriverRequestService->deleteBy(criteria: ['trip_request_id' => $trip->id]);
+            // Only now that the trip is this driver's: the others stop waiting for it.
+            $data = $this->tempTripNotificationService->getBy(criteria: ['trip_request_id' => $request->trip_request_id, ['user_id', '!=', $driver->id]], relations: ['user']);
+            if ($data->isNotEmpty()) {
+                $push = getNotification('another_driver_assigned');
+                $notification = [
+                    'title' => $push['title'],
+                    'description' => $push['description'],
+                    'status' => $push['status'],
+                    'ride_request_id' => $trip->id,
+                    'type' => $trip->type,
+                    'notification_type' => 'trip',
+                    'action' => $push['action'],
+                    'replace' => ['tripId' => $trip->ref_id],
+                ];
+                dispatch(new SendPushNotificationJob($notification, $data))->onQueue('high');
+                if (checkReverbConnection()) {
+                    foreach ($data as $tempNotification) {
+                        try {
+                            \App\Events\AnotherDriverTripAcceptedEvent::broadcast($tempNotification->user, $trip);
+                        } catch (\Exception $exception) {
+                        }
+                    }
+                }
+            }
+            $this->tempTripNotificationService->deleteBy(criteria: ['trip_request_id' => $trip->id]);
+            if (get_cache('bid_on_fare') ?? 0) {
+                // The other offers are gone with the trip taken.
+                \Modules\TripManagement\Entities\FareBidding::where('trip_request_id', $trip->id)
+                    ->where('driver_id', '!=', $driver->id)->delete();
             }
             app(TripDepositService::class)->open($trip->refresh());
             // The driver hears of a pause or a fresh danger report at the pickup or destination.
@@ -831,7 +885,7 @@ class TripRequestController extends Controller
                 $all_bidding = $this->fareBiddingService->getBy(criteria: ['trip_request_id' => $request['trip_request_id']]);
 
                 if (count($all_bidding) > 0) {
-                    $this->fareBiddingService->deleteBy(criteria: ['trip_request_id' => $request['trip_request_id'], ['id' => $all_bidding->id]]);
+                    $this->fareBiddingService->deleteBy(criteria: ['trip_request_id' => $request['trip_request_id']]);
                 }
 
             }
@@ -959,7 +1013,8 @@ class TripRequestController extends Controller
                 'trip_request_id' => $trip_request_id
             ], relations: ['user']);
 
-            if (!empty($data)) {
+            // The assigned driver hears of it even when nobody else was offered the trip.
+            if ($trip->driver_id || $data->isNotEmpty()) {
                 $push = $trip->ride_request_type == SCHEDULED ? getNotification('customer_canceled_the_trip') : getNotification('customer_canceled_trip');
                 if ($trip->driver_id)
                 {
@@ -1143,7 +1198,7 @@ class TripRequestController extends Controller
                 'trip_request_id' => $trip_request_id,
                 'attributes' => $attributes
             ]);
-            return $response()->json(responseFormatter(constant: DEFAULT_FAIL_200), 403);
+            return response()->json(responseFormatter(constant: DEFAULT_FAIL_200), 403);
         }
 
         if ($attributes['is_identity_mismatched'] ?? null) {

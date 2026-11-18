@@ -16,43 +16,66 @@ if (!function_exists('tripRequestUpdate'))
             ->find($data->attribute_id);
         $trip->paid_fare = ($trip->paid_fare +$trip->tips);
         $trip->payment_status = PAID;
+        // Paid with Mobile Money (set here, not when the link opened: see PaymentController::digitalPayment).
+        $trip->payment_method = $data->payment_method ?: 'digital';
         $trip->save();
-        $tripType = ($trip->ride_request_type ?? 'regular') === 'regular' ? 'regular_trip' : 'schedule_trip';
-        $push = getNotification(key: 'payment_successful', type: $tripType);
-        sendDeviceNotification(
-            fcm_token: $trip->driver->fcm_token,
-            title: translate(key: $push['title'], locale: $trip?->driver?->current_language_key),
-            description: textVariableDataFormat(value: $push['description'], paidAmount: getCurrencyFormat($trip->paid_fare), methodName: $trip->payment_method, locale: $trip?->driver?->current_language_key),
-            status: $push['status'],
-            ride_request_id: $trip->id,
-            type: $trip->type,
-            action: $push['action'],
-            user_id: $trip->driver->id
-        );
-        if ($trip->tips > 0)
-        {
-            $pushTips = getNotification('tips_from_customer');
+        // Told only once the payment is saved (this runs inside FapshiPayments'
+        // transaction): an app that refetches on the event must see it paid.
+        \Illuminate\Support\Facades\DB::afterCommit(function () use ($trip) {
+            $tripType = ($trip->ride_request_type ?? 'regular') === 'regular' ? 'regular_trip' : 'schedule_trip';
+            $push = getNotification(key: 'payment_successful', type: $tripType);
             sendDeviceNotification(
                 fcm_token: $trip->driver->fcm_token,
-                title: translate($pushTips['title']),
-                description: translate(textVariableDataFormat(value: $pushTips['description'],tipsAmount: $trip->tips)),
-                status: $pushTips['status'],
+                title: translate(key: $push['title'], locale: $trip?->driver?->current_language_key),
+                description: textVariableDataFormat(value: $push['description'], paidAmount: getCurrencyFormat($trip->paid_fare), methodName: $trip->payment_method, locale: $trip?->driver?->current_language_key),
+                status: $push['status'],
                 ride_request_id: $trip->id,
                 type: $trip->type,
-                action: $pushTips['action'],
+                action: $push['action'],
                 user_id: $trip->driver->id
             );
-        }
-
-        app(DriverDetailServiceInterface::class)->pauseIfCashInHandLimitExceeded($trip);
-
-        if (!empty($trip)) {
-            try {
-                checkReverbConnection() && CustomerTripPaymentSuccessfulEvent::broadcast($trip);
-            }catch(Exception $exception){
-
+            if ($trip->tips > 0)
+            {
+                $pushTips = getNotification('tips_from_customer');
+                sendDeviceNotification(
+                    fcm_token: $trip->driver->fcm_token,
+                    title: translate($pushTips['title']),
+                    description: translate(textVariableDataFormat(value: $pushTips['description'],tipsAmount: $trip->tips)),
+                    status: $pushTips['status'],
+                    ride_request_id: $trip->id,
+                    type: $trip->type,
+                    action: $pushTips['action'],
+                    user_id: $trip->driver->id
+                );
             }
-        }
+
+            app(DriverDetailServiceInterface::class)->pauseIfCashInHandLimitExceeded($trip);
+
+            if (!empty($trip)) {
+                try {
+                    checkReverbConnection() && CustomerTripPaymentSuccessfulEvent::broadcast($trip);
+                }catch(Exception $exception){
+
+                }
+            }
+            // The customer too: the payment page may be closed by now.
+            try {
+                checkReverbConnection() && \App\Events\DriverPaymentReceivedEvent::broadcast($trip);
+            } catch (Exception $exception) {
+            }
+            $paid = getNotification(key: 'payment_successful', type: ($trip->ride_request_type ?? 'regular') === 'regular' ? 'regular_trip' : 'schedule_trip');
+            sendDeviceNotification(
+                fcm_token: $trip->customer?->fcm_token,
+                title: translate(key: $paid['title'], locale: $trip->customer?->current_language_key),
+                description: textVariableDataFormat(value: $paid['description'], paidAmount: getCurrencyFormat($trip->paid_fare), methodName: translate(key: 'Mobile Money', locale: $trip->customer?->current_language_key), locale: $trip->customer?->current_language_key),
+                status: $paid['status'],
+                ride_request_id: $trip->id,
+                type: $trip->type,
+                notification_type: $trip->type == 'parcel' ? 'parcel' : 'trip',
+                action: $paid['action'],
+                user_id: $trip->customer?->id
+            );
+        });
 
         // The gateway charged the fare minus the booking deposit; the ledger
         // books the whole fare, since E-Ride holds both.

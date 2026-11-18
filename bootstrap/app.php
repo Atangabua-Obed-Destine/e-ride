@@ -126,7 +126,8 @@ $app = Application::configure(basePath: dirname(__DIR__))
         $job = fn (string $command) => $schedule
             ->call(fn () => \Illuminate\Support\Facades\Artisan::call($command))
             ->name($command)
-            ->withoutOverlapping();
+            // A run killed midway (restart, out of memory) must not stop the job for a day.
+            ->withoutOverlapping(10);
 
         $job('trip-request:cancel')->everyMinute();
         $job('app:process-scheduled-trips')->everyMinute();
@@ -140,7 +141,7 @@ $app = Application::configure(basePath: dirname(__DIR__))
         $job('bus:tick')->everyMinute();
         $job('hotel:tick')->everyMinute();
         // E-Ride ID Verified: documents past their expiry date stop counting.
-        $schedule->call(fn() => app(\Modules\UserManagement\Service\IdVerificationService::class)->expireDue())->name('id-verifications:expire')->dailyAt('01:10')->withoutOverlapping();
+        $schedule->call(fn() => app(\Modules\UserManagement\Service\IdVerificationService::class)->expireDue())->name('id-verifications:expire')->dailyAt('01:10')->withoutOverlapping(60);
         $job('trip-deposits:tick')->everyFifteenSeconds();
         // Homes & spaces: the still-available policy, at 8:00 so reminders arrive in the morning.
         $job('listings:sweep')->dailyAt('08:00');

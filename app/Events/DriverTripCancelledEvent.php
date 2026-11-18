@@ -16,12 +16,19 @@ class DriverTripCancelledEvent implements ShouldBroadcast
     use Dispatchable, InteractsWithSockets, SerializesModels;
 
     public $tripRequest;
+    /** The trip E-Ride opened again for the customer (smart rebooking), if any. */
+    public ?string $newTripId;
+    /** Why: 'no_driver' when nobody accepted in time (there never was a driver). */
+    public ?string $reason;
+
     /**
      * Create a new event instance.
      */
-    public function __construct(TripRequest $tripRequest)
+    public function __construct(TripRequest $tripRequest, ?string $newTripId = null, ?string $reason = null)
     {
         $this->tripRequest = $tripRequest;
+        $this->newTripId = $newTripId;
+        $this->reason = $reason;
     }
 
     /**
@@ -47,6 +54,8 @@ class DriverTripCancelledEvent implements ShouldBroadcast
             'id'=>$this->tripRequest->id,
             'type'=>$this->tripRequest->type,
             'user_id'=>$this->tripRequest->customer->id,
+            'new_trip_id' => $this->newTripId,
+            'reason' => $this->reason,
         ];
     }
 }

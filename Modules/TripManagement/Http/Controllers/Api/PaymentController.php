@@ -81,6 +81,12 @@ class PaymentController extends Controller
             }
         }
         DB::beginTransaction();
+        // Read again under the row lock: a Mobile Money payment may have just
+        // settled this trip (FapshiPayments locks the same row).
+        if (\Modules\TripManagement\Entities\TripRequest::whereKey($trip->id)->lockForUpdate()->value('payment_status') == PAID) {
+            DB::rollBack();
+            return response()->json(responseFormatter(DEFAULT_PAID_200));
+        }
         $feeAttributes['tips'] = $tips;
 
         $data = [
@@ -176,9 +182,10 @@ class PaymentController extends Controller
 
         $trip->fee()->update($feeAttributes);
 
+        // The way to pay changes only once Mobile Money succeeds (TripRequestUpdate):
+        // a failed attempt must not take away cash from a trip booked with cash.
         $data = [
             'tips' => $tips,
-            'payment_method' => $request->payment_method,
         ];
 
 

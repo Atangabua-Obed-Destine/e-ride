@@ -341,6 +341,11 @@ class TripRequest extends Model
                         ->latest()->first();
                 }
                 $driver = DriverDetail::query()->firstWhere('user_id', $item->driver_id);
+                // No driver details or no time track yet (never went online properly):
+                // the trip still goes ahead, only the driving-time figures are skipped.
+                if (!$driver) {
+                    return;
+                }
 
                 if ($item->current_status == OUT_FOR_PICKUP || $item->current_status == ACCEPTED) {
                     if ($item->type == RIDE_REQUEST && $item->ride_request_type == 'regular') {
@@ -352,17 +357,21 @@ class TripRequest extends Model
                     $driver->availability_status = 'available';
                     $driver->save();
 
-                    $duration = Carbon::parse($track->last_ride_completed_at)->diffInMinutes();
-                    $track->last_ride_started_at = now();
-                    $track->total_idle += $duration;
-                    $track->save();
+                    if ($track) {
+                        $duration = Carbon::parse($track->last_ride_completed_at)->diffInMinutes();
+                        $track->last_ride_started_at = now();
+                        $track->total_idle += $duration;
+                        $track->save();
+                    }
                 } elseif ($item->current_status == COMPLETED || $item->current_status == CANCELLED) {
                     $driver->availability_status = 'available';
                     $driver->save();
-                    $duration = Carbon::parse($track->last_ride_started_at)->diffInMinutes();
-                    $track->last_ride_completed_at = now();
-                    $track->total_driving += $duration;
-                    $track->save();
+                    if ($track) {
+                        $duration = Carbon::parse($track->last_ride_started_at)->diffInMinutes();
+                        $track->last_ride_completed_at = now();
+                        $track->total_driving += $duration;
+                        $track->save();
+                    }
                 }
             }
         });

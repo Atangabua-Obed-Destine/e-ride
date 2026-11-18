@@ -27,11 +27,25 @@ class CancelPendingTrips extends Command
             ->whereIn('current_status', [PENDING])
             ->whereNull('scheduled_at')
             ->where('updated_at', '<', $activeMinutes)
-            ->chunk(100, function ($trips) use ($reverbConnected) {
+            ->chunkById(100, function ($trips) use ($reverbConnected, $activeMinutes) {
                 foreach ($trips as $trip) {
+                    // Cancel first, and only if it is still waiting: a driver may have
+                    // accepted it a moment ago. Nobody is told about a trip that goes on.
+                    $cancelled = TripRequest::whereKey($trip->id)
+                        ->where('current_status', PENDING)->whereNull('driver_id')
+                        ->where('updated_at', '<', $activeMinutes)
+                        ->update(['current_status' => CANCELLED]);
+                    if (!$cancelled) {
+                        continue;
+                    }
+                    $trip->tripStatus()->update([CANCELLED => now()]);
                     $tripType = $trip->type == RIDE_REQUEST ? 'trip' : PARCEL;
                     $push = getNotification(key: $tripType . '_canceled', group: 'customer');
-                    sendDeviceNotification(fcm_token: $trip->customer->fcm_token,
+                    // A food or shop delivery: the order asks for another rider by itself
+                    // (StoreOrderService::syncFromTrip). Its customer is not told "cancelled",
+                    // only the drivers who were offered it.
+                    $storeTrip = \Modules\StoreManagement\Entities\StoreOrder::where('trip_request_id', $trip->id)->exists();
+                    $storeTrip || sendDeviceNotification(fcm_token: $trip->customer->fcm_token,
                         title: translate(key: $push['title'], locale: $trip->customer?->current_language_key),
                         description: textVariableDataFormat(value: $push['description'], tripId: $trip->ref_id, parcelId: $trip->ref_id, sentTime: pushSentTime($trip->updated_at), locale: $trip->customer?->current_language_key),
                         status: $push['status'],
@@ -41,7 +55,7 @@ class CancelPendingTrips extends Command
                         action: $push['action'],
                         user_id: $trip->customer->id
                     );
-                    $reverbConnected && DriverTripCancelledEvent::broadcast($trip);
+                    $reverbConnected && !$storeTrip && DriverTripCancelledEvent::broadcast($trip, null, 'no_driver');
                     if ($trip->tempNotifications->isNotEmpty()) {
                         $notification = [
                             'title' => $push['title'],
@@ -77,11 +91,5 @@ class CancelPendingTrips extends Command
                     }
                 }
             });
-
-        TripRequest::whereIn('current_status', [PENDING])
-            ->whereNull('scheduled_at')
-            ->where('updated_at', '<', $activeMinutes)->update([
-                'current_status' => 'cancelled',
-            ]);
     }
 }

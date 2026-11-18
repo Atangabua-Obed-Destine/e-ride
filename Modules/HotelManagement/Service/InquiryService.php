@@ -105,8 +105,9 @@ class InquiryService
             throw ValidationException::withMessages(['inquiry' => translate('You are checked in. Talk to the reception about leaving.')]);
         }
         DB::transaction(function () use ($inquiry) {
+            $this->lockActive($inquiry);
             foreach ($inquiry->stays()->where('status', HotelStay::KEPT)->get() as $stay) {
-                $this->stays->end($stay, HotelStay::RELEASED);
+                $this->stays->end($stay, HotelStay::RELEASED, [HotelStay::KEPT]);
             }
             $inquiry->update(['status' => HotelInquiry::CLOSED, 'close_reason' => 'guest']);
             $this->post($inquiry, HotelMessage::SYSTEM, 'released', null, ['reason' => 'guest']);
@@ -183,7 +184,10 @@ class InquiryService
         }
 
         DB::transaction(function () use ($inquiry, $hotel, $data, $until, $userId) {
-            $kept = $inquiry->stays()->where('status', HotelStay::KEPT)->get();
+            // One keep at a time per guest: two receptionists keeping at once, or a
+            // keep landing just after the guest let the room go, would hold too much.
+            $this->lockActive($inquiry);
+            $kept = $inquiry->stays()->where('status', HotelStay::KEPT)->lockForUpdate()->get();
             if ($kept->isNotEmpty()) {
                 // Already kept: only the time moves.
                 $kept->each(fn(HotelStay $s) => $s->update(['kept_until' => $until]));
@@ -230,8 +234,9 @@ class InquiryService
             throw ValidationException::withMessages(['inquiry' => translate('The guest is in the house. Mark them as left on the rooms board.')]);
         }
         DB::transaction(function () use ($inquiry, $reason, $userId) {
+            $this->lockActive($inquiry);
             foreach ($inquiry->stays()->where('status', HotelStay::KEPT)->get() as $stay) {
-                $this->stays->end($stay, HotelStay::RELEASED);
+                $this->stays->end($stay, HotelStay::RELEASED, [HotelStay::KEPT]);
             }
             $inquiry->update(['status' => HotelInquiry::CLOSED, 'close_reason' => $reason]);
             $this->post($inquiry, HotelMessage::HOTEL, 'closed', null, ['reason' => $reason], $userId);
@@ -367,5 +372,15 @@ class InquiryService
         if ((string)$inquiry->customer_id !== (string)$customer->id) {
             abort(404);
         }
+    }
+
+    /** The inquiry read again under a row lock; refuses one that closed meanwhile. */
+    protected function lockActive(HotelInquiry $inquiry): void
+    {
+        $fresh = HotelInquiry::whereKey($inquiry->id)->lockForUpdate()->first();
+        if (!$fresh || !$fresh->isActive()) {
+            throw ValidationException::withMessages(['inquiry' => translate('This conversation has just been closed.')]);
+        }
+        $inquiry->setRawAttributes($fresh->getAttributes(), true);
     }
 }

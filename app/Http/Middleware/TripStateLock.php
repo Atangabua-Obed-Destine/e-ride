@@ -27,6 +27,11 @@ use Symfony\Component\HttpFoundation\Response;
  * route parameter) or tripId. ->middleware('trip.lock:driver') also locks the
  * signed-in driver (one accept at a time), ->middleware('trip.lock:customer')
  * the signed-in customer (one new booking at a time).
+ *
+ * Trip reads (details, final fare) take it too: an event or push is sent while
+ * the change is still being saved, and the app refetches at once. Waiting for
+ * the lock means that refetch sees the saved trip, not the one before. With no
+ * change in progress the lock is free and costs one quick query.
  */
 class TripStateLock
 {
@@ -38,6 +43,7 @@ class TripStateLock
         $names = [];
         $tripId = $request->input('trip_request_id')
             ?? $request->route('trip_request_id')
+            ?? $request->route('ride_request_id')
             ?? $request->route('tripId');
         if ($tripId) {
             $names[] = 'eride:trip:' . $tripId;

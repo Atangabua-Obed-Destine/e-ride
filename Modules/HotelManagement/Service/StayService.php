@@ -151,10 +151,12 @@ class StayService
     public function arrive(Hotel $hotel, HotelStay $stay): HotelStay
     {
         $this->own($hotel, $stay->hotel_id);
-        if (!in_array($stay->status, [HotelStay::KEPT, HotelStay::BOOKED], true)) {
-            throw ValidationException::withMessages(['stay' => translate('This guest is already in, or the room was let go.')]);
-        }
-        $stay->update(['status' => HotelStay::IN_HOUSE, 'arrived_at' => now(), 'kept_until' => null]);
+        // Under a lock: the minute tick may be letting this kept room go right now.
+        DB::transaction(function () use ($stay) {
+            $fresh = $this->lockStay($stay, [HotelStay::KEPT, HotelStay::BOOKED], translate('This guest is already in, or the room was let go.'));
+            $fresh->update(['status' => HotelStay::IN_HOUSE, 'arrived_at' => now(), 'kept_until' => null]);
+            $stay->setRawAttributes($fresh->getAttributes(), true);
+        });
         $hotel->touchBoard();
         if ($stay->inquiry_id && ($inquiry = HotelInquiry::find($stay->inquiry_id))) {
             app(InquiryService::class)->staysChanged($inquiry, 'arrived');
@@ -166,10 +168,9 @@ class StayService
     public function noShow(Hotel $hotel, HotelStay $stay): HotelStay
     {
         $this->own($hotel, $stay->hotel_id);
-        if (!in_array($stay->status, [HotelStay::KEPT, HotelStay::BOOKED], true)) {
+        if (!$this->end($stay, HotelStay::NO_SHOW, [HotelStay::KEPT, HotelStay::BOOKED])) {
             throw ValidationException::withMessages(['stay' => translate('This guest is already in, or the room was let go.')]);
         }
-        $this->end($stay, HotelStay::NO_SHOW);
         $hotel->touchBoard();
         if ($stay->inquiry_id && ($inquiry = HotelInquiry::find($stay->inquiry_id))) {
             app(InquiryService::class)->staysChanged($inquiry, 'didnt_come');
@@ -181,12 +182,11 @@ class StayService
     public function leave(Hotel $hotel, HotelStay $stay): HotelStay
     {
         $this->own($hotel, $stay->hotel_id);
-        if ($stay->status !== HotelStay::IN_HOUSE) {
-            throw ValidationException::withMessages(['stay' => translate('This guest is not in the house.')]);
-        }
         DB::transaction(function () use ($stay) {
+            $fresh = $this->lockStay($stay, [HotelStay::IN_HOUSE], translate('This guest is not in the house.'));
             HotelRoomNight::where('stay_id', $stay->id)->where('night', '>=', today()->toDateString())->delete();
-            $stay->update(['status' => HotelStay::LEFT, 'left_at' => now(), 'ended_at' => now()]);
+            $fresh->update(['status' => HotelStay::LEFT, 'left_at' => now(), 'ended_at' => now()]);
+            $stay->setRawAttributes($fresh->getAttributes(), true);
             HotelRoom::whereKey($stay->room_id)->update(['state' => HotelRoom::TO_CLEAN, 'state_note' => null, 'state_at' => now()]);
         });
         $hotel->touchBoard();
@@ -200,21 +200,41 @@ class StayService
     public function cancel(Hotel $hotel, HotelStay $stay): HotelStay
     {
         $this->own($hotel, $stay->hotel_id);
-        if ($stay->source === HotelStay::ERIDE || $stay->status !== HotelStay::BOOKED) {
+        if ($stay->source === HotelStay::ERIDE || !$this->end($stay, HotelStay::RELEASED, [HotelStay::BOOKED])) {
             throw ValidationException::withMessages(['stay' => translate('Only a booking you entered and that has not started can be removed here.')]);
         }
-        $this->end($stay, HotelStay::RELEASED);
         $hotel->touchBoard();
         return $stay;
     }
 
-    /** Ends a stay that holds nights: they are free again. */
-    public function end(HotelStay $stay, string $status): void
+    /**
+     * Ends a stay that holds nights: they are free again. With $onlyFrom, only
+     * if the stay (read again under a lock) is still in one of those states and
+     * passes $still; returns false when it has moved on (the guest just arrived,
+     * the reception kept it longer).
+     */
+    public function end(HotelStay $stay, string $status, ?array $onlyFrom = null, ?callable $still = null): bool
     {
-        DB::transaction(function () use ($stay, $status) {
+        return DB::transaction(function () use ($stay, $status, $onlyFrom, $still) {
+            $fresh = HotelStay::whereKey($stay->id)->lockForUpdate()->first();
+            if (!$fresh || ($onlyFrom !== null && !in_array($fresh->status, $onlyFrom, true)) || ($still && !$still($fresh))) {
+                return false;
+            }
             HotelRoomNight::where('stay_id', $stay->id)->delete();
-            $stay->update(['status' => $status, 'ended_at' => now()]);
+            $fresh->update(['status' => $status, 'ended_at' => now()]);
+            $stay->setRawAttributes($fresh->getAttributes(), true);
+            return true;
         });
+    }
+
+    /** The stay read again under a row lock, in one of the $allowed states. */
+    protected function lockStay(HotelStay $stay, array $allowed, string $message): HotelStay
+    {
+        $fresh = HotelStay::whereKey($stay->id)->lockForUpdate()->first();
+        if (!$fresh || !in_array($fresh->status, $allowed, true)) {
+            throw ValidationException::withMessages(['stay' => $message]);
+        }
+        return $fresh;
     }
 
     public function setRoomState(Hotel $hotel, HotelRoom $room, string $state, ?string $note): HotelRoom
@@ -287,7 +307,12 @@ class StayService
         $released = 0;
         HotelStay::where('status', HotelStay::KEPT)->where('kept_until', '<', now())->orderBy('kept_until')->limit(200)->get()
             ->each(function (HotelStay $stay) use (&$released) {
-                $this->end($stay, HotelStay::RELEASED);
+                // Still kept and still past its time once locked: the guest may have
+                // just arrived, or the reception kept it longer.
+                if (!$this->end($stay, HotelStay::RELEASED, [HotelStay::KEPT],
+                    fn(HotelStay $s) => $s->kept_until && $s->kept_until->lt(now()))) {
+                    return;
+                }
                 $released++;
                 if ($stay->inquiry_id && ($inquiry = HotelInquiry::find($stay->inquiry_id))) {
                     app(InquiryService::class)->staysChanged($inquiry, 'expired');
@@ -296,8 +321,9 @@ class StayService
         $ended = 0;
         HotelStay::where('status', HotelStay::BOOKED)->where('check_out', '<=', today()->toDateString())->limit(200)->get()
             ->each(function (HotelStay $stay) use (&$ended) {
-                $this->end($stay, $stay->source === HotelStay::BLOCKED ? HotelStay::RELEASED : HotelStay::NO_SHOW);
-                $ended++;
+                if ($this->end($stay, $stay->source === HotelStay::BLOCKED ? HotelStay::RELEASED : HotelStay::NO_SHOW, [HotelStay::BOOKED])) {
+                    $ended++;
+                }
             });
         return ['released' => $released, 'ended' => $ended];
     }
