@@ -1014,6 +1014,12 @@ class StoreOrderService extends BaseService implements StoreOrderServiceInterfac
                         $order->save();
                         $this->alertAdmin($order, 'store_order_delivery_failed');
                         DB::afterCommit(fn() => $this->notifyCustomer($order, 'delivery_failed'));
+                        // The food comes back to the store, not to the customer: the store
+                        // gives the rider the return code (also on its order board).
+                        if ($trip->current_status === RETURNING && $trip->otp) {
+                            $code = (string)$trip->otp;
+                            DB::afterCommit(fn() => $this->tellStoreReturnCode($order, $code));
+                        }
                     }
                     break;
                 case CANCELLED:
@@ -1338,6 +1344,25 @@ class StoreOrderService extends BaseService implements StoreOrderServiceInterfac
             })::send($store->phone, $message);
         } catch (Throwable $e) {
             Log::info('Food & Shops partner SMS not sent', ['order' => $order->id, 'error' => $e->getMessage()]);
+        }
+    }
+
+    /** SMS to the store: the rider is bringing the order back; the code to give them. */
+    public function tellStoreReturnCode(StoreOrder $order, string $code): void
+    {
+        $store = $order->store;
+        if (!$store?->phone) {
+            return;
+        }
+        try {
+            $message = translate(key: 'E-Ride: the rider is bringing order #{ref} back to {store}. When you have it, give the rider this code: {code}', replace: [
+                'ref' => $order->ref_id, 'store' => $store->displayName(), 'code' => $code,
+            ]);
+            (new class {
+                use SmsGatewayForMessage;
+            })::send($store->phone, $message);
+        } catch (Throwable $e) {
+            Log::info('Food & Shops return code SMS not sent', ['order' => $order->id, 'error' => $e->getMessage()]);
         }
     }
 

@@ -162,6 +162,7 @@
         cancelled: @json(translate('Cancelled')),
         expired: @json(translate('Expired')),
         failed: @json(translate('Not delivered')),
+        comingBack: @json(translate('Not delivered: the rider is bringing it back. When you have it, give this code')),
         offline: @json(translate('Offline, retrying')),
         live: @json(translate('Live')),
         total: @json(translate('Food total')),
@@ -337,6 +338,10 @@
     function doneRow(o) {
         var map = {delivered: ['ok', T.delivered], rejected: ['no', T.rejected], cancelled: ['no', T.cancelled], expired: ['no', T.expired], delivery_failed: ['no', T.failed]};
         var m = map[o.status] || ['no', o.status];
+        if (o.return_code) {
+            return '<div class="done-row" style="flex-wrap:wrap"><b>#' + o.ref + '</b><span class="text-muted">' + T.comingBack + '</span>' +
+                '<span class="o__code"><b>' + esc(o.return_code) + '</b></span></div>';
+        }
         return '<div class="done-row"><b>#' + o.ref + '</b><span class="text-muted">' + count(o.items_count) + ' · ' + esc(o.items_subtotal_text) + '</span><span class="tag ' + m[0] + '">' + m[1] + '</span></div>';
     }
     function lane(cls, title, list, render) {

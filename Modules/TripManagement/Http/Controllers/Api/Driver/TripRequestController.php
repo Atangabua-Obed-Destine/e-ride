@@ -290,6 +290,13 @@ class TripRequestController extends Controller
             return response()->json(responseFormatter(constant: TRIP_REQUEST_404), 404);
         }
 
+        // A food order goes back to the store, which gives the rider the code: it
+        // gets it again by SMS (and sees it on its order board), not the customer.
+        $storeOrder = \Modules\StoreManagement\Entities\StoreOrder::where('trip_request_id', $trip->id)->first();
+        if ($storeOrder) {
+            $trip->otp && app(\Modules\StoreManagement\Service\Interfaces\StoreOrderServiceInterface::class)->tellStoreReturnCode($storeOrder, (string)$trip->otp);
+            return response()->json(responseFormatter(DEFAULT_UPDATE_200, TripRequestResource::make($trip)));
+        }
         $push = getNotification('parcel_returning_otp');
         sendDeviceNotification(fcm_token: $trip->customer->fcm_token,
             title: translate(key: $push['title'], locale: $trip?->customer?->current_language_key),

@@ -45,6 +45,9 @@ interface StoreOrderServiceInterface extends BaseServiceInterface
     /** Money arrived after the order closed: alert the admin to send it back, tell the customer. */
     public function onLatePayment(string $orderId, float $amount, string $reference): void;
 
+    /** SMS to the store: the rider brings the order back; the return code to give them. */
+    public function tellStoreReturnCode(StoreOrder $order, string $code): void;
+
     public function accept(StoreOrder $order, int $prepMinutes): StoreOrder;
 
     public function reject(StoreOrder $order, string $reason, string $by = 'partner'): StoreOrder;

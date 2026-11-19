@@ -58,7 +58,10 @@ class PartnerOrderController extends Controller
                 $q->whereIn('status', StoreOrder::ACTIVE)
                     // Confirmed, waiting for the customer to pay.
                     ->orWhere(fn($w) => $w->where('status', StoreOrder::AWAITING_PAYMENT)->whereNotNull('confirmed_at'))
-                    ->orWhere(fn($w) => $w->whereIn('status', StoreOrder::FINAL)->where('updated_at', '>=', now()->subHours(3)));
+                    ->orWhere(fn($w) => $w->whereIn('status', StoreOrder::FINAL)->where('updated_at', '>=', now()->subHours(3)))
+                    // Not delivered: on the board while the rider brings it back (with the return code).
+                    ->orWhere(fn($w) => $w->where('status', StoreOrder::DELIVERY_FAILED)->where('updated_at', '>=', now()->subDay())
+                        ->whereHas('trip', fn($t) => $t->where('current_status', RETURNING)));
             })
             ->orderBy('placed_at')
             ->limit(100)
@@ -216,6 +219,8 @@ class PartnerOrderController extends Controller
                 'pickup_code' => $showCode && in_array($trip->current_status, [ACCEPTED, OUT_FOR_PICKUP], true) ? $trip->otp : null,
             ] : null,
             'trip_status' => $trip?->current_status,
+            // Coming back to the store: the store gives the rider this code when it has the food.
+            'return_code' => $trip?->current_status === RETURNING ? $trip->otp : null,
         ];
     }
 }

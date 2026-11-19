@@ -1398,6 +1398,11 @@ class TripRequestController extends Controller
         if ($trip->current_status == RETURNED) {
             return response()->json(responseFormatter(TRIP_STATUS_RETURNED_403), 403);
         }
+        // Only the customer's own parcel: a food order goes back to the store,
+        // which confirms with the return code, not the person who ordered.
+        if ($trip->customer_id != auth('api')->id() || \Modules\StoreManagement\Entities\StoreOrder::where('trip_request_id', $trip->id)->exists()) {
+            return response()->json(responseFormatter(DEFAULT_403), 403);
+        }
         DB::beginTransaction();
         $attributes = [];
 
