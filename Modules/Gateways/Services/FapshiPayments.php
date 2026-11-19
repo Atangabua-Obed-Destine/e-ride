@@ -59,6 +59,9 @@ class FapshiPayments
         if ($paymentRequest->is_paid) {
             return ['status' => FapshiTransaction::SUCCESSFUL];
         }
+        if ($closed = $this->closedReason($paymentRequest, true)) {
+            return ['error' => $closed];
+        }
 
         if (strtoupper((string)$paymentRequest->currency_code) !== 'XAF') {
             return ['error' => translate('Mobile money only accepts payments in FCFA (XAF).')];
@@ -217,6 +220,16 @@ class FapshiPayments
                 if ($paymentRequest->is_paid) {
                     return $this->flag($tx, FapshiTransaction::REFUNDABLE, 'The payment request was already settled when this payment arrived (paid twice).');
                 }
+                if ($this->closedReason($paymentRequest, false)) {
+                    // A food order that stopped waiting for this money (time over,
+                    // cancelled, paid another way): it is not applied, and the
+                    // admin sends it back by Mobile Money.
+                    $orderId = (string)$paymentRequest->attribute_id;
+                    $amount = (float)($tx->amount_received ?: $tx->charged_amount);
+                    $reference = (string)$tx->external_id;
+                    DB::afterCommit(fn() => app(\Modules\StoreManagement\Service\Interfaces\StoreOrderServiceInterface::class)->onLatePayment($orderId, $amount, $reference));
+                    return $this->flag($tx, FapshiTransaction::REFUNDABLE, 'Paid after the order stopped waiting for payment.');
+                }
                 if ($paymentRequest->hook === 'tripRequestUpdate') {
                     $trip = TripRequest::whereKey($paymentRequest->attribute_id)->lockForUpdate()->first();
                     if ($trip && $trip->payment_status === PAID) {
@@ -247,6 +260,51 @@ class FapshiPayments
             Log::error('Fapshi settlement failed, will retry', ['external_id' => $transaction->external_id, 'error' => $e->getMessage()]);
             return $transaction->fresh()->status;
         }
+    }
+
+    /**
+     * Close a payment link so it takes no more money (the time to pay is over).
+     * True once it is closed; false when Fapshi could not be reached, or the
+     * payment went through just before (it is applied then).
+     */
+    public function expire(FapshiTransaction $transaction): bool
+    {
+        if (!$transaction->isOpen() || !$transaction->trans_id) {
+            return true;
+        }
+        try {
+            $response = $this->client->expirePay($transaction->trans_id);
+        } catch (Throwable $e) {
+            Log::info('Fapshi expire-pay unreachable', ['trans_id' => $transaction->trans_id, 'error' => $e->getMessage()]);
+            return false;
+        }
+        $message = strtolower((string)($response->json('message') ?? ''));
+        if (!$response->successful() && !str_contains($message, 'expired')) {
+            Log::info('Fapshi expire-pay refused', ['trans_id' => $transaction->trans_id, 'status' => $response->status(), 'message' => $message]);
+            // Paid in the meantime, perhaps: settle it.
+            $this->sync($transaction);
+            return false;
+        }
+        // One last look: a payment that landed just before the link closed is applied.
+        if ($this->sync($transaction) === FapshiTransaction::SUCCESSFUL) {
+            return false;
+        }
+        FapshiTransaction::whereKey($transaction->id)->whereIn('status', FapshiTransaction::OPEN)
+            ->update(['status' => FapshiTransaction::EXPIRED, 'failure_reason' => 'Closed by E-Ride: the time to pay was over.']);
+        return true;
+    }
+
+    /**
+     * Why the thing being paid for no longer takes this payment, or null.
+     * Food orders only, for now: their time to pay is short and strict.
+     */
+    protected function closedReason(PaymentRequest $paymentRequest, bool $starting): ?string
+    {
+        if ($paymentRequest->hook !== 'storeOrderPaymentUpdate' || !$paymentRequest->attribute_id) {
+            return null;
+        }
+        return app(\Modules\StoreManagement\Service\Interfaces\StoreOrderServiceInterface::class)
+            ->paymentClosedReason((string)$paymentRequest->attribute_id, $starting);
     }
 
     /** Open attempts for a payment request, newest first. */

@@ -30,6 +30,7 @@ class StoreSettingController extends Controller
             'parcel_weight' => 'required|numeric|min:0.1|max:100',
         ]);
         updateBusinessSetting(keyName: 'store_ordering_status', settingType: STORE_SETTINGS, value: $request->boolean('status') ? '1' : '0');
+        updateBusinessSetting(keyName: 'store_refund_status', settingType: STORE_SETTINGS, value: $request->boolean('refund_status') ? '1' : '0');
         updateBusinessSetting(keyName: 'store_service_label', settingType: STORE_SETTINGS, value: trim($data['service_label']));
         updateBusinessSetting(keyName: 'store_partner_response_minutes', settingType: STORE_SETTINGS, value: (string)$data['partner_response_minutes']);
         updateBusinessSetting(keyName: 'store_rider_lead_minutes', settingType: STORE_SETTINGS, value: (string)$data['rider_lead_minutes']);

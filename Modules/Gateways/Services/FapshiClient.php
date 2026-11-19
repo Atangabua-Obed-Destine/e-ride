@@ -138,6 +138,15 @@ class FapshiClient
     }
 
     /**
+     * POST /expire-pay {transId}: the link stops taking payments. Only for
+     * links made by initiate-pay. 400 "Link already expired" when it was.
+     */
+    public function expirePay(string $transId): Response
+    {
+        return $this->http()->post($this->baseUrl() . '/expire-pay', ['transId' => $transId]);
+    }
+
+    /**
      * GET /payment-status/{transId} -> status CREATED | PENDING | SUCCESSFUL |
      * FAILED | EXPIRED, with amount, revenue, externalId, financialTransId,
      * medium and dateConfirmed. Limited to 6 calls a minute per transId; a 429

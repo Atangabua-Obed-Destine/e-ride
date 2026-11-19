@@ -15,7 +15,7 @@
                     <div class="card-body d-flex flex-wrap align-items-center justify-content-between gap-3">
                         <div class="flex-grow-1" style="min-width: 240px">
                             <h5 class="mb-1">{{ translate('Food_&_Shops_in_the_customer_app') }}</h5>
-                            <p class="fs-12 text-muted mb-0">{{ translate('When on, customers see the service on the home screen and can order from active, open stores. Orders are prepaid by mobile money or E-Ride wallet. E-Ride keeps the delivery fee; partners receive the full food price.') }}</p>
+                            <p class="fs-12 text-muted mb-0">{{ translate('When on, customers see the service on the home screen and can order from active, open stores. The store confirms each order, then the customer pays by Mobile Money. E-Ride keeps the delivery fee; partners receive the full food price.') }}</p>
                         </div>
                         <label class="switcher">
                             <input type="hidden" name="status" value="0">
@@ -35,7 +35,7 @@
                             <div class="col-sm-6">
                                 <label class="form-label">{{ translate('Partner_must_accept_within_(minutes)') }}</label>
                                 <input type="number" name="partner_response_minutes" class="form-control" required min="2" max="60" value="{{ $settings['partner_response_minutes'] }}">
-                                <div class="fs-12 text-muted mt-1">{{ translate('After this, the order is cancelled and the customer is refunded to their wallet.') }}</div>
+                                <div class="fs-12 text-muted mt-1">{{ translate('After this, the order is cancelled. The customer has not paid yet.') }}</div>
                             </div>
                             <div class="col-sm-6">
                                 <label class="form-label">{{ translate('Call_a_rider_before_food_is_ready_(minutes)') }}</label>
@@ -47,6 +47,23 @@
                                 <input type="number" name="parcel_weight" class="form-control" required min="0.1" max="100" step="0.1" value="{{ $settings['parcel_weight'] }}">
                             </div>
                         </div>
+                    </div>
+                </div>
+
+                <div class="card mb-3">
+                    <div class="card-body d-flex flex-wrap align-items-center justify-content-between gap-3">
+                        <div class="flex-grow-1" style="min-width: 240px">
+                            <h5 class="mb-1">{{ translate('Refunds') }}</h5>
+                            <p class="fs-12 text-muted mb-0">{{ translate('When on, a paid order that is cancelled (by you, or by the store when no rider comes) is refunded to the customer E-Ride wallet, and the customer is told so. Needs the wallet switched on in Ways to pay. When off, nothing is refunded or promised: you are alerted and your team settles with the customer.') }}</p>
+                            @if($settings['refund_status'] && !\Modules\TripManagement\Lib\PaymentWays::wallet())
+                                <p class="fs-12 text-danger mb-0 mt-1">{{ translate('The wallet is switched off in Ways to pay, so refunds are off too.') }}</p>
+                            @endif
+                        </div>
+                        <label class="switcher">
+                            <input type="hidden" name="refund_status" value="0">
+                            <input class="switcher_input" type="checkbox" name="refund_status" value="1" {{ $settings['refund_status'] ? 'checked' : '' }}>
+                            <span class="switcher_control"></span>
+                        </label>
                     </div>
                 </div>
 

@@ -103,11 +103,13 @@ class PartnerOrderController extends Controller
         } catch (ValidationException $e) {
             return response()->json(['ok' => false, 'message' => collect($e->errors())->flatten()->first()], 422);
         }
+        // Declined before payment, or a paid order cancelled because no rider came.
+        $ended = in_array($order->status, [StoreOrder::REJECTED, StoreOrder::CANCELLED], true);
         return response()->json([
-            'ok' => in_array($order->status, [StoreOrder::REJECTED], true),
-            'message' => $order->status === StoreOrder::REJECTED ? null : translate('This order changed in the meantime. The board has been refreshed.'),
+            'ok' => $ended,
+            'message' => $ended ? null : translate('This order changed in the meantime. The board has been refreshed.'),
             'order' => $this->present($order->fresh(['items', 'store', 'trip.driver', 'trip.vehicle']), StoreSettings::all()['partner_response_minutes']),
-        ], $order->status === StoreOrder::REJECTED ? 200 : 409);
+        ], $ended ? 200 : 409);
     }
 
     /** Dishes that can be offered instead, for the "Suggest changes" sheet. */
@@ -173,6 +175,8 @@ class PartnerOrderController extends Controller
         $driver = $trip?->driver;
         // Same test as the apps' config (otp_confirmation_for_trip).
         $showCode = (businessConfig('driver_otp_confirmation_for_trip')?->value ?? 0) == 1;
+        $noRider = $o->status === StoreOrder::RIDER_REQUESTED && $o->payment_status === StoreOrder::PAID
+            && !($trip?->driver_id && in_array($trip->current_status, [ACCEPTED, OUT_FOR_PICKUP, ONGOING, COMPLETED], true));
         return [
             'id' => $o->id,
             'ref' => $o->ref_id,
@@ -194,8 +198,12 @@ class PartnerOrderController extends Controller
             // Call or WhatsApp the customer while the order is open; hidden once it is over.
             'customer_phone' => $o->isActive() ? $o->receiver_phone : null,
             'whatsapp' => $o->isActive() ? $this->whatsappNumber($o->receiver_phone) : null,
-            // Only before payment: a paid order goes ahead, no refunds.
-            'can_cancel' => in_array($o->status, [StoreOrder::CHANGES_PROPOSED], true) || $o->isConfirmedUnpaid(),
+            // Before payment; after payment only when no rider has taken it (E-Ride
+            // keeps calling riders until the store gives up on it).
+            'can_cancel' => in_array($o->status, [StoreOrder::CHANGES_PROPOSED], true) || $o->isConfirmedUnpaid() || $noRider,
+            'no_rider' => $noRider,
+            'rider_attempts' => (int)$o->rider_attempts,
+            'refunds' => StoreSettings::refunds(),
             'prep_minutes' => $o->prep_minutes,
             'ready_at' => $o->ready_at?->toIso8601String(),
             'picked_up_at' => $o->picked_up_at?->toIso8601String(),

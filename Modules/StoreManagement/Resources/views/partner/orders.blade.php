@@ -102,6 +102,7 @@
                 <div class="modal-body">
                     <p class="text-muted fs-14" data-reject-hint>{{ translate('Nothing was paid yet. Tell the customer why:') }}</p>
                     <div class="d-grid gap-2" data-reasons>
+                        <button type="button" class="btn btn-outline-secondary text-start" data-reason="{{ translate('No rider came to collect the order') }}" data-reason-norider style="display:none">{{ translate('No rider came to collect the order') }}</button>
                         @foreach([translate('Too busy right now'), translate('An item is sold out'), translate('We are closing soon')] as $reason)
                             <button type="button" class="btn btn-outline-secondary text-start" data-reason="{{ $reason }}">{{ $reason }}</button>
                         @endforeach
@@ -167,7 +168,7 @@
         note: @json(translate('Note')),
         newOrderTitle: @json(translate('New order')),
         accepted: @json(translate('Order accepted')),
-        declined: @json(translate('Order declined, the customer is refunded')),
+        declined: @json(translate('Order declined')),
         riderCalled: @json(translate('Looking for a rider now')),
         failedSave: @json(translate('Could not save. Check your connection and try again.')),
         confirm: @json(translate('Confirm')),
@@ -187,6 +188,11 @@
         declineTitle: @json(translate('Decline this order')),
         hintUnpaid: @json(translate('Nothing was paid yet. Tell the customer why:')),
         hintPaid: @json(translate('The customer is refunded to their E-Ride wallet straight away. Tell them why:')),
+        hintPaidNoRefund: @json(translate('The customer has paid. E-Ride will contact them about their money. Tell them why:')),
+        hintNoRider: @json(translate('No rider has taken this order yet, and E-Ride keeps calling riders. Cancel only if you cannot keep the food.')),
+        declineSend: @json(translate('Decline order')),
+        cancelSend: @json(translate('Cancel order')),
+        tries: @json(translate('try')),
         cancelled2: @json(translate('Order cancelled')),
         changesSent: @json(translate('Changes sent to the customer')),
         keep: @json(translate('Keep')),
@@ -265,7 +271,7 @@
     }
     function riderHtml(o) {
         if (o.status === 'picked_up') return '<div class="o__state" style="color:var(--ok)"><i class="bi bi-bicycle"></i>' + T.pickedUp + '</div>';
-        if (!o.rider) return '<div class="o__state searching">' + T.searching + '</div>';
+        if (!o.rider) return '<div class="o__state searching">' + T.searching + (o.rider_attempts > 1 ? ' · ' + T.tries + ' ' + o.rider_attempts : '') + '</div>';
         return '<div class="o__rider"><i class="bi bi-person-circle"></i><div><b>' + esc(o.rider.name) + '</b><br>' +
             '<a href="tel:' + esc(o.rider.phone) + '">' + esc(o.rider.phone) + '</a>' + (o.rider.vehicle ? ' · ' + esc(o.rider.vehicle) : '') + '</div>' +
             (o.rider.pickup_code ? '<div class="o__code"><b>' + esc(o.rider.pickup_code) + '</b><small>' + T.pickupCode + '</small></div>' : '') + '</div>' +
@@ -433,7 +439,10 @@
         var o = orders.find(function (x) { return x.id === id; }) || {};
         var m = document.getElementById('reject-modal');
         m.querySelector('[data-reject-title]').textContent = cancelling ? T.cancelTitle : T.declineTitle;
-        m.querySelector('[data-reject-hint]').textContent = o.paid ? T.hintPaid : T.hintUnpaid;
+        var paidHint = o.refunds ? T.hintPaid : T.hintPaidNoRefund;
+        m.querySelector('[data-reject-hint]').textContent = o.no_rider ? T.hintNoRider + ' ' + paidHint : (o.paid ? paidHint : T.hintUnpaid);
+        m.querySelector('[data-reason-norider]').style.display = o.no_rider ? '' : 'none';
+        m.querySelector('[data-reason-send]').textContent = cancelling ? T.cancelSend : T.declineSend;
         m.dataset.okText = cancelling ? T.cancelled2 : T.declined;
         bootstrap.Modal.getOrCreateInstance(m).show();
     }

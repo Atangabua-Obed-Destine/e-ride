@@ -39,6 +39,12 @@ interface StoreOrderServiceInterface extends BaseServiceInterface
     /** Payment hook (storeOrderPaymentUpdate). */
     public function onGatewayPaid(PaymentRequest $paymentRequest): void;
 
+    /** Why the order can no longer be paid ($starting: a new payment page), or null while it can. */
+    public function paymentClosedReason(string $orderId, bool $starting): ?string;
+
+    /** Money arrived after the order closed: alert the admin to send it back, tell the customer. */
+    public function onLatePayment(string $orderId, float $amount, string $reference): void;
+
     public function accept(StoreOrder $order, int $prepMinutes): StoreOrder;
 
     public function reject(StoreOrder $order, string $reason, string $by = 'partner'): StoreOrder;

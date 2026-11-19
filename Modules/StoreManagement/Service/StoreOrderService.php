@@ -57,6 +57,8 @@ class StoreOrderService extends BaseService implements StoreOrderServiceInterfac
     public const UNPAID_EXPIRY_MINUTES = 30;
     /** After the restaurant confirms, the customer pays within this. */
     public const PAY_MINUTES = 10;
+    /** A customer still approving the payment on their phone when the time ends gets this long. */
+    public const PAYING_GRACE_MINUTES = 3;
     /** The customer answers suggested changes within this. */
     public const ANSWER_MINUTES = 10;
     public const QUOTE_MINUTES = 15;
@@ -500,8 +502,7 @@ class StoreOrderService extends BaseService implements StoreOrderServiceInterfac
                 return;
             }
             // The same payment reported twice (some gateways do): already applied.
-            if ($order->payment_request_id === $paymentRequest->id
-                || Transaction::where('attribute', 'store_order_late_payment')->where('attribute_id', $order->id)->where('trx_ref_id', $paymentRequest->id)->exists()) {
+            if ($order->payment_request_id === $paymentRequest->id) {
                 return;
             }
             if ($order->status === StoreOrder::AWAITING_PAYMENT && $order->payment_status === StoreOrder::UNPAID) {
@@ -509,11 +510,84 @@ class StoreOrderService extends BaseService implements StoreOrderServiceInterfac
                 $this->markPaid($order, $paymentRequest->payment_method);
                 return;
             }
-            // Paid after the order expired or was cancelled, or paid twice:
-            // the money goes to the wallet, never lost.
-            $this->creditWallet($order->customer_id, (float)$paymentRequest->payment_amount, $order->id, 'store_order_late_payment', 'Late or duplicate food & shop order payment added to customer wallet', $paymentRequest->id);
-            $this->notifyCustomer($order, 'refunded_late');
+            // Paid after the order closed, or paid twice. Mobile Money links are
+            // expired when the time to pay ends (closePayments), so this is rare.
+            $this->onLatePayment($order->id, (float)$paymentRequest->payment_amount, (string)$paymentRequest->id);
         });
+    }
+
+    /**
+     * Why this order can no longer be paid, or null while it can. The payment
+     * gateway asks before opening a payment page and before accepting money.
+     * $starting: a new payment page (refused once the time to pay is over);
+     * otherwise money already sent (accepted while the order still waits for
+     * it, which covers a customer still approving on their phone at the end).
+     */
+    public function paymentClosedReason(string $orderId, bool $starting): ?string
+    {
+        $order = StoreOrder::find($orderId);
+        if (!$order) {
+            return translate('This order no longer exists.');
+        }
+        if ($order->status !== StoreOrder::AWAITING_PAYMENT || $order->payment_status !== StoreOrder::UNPAID) {
+            return $order->payment_status === StoreOrder::PAID
+                ? translate('This order is already paid.')
+                : translate('The time to pay for this order is over. Please order again.');
+        }
+        if ($starting && $order->pay_by && $order->pay_by->isPast()) {
+            return translate('The time to pay for this order is over. Please order again.');
+        }
+        return null;
+    }
+
+    /**
+     * Money arrived for an order that is no longer waiting for it. It is not
+     * put in the wallet: the admin is alerted to send it back by Mobile Money,
+     * and the customer is told so. Once per payment.
+     */
+    public function onLatePayment(string $orderId, float $amount, string $reference): void
+    {
+        if (!Cache::add('store-order-late-payment:' . $reference, 1, now()->addDays(30))) {
+            return;
+        }
+        $order = StoreOrder::find($orderId);
+        if (!$order) {
+            return;
+        }
+        Log::warning('Food & Shops payment arrived after the order closed', ['order' => $order->id, 'amount' => $amount, 'reference' => $reference]);
+        $this->alertAdmin($order, 'store_order_late_payment_send_it_back');
+        DB::afterCommit(fn() => $this->notifyCustomer($order, 'paid_late', $amount));
+    }
+
+    /**
+     * Before an unpaid order expires: settle what is in flight and close its
+     * Mobile Money links so nobody can pay after the time is over.
+     * False while it must wait: paid just now (the order moved on), or the
+     * customer is approving the payment on their phone (a few minutes' grace).
+     */
+    protected function closePayments(StoreOrder $order): bool
+    {
+        $requests = PaymentRequest::where('attribute', 'store_order')->where('attribute_id', $order->id)->where('is_paid', 0)->get();
+        if ($requests->isEmpty()) {
+            return true;
+        }
+        $fapshi = app(\Modules\Gateways\Services\FapshiPayments::class);
+        $graceOver = !$order->pay_by || $order->pay_by->lt(now()->subMinutes(self::PAYING_GRACE_MINUTES));
+        foreach ($requests as $request) {
+            foreach ($fapshi->openAttempts($request) as $attempt) {
+                $status = $fapshi->sync($attempt);
+                if ($status === \Modules\Gateways\Entities\FapshiTransaction::SUCCESSFUL) {
+                    return false;
+                }
+                if ($status === \Modules\Gateways\Entities\FapshiTransaction::PENDING && !$graceOver) {
+                    return false;
+                }
+                if (!$fapshi->expire($attempt) && !$graceOver) {
+                    return false;
+                }
+            }
+        }
+        return true;
     }
 
     protected function markPaid(StoreOrder $order, string $method): StoreOrder
@@ -588,13 +662,19 @@ class StoreOrderService extends BaseService implements StoreOrderServiceInterfac
             $open = in_array($order->status, [StoreOrder::AWAITING_CONFIRMATION, StoreOrder::CHANGES_PROPOSED, StoreOrder::PLACED], true)
                 || $order->isConfirmedUnpaid();
             if (!$open) {
+                // Paid, cooked, and no rider has taken it: E-Ride keeps calling riders
+                // until the store decides to give up on it.
+                if ($by === 'partner' && $order->status === StoreOrder::RIDER_REQUESTED && $order->payment_status === StoreOrder::PAID) {
+                    return $this->cancelWithoutRider($order, $reason);
+                }
                 if ($order->payment_status === StoreOrder::PAID && $by === 'partner') {
                     throw ValidationException::withMessages(['order' => translate('This order is paid, so it can no longer be cancelled. Call the customer, or E-Ride support if there is a real problem.')]);
                 }
                 return $order;
             }
-            if ($order->status === StoreOrder::PLACED && $order->payment_status === StoreOrder::PAID) {
-                $this->refundOrder($order, $order->total);
+            if ($order->status === StoreOrder::PLACED && $order->payment_status === StoreOrder::PAID
+                && !$this->refundOrder($order, $order->total)) {
+                $this->alertAdmin($order, 'store_order_paid_cancelled_settle_with_customer');
             }
             $order->status = StoreOrder::REJECTED;
             $order->cancelled_at = now();
@@ -613,6 +693,9 @@ class StoreOrderService extends BaseService implements StoreOrderServiceInterfac
                 throw ValidationException::withMessages(['order' => translate('The store has already started on this order, so it can no longer be cancelled here. Contact support if there is a problem.')]);
             }
             if ($order->payment_status === StoreOrder::PAID) {
+                if (!StoreSettings::refunds()) {
+                    throw ValidationException::withMessages(['order' => translate('This order is paid, so it can no longer be cancelled. Call the store, or E-Ride support if there is a problem.')]);
+                }
                 $this->refundOrder($order, $order->total);
             }
             $order->status = StoreOrder::CANCELLED;
@@ -623,47 +706,80 @@ class StoreOrderService extends BaseService implements StoreOrderServiceInterfac
         });
     }
 
+    /**
+     * The store gives up on a paid order no rider has taken. Caller holds the
+     * order lock. Refunded when refunds are on; otherwise E-Ride's team is
+     * alerted and settles with the customer.
+     *
+     * @throws ValidationException when a rider has just accepted it
+     */
+    protected function cancelWithoutRider(StoreOrder $order, string $reason): StoreOrder
+    {
+        $this->releaseUnclaimedTrip($order, translate('A rider has just accepted this delivery, so the order goes ahead.'));
+        if (!$this->refundOrder($order, $order->total)) {
+            $this->alertAdmin($order, 'store_order_paid_cancelled_settle_with_customer');
+        }
+        $order->status = StoreOrder::CANCELLED;
+        $order->cancelled_at = now();
+        $order->cancelled_by = 'partner';
+        $order->cancel_reason = mb_substr($reason, 0, 255);
+        $order->save();
+        DB::afterCommit(fn() => $this->notifyCustomer($order, 'cancelled'));
+        return $order;
+    }
+
+    /**
+     * Cancels the order's delivery trip if no rider has taken it, and stops it
+     * ringing on the riders it was offered to. Caller holds the order lock.
+     *
+     * @throws ValidationException when a rider has accepted it
+     */
+    protected function releaseUnclaimedTrip(StoreOrder $order, string $taken): void
+    {
+        // Locked: a rider accepting at this moment either wins (and the cancel is
+        // refused) or finds the trip cancelled.
+        $trip = $order->trip_request_id ? TripRequest::whereKey($order->trip_request_id)->lockForUpdate()->first() : null;
+        if ($trip && ($trip->driver_id || !in_array($trip->current_status, [PENDING, CANCELLED], true))) {
+            throw ValidationException::withMessages(['order' => $taken]);
+        }
+        if (!$trip || $trip->current_status !== PENDING) {
+            return;
+        }
+        $trip->update(['current_status' => CANCELLED]);
+        $trip->tripStatus()->update([CANCELLED => now()]);
+        $tripId = $trip->id;
+        DB::afterCommit(function () use ($tripId) {
+            $trip = TripRequest::find($tripId);
+            $offers = \Modules\TripManagement\Entities\TempTripNotification::with('user')->where('trip_request_id', $tripId)->get();
+            if (checkReverbConnection()) {
+                foreach ($offers as $offer) {
+                    try {
+                        $offer->user && \App\Events\CustomerTripCancelledEvent::broadcast($offer->user, $trip);
+                    } catch (\Throwable) {
+                    }
+                }
+            }
+            $push = getNotification('customer_canceled_trip');
+            foreach ($offers as $offer) {
+                if ($offer->user?->fcm_token) {
+                    sendDeviceNotification(fcm_token: $offer->user->fcm_token,
+                        title: translate(key: $push['title'], locale: $offer->user->current_language_key),
+                        description: textVariableDataFormat(value: $push['description'], tripId: $trip->ref_id, sentTime: pushSentTime($trip->updated_at), locale: $offer->user->current_language_key),
+                        status: $push['status'], ride_request_id: $trip->id, type: $trip->type,
+                        notification_type: 'parcel', action: $push['action'], user_id: $offer->user->id);
+                }
+            }
+            \Modules\TripManagement\Entities\TempTripNotification::where('trip_request_id', $tripId)->delete();
+        });
+    }
+
     public function cancelByAdmin(StoreOrder $order, string $reason, bool $refund = true): StoreOrder
     {
         return $this->locked($order, function (StoreOrder $order) use ($reason, $refund) {
             if (in_array($order->status, StoreOrder::FINAL, true) || $order->status === StoreOrder::PICKED_UP) {
                 throw ValidationException::withMessages(['order' => translate('This order can no longer be cancelled.')]);
             }
-            // Locked: a rider accepting at this moment either wins (and the cancel is
-            // refused) or finds the trip cancelled.
-            $trip = $order->trip_request_id ? TripRequest::whereKey($order->trip_request_id)->lockForUpdate()->first() : null;
-            if ($trip && ($trip->driver_id || !in_array($trip->current_status, [PENDING, CANCELLED], true))) {
-                throw ValidationException::withMessages(['order' => translate('A rider has already accepted this delivery. Ask the rider to cancel it first.')]);
-            }
-            if ($trip && $trip->current_status === PENDING) {
-                $trip->update(['current_status' => CANCELLED]);
-                $trip->tripStatus()->update([CANCELLED => now()]);
-                // The riders it was offered to stop ringing.
-                $tripId = $trip->id;
-                DB::afterCommit(function () use ($tripId) {
-                    $trip = TripRequest::find($tripId);
-                    $offers = \Modules\TripManagement\Entities\TempTripNotification::with('user')->where('trip_request_id', $tripId)->get();
-                    if (checkReverbConnection()) {
-                        foreach ($offers as $offer) {
-                            try {
-                                $offer->user && \App\Events\CustomerTripCancelledEvent::broadcast($offer->user, $trip);
-                            } catch (\Throwable) {
-                            }
-                        }
-                    }
-                    $push = getNotification('customer_canceled_trip');
-                    foreach ($offers as $offer) {
-                        if ($offer->user?->fcm_token) {
-                            sendDeviceNotification(fcm_token: $offer->user->fcm_token,
-                                title: translate(key: $push['title'], locale: $offer->user->current_language_key),
-                                description: textVariableDataFormat(value: $push['description'], tripId: $trip->ref_id, sentTime: pushSentTime($trip->updated_at), locale: $offer->user->current_language_key),
-                                status: $push['status'], ride_request_id: $trip->id, type: $trip->type,
-                                notification_type: 'parcel', action: $push['action'], user_id: $offer->user->id);
-                        }
-                    }
-                    \Modules\TripManagement\Entities\TempTripNotification::where('trip_request_id', $tripId)->delete();
-                });
-            }
+            $this->releaseUnclaimedTrip($order, translate('A rider has already accepted this delivery. Ask the rider to cancel it first.'));
             if ($refund && $order->payment_status === StoreOrder::PAID) {
                 $this->refundOrder($order, $order->total);
             }
@@ -947,7 +1063,20 @@ class StoreOrderService extends BaseService implements StoreOrderServiceInterfac
             ->where(fn($q) => $q->where('pay_by', '<', now())
                 ->orWhere(fn($w) => $w->whereNull('pay_by')->where('created_at', '<', now()->subMinutes(self::UNPAID_EXPIRY_MINUTES))))
             ->pluck('id')->each(function ($id) use (&$counts) {
-                $this->locked(StoreOrder::find($id), function (StoreOrder $order) use (&$counts) {
+                $order = StoreOrder::find($id);
+                // Outside the order lock: this asks Mobile Money, and a payment that
+                // lands meanwhile takes the lock itself to move the order on.
+                try {
+                    if ($order && !$this->closePayments($order)) {
+                        return;
+                    }
+                } catch (Throwable $e) {
+                    Log::warning('Food & Shops: could not close payments', ['order' => $id, 'error' => $e->getMessage()]);
+                    if ($order?->pay_by && $order->pay_by->gt(now()->subMinutes(self::PAYING_GRACE_MINUTES))) {
+                        return;
+                    }
+                }
+                $this->locked($order, function (StoreOrder $order) use (&$counts) {
                     if ($order->status === StoreOrder::AWAITING_PAYMENT && $order->payment_status === StoreOrder::UNPAID) {
                         $order->status = StoreOrder::EXPIRED;
                         $order->cancelled_at = now();
@@ -1018,11 +1147,12 @@ class StoreOrderService extends BaseService implements StoreOrderServiceInterfac
         });
     }
 
-    protected function refundOrder(StoreOrder $order, float $amount): void
+    /** Refunds to the wallet when Food & Shops refunds are on. False when nothing was credited. */
+    protected function refundOrder(StoreOrder $order, float $amount): bool
     {
         $amount = round(min($amount, $order->total - $order->refunded_amount), 2);
-        if ($amount <= 0) {
-            return;
+        if ($amount <= 0 || !StoreSettings::refunds()) {
+            return false;
         }
         $this->creditWallet($order->customer_id, $amount, $order->id, 'store_order_refund', 'Food & shop order refunded to customer wallet');
         $order->refunded_amount = round($order->refunded_amount + $amount, 2);
@@ -1030,6 +1160,7 @@ class StoreOrderService extends BaseService implements StoreOrderServiceInterfac
         if ($order->refunded_amount + 0.00001 >= $order->total) {
             $order->payment_status = StoreOrder::REFUNDED;
         }
+        return true;
     }
 
     protected function creditWallet(string $userId, float $amount, string $orderId, string $attribute, string $label, ?string $reference = null): void
@@ -1053,7 +1184,7 @@ class StoreOrderService extends BaseService implements StoreOrderServiceInterfac
         ]);
     }
 
-    protected function notifyCustomer(StoreOrder $order, string $event): void
+    protected function notifyCustomer(StoreOrder $order, string $event, ?float $paidAmount = null): void
     {
         try {
             $customer = User::find($order->customer_id);
@@ -1062,7 +1193,9 @@ class StoreOrderService extends BaseService implements StoreOrderServiceInterfac
             }
             $store = $order->store?->displayName() ?? '';
             $locale = $customer->current_language_key;
-            $amount = getCurrencyFormat($order->refunded_amount ?: $order->total);
+            $amount = getCurrencyFormat($paidAmount ?? ($order->refunded_amount ?: $order->total));
+            // Cancelled after payment with refunds off: no refund is promised.
+            $paidNoRefund = $order->payment_status === StoreOrder::PAID && (float)$order->refunded_amount <= 0;
             $rider = trim((string)$order->trip?->driver?->first_name) ?: translate(key: 'Your rider', locale: $locale);
             [$title, $body] = match ($event) {
                 'placed' => [
@@ -1095,17 +1228,22 @@ class StoreOrderService extends BaseService implements StoreOrderServiceInterfac
                 ],
                 'rejected', 'timeout' => [
                     translate(key: '{store} could not take your order', replace: ['store' => $store], locale: $locale),
-                    $order->refunded_amount > 0
-                        ? translate(key: '{amount} has been refunded to your E-Ride wallet.', replace: ['amount' => $amount], locale: $locale)
-                        : ($order->cancel_reason && $event === 'rejected'
+                    match (true) {
+                        $order->refunded_amount > 0 => translate(key: '{amount} has been refunded to your E-Ride wallet.', replace: ['amount' => $amount], locale: $locale),
+                        $paidNoRefund => translate(key: 'E-Ride will contact you about your payment.', locale: $locale),
+                        default => ($order->cancel_reason && $event === 'rejected'
                             ? translate(key: 'Reason: {reason}. Nothing was charged.', replace: ['reason' => $order->cancel_reason], locale: $locale)
                             : translate(key: 'Nothing was charged. Try another restaurant or branch.', locale: $locale)),
+                    },
                 ],
                 'cancelled' => [
                     translate(key: 'Your order was cancelled', locale: $locale),
                     $order->refunded_amount > 0
                         ? translate(key: '{amount} has been refunded to your E-Ride wallet.', replace: ['amount' => $amount], locale: $locale)
-                        : translate(key: 'Nothing was charged.', locale: $locale),
+                        : ($paidNoRefund
+                            ? trim(($order->cancel_reason ? translate(key: 'Reason: {reason}.', replace: ['reason' => $order->cancel_reason], locale: $locale) . ' ' : '')
+                                . translate(key: 'E-Ride will contact you about your payment.', locale: $locale))
+                            : translate(key: 'Nothing was charged.', locale: $locale)),
                 ],
                 'rider_assigned' => [
                     translate(key: '{rider} is collecting your order', replace: ['rider' => $rider], locale: $locale),
@@ -1125,11 +1263,13 @@ class StoreOrderService extends BaseService implements StoreOrderServiceInterfac
                 ],
                 'delivery_failed' => [
                     translate(key: 'Your order could not be delivered', locale: $locale),
-                    translate(key: 'Our team will contact you. The delivery fee has been returned to your wallet.', locale: $locale),
+                    StoreSettings::refunds()
+                        ? translate(key: 'Our team will contact you. The delivery fee has been returned to your wallet.', locale: $locale)
+                        : translate(key: 'Our team will contact you.', locale: $locale),
                 ],
-                'refunded_late' => [
-                    translate(key: 'Payment added to your wallet', locale: $locale),
-                    translate(key: 'Your payment arrived after the order closed, so it was added to your E-Ride wallet.', locale: $locale),
+                'paid_late' => [
+                    translate(key: 'Payment not used for your order', locale: $locale),
+                    translate(key: 'Your order was no longer waiting for this payment. E-Ride will send {amount} back to your Mobile Money number.', replace: ['amount' => $amount], locale: $locale),
                 ],
                 default => [null, null],
             };

@@ -1891,7 +1891,12 @@ class TripRequestService extends BaseService implements TripRequestServiceInterf
                 ]);
             }
 
-            if ($trip?->parcel?->payer === 'sender' && $trip->payment_status == PAID) {
+            // A food delivery with Food & Shops refunds off: the delivery fee is not
+            // returned to the wallet (nor the rider's share taken back); E-Ride's
+            // team settles with the customer.
+            $foodWithoutRefunds = !\Modules\StoreManagement\Lib\StoreSettings::refunds()
+                && \Modules\StoreManagement\Entities\StoreOrder::where('trip_request_id', $trip->id)->exists();
+            if (!$foodWithoutRefunds && $trip?->parcel?->payer === 'sender' && $trip->payment_status == PAID) {
                 if ($trip->payment_method === 'cash') {
                     $this->senderCashPaymentDriverParcelCancelReverseTransaction($trip);
                 } elseif ($trip->payment_method === 'wallet') {

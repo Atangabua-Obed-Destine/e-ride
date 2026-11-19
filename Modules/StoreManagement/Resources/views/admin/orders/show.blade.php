@@ -90,10 +90,14 @@
                                 <form action="{{ route('admin.store-order.cancel', $order) }}" method="POST" onsubmit='return confirm(@json(translate("Cancel this order?")))'>
                                     @csrf
                                     <input type="text" name="reason" class="form-control mb-2" required maxlength="200" placeholder="{{ translate('Reason_shown_to_the_customer') }}">
-                                    <label class="d-flex align-items-center gap-2 fs-12 mb-2">
-                                        <input type="hidden" name="refund" value="0">
-                                        <input type="checkbox" name="refund" value="1" checked> {{ translate('Refund_the_full_amount_to_the_customer_wallet') }}
-                                    </label>
+                                    <input type="hidden" name="refund" value="0">
+                                    @if(\Modules\StoreManagement\Lib\StoreSettings::refunds())
+                                        <label class="d-flex align-items-center gap-2 fs-12 mb-2">
+                                            <input type="checkbox" name="refund" value="1" checked> {{ translate('Refund_the_full_amount_to_the_customer_wallet') }}
+                                        </label>
+                                    @elseif($order->payment_status === 'paid')
+                                        <p class="fs-12 text-muted mb-2">{{ translate('Refunds are off in Food & Shops settings: nothing is credited. Settle with the customer yourself.') }}</p>
+                                    @endif
                                     <button type="submit" class="btn btn-outline-danger w-100">{{ translate('Cancel_order') }}</button>
                                 </form>
                             </div></div>
@@ -101,12 +105,20 @@
                         @if($order->status === 'delivery_failed')
                             <div class="card mb-3 border-danger"><div class="card-body">
                                 <h5 class="mb-1">{{ translate('Delivery_failed') }}</h5>
-                                <p class="fs-12 text-muted">{{ translate('The delivery fee went back to the customer wallet automatically. Decide about the food.') }}</p>
+                                @if(\Modules\StoreManagement\Lib\StoreSettings::refunds())
+                                    <p class="fs-12 text-muted">{{ translate('The delivery fee went back to the customer wallet automatically. Decide about the food.') }}</p>
+                                @else
+                                    <p class="fs-12 text-muted">{{ translate('Refunds are off in Food & Shops settings. Settle with the customer, then note what was agreed.') }}</p>
+                                @endif
                                 <form action="{{ route('admin.store-order.resolve', $order) }}" method="POST" class="d-grid gap-2">
                                     @csrf
                                     <input type="text" name="note" class="form-control" maxlength="150" placeholder="{{ translate('Note') }}">
-                                    <button type="submit" name="refund_food" value="1" class="btn btn-primary">{{ translate('Refund_food_to_customer_wallet') }}</button>
-                                    <button type="submit" name="refund_food" value="0" class="btn btn-outline-secondary">{{ translate('No_food_refund') }}</button>
+                                    @if(\Modules\StoreManagement\Lib\StoreSettings::refunds())
+                                        <button type="submit" name="refund_food" value="1" class="btn btn-primary">{{ translate('Refund_food_to_customer_wallet') }}</button>
+                                        <button type="submit" name="refund_food" value="0" class="btn btn-outline-secondary">{{ translate('No_food_refund') }}</button>
+                                    @else
+                                        <button type="submit" name="refund_food" value="0" class="btn btn-primary">{{ translate('Save') }}</button>
+                                    @endif
                                 </form>
                             </div></div>
                         @endif

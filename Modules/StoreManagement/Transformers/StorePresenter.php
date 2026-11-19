@@ -156,7 +156,9 @@ class StorePresenter
                 'rider_rating' => $riderReview?->rating,
             ] : null,
             'cancel_reason' => $order->cancel_reason,
-            'can_cancel' => in_array($order->status, [StoreOrder::AWAITING_CONFIRMATION, StoreOrder::CHANGES_PROPOSED, StoreOrder::AWAITING_PAYMENT, StoreOrder::PLACED], true),
+            // A paid order is cancelled (and refunded) by the customer only when refunds are on.
+            'can_cancel' => in_array($order->status, [StoreOrder::AWAITING_CONFIRMATION, StoreOrder::CHANGES_PROPOSED, StoreOrder::AWAITING_PAYMENT, StoreOrder::PLACED], true)
+                && ($order->payment_status !== StoreOrder::PAID || \Modules\StoreManagement\Lib\StoreSettings::refunds()),
             // Confirm before payment: who has to act, and by when.
             'respond_by' => in_array($order->status, [StoreOrder::AWAITING_CONFIRMATION, StoreOrder::PLACED], true) && $order->placed_at
                 ? $order->placed_at->copy()->addMinutes(\Modules\StoreManagement\Lib\StoreSettings::all()['partner_response_minutes'])->toIso8601String() : null,
