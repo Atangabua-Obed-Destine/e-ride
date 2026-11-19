@@ -130,12 +130,18 @@ class PlacePresenter
                 : (array_intersect($all, array_merge(self::HOTEL_TYPES, ['lodging'])) ? 'hotel_pool' : 'swimming_pool');
         }
         if ($exploreCategory !== 'stay') {
+            // Prefer a type of this category: a hotel with a restaurant is a restaurant under Eat, not a night club.
+            $allowed = \Modules\PlaceManagement\Entities\PlaceCategory::typesFor($exploreCategory);
+            $first = null;
             foreach (array_merge([$primaryType], $types) as $type) {
                 if (isset(self::GOOGLE_TO_TYPE[$type])) {
-                    return self::GOOGLE_TO_TYPE[$type];
+                    if (in_array(self::GOOGLE_TO_TYPE[$type], $allowed, true)) {
+                        return self::GOOGLE_TO_TYPE[$type];
+                    }
+                    $first ??= self::GOOGLE_TO_TYPE[$type];
                 }
             }
-            return 'other';
+            return $first ?? 'other';
         }
         foreach (array_merge([$primaryType], $types) as $type) {
             if (in_array($type, self::HOTEL_TYPES, true)) {
