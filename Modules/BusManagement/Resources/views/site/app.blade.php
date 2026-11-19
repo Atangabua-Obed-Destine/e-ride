@@ -16,6 +16,8 @@
     </div>
     <div class="sec col" style="gap:10px;padding-top:20px">
         <a class="btn dark" href="{{ $playUrl }}">{{ $t('google_play') }}</a>
+        @if($appStoreUrl)<a class="btn dark" href="{{ $appStoreUrl }}">{{ $t('app_store') }}</a>
+        @else<span class="btn line" style="cursor:default;opacity:.8">{{ $t('app_store_soon') }}</span>@endif
         <a class="btn line" href="{{ $openApp }}" id="open-app">{{ $t('open_in_app') }}</a>
         <a class="sm b" href="{{ $back }}" style="text-align:center;padding-top:6px">{{ $t('back_web') }}</a>
     </div>

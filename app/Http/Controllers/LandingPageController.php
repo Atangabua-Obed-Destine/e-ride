@@ -36,6 +36,26 @@ class LandingPageController extends Controller
         return in_array($theme, self::THEMES, true) ? $theme : 'dark';
     }
 
+    /** The customer app on the App Store, once its link is set (App Version settings); null until then. */
+    public static function appStoreUrl(): ?string
+    {
+        $url = trim((string)(businessConfig(key: CUSTOMER_APP_VERSION_CONTROL_FOR_IOS, settingsType: APP_VERSION)?->value['app_url'] ?? ''));
+        return filter_var($url, FILTER_VALIDATE_URL) ? $url : null;
+    }
+
+    /** /get-app: the QR code and shared links. iPhones go to the App Store (when it is set), other phones to Google Play. */
+    public function getApp(\Illuminate\Http\Request $request): \Illuminate\Http\RedirectResponse
+    {
+        $ua = (string)$request->userAgent();
+        $ios = (bool)preg_match('/iPhone|iPad|iPod/i', $ua);
+        $play = trim((string)(businessConfig(key: CUSTOMER_APP_VERSION_CONTROL_FOR_ANDROID, settingsType: APP_VERSION)?->value['app_url'] ?? ''));
+        $play = filter_var($play, FILTER_VALIDATE_URL) ? $play : 'https://play.google.com/store/apps/details?id=' . config('marketmanagement.android_package', 'com.i_nnova.eride');
+        if ($ios) {
+            return ($url = self::appStoreUrl()) ? redirect()->away($url) : redirect()->to(url('/') . '#get');
+        }
+        return preg_match('/Android/i', $ua) ? redirect()->away($play) : redirect()->to(url('/') . '#get');
+    }
+
     /**
      * The home page: fixed words in English and French (App\Lib\LandingWords), the look the admin chose,
      * and what comes from the settings: contact details, the apps' Play Store pages, the bus website.
@@ -64,6 +84,7 @@ class LandingPageController extends Controller
         };
         $playUrl = $storeUrl(CUSTOMER_APP_VERSION_CONTROL_FOR_ANDROID, config('marketmanagement.android_package', 'com.i_nnova.eride'));
         $driverUrl = $storeUrl(DRIVER_APP_VERSION_CONTROL_FOR_ANDROID, 'com.i_nnova.eridedriver');
+        $appStoreUrl = self::appStoreUrl();
 
         $contact = [
             'phone' => businessConfig('business_contact_phone', BUSINESS_INFORMATION)?->value,
@@ -77,11 +98,16 @@ class LandingPageController extends Controller
             : ($contact['email'] ? 'mailto:' . $contact['email'] . '?subject=' . rawurlencode($message) : null);
 
         $busWeb = \Modules\BusManagement\Lib\BusSettings::enabled() && \Modules\BusManagement\Lib\BusSettings::web()['booking'] ? route('bus.web.home') : null;
-        $qr = (string)\SimpleSoftwareIO\QrCode\Facades\QrCode::format('svg')->size(144)->margin(0)->errorCorrection('M')->generate($playUrl);
+        // One QR for every phone: /get-app sends it to its own store.
+        $qr = (string)\SimpleSoftwareIO\QrCode\Facades\QrCode::format('svg')->size(144)->margin(0)->errorCorrection('M')->generate(route('get-app'));
+        // Explore's categories (Business Setup > Explore), for the city guide.
+        $explore = \Illuminate\Support\Facades\Cache::remember('landing:explore', 300, fn() => \Illuminate\Support\Facades\DB::table('place_categories')
+            ->where('is_active', 1)->orderBy('sort')->get(['key', 'name', 'name_fr'])->map(fn($c) => (array)$c)->all());
+        $exploreLabel = (string)(businessConfig('explore_label')?->value ?: 'Explore Bamenda');
         $favicon = getSession('favicon');
         $favicon = $favicon ? dynamicStorage(path: 'storage/app/public/business/' . $favicon) : dynamicAsset(path: 'public/landing-page/assets/img/favicon.png');
 
-        return response()->view('landing-page.home', compact('t', 'theme', 'playUrl', 'driverUrl', 'contact', 'partnerLink', 'busWeb', 'qr', 'favicon'));
+        return response()->view('landing-page.home', compact('t', 'theme', 'playUrl', 'driverUrl', 'appStoreUrl', 'contact', 'partnerLink', 'busWeb', 'qr', 'favicon', 'explore', 'exploreLabel'));
     }
 
     public function aboutUs()

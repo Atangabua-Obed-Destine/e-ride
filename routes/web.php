@@ -29,6 +29,7 @@ Route::get('/sender', function () {
 
 Route::controller(LandingPageController::class)->group(function () {
     Route::get('/', 'index')->name('index');
+    Route::get('/get-app', 'getApp')->name('get-app');
     Route::get('/contact-us', 'contactUs')->name('contact-us');
     Route::get('/about-us', 'aboutUs')->name('about-us');
     Route::get('/privacy', 'privacy')->name('privacy');

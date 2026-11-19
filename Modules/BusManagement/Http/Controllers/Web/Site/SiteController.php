@@ -236,6 +236,7 @@ class SiteController extends SiteBase
             't' => $t,
             'openApp' => BusWebLinks::openInApp($to),
             'playUrl' => BusWebLinks::playStore($to),
+            'appStoreUrl' => \App\Http\Controllers\LandingPageController::appStoreUrl(),
             'back' => $back,
         ]);
     }
