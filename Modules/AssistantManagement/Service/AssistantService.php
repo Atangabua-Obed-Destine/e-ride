@@ -212,10 +212,15 @@ class AssistantService
                 $p['name'], $answer['reply'], $answer['actions'], $started, true, $answer['cards']);
         }
         // No AI right now: what E-Ride has for the words is still useful.
-        if ($this->catalog['results']) {
+        if ($this->audience === 'customer' && ($this->catalog['results'] || $this->catalog['categories'])) {
             $cards = array_slice($this->catalog['results'], 0, 4);
-            $actions = in_array('market', $services, true) && $this->catalog['terms']
-                ? [['type' => 'market', 'label' => $lang === 'fr' ? 'Chercher au Market' : 'Search Market', 'id' => implode(' ', $this->catalog['terms'])]] : [];
+            $actions = [];
+            foreach (array_slice($this->catalog['categories'], 0, 2) as $c) {
+                $actions[] = ['type' => 'explore', 'label' => mb_substr($c['name'], 0, 40), 'id' => $c['key']];
+            }
+            if (in_array('market', $services, true) && $this->catalog['terms'] && count($actions) < 3) {
+                $actions[] = ['type' => 'market', 'label' => $lang === 'fr' ? 'Chercher au Market' : 'Search Market', 'id' => implode(' ', $this->catalog['terms'])];
+            }
             return $this->finish($user, $question, $screen, $lang, AssistantQuestion::ANSWERED, null, self::say('found', $lang), $actions, $started, true, $cards);
         }
         return $this->finish($user, $question, $screen, $lang, AssistantQuestion::BUSY, null, self::say('busy', $lang), [self::support($lang)], $started);

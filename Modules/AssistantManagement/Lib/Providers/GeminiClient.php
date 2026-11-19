@@ -83,7 +83,7 @@ class GeminiClient implements ChatProvider
                 [
                     'systemInstruction' => ['parts' => [['text' => $system]]],
                     'contents' => [['role' => 'user', 'parts' => [['text' => $user]]]],
-                    'generationConfig' => ['responseMimeType' => 'application/json', 'temperature' => 0.3, 'maxOutputTokens' => 600],
+                    'generationConfig' => ['responseMimeType' => 'application/json', 'temperature' => 0.3, 'maxOutputTokens' => 1200],
                 ]
             );
         } catch (ConnectionException $e) {

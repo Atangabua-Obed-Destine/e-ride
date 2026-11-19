@@ -51,6 +51,18 @@ class CatalogSearch
         'homes' => ['rent', 'louer', 'location', 'studio', 'apartment', 'appartement', 'house', 'maison', 'flat', 'shop to rent'],
     ];
 
+    /** French and English words for the same thing, so either finds a listing written in the other. */
+    private const SAME = [
+        'téléphone' => 'phone', 'telephone' => 'phone', 'portable' => 'phone', 'chaussure' => 'shoe', 'ordinateur' => 'laptop',
+        'voiture' => 'car', 'moto' => 'motorbike', 'maison' => 'house', 'chambre' => 'room', 'vêtement' => 'clothe', 'vetement' => 'clothe',
+        'robe' => 'dress', 'sac' => 'bag', 'montre' => 'watch', 'lit' => 'bed', 'matelas' => 'mattress', 'frigo' => 'fridge',
+        'réfrigérateur' => 'fridge', 'télé' => 'tv', 'tele' => 'tv', 'télévision' => 'tv', 'riz' => 'rice', 'poulet' => 'chicken',
+        'poisson' => 'fish', 'gâteau' => 'cake', 'gateau' => 'cake', 'coiffure' => 'hair', 'coiffeur' => 'hair', 'tresse' => 'braid',
+        'couture' => 'tailor', 'tailleur' => 'tailor', 'plombier' => 'plumber', 'électricien' => 'electrician', 'electricien' => 'electrician',
+        'réparation' => 'repair', 'reparation' => 'repair', 'réparer' => 'repair', 'reparer' => 'repair', 'nettoyage' => 'cleaning',
+        'cours' => 'lesson', 'fix' => 'repair', 'photographe' => 'photo', 'emploi' => 'job', 'travail' => 'job', 'chauffeur' => 'driver', 'vendeur' => 'sales',
+    ];
+
     /** The words of a question that say what the person wants. */
     public static function terms(string $question): array
     {
@@ -66,7 +78,14 @@ class CatalogSearch
             // Plural "s" off for the match ("shoes" finds "shoe"), but keep short words like "ps4" as they are.
             $out[] = mb_strlen($w) > 4 && str_ends_with($w, 's') ? mb_substr($w, 0, -1) : $w;
         }
-        return array_slice(array_values(array_unique($out)), 0, 5);
+        $out = array_slice(array_values(array_unique($out)), 0, 5);
+        foreach ($out as $w) {
+            $other = self::SAME[$w] ?? array_search($w, self::SAME, true);
+            if (is_string($other) && !in_array($other, $out, true)) {
+                $out[] = $other;
+            }
+        }
+        return array_slice($out, 0, 7);
     }
 
     /**
@@ -99,7 +118,8 @@ class CatalogSearch
                 report($e);
             }
         }
-        // Best match first: words found in the title count most.
+        // Only real word matches, best first: words found in the title count most.
+        $results = array_values(array_filter($results, fn($r) => $r['score'] > 0));
         usort($results, fn($a, $b) => $b['score'] <=> $a['score']);
         $results = array_slice($results, 0, self::MAX_RESULTS);
         foreach ($results as $i => &$r) {
@@ -110,20 +130,31 @@ class CatalogSearch
         return ['terms' => $terms, 'results' => $results, 'categories' => self::categories($terms, $services, $lang)];
     }
 
-    /** How well a text matches: 3 per word in the title, 1 per word elsewhere. */
+    /**
+     * How well a text matches: 3 per word found in the title, 1 per word found
+     * elsewhere, as the start of a word ("bus" is not in "busy"). 0 means the
+     * database's rough match was wrong and the result is dropped.
+     */
     private static function score(array $terms, string $title, string $rest = ''): int
     {
         $t = mb_strtolower($title);
         $r = mb_strtolower($rest);
         $s = 0;
         foreach ($terms as $w) {
-            if (str_contains($t, $w)) {
+            $re = '/(^|[^\p{L}\p{N}])' . preg_quote($w, '/') . '/u';
+            if (preg_match($re, $t)) {
                 $s += 3;
-            } elseif ($r !== '' && str_contains($r, $w)) {
+            } elseif ($r !== '' && preg_match($re, $r)) {
                 $s += 1;
             }
         }
         return $s;
+    }
+
+    /** A source's head start, only for a real match. */
+    private static function bonus(int $score, int $extra): int
+    {
+        return $score > 0 ? $score + $extra : 0;
     }
 
     /** Any of the words in any of the columns. */
@@ -157,7 +188,7 @@ class CatalogSearch
                 'price' => $it->price !== null ? (float)$it->price : null,
                 'photo' => $it->cover()?->url(),
                 'source' => $service ? 'market_service' : 'market',
-                'score' => self::score($terms, $it->title, (string)$it->description) + 1,
+                'score' => self::bonus(self::score($terms, $it->title, (string)$it->description), 1),
             ];
         }
         usort($out, fn($a, $b) => $b['score'] <=> $a['score']);
@@ -183,7 +214,7 @@ class CatalogSearch
         foreach ($stores as $st) {
             $out[] = [
                 'type' => 'store', 'id' => $st->id, 'title' => $st->name, 'subtitle' => 'Food & Shops',
-                'price' => null, 'photo' => $st->logoUrl(), 'source' => 'food', 'score' => self::score($terms, $st->name, (string)$st->description) + 1,
+                'price' => null, 'photo' => $st->logoUrl(), 'source' => 'food', 'score' => self::bonus(self::score($terms, $st->name, (string)$st->description), 1),
             ];
         }
         // Dishes and products: the store that has them.
@@ -221,7 +252,7 @@ class CatalogSearch
                 'title' => $p->name,
                 'subtitle' => trim(str_replace('_', ' ', ucfirst((string)$p->category)) . ($card['distance_km'] !== null ? ' · ' . $card['distance_km'] . ' km' : '')),
                 'price' => null, 'photo' => $card['photos'][0]['thumb'] ?? null, 'source' => 'place',
-                'score' => self::score($terms, $p->name, $p->category . ' ' . $p->description . ' ' . $p->story) + 1,
+                'score' => self::bonus(self::score($terms, $p->name, str_replace('_', ' ', (string)$p->category) . ' ' . $p->description . ' ' . $p->story), 1),
                 // The app opens the place page from this card without another request.
                 'place' => $card,
             ];
@@ -286,7 +317,7 @@ class CatalogSearch
             ->where(fn($q) => self::like($q, ['city'], $terms))->distinct()->limit(3)->pluck('city');
         foreach ($cities as $city) {
             $out[] = ['type' => 'bus', 'id' => $city, 'title' => 'Bus to ' . $city, 'subtitle' => 'Bus tickets', 'price' => null, 'photo' => null,
-                'source' => 'bus', 'score' => self::score($terms, $city) + 2];
+                'source' => 'bus', 'score' => self::bonus(self::score($terms, $city), 2)];
         }
         return $out;
     }
