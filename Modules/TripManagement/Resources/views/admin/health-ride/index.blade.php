@@ -1,14 +1,14 @@
 @extends('adminmodule::layouts.master')
 
-@section('title', translate('Health rides'))
+@section('title', translate('Emergency rides'))
 
 @section('content')
     <div class="main-content">
         <div class="container-fluid">
             <div class="d-flex flex-wrap justify-content-between align-items-center gap-3 mb-3">
                 <div>
-                    <h2 class="fs-22 mb-1">{{ translate('Health rides') }}</h2>
-                    <p class="fs-12 text-muted mb-0">{{ translate('Urgent rides to a hospital, clinic or pharmacy, booked from the Health ride button in the app. They skip bidding, have no surge or extra fare, and reach drivers further away. The app says plainly that this is not an ambulance.') }}</p>
+                    <h2 class="fs-22 mb-1">{{ translate('Emergency rides') }}</h2>
+                    <p class="fs-12 text-muted mb-0">{{ translate('Urgent rides to a hospital, clinic or pharmacy, booked from the Emergency ride button in the app. They skip bidding, have no surge or extra fare, and reach drivers further away. The app says plainly that this is not an ambulance.') }}</p>
                 </div>
                 @if(!$settings['enabled'])
                     <span class="badge bg-warning text-dark fs-12">{{ translate('Off: turn it on in Settings') }}</span>
@@ -58,7 +58,7 @@
                                         <td class="text-end text-nowrap">{{ set_currency_symbol($trip->paid_fare > 0 ? $trip->paid_fare : $trip->estimated_fare) }}</td>
                                     </tr>
                                 @empty
-                                    <tr><td colspan="7" class="text-center text-muted py-4">{{ translate('No health rides in this period.') }}</td></tr>
+                                    <tr><td colspan="7" class="text-center text-muted py-4">{{ translate('No emergency rides in this period.') }}</td></tr>
                                 @endforelse
                                 </tbody>
                             </table>
@@ -75,21 +75,21 @@
                                 <div class="form-check form-switch mb-3">
                                     <input type="hidden" name="health_rides_enabled" value="0">
                                     <input class="form-check-input" type="checkbox" role="switch" id="health-enabled" name="health_rides_enabled" value="1" {{ $settings['enabled'] ? 'checked' : '' }}>
-                                    <label class="form-check-label" for="health-enabled">{{ translate('Health rides are on') }}</label>
+                                    <label class="form-check-label" for="health-enabled">{{ translate('Emergency rides are on') }}</label>
                                 </div>
                                 <div class="form-check form-switch mb-3">
                                     <input type="hidden" name="health_rides_deposit" value="0">
                                     <input class="form-check-input" type="checkbox" role="switch" id="health-deposit" name="health_rides_deposit" value="1" {{ $settings['deposit'] ? 'checked' : '' }}>
-                                    <label class="form-check-label fs-12" for="health-deposit">{{ translate('Ask the booking deposit on health rides') }}</label>
+                                    <label class="form-check-label fs-12" for="health-deposit">{{ translate('Ask the booking deposit on emergency rides') }}</label>
                                     <div class="fs-11 text-muted">{{ translate('Off: the driver sets off at once, with no payment step. The daily limit still stops misuse.') }}</div>
                                 </div>
                                 <div class="form-check form-switch mb-3">
                                     <input type="hidden" name="health_rides_schedule" value="0">
                                     <input class="form-check-input" type="checkbox" role="switch" id="health-schedule" name="health_rides_schedule" value="1" {{ $settings['schedule'] ? 'checked' : '' }}>
-                                    <label class="form-check-label fs-12" for="health-schedule">{{ translate('Riders can book health rides ahead') }}</label>
+                                    <label class="form-check-label fs-12" for="health-schedule">{{ translate('Riders can book emergency rides ahead') }}</label>
                                     <div class="fs-11 text-muted">{{ translate('For a clinic appointment or a treatment. Needs scheduled rides on in Business setup. The daily limit counts the day of the ride.') }}</div>
                                 </div>
-                                <div class="mb-2"><label class="form-label fs-12 mb-1">{{ translate('Health rides a rider can book per day') }}</label>
+                                <div class="mb-2"><label class="form-label fs-12 mb-1">{{ translate('Emergency rides a rider can book per day') }}</label>
                                     <input type="number" name="health_rides_daily_limit" min="1" max="10" class="form-control form-control-sm" value="{{ $settings['daily_limit'] }}"></div>
                                 <div class="mb-2"><label class="form-label fs-12 mb-1">{{ translate('Search radius for drivers (km), 0 for twice the normal radius') }}</label>
                                     <input type="number" step="any" name="health_rides_radius_km" min="0" max="500" class="form-control form-control-sm" value="{{ $settings['radius_km'] }}">
@@ -102,11 +102,11 @@
                         </div></div>
                     @endcan
                     <div class="card"><div class="card-body fs-12">
-                        <h6 class="mb-2">{{ translate('How a health ride works') }}</h6>
+                        <h6 class="mb-2">{{ translate('How an emergency ride works') }}</h6>
                         <ul class="ps-3 mb-0 text-muted">
                             <li>{{ translate('The rider picks a hospital, clinic or pharmacy near them, nearest first.') }}</li>
                             <li>{{ translate('The normal fare, with no surge or extra fare, and no bidding.') }}</li>
-                            <li>{{ translate('Drivers see it in red as a Health ride. It is not an ambulance: the app shows the emergency numbers.') }}</li>
+                            <li>{{ translate('Drivers see it in red as a Emergency ride. It is not an ambulance: the app shows the emergency numbers.') }}</li>
                             <li>{{ translate('A ride cancelled before a driver took it does not count toward the daily limit.') }}</li>
                         </ul>
                     </div></div>

@@ -13,7 +13,7 @@ use Modules\TripManagement\Entities\TripRequest;
 use Modules\TripManagement\Lib\HealthRideSettings;
 use Modules\TripManagement\Service\HealthRideService;
 
-/** Trip management > Health rides: every health ride, how fast drivers took them, and the settings. */
+/** Trip management > Emergency rides: every emergency ride, how fast drivers took them, and the settings. */
 class HealthRideAdminController extends Controller
 {
     public const PERIODS = ['today' => 'Today', 'week' => 'Last 7 days', 'month' => 'Last 30 days', 'all' => 'All'];
@@ -36,7 +36,7 @@ class HealthRideAdminController extends Controller
             'tripStatus:id,trip_request_id,accepted,completed,cancelled',
         ])->latest()->paginate(paginationLimit())->withQueryString();
 
-        // How long until a driver accepted: the number that tells if health rides work.
+        // How long until a driver accepted: the number that tells if emergency rides work.
         $accepted = (clone $base)->with('tripStatus:id,trip_request_id,accepted')->get(['id', 'created_at'])
             ->map(fn($t) => $t->tripStatus?->accepted ? Carbon::parse($t->tripStatus->accepted)->diffInSeconds($t->created_at, true) / 60 : null);
         $waits = $accepted->filter(fn($m) => $m !== null)->sort()->values();
@@ -73,7 +73,7 @@ class HealthRideAdminController extends Controller
             updateBusinessSetting(keyName: $key, settingType: HealthRideSettings::TYPE, value: (string)$value);
         }
         Cache::forget(CACHE_BUSINESS_SETTINGS);
-        Toastr::success(translate('Health ride settings saved'));
+        Toastr::success(translate('Emergency ride settings saved'));
         return back();
     }
 }

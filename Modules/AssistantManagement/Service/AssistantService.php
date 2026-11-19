@@ -27,7 +27,7 @@ class AssistantService
     public const ACTIONS = [
         'ride' => ['service' => 'ride', 'what' => 'book a ride now'],
         'ride_later' => ['service' => 'ride', 'what' => 'book a ride for later (1 hour to 3 days ahead)'],
-        'health_ride' => ['service' => 'health', 'what' => 'urgent ride to a hospital, clinic or pharmacy'],
+        'health_ride' => ['service' => 'health', 'what' => 'emergency ride (course d\'urgence): urgent ride to a hospital, clinic or pharmacy'],
         'parcel' => ['service' => 'parcel', 'what' => 'send a parcel'],
         'move' => ['service' => 'move', 'what' => 'book a truck to move goods'],
         'food' => ['service' => 'food', 'what' => 'restaurants and shops that deliver'],

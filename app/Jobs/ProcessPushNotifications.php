@@ -61,7 +61,7 @@ class ProcessPushNotifications implements ShouldQueue
                 $push['description'] = 'A customer needs a truck from {pickUpLocation}. You agree the price together at the pickup.';
             } elseif ($this->trip->is_health_ride) {
                 // Urgent, to care: the driver app shows it in red. Not an ambulance.
-                $push['title'] = 'Health ride request';
+                $push['title'] = 'Emergency ride request';
                 $push['description'] = 'Urgent: a rider needs to get to {dropOffLocation} for care. Pickup at {pickUpLocation}.';
             }
             $notification = [

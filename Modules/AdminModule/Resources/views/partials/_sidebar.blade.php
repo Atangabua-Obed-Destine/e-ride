@@ -250,7 +250,7 @@
                     <li class="{{ Request::is('admin/health-rides*') ? 'active open' : '' }}">
                         <a href="{{ route('admin.health-ride.index') }}">
                             <i class="bi bi-heart-pulse"></i>
-                            <span class="link-title">{{ translate('Health rides') }}</span>
+                            <span class="link-title">{{ translate('Emergency rides') }}</span>
                         </a>
                     </li>
                     <li class="{{ Request::is('admin/lost-items*') ? 'active open' : '' }}">

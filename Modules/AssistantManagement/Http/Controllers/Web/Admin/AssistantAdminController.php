@@ -51,7 +51,7 @@ class AssistantAdminController extends Controller
     protected static function tipButtons(): array
     {
         $buttons = [
-            'ride' => translate('Book a ride'), 'ride_later' => translate('Book a ride for later'), 'health_ride' => translate('Health ride'),
+            'ride' => translate('Book a ride'), 'ride_later' => translate('Book a ride for later'), 'health_ride' => translate('Emergency ride'),
             'parcel' => translate('Send a parcel'), 'move' => translate('Move (truck)'), 'food' => translate('Food & Shops'),
             'bus' => translate('Bus tickets'), 'market' => translate('Market'), 'jobs' => translate('Jobs'),
             'explore' => translate('Explore'), 'id_verify' => translate('E-Ride ID verification'),

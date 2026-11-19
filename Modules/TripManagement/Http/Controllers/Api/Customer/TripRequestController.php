@@ -195,13 +195,13 @@ class TripRequestController extends Controller
             }
         }
 
-        // Health ride: an urgent ride to care. Normal fare, no surge, no bidding, now only, a few a day.
+        // Emergency ride: an urgent ride to care. Normal fare, no surge, no bidding, now only, a few a day.
         $isHealth = $request->type == RIDE_REQUEST && !$request->trip_request_id && filter_var($request->input('health_ride'), FILTER_VALIDATE_BOOLEAN);
         if ($isHealth && ($problem = app(\Modules\TripManagement\Service\HealthRideService::class)->problem(auth('api')->id(), $isMove, $request->ride_request_type, (bool)$request['bid'], $request['scheduled_at']))) {
             return response()->json(responseFormatter(DEFAULT_400, errors: [['error_code' => 'health_ride', 'message' => $problem]]), 403);
         }
         if ($request->trip_request_id && $request['bid'] && $save_trip?->is_health_ride) {
-            return response()->json(responseFormatter(DEFAULT_400, errors: [['error_code' => 'health_ride', 'message' => translate('A health ride uses the normal fare, so there is no bidding.')]]), 403);
+            return response()->json(responseFormatter(DEFAULT_400, errors: [['error_code' => 'health_ride', 'message' => translate('An emergency ride uses the normal fare, so there is no bidding.')]]), 403);
         }
 
         $extraFare = $isMove ? null : $this->checkZoneExtraFare($zone);
@@ -309,9 +309,9 @@ class TripRequestController extends Controller
             $search_radius = $final->is_health_ride ? app(\Modules\TripManagement\Service\HealthRideService::class)->radiusKm() : ((double)get_cache('search_radius') ?? 5);
             if ($final->is_health_ride) {
                 try {
-                    \Modules\AdminModule\Entities\AdminNotification::create(['model' => 'trip_request', 'model_id' => $final->id, 'message' => 'Health ride requested, trip #' . $final->ref_id]);
+                    \Modules\AdminModule\Entities\AdminNotification::create(['model' => 'trip_request', 'model_id' => $final->id, 'message' => 'Emergency ride requested, trip #' . $final->ref_id]);
                 } catch (\Throwable $e) {
-                    Log::info('Health ride admin notification not saved', ['trip' => $final->id, 'error' => $e->getMessage()]);
+                    Log::info('Emergency ride admin notification not saved', ['trip' => $final->id, 'error' => $e->getMessage()]);
                 }
             }
             $final->ride_request_type != 'scheduled' && ProcessPushNotifications::dispatch(radius: $search_radius, trip: $final, parcelWeight: $request->weight ?? null)->afterResponse();
@@ -424,7 +424,7 @@ class TripRequestController extends Controller
         }
         // Pauses that only warn: the rider sees why before booking (on every fare).
         $safetyNotice = $isScheduled ? null : app(\Modules\ZoneManagement\Service\SafetyService::class)->tripNotice($pickupPoint, $destinationPoint);
-        // Health ride: checked before the fares, so the rider learns at once if they cannot book one.
+        // Emergency ride: checked before the fares, so the rider learns at once if they cannot book one.
         $isHealth = $request->type == 'ride_request' && filter_var($request->input('health_ride'), FILTER_VALIDATE_BOOLEAN);
         if ($isHealth && ($problem = app(\Modules\TripManagement\Service\HealthRideService::class)->problem($user->id, $request->input('service') === 'move', $request->ride_request_type, false, $request->input('scheduled_at')))) {
             return response()->json(responseFormatter(DEFAULT_400, errors: [['error_code' => 'health_ride', 'message' => $problem]]), 403);

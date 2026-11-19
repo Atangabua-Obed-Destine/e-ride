@@ -10,10 +10,10 @@ use Modules\TripManagement\Entities\TripRequest;
 use Modules\TripManagement\Lib\HealthRideSettings;
 
 /**
- * Health rides: an urgent ride to a hospital, clinic or pharmacy. Not an ambulance.
+ * Emergency rides: an urgent ride to a hospital, clinic or pharmacy. Not an ambulance.
  * The rider pays the normal fare with no surge or extra fare, cannot bid, and the
- * request reaches drivers over a wider radius with a red "Health ride" label.
- * At most daily_limit a day per rider; admins see every one (Trip management > Health rides).
+ * request reaches drivers over a wider radius with a red "Emergency ride" label.
+ * At most daily_limit a day per rider; admins see every one (Trip management > Emergency rides).
  */
 class HealthRideService
 {
@@ -29,7 +29,7 @@ class HealthRideService
     }
 
     /**
-     * Health rides that count toward a day's limit (today unless $day is given): every
+     * Emergency rides that count toward a day's limit (today unless $day is given): every
      * one riding that day (its pickup time when scheduled, else when it was booked),
      * except those cancelled before any driver accepted (nobody came, so nothing was used).
      */
@@ -49,7 +49,7 @@ class HealthRideService
         return max(0, HealthRideSettings::all()['daily_limit'] - $this->ridesToday($customerId, $day));
     }
 
-    /** Why this health ride cannot be booked, or null. $scheduledAt: the pickup time of a scheduled one. */
+    /** Why this emergency ride cannot be booked, or null. $scheduledAt: the pickup time of a scheduled one. */
     public function problem(string $customerId, bool $isMove = false, ?string $rideRequestType = null, bool $bid = false, ?string $scheduledAt = null): ?string
     {
         $day = null;
@@ -61,28 +61,28 @@ class HealthRideService
             }
         }
         if (!HealthRideSettings::enabled()) {
-            return translate('Health rides are not available right now. Book a normal ride.');
+            return translate('Emergency rides are not available right now. Book a normal ride.');
         }
         if ($isMove) {
-            return translate('A health ride is for a person, not a move.');
+            return translate('An emergency ride is for a person, not a move.');
         }
         if ($rideRequestType === SCHEDULED && !HealthRideSettings::all()['schedule']) {
-            return translate('A health ride is for right now. Schedule a normal ride instead.');
+            return translate('An emergency ride is for right now. Schedule a normal ride instead.');
         }
         if ($bid) {
-            return translate('A health ride uses the normal fare, so there is no bidding.');
+            return translate('An emergency ride uses the normal fare, so there is no bidding.');
         }
         if ($this->ridesLeft($customerId, $day) <= 0) {
             return $day && !$day->isToday()
-                ? translate(key: 'You already have {n} health rides on that day. Choose another day, or book a normal ride.',
+                ? translate(key: 'You already have {n} emergency rides on that day. Choose another day, or book a normal ride.',
                     replace: ['n' => HealthRideSettings::all()['daily_limit']])
-                : translate(key: 'You have used your {n} health rides for today. Book a normal ride, or call the emergency numbers if it is an emergency.',
+                : translate(key: 'You have used your {n} emergency rides for today. Book a normal ride, or call the emergency numbers if it is an emergency.',
                     replace: ['n' => HealthRideSettings::all()['daily_limit']]);
         }
         return null;
     }
 
-    /** The estimate list for a health ride: the normal fare with no surge or extra fare, and the flag. */
+    /** The estimate list for an emergency ride: the normal fare with no surge or extra fare, and the flag. */
     public function applyToEstimate(Collection $estimates): Collection
     {
         $deposit = HealthRideSettings::all()['deposit'];
@@ -155,7 +155,7 @@ class HealthRideService
         return [
             'status' => $s['enabled'],
             'daily_limit' => $s['daily_limit'],
-            // A health ride can be scheduled (when scheduling is on).
+            // An emergency ride can be scheduled (when scheduling is on).
             'schedule' => $s['schedule'],
             'emergency_numbers' => HealthRideSettings::emergencyNumbers(),
         ];
