@@ -410,7 +410,7 @@ footer .cols a:hover{color:var(--ink)}
 </section>
 </div>
 
-<section id="get" class="wrap" style="padding-top:140px" aria-labelledby="get-title">
+<section id="get" class="wrap" style="padding-top:140px;padding-bottom:50px" aria-labelledby="get-title">
     <div class="get">
         <svg width="700" height="320" viewBox="0 0 700 320" fill="none" aria-hidden="true" style="position:absolute;right:-60px;top:-20px">
             <path d="M0 260 C 160 300, 240 90, 380 140 S 600 300, 700 40" stroke="#FFFFFF" stroke-opacity="0.35" stroke-width="2.5" stroke-dasharray="2 10" stroke-linecap="round"/>
