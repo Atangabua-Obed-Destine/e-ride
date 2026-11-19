@@ -817,7 +817,7 @@
                             </li>
                             <li class="{{Request::is('admin/business/pages-media/landing-page/*') ? 'active open' : ''}}">
                                 <a class="text-capitalize"
-                                   href="{{route('admin.business.pages-media.landing-page.intro-section.index')}}">
+                                   href="{{route('admin.business.pages-media.landing-page.look.index')}}">
                                     <i class="bi bi-dash-lg"></i>
                                     {{translate('landing_Page_Setup')}}
                                 </a>

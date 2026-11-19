@@ -27,82 +27,61 @@ class LandingPageController extends Controller
         $this->newsletterSubscriptionService = $newsletterSubscriptionService;
     }
 
-    public function index(): Factory|View|Application
+    /** Dark, light, or the visitor's phone setting: Landing Page Setup > Home page look. */
+    public const THEMES = ['dark', 'light', 'auto'];
+
+    public static function theme(): string
     {
-        $businessName = businessConfig(key: 'business_name', settingsType: BUSINESS_INFORMATION)?->value ?? null;
+        $theme = businessConfig(key: 'landing_theme', settingsType: 'landing_page_look')?->value;
+        return in_array($theme, self::THEMES, true) ? $theme : 'dark';
+    }
 
-        //APP LINK
-        $driverAppVersionControlForAndroid = businessConfig(key: DRIVER_APP_VERSION_CONTROL_FOR_ANDROID, settingsType: APP_VERSION)?->value ?? null;
-        $driverAppVersionControlForIos = businessConfig(key: DRIVER_APP_VERSION_CONTROL_FOR_IOS, settingsType: APP_VERSION)?->value ?? null;
-        $customerAppVersionControlForAndroid = businessConfig(key: CUSTOMER_APP_VERSION_CONTROL_FOR_ANDROID, settingsType: APP_VERSION)?->value ?? null;
-        $customerAppVersionControlForIos = businessConfig(key: CUSTOMER_APP_VERSION_CONTROL_FOR_IOS, settingsType: APP_VERSION)?->value ?? null;
+    /**
+     * The home page: fixed words in English and French (App\Lib\LandingWords), the look the admin chose,
+     * and what comes from the settings: contact details, the apps' Play Store pages, the bus website.
+     */
+    public function index(\Illuminate\Http\Request $request): \Illuminate\Http\Response
+    {
+        $lang = $request->query('lang');
+        if (in_array($lang, \App\Lib\LandingWords::LANGS, true)) {
+            // The bus website follows the same choice.
+            $request->session()->put('site_lang', $lang);
+            $request->session()->put('bus_lang', $lang);
+        } else {
+            $lang = $request->session()->get('site_lang') ?? $request->session()->get('bus_lang');
+        }
+        if (!in_array($lang, \App\Lib\LandingWords::LANGS, true)) {
+            $lang = str_starts_with(strtolower((string)$request->getPreferredLanguage(['en', 'fr'])), 'fr') ? 'fr' : 'en';
+        }
+        $t = \App\Lib\LandingWords::for($lang);
 
-        $introSection = $this->landingPageSectionService->findOneBy(criteria: ['key_name' => INTRO_CONTENTS, 'settings_type' => INTRO_SECTION])?->value ?? null;
+        // ?theme= shows another look (to preview it from the admin); otherwise the admin's choice.
+        $theme = in_array($request->query('theme'), self::THEMES, true) ? $request->query('theme') : self::theme();
 
-        //BUSINESS STATISTICS
-        $isBusinessStatisticsEnabled = $this->landingPageSectionService->findOneBy(criteria: ['key_name' => 'is_business_statistics_enabled', 'settings_type' => BUSINESS_STATISTICS])?->value == 1;
-        $businessStatistics = $this->landingPageSectionService->getBy(criteria: ['settings_type' => BUSINESS_STATISTICS, ['key_name', '!=', 'is_business_statistics_enabled']]);
-        $activeBusinessStatistics = collect($businessStatistics)->filter(
-            fn($item) => !empty($item?->value) && ($item?->value['status'] ?? false)
-        );
-        $showBusinessStatisticsSection =
-            $isBusinessStatisticsEnabled && $activeBusinessStatistics->isNotEmpty();
+        $storeUrl = function (string $key, string $package): string {
+            $url = trim((string)(businessConfig(key: $key, settingsType: APP_VERSION)?->value['app_url'] ?? ''));
+            return filter_var($url, FILTER_VALIDATE_URL) ? $url : 'https://play.google.com/store/apps/details?id=' . $package;
+        };
+        $playUrl = $storeUrl(CUSTOMER_APP_VERSION_CONTROL_FOR_ANDROID, config('marketmanagement.android_package', 'com.i_nnova.eride'));
+        $driverUrl = $storeUrl(DRIVER_APP_VERSION_CONTROL_FOR_ANDROID, 'com.i_nnova.eridedriver');
 
-        //OUR SOLUTIONS
-        $isOurSolutionsEnabled = $this->landingPageSectionService->findOneBy(criteria: ['key_name' => 'is_our_solutions_enabled', 'settings_type' => OUR_SOLUTIONS_SECTION])?->value == 1;
-        $ourSolutionsSectionContent = $this->landingPageSectionService->findOneBy(criteria: ['key_name' => INTRO_CONTENTS, 'settings_type' => OUR_SOLUTIONS_SECTION])?->value ?? null;
-        $ourSolutions = $this->landingPageSectionService->getBy(criteria: ['key_name' => 'solutions', 'settings_type' => OUR_SOLUTIONS_SECTION]);
-        $activeOurSolutions = collect($ourSolutions)->filter(
-            fn($item) => !empty($item?->value) && ($item?->value['status'] ?? false)
-        );
-        $showOurSolutionsSection =
-            $isOurSolutionsEnabled && $activeOurSolutions->isNotEmpty();
+        $contact = [
+            'phone' => businessConfig('business_contact_phone', BUSINESS_INFORMATION)?->value,
+            'email' => businessConfig('business_contact_email', BUSINESS_INFORMATION)?->value,
+            'address' => businessConfig('business_address', BUSINESS_INFORMATION)?->value,
+        ];
+        // Partners write to the team on WhatsApp, with what they want already typed; email when there is no phone.
+        $waNumber = preg_replace('/\D+/', '', (string)$contact['phone']);
+        $partnerLink = fn(string $message) => $waNumber !== ''
+            ? 'https://wa.me/' . $waNumber . '?text=' . rawurlencode($message)
+            : ($contact['email'] ? 'mailto:' . $contact['email'] . '?subject=' . rawurlencode($message) : null);
 
+        $busWeb = \Modules\BusManagement\Lib\BusSettings::enabled() && \Modules\BusManagement\Lib\BusSettings::web()['booking'] ? route('bus.web.home') : null;
+        $qr = (string)\SimpleSoftwareIO\QrCode\Facades\QrCode::format('svg')->size(144)->margin(0)->errorCorrection('M')->generate($playUrl);
+        $favicon = getSession('favicon');
+        $favicon = $favicon ? dynamicStorage(path: 'storage/app/public/business/' . $favicon) : dynamicAsset(path: 'public/landing-page/assets/img/favicon.png');
 
-        //OUR SERVICES
-        $isOurServicesEnabled = $this->landingPageSectionService->findOneBy(criteria: ['key_name' => 'is_our_services_enabled', 'settings_type' => OUR_SERVICES])?->value == 1;
-        $ourServicesSectionContent = $this->landingPageSectionService->findOneBy(criteria: ['key_name' => INTRO_CONTENTS, 'settings_type' => OUR_SERVICES])?->value ?? null;
-        $ourServices = $this->landingPageSectionService->getBy(criteria: ['settings_type' => OUR_SERVICES, ['key_name', '!=', 'is_our_services_enabled'], ['key_name', '!=', 'intro_contents']]);
-        $activeOurServices = collect($ourServices)->filter(
-            fn($item) => !empty($item?->value) && ($item?->value['status'] ?? false)
-        );
-        $showOurServicesSection =
-            $isOurServicesEnabled && $activeOurServices->isNotEmpty();
-
-        //GALLERY
-        $isGalleryEnabled = $this->landingPageSectionService->findOneBy(criteria: ['key_name' => 'is_gallery_enabled', 'settings_type' => GALLERY])?->value == 1;
-        $cardOneGallery = $this->landingPageSectionService->findOneBy(criteria: ['key_name' => 'card_1', 'settings_type' => GALLERY])?->value;
-        $cardTwoGallery = $this->landingPageSectionService->findOneBy(criteria: ['key_name' => 'card_2', 'settings_type' => GALLERY])?->value;
-
-        //CUSTOMER APP DOWNLOAD
-        $isCustomerAppDownloadEnabled = $this->landingPageSectionService->findOneBy(criteria: ['key_name' => 'is_customer_app_download_enabled', 'settings_type' => CUSTOMER_APP_DOWNLOAD])?->value == 1;
-        $customerAppDownloadSectionContent = $this->landingPageSectionService->findOneBy(criteria: ['key_name' => INTRO_CONTENTS, 'settings_type' => CUSTOMER_APP_DOWNLOAD])?->value ?? null;
-        $customerAppDownloadButtonContent = $this->landingPageSectionService->findOneBy(criteria: ['key_name' => BUTTON_CONTENTS, 'settings_type' => CUSTOMER_APP_DOWNLOAD])?->value ?? null;
-
-        //EARN MONEY
-        $isEarnMoneyEnabled = $this->landingPageSectionService->findOneBy(criteria: ['key_name' => 'is_earn_money_enabled', 'settings_type' => EARN_MONEY])?->value == 1;
-        $earnMoneySectionContent = $this->landingPageSectionService->findOneBy(criteria: ['key_name' => INTRO_CONTENTS, 'settings_type' => EARN_MONEY])?->value ?? null;
-        $earnMoneyButtonContent = $this->landingPageSectionService->findOneBy(criteria: ['key_name' => BUTTON_CONTENTS, 'settings_type' => EARN_MONEY])?->value ?? null;
-
-        //TESTIMONIAL
-        $isTestimonialEnabled = $this->landingPageSectionService->findOneBy(criteria: ['key_name' => 'is_testimonial_enabled', 'settings_type' => TESTIMONIAL])?->value == 1;
-        $testimonialSectionContent = $this->landingPageSectionService->findOneBy(criteria: ['key_name' => INTRO_CONTENTS, 'settings_type' => TESTIMONIAL])?->value ?? null;
-        $testimonials = $this->landingPageSectionService->getBy(criteria: ['settings_type' => TESTIMONIAL, ['key_name', '!=', 'is_testimonial_enabled'], ['key_name', '!=', 'intro_contents']]);
-        $activeTestimonials = collect($testimonials)->filter(
-            fn($item) => !empty($item?->value) && ($item?->value['status'] ?? false)
-        );
-        $showTestimonialSection =
-            $isTestimonialEnabled && $activeTestimonials->isNotEmpty();
-        return view('landing-page.index',
-            compact('businessName', 'introSection',
-                'showBusinessStatisticsSection', 'businessStatistics',
-                'ourSolutionsSectionContent', 'showOurSolutionsSection', 'activeOurSolutions',
-                'ourServicesSectionContent', 'showOurServicesSection', 'activeOurServices',
-                'isGalleryEnabled', 'cardOneGallery', 'cardTwoGallery',
-                'isCustomerAppDownloadEnabled', 'customerAppDownloadSectionContent', 'customerAppDownloadButtonContent',
-                'isEarnMoneyEnabled', 'earnMoneySectionContent', 'earnMoneyButtonContent',
-                'showTestimonialSection', 'testimonialSectionContent', 'activeTestimonials',
-                'driverAppVersionControlForAndroid', 'driverAppVersionControlForIos', 'customerAppVersionControlForAndroid', 'customerAppVersionControlForIos'));
+        return response()->view('landing-page.home', compact('t', 'theme', 'playUrl', 'driverUrl', 'contact', 'partnerLink', 'busWeb', 'qr', 'favicon'));
     }
 
     public function aboutUs()

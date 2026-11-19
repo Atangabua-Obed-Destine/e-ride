@@ -266,9 +266,9 @@ Route::group(['prefix' => 'admin', 'as' => 'admin.', 'middleware' => 'admin'], f
             Route::group(['prefix' => 'landing-page', 'as' => 'landing-page.'], function () {
                 Route::controller(LandingPageController::class)->group(function () {
                     Route::get('update-landing-page-setting', 'updateLandingPageSetting')->name('update-landing-page-setting');
-                    Route::group(['prefix' => 'whatsapp-booking', 'as' => 'whatsapp-booking.'], function () {
-                        Route::get('/', 'whatsappBooking')->name('index');
-                        Route::post('update', 'updateWhatsappBooking')->name('update');
+                    Route::group(['prefix' => 'look', 'as' => 'look.'], function () {
+                        Route::get('/', 'look')->name('index');
+                        Route::post('update', 'updateLook')->name('update');
                     });
                     Route::group(['prefix' => 'intro-section', 'as' => 'intro-section.'], function () {
                         Route::get('/', 'introSection')->name('index');

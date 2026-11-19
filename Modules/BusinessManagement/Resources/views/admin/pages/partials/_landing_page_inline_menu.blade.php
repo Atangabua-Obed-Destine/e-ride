@@ -1,54 +1,14 @@
 <div class="position-relative nav--tab-wrapper mb-4">
     <ul class="nav d-flex gap-4 flex-nowrap nav--tabs bg-transparent overflow-x-auto text-nowrap">
         <li class="nav-item">
-            <a href="{{ route('admin.business.pages-media.landing-page.intro-section.index') }}" class="text-capitalize nav-link active-rounded-20
-                {{ Request::is('admin/business/pages-media/landing-page/intro-section') ? 'active' : '' }}
-            ">{{ translate('intro_section') }}</a>
-        </li>
-        <li class="nav-item">
-            <a href="{{ route('admin.business.pages-media.landing-page.business-statistics.index') }}" class="text-capitalize nav-link active-rounded-20
-                {{ Request::is('admin/business/pages-media/landing-page/business-statistics') ? 'active' : '' }}
-            ">{{ translate('business_statistics') }}</a>
-        </li>
-        <li class="nav-item">
-            <a href="{{ route('admin.business.pages-media.landing-page.our-solutions.index') }}" class="text-capitalize nav-link active-rounded-20
-                {{ Request::is('admin/business/pages-media/landing-page/our-solutions*') ? 'active' : '' }}
-            ">{{ translate('Our_Solutions') }}</a>
-        </li>
-        <li class="nav-item">
-            <a href="{{ route('admin.business.pages-media.landing-page.our-services.index') }}" class="text-capitalize nav-link active-rounded-20
-             {{ Request::is('admin/business/pages-media/landing-page/our-services') ? 'active' : '' }}
-            ">{{ translate('Our_Services') }}</a>
-        </li>
-        <li class="nav-item">
-            <a href="{{ route('admin.business.pages-media.landing-page.gallery.index') }}" class="text-capitalize nav-link active-rounded-20
-            {{ Request::is('admin/business/pages-media/landing-page/gallery') ? 'active' : '' }}
-            ">{{ translate('Gallery') }}</a>
+            <a href="{{ route('admin.business.pages-media.landing-page.look.index') }}" class="text-capitalize nav-link active-rounded-20
+            {{ Request::is('admin/business/pages-media/landing-page/look') ? 'active' : '' }}
+            ">{{ translate('Home_page_look') }}</a>
         </li>
         <li class="nav-item">
             <a href="{{ route('admin.business.pages-media.landing-page.customer-app-download.index') }}" class="text-capitalize nav-link active-rounded-20
             {{ Request::is('admin/business/pages-media/landing-page/customer-app-download') ? 'active' : '' }}
             ">{{ translate('Customer_App_Download') }}</a>
-        </li>
-        <li class="nav-item">
-            <a href="{{ route('admin.business.pages-media.landing-page.earn-money.index') }}" class="text-capitalize nav-link active-rounded-20
-            {{ Request::is('admin/business/pages-media/landing-page/earn-money') ? 'active' : '' }}
-            ">{{ translate('earn_money') }}</a>
-        </li>
-        <li class="nav-item">
-            <a href="{{ route('admin.business.pages-media.landing-page.testimonial.index') }}" class="text-capitalize nav-link active-rounded-20
-            {{ Request::is('admin/business/pages-media/landing-page/testimonial*') ? 'active' : '' }}
-            ">{{ translate('testimonial') }}</a>
-        </li>
-        <li class="nav-item">
-            <a href="{{ route('admin.business.pages-media.landing-page.newsletter.index') }}" class="text-capitalize nav-link active-rounded-20
-            {{ Request::is('admin/business/pages-media/landing-page/newsletter') ? 'active' : '' }}
-            ">{{ translate('Newsletter') }}</a>
-        </li>
-        <li class="nav-item">
-            <a href="{{ route('admin.business.pages-media.landing-page.whatsapp-booking.index') }}" class="text-capitalize nav-link active-rounded-20
-            {{ Request::is('admin/business/pages-media/landing-page/whatsapp-booking') ? 'active' : '' }}
-            ">{{ translate('WhatsApp_Booking') }}</a>
         </li>
         <li class="nav-item">
             <a href="{{ route('admin.business.pages-media.landing-page.footer.index') }}" class="text-capitalize nav-link active-rounded-20
