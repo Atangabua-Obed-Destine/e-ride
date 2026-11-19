@@ -209,21 +209,33 @@ footer{display:block!important}
 .foot-bottom{display:flex;justify-content:space-between;gap:16px;flex-wrap:wrap;margin-top:30px;padding-top:18px;border-top:1px solid var(--line);font-size:13px;color:var(--muted)}
 .foot-bottom a{color:var(--muted)}.foot-bottom a:hover{color:var(--ink)}
 .foot-links,.social{display:flex;gap:16px;flex-wrap:wrap}
-/* Burger menu */
-.burger{display:none;width:46px;height:46px;border-radius:6px;border:1.5px solid var(--outline);background:transparent;cursor:pointer;flex-direction:column;justify-content:center;align-items:center;gap:5px;padding:0}
+/* Header logo */
+.hlogo{height:40px;width:auto;display:block}
+.top .logo-light.hlogo{display:none}
+:root[data-theme=light] .top .logo-dark.hlogo{display:none}:root[data-theme=light] .top .logo-light.hlogo{display:block}
+@media (prefers-color-scheme:light){:root[data-theme=auto] .top .logo-dark.hlogo{display:none}:root[data-theme=auto] .top .logo-light.hlogo{display:block}}
+/* Burger and the side menu */
+.burger{display:none;width:46px;height:46px;border-radius:6px;border:1.5px solid var(--outline);background:transparent;cursor:pointer;flex-direction:column;justify-content:center;align-items:center;gap:5px;padding:0;flex-shrink:0}
 .burger span{display:block;width:20px;height:2px;background:var(--ink);border-radius:2px}
-.sheet{position:fixed;inset:0;z-index:60;background:var(--bg);overflow-y:auto;animation:sheetIn .35s cubic-bezier(.2,.7,.2,1)}
+.sheet{position:fixed;inset:0;z-index:60}
 .sheet[hidden]{display:none}
-@keyframes sheetIn{from{transform:translateY(-3%);opacity:0}to{transform:none;opacity:1}}
-.sheet-in{padding-top:18px;padding-bottom:30px;display:flex;flex-direction:column;gap:26px;min-height:100%}
-.sheet-head{display:flex;justify-content:space-between;align-items:center}
-.sheet-close{width:46px;height:46px;border-radius:6px;border:1.5px solid var(--outline);background:transparent;color:var(--ink);cursor:pointer;display:flex;align-items:center;justify-content:center}
-.sheet-links{display:flex;flex-direction:column}
-.sheet-links a{display:flex;align-items:baseline;gap:16px;padding:12px 0;border-bottom:1px solid var(--line);font-size:28px;font-weight:800;letter-spacing:-.02em}
-.sheet-links .n{font-size:13px;font-weight:800;color:var(--eyebrow);width:24px}
-.sheet-roles{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:6px}
-.sheet-roles .eyebrow{grid-column:1/-1;margin-bottom:4px}
-.sheet-foot{display:flex;align-items:center;gap:18px;flex-wrap:wrap;margin-top:auto}
+.sheet-back{position:absolute;inset:0;background:rgba(0,0,0,.55);animation:fade .25s ease both}
+.drawer{position:absolute;top:0;right:0;bottom:0;width:min(420px,90vw);background:var(--bg);border-left:1px solid var(--line);overflow-y:auto;padding:16px 18px 24px;display:flex;flex-direction:column;gap:16px;animation:slideIn .32s cubic-bezier(.2,.7,.2,1) both;box-shadow:-20px 0 50px rgba(0,0,0,.3)}
+@keyframes slideIn{from{transform:translateX(100%)}to{transform:none}}
+@keyframes fade{from{opacity:0}to{opacity:1}}
+@media (prefers-reduced-motion:reduce){.drawer,.sheet-back{animation:none}}
+.drawer-head{display:flex;justify-content:space-between;align-items:center}
+.sheet-close{width:44px;height:44px;border-radius:6px;border:1.5px solid var(--outline);background:transparent;color:var(--ink);cursor:pointer;display:flex;align-items:center;justify-content:center}
+.drawer-lang{display:flex;flex-direction:column;gap:8px;padding:12px;border-radius:6px;background:var(--surface);border:1px solid var(--line)}
+.drawer-lang > span{display:flex;align-items:center;gap:8px;font-size:13px;font-weight:800;color:var(--muted)}
+.lang.big{display:grid;grid-template-columns:1fr 1fr}
+.lang.big a{height:42px;font-size:15px}
+.tiles{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+.tile-link{display:flex;align-items:center;gap:10px;padding:10px;border-radius:6px;background:var(--surface);border:1px solid var(--line);font-size:14px;font-weight:700;color:var(--ink);min-height:56px}
+.tile-ic{width:36px;height:36px;border-radius:6px;display:flex;align-items:center;justify-content:center;flex-shrink:0}
+.roles{display:flex;flex-direction:column;gap:2px;margin-top:-6px}
+.roles .menu-item{padding:8px 6px}
+.drawer-foot{display:flex;flex-direction:column;gap:10px;margin-top:auto;padding-top:6px}
 /* Slides: each section arrives like a new slide */
 html{scroll-padding-top:84px}
 @media (max-width:760px){html{scroll-padding-top:74px}}
@@ -344,11 +356,11 @@ footer .cols a:hover{color:var(--ink)}
   .pane-qr{display:none}
   .pane-cta .btn{width:100%}
   .top nav .menu summary{padding:0 12px}
-  .top nav > .btn-red{display:none}
-  .top nav > .menu,.top nav > .lang{display:none}
-  .sheet-links a{font-size:24px}
-  .sheet-roles{grid-template-columns:1fr}
-  .top > a img{height:28px!important;min-width:44px}
+  .top nav > .getapp,.top nav > .menu{display:none}
+  .top{padding-top:12px;padding-bottom:12px}
+  .hlogo{height:32px}
+  .toplang a{height:38px;min-width:38px;padding:0 8px}
+  .tab{font-size:13px;line-height:1.15;padding:4px 2px}
   .menu-pop{position:fixed;left:12px;right:12px;top:70px;width:auto}
   .appcards{max-width:none}
   .foot-top .cols{grid-template-columns:1fr 1fr}
@@ -368,8 +380,8 @@ footer .cols a:hover{color:var(--ink)}
 <body>
 <div class="wrap top">
     <a href="{{ url('/') }}" aria-label="E-Ride">
-        <img class="logo-dark" src="{{ $img('logo-on-dark.png') }}" alt="E-Ride" height="32" style="height:32px;width:auto">
-        <img class="logo-light" src="{{ $img('logo-on-light.png') }}" alt="E-Ride" height="32" style="height:32px;width:auto">
+        <img class="logo-dark hlogo" src="{{ $img('logo-h-dark.png') }}" alt="E-Ride" width="252" height="40">
+        <img class="logo-light hlogo" src="{{ $img('logo-h-light.png') }}" alt="E-Ride" width="252" height="40">
     </a>
     <nav aria-label="E-Ride">
         <a class="lnk" href="#services">{{ $t('nav_services') }}</a>
@@ -389,43 +401,61 @@ footer .cols a:hover{color:var(--ink)}
                 @endforeach
             </div>
         </details>
-        <div class="lang" role="group" aria-label="Language">
-            <a href="{{ url('/?lang=en') }}" class="{{ $t->lang === 'en' ? 'on' : '' }}" hreflang="en" @if($t->lang === 'en') aria-current="true" @endif>EN</a>
-            <a href="{{ url('/?lang=fr') }}" class="{{ $t->lang === 'fr' ? 'on' : '' }}" hreflang="fr" @if($t->lang === 'fr') aria-current="true" @endif>FR</a>
+        <div class="lang toplang" role="group" aria-label="{{ $t('language') }}">
+            <a href="{{ url('/?lang=en') }}" class="{{ $t->lang === 'en' ? 'on' : '' }}" hreflang="en" lang="en" @if($t->lang === 'en') aria-current="true" @endif>EN</a>
+            <a href="{{ url('/?lang=fr') }}" class="{{ $t->lang === 'fr' ? 'on' : '' }}" hreflang="fr" lang="fr" @if($t->lang === 'fr') aria-current="true" @endif>FR</a>
         </div>
-        <a class="btn btn-red" href="#get" style="min-height:44px;padding:0 18px;font-size:15px">{{ $t('get_app') }}</a>
+        <a class="btn btn-red getapp" href="#get" style="min-height:44px;padding:0 18px;font-size:15px">{{ $t('get_app') }}</a>
         <button type="button" class="burger" aria-expanded="false" aria-controls="site-menu" aria-label="{{ $t('menu') }}"><span></span><span></span><span></span></button>
     </nav>
 </div>
 <div id="site-menu" class="sheet" hidden>
-    <div class="sheet-in wrap">
-        <div class="sheet-head">
-            <img class="logo-dark" src="{{ $img('logo-on-dark.png') }}" alt="E-Ride" style="height:30px;width:auto">
-            <img class="logo-light" src="{{ $img('logo-on-light.png') }}" alt="E-Ride" style="height:30px;width:auto">
-            <button type="button" class="sheet-close" aria-label="{{ $t('close') }}"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18"/></svg></button>
+    <div class="sheet-back" data-close></div>
+    <aside class="drawer" role="dialog" aria-modal="true" aria-label="{{ $t('menu') }}">
+        <div class="drawer-head">
+            <img class="logo-dark" src="{{ $img('logo-h-dark.png') }}" alt="E-Ride" style="height:30px;width:auto">
+            <img class="logo-light" src="{{ $img('logo-h-light.png') }}" alt="E-Ride" style="height:30px;width:auto">
+            <button type="button" class="sheet-close" data-close aria-label="{{ $t('close') }}"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18"/></svg></button>
         </div>
-        <nav class="sheet-links" aria-label="{{ $t('menu') }}">
-            @foreach([['#services', 'nav_services'], ['#guide', 'nav_guide'], ['#how', 'nav_how'], ['#bus', 'nav_bus'], ['#safe', 'nav_safe'], ['#drive', 'nav_drive'], ['#partners', 'nav_partners']] as $i => [$href, $key])
-                <a href="{{ $href }}"><span class="n">{{ str_pad($i + 1, 2, '0', STR_PAD_LEFT) }}</span>{{ $t($key) }}</a>
+        <div class="drawer-lang">
+            <span><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M3 12h18M12 3c2.5 2.7 3.8 5.7 3.8 9s-1.3 6.3-3.8 9c-2.5-2.7-3.8-5.7-3.8-9S9.5 5.7 12 3z"/></svg>{{ $t('language') }}</span>
+            <div class="lang big" role="group" aria-label="{{ $t('language') }}">
+                <a href="{{ url('/?lang=en') }}" class="{{ $t->lang === 'en' ? 'on' : '' }}" hreflang="en" lang="en">English</a>
+                <a href="{{ url('/?lang=fr') }}" class="{{ $t->lang === 'fr' ? 'on' : '' }}" hreflang="fr" lang="fr">Français</a>
+            </div>
+        </div>
+        <p class="eyebrow">{{ $t('go_to') }}</p>
+        <nav class="tiles" aria-label="{{ $t('menu') }}">
+            @foreach([
+                ['#services', 'nav_services', '#FFF1DE', '#B45309', '<rect x="3" y="3" width="7" height="7" rx="1.5"/><rect x="14" y="3" width="7" height="7" rx="1.5"/><rect x="3" y="14" width="7" height="7" rx="1.5"/><rect x="14" y="14" width="7" height="7" rx="1.5"/>'],
+                ['#guide', 'nav_guide', '#EAF7F3', '#0E7A5A', '<path d="M12 21s-6-5.5-6-10a6 6 0 0112 0c0 4.5-6 10-6 10z"/><circle cx="12" cy="11" r="2"/>'],
+                ['#how', 'nav_how', '#FFE9E7', '#C41A1A', '<circle cx="12" cy="12" r="9"/><path d="M12 8v4l3 2"/>'],
+                ['#bus', 'nav_bus', '#E8F0FF', '#1D4ED8', '<rect x="4" y="3" width="16" height="15" rx="3"/><path d="M4 11h16"/><path d="M7 18v3M17 18v3"/>'],
+                ['#safe', 'nav_safe', '#F3EEFF', '#6D28D9', '<path d="M12 3l7 3v5c0 4.5-3 8.3-7 10-4-1.7-7-5.5-7-10V6z"/><path d="M9 12l2 2 4-4"/>'],
+                ['#drive', 'nav_drive', '#F1F5EC', '#4D7C0F', '<circle cx="12" cy="12" r="9"/><circle cx="12" cy="12" r="2.5"/><path d="M12 3v6.5M4.5 15l5.3-2M19.5 15l-5.3-2"/>'],
+                ['#partners', 'nav_partners', '#EEF2F7', '#334155', '<path d="M4 9l1.5-5h13L20 9"/><path d="M4 9h16v2a3 3 0 0 1-5.3 2 3 3 0 0 1-5.4 0A3 3 0 0 1 4 11V9z"/><path d="M5 14v6h14v-6"/>'],
+                [route('contact-us'), 'help', '#FFF7E0', '#A16207', '<circle cx="12" cy="12" r="9"/><path d="M9.5 9.5a2.5 2.5 0 015 0c0 1.7-2.5 2-2.5 4M12 17h.01"/>'],
+            ] as [$href, $key, $bg, $fg, $path])
+                <a href="{{ $href }}" class="tile-link"><span class="tile-ic" style="background:{{ $bg }};color:{{ $fg }}"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">{!! $path !!}</svg></span>{{ $t($key) }}</a>
             @endforeach
         </nav>
-        <div class="sheet-roles">
-            <p class="eyebrow">{{ $t('signin_title') }}</p>
+        <p class="eyebrow">{{ $t('signin_title') }}</p>
+        <div class="roles">
             @foreach($t('roles') as $key => [$who, $where])
                 @php($href = match ($key) { 'app' => '#get', 'driver' => $driverUrl, default => $portals[$key] ?? null })
                 @continue(!$href)
                 <a href="{{ $href }}" class="menu-item">{!! $roleIcon($key) !!}<span><b>{{ $who }}</b><small>{{ $where }}</small></span></a>
             @endforeach
         </div>
-        <div class="sheet-foot">
-            <div class="lang" role="group" aria-label="Language">
-                <a href="{{ url('/?lang=en') }}" class="{{ $t->lang === 'en' ? 'on' : '' }}" hreflang="en">EN</a>
-                <a href="{{ url('/?lang=fr') }}" class="{{ $t->lang === 'fr' ? 'on' : '' }}" hreflang="fr">FR</a>
+        <div class="drawer-foot">
+            <a class="btn btn-red" href="#get" style="width:100%">{{ $t('get_app') }}</a>
+            <div style="display:flex;gap:8px">
+                <a class="badge-store" href="{{ $playUrl }}" rel="noopener" style="flex:1;justify-content:center">{!! $play !!}Google Play</a>
+                @if($appStoreUrl)<a class="badge-store" href="{{ $appStoreUrl }}" rel="noopener" style="flex:1;justify-content:center">{!! $apple !!}App Store</a>
+                @else<span class="badge-store" style="flex:1;justify-content:center;opacity:.7">{!! $apple !!}{{ $t('appstore_soon') }}</span>@endif
             </div>
-            <a href="{{ route('contact-us') }}" style="font-weight:700">{{ $t('help') }}</a>
-            <a class="btn btn-red" href="#get">{{ $t('get_app') }}</a>
         </div>
-    </div>
+    </aside>
 </div>
 <nav class="dots" aria-label="{{ $t('menu') }}"></nav>
 
@@ -834,7 +864,7 @@ footer .cols a:hover{color:var(--ink)}
     document.addEventListener('click', function (e) { if (menu.open && !menu.contains(e.target)) menu.open = false; });
     document.addEventListener('keydown', function (e) { if (e.key === 'Escape' && menu.open) { menu.open = false; menu.querySelector('summary').focus(); } });
 })();
-// The menu sheet (phones and tablets).
+// The side menu (phones and tablets).
 (function () {
     var btn = document.querySelector('.burger'), sheet = document.getElementById('site-menu');
     if (!btn || !sheet) return;
@@ -844,7 +874,7 @@ footer .cols a:hover{color:var(--ink)}
         (open ? sheet.querySelector('.sheet-close') : btn).focus();
     }
     btn.addEventListener('click', function () { set(true); });
-    sheet.querySelector('.sheet-close').addEventListener('click', function () { set(false); });
+    sheet.querySelectorAll('[data-close]').forEach(function (el) { el.addEventListener('click', function () { set(false); }); });
     sheet.querySelectorAll('a').forEach(function (a) { a.addEventListener('click', function () { if (a.getAttribute('href').charAt(0) === '#') set(false); }); });
     document.addEventListener('keydown', function (e) { if (e.key === 'Escape' && !sheet.hidden) set(false); });
 })();
