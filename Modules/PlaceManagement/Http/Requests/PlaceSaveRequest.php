@@ -52,6 +52,16 @@ class PlaceSaveRequest extends FormRequest
             'remove_photos' => 'nullable|array',
             'remove_photos.*' => 'string',
             'cover_photo' => 'nullable|string',
+            // The guide (Things to do).
+            'guide_status' => ['nullable', Rule::in([Place::GUIDE_NONE, Place::GUIDE_DRAFT, Place::GUIDE_PUBLISHED])],
+            'story' => 'nullable|string|max:2000|required_if:guide_status,published',
+            'story_fr' => 'nullable|string|max:2000',
+            'entry_fee' => 'nullable|integer|min:0|max:10000000',
+            'stay_minutes' => 'nullable|integer|min:5|max:600',
+            'best_time' => 'nullable|string|max:200',
+            'best_time_fr' => 'nullable|string|max:200',
+            'tips' => 'nullable|string|max:1000',
+            'tips_fr' => 'nullable|string|max:1000',
         ];
     }
 
@@ -62,6 +72,7 @@ class PlaceSaveRequest extends FormRequest
             'price_max.gte' => translate('The highest price must be at least the lowest price.'),
             'check_in.regex' => translate('Use the 24-hour format, for example 14:00.'),
             'check_out.regex' => translate('Use the 24-hour format, for example 11:00.'),
+            'story.required_if' => translate('Write the story before publishing the guide.'),
         ];
     }
 }

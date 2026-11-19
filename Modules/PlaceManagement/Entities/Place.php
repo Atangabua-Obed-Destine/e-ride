@@ -56,7 +56,14 @@ class Place extends Model
         'name', 'category', 'explore_category', 'google_place_id', 'description', 'address', 'latitude', 'longitude', 'zone_id',
         'phone', 'whatsapp', 'website', 'price_min', 'price_max', 'amenities', 'photos', 'check_in', 'check_out',
         'reception_24h', 'on_duty_from', 'on_duty_until', 'is_featured', 'is_active', 'sort',
+        'guide_status', 'story', 'story_fr', 'entry_fee', 'stay_minutes', 'best_time', 'best_time_fr', 'tips', 'tips_fr',
+        'guide_checked_by', 'guide_checked_at',
     ];
+
+    /** Guide states: no guide yet, written but not checked, checked and shown in the app. */
+    public const GUIDE_NONE = 'none';
+    public const GUIDE_DRAFT = 'draft';
+    public const GUIDE_PUBLISHED = 'published';
 
     protected $casts = [
         'latitude' => 'float',
@@ -71,6 +78,9 @@ class Place extends Model
         'is_featured' => 'boolean',
         'is_active' => 'boolean',
         'sort' => 'integer',
+        'entry_fee' => 'integer',
+        'stay_minutes' => 'integer',
+        'guide_checked_at' => 'datetime',
     ];
 
     public function zone(): BelongsTo
@@ -84,6 +94,19 @@ class Place extends Model
         $today = ($today ?? now())->startOfDay();
         return $this->on_duty_from && $this->on_duty_until
             && $this->on_duty_from->lte($today) && $this->on_duty_until->gte($today);
+    }
+
+    public function hasGuide(): bool
+    {
+        return $this->guide_status === self::GUIDE_PUBLISHED;
+    }
+
+    /** A guide text in the customer's language, falling back to English. */
+    public function guideText(string $field, ?string $language): ?string
+    {
+        $fr = $field . '_fr';
+        $value = $language === 'fr' && filled($this->{$fr}) ? $this->{$fr} : $this->{$field};
+        return filled($value) ? trim($value) : null;
     }
 
     /** @return string[] */

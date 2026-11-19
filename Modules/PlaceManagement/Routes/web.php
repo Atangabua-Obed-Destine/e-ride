@@ -3,6 +3,7 @@
 use Illuminate\Support\Facades\Route;
 use Modules\PlaceManagement\Http\Controllers\Web\Admin\DropFareAdminController;
 use Modules\PlaceManagement\Http\Controllers\Web\Admin\GooglePlaceController;
+use Modules\PlaceManagement\Http\Controllers\Web\Admin\GuideAdminController;
 use Modules\PlaceManagement\Http\Controllers\Web\Admin\LandmarkAdminController;
 use Modules\PlaceManagement\Http\Controllers\Web\Admin\ListingAdminController;
 use Modules\PlaceManagement\Http\Controllers\Web\Admin\ListingReservationAdminController;
@@ -21,6 +22,22 @@ Route::group(['prefix' => 'admin', 'as' => 'admin.', 'middleware' => 'admin'], f
             Route::get('google', [GooglePlaceController::class, 'index'])->name('google');
             Route::get('categories', [PlaceCategoryController::class, 'index'])->name('categories');
             Route::get('on-duty', [OnDutyController::class, 'index'])->name('on-duty');
+        });
+        // The city and tour guide: tours, riders' ratings, AI drafts.
+        Route::middleware('can:place_view')->group(function () {
+            Route::get('tours', [GuideAdminController::class, 'tours'])->name('tours');
+            Route::get('ratings', [GuideAdminController::class, 'ratings'])->name('ratings');
+        });
+        Route::middleware('can:place_edit')->group(function () {
+            Route::post('guide-draft', [GuideAdminController::class, 'placeDraft'])->name('guide-draft')->middleware('throttle:20,1,guide-draft');
+            Route::get('tours/create', [GuideAdminController::class, 'createTour'])->name('tours.create');
+            Route::post('tours', [GuideAdminController::class, 'storeTour'])->name('tours.store');
+            Route::post('tours/draft', [GuideAdminController::class, 'tourDraft'])->name('tours.draft')->middleware('throttle:20,1,guide-draft');
+            Route::get('tours/{tour}/edit', [GuideAdminController::class, 'editTour'])->name('tours.edit');
+            Route::put('tours/{tour}', [GuideAdminController::class, 'updateTour'])->name('tours.update');
+            Route::post('tours/{tour}/status', [GuideAdminController::class, 'tourStatus'])->name('tours.status');
+            Route::delete('tours/{tour}', [GuideAdminController::class, 'destroyTour'])->name('tours.destroy');
+            Route::post('ratings/{rating}/visibility', [GuideAdminController::class, 'ratingVisibility'])->name('ratings.visibility');
         });
         Route::middleware('can:place_add')->group(function () {
             Route::get('create', [PlaceController::class, 'create'])->name('create');

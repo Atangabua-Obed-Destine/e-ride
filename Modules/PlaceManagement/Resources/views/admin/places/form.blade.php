@@ -127,6 +127,62 @@
                             </div>
                         </div>
 
+                        @php($gs = old('guide_status', $place->guide_status ?? 'none'))
+                        <div class="card mb-3 js-things-only" id="guide-card">
+                            <div class="card-body">
+                                <div class="d-flex align-items-start justify-content-between gap-2 flex-wrap">
+                                    <div>
+                                        <h5 class="mb-1">{{ translate('Guide') }}</h5>
+                                        <p class="fs-12 text-muted mb-2">{{ translate('What the app tells a visitor: the story, what it costs, how long to stay, the best time and tips. Let the AI write a first draft, then check every fact with the place before you publish.') }}</p>
+                                    </div>
+                                    @can('place_edit')
+                                        <button type="button" class="btn btn-outline-primary btn-sm" id="guide-draft"><i class="bi bi-stars"></i> {{ translate('Draft_with_AI') }}</button>
+                                    @endcan
+                                </div>
+                                <div class="alert alert-info fs-12 py-2 d-none" id="guide-draft-note"></div>
+                                <div class="row g-3">
+                                    <div class="col-sm-6">
+                                        <label class="form-label">{{ translate('Guide_status') }}</label>
+                                        <select name="guide_status" class="form-select">
+                                            <option value="none" {{ $gs === 'none' ? 'selected' : '' }}>{{ translate('No_guide') }}</option>
+                                            <option value="draft" {{ $gs === 'draft' ? 'selected' : '' }}>{{ translate('Draft_(not_in_the_app)') }}</option>
+                                            <option value="published" {{ $gs === 'published' ? 'selected' : '' }}>{{ translate('Checked_and_published') }}</option>
+                                        </select>
+                                        @if($place->guide_checked_at)
+                                            <div class="fs-12 text-muted mt-1">{{ translate('Checked on') }} {{ $place->guide_checked_at->toDateString() }}</div>
+                                        @endif
+                                    </div>
+                                    <div class="col-sm-3">
+                                        <label class="form-label">{{ translate('Entry_fee') }}</label>
+                                        <input type="number" min="0" step="50" name="entry_fee" class="form-control" value="{{ old('entry_fee', $place->entry_fee) }}" placeholder="{{ translate('Unknown') }}">
+                                        <div class="fs-12 text-muted mt-1">{{ translate('0 = free') }}</div>
+                                    </div>
+                                    <div class="col-sm-3">
+                                        <label class="form-label">{{ translate('Minutes_to_spend') }}</label>
+                                        <input type="number" min="5" max="600" step="5" name="stay_minutes" class="form-control" value="{{ old('stay_minutes', $place->stay_minutes) }}" placeholder="45">
+                                    </div>
+                                    @foreach([['story', 'Story', 5, 2000], ['best_time', 'Best_time_to_go', 1, 200], ['tips', 'Tips', 3, 1000]] as [$f, $label, $rows, $max])
+                                        <div class="col-sm-6">
+                                            <label class="form-label">{{ translate($label) }} (English)</label>
+                                            @if($rows > 1)
+                                                <textarea name="{{ $f }}" rows="{{ $rows }}" maxlength="{{ $max }}" class="form-control">{{ old($f, $place->{$f}) }}</textarea>
+                                            @else
+                                                <input type="text" name="{{ $f }}" maxlength="{{ $max }}" class="form-control" value="{{ old($f, $place->{$f}) }}">
+                                            @endif
+                                        </div>
+                                        <div class="col-sm-6">
+                                            <label class="form-label">{{ translate($label) }} (Français)</label>
+                                            @if($rows > 1)
+                                                <textarea name="{{ $f }}_fr" rows="{{ $rows }}" maxlength="{{ $max }}" class="form-control">{{ old($f . '_fr', $place->{$f . '_fr'}) }}</textarea>
+                                            @else
+                                                <input type="text" name="{{ $f }}_fr" maxlength="{{ $max }}" class="form-control" value="{{ old($f . '_fr', $place->{$f . '_fr'}) }}">
+                                            @endif
+                                        </div>
+                                    @endforeach
+                                </div>
+                            </div>
+                        </div>
+
                         <div class="card mb-3">
                             <div class="card-body">
                                 <h5 class="mb-1">{{ translate('Photos') }}</h5>
@@ -260,10 +316,12 @@
         // stay, on-duty dates for pharmacies, and that category's types.
         (function () {
             var explore = document.getElementById('explore-category'), type = document.getElementById('place-type');
+            var things = @json(\Modules\PlaceManagement\Entities\PlaceCategory::THINGS);
             function sync() {
                 var opt = explore.options[explore.selectedIndex], key = opt.value, price = opt.dataset.price === '1';
                 document.querySelectorAll('.js-stay-only').forEach(function (el) { el.style.display = price ? '' : 'none'; });
                 document.querySelectorAll('.js-pharmacy-only').forEach(function (el) { el.style.display = key === 'pharmacy' ? '' : 'none'; });
+                document.querySelectorAll('.js-things-only').forEach(function (el) { el.style.display = things.indexOf(key) >= 0 ? '' : 'none'; });
                 var firstVisible = null, selectedVisible = false;
                 Array.prototype.forEach.call(type.options, function (o) {
                     var show = o.dataset.group === key;
@@ -275,6 +333,39 @@
             }
             explore.addEventListener('change', sync);
             sync();
+        })();
+
+        // Draft with AI: fills the guide from the place's details. Nothing is saved until Save.
+        (function () {
+            var btn = document.getElementById('guide-draft'), note = document.getElementById('guide-draft-note');
+            if (!btn) return;
+            var form = btn.closest('form');
+            btn.addEventListener('click', function () {
+                var fields = ['story', 'story_fr', 'best_time', 'best_time_fr', 'tips', 'tips_fr', 'stay_minutes'];
+                var filled = fields.some(function (f) { return form.elements[f] && form.elements[f].value.trim() !== ''; });
+                if (filled && !confirm(@json(translate('Replace what is written in the guide with a new AI draft?')))) return;
+                btn.disabled = true;
+                note.classList.remove('d-none', 'alert-danger'); note.classList.add('alert-info');
+                note.textContent = @json(translate('Writing a draft, this takes up to half a minute...'));
+                var body = new FormData();
+                ['name', 'explore_category', 'category', 'address', 'description', 'latitude', 'longitude', 'google_place_id'].forEach(function (f) {
+                    if (form.elements[f]) body.append(f, form.elements[f].value);
+                });
+                body.append('_token', @json(csrf_token()));
+                fetch(@json(route('admin.place.guide-draft')), { method: 'POST', body: body, headers: { 'Accept': 'application/json' } })
+                    .then(function (r) { return r.json().then(function (j) { return { ok: r.ok, j: j }; }); })
+                    .then(function (res) {
+                        if (!res.ok) throw new Error(res.j.message || 'failed');
+                        fields.forEach(function (f) { if (form.elements[f] && res.j.draft[f] != null) form.elements[f].value = res.j.draft[f]; });
+                        if (form.elements.guide_status.value === 'none') form.elements.guide_status.value = 'draft';
+                        note.textContent = res.j.message;
+                    })
+                    .catch(function (e) {
+                        note.classList.remove('alert-info'); note.classList.add('alert-danger');
+                        note.textContent = e.message;
+                    })
+                    .finally(function () { btn.disabled = false; });
+            });
         })();
     </script>
 @endpush

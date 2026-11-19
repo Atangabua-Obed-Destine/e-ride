@@ -20,6 +20,13 @@ class PlacePresenter
         'hospital' => 'hospital', 'doctor' => 'clinic', 'medical_lab' => 'laboratory', 'dental_clinic' => 'clinic',
         'bank' => 'bank', 'atm' => 'atm',
         'bus_station' => 'bus_agency', 'transit_station' => 'bus_agency', 'travel_agency' => 'bus_agency',
+        // Things to do (the tour guide).
+        'museum' => 'museum', 'art_gallery' => 'art_gallery', 'park' => 'park', 'national_park' => 'park', 'hiking_area' => 'park',
+        'tourist_attraction' => 'sight', 'historical_landmark' => 'monument', 'monument' => 'monument',
+        'restaurant' => 'restaurant', 'cafe' => 'cafe', 'fast_food_restaurant' => 'snack_bar', 'bakery' => 'bakery',
+        'swimming_pool' => 'swimming_pool', 'water_park' => 'water_park',
+        'night_club' => 'night_club', 'bar' => 'bar', 'karaoke' => 'lounge',
+        'market' => 'market', 'shopping_mall' => 'shopping_mall',
     ];
 
     /** Signed links stay the same for a whole day, so the phone's image cache keeps working. */
@@ -116,6 +123,12 @@ class PlacePresenter
 
     public static function category(?string $primaryType, array $types = [], string $exploreCategory = 'stay'): string
     {
+        if ($exploreCategory === 'swim') {
+            // Most pools are a hotel's, open to visitors for a fee.
+            $all = array_merge([$primaryType], $types);
+            return in_array('water_park', $all, true) ? 'water_park'
+                : (array_intersect($all, array_merge(self::HOTEL_TYPES, ['lodging'])) ? 'hotel_pool' : 'swimming_pool');
+        }
         if ($exploreCategory !== 'stay') {
             foreach (array_merge([$primaryType], $types) as $type) {
                 if (isset(self::GOOGLE_TO_TYPE[$type])) {

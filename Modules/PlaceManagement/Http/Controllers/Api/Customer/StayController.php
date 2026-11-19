@@ -41,6 +41,8 @@ class StayController extends Controller
             'enabled' => $settings['status'],
             'label' => $settings['explore_label'],
             'categories' => $settings['status'] ? $this->places->categories($language) : [],
+            // Apps with the tour guide show these as one "Things to do" tile instead of one tile each.
+            'things' => $settings['status'] ? \Modules\PlaceManagement\Entities\PlaceCategory::THINGS : [],
         ]));
     }
 
@@ -63,6 +65,10 @@ class StayController extends Controller
         if ($category === 'stay' && class_exists(\Modules\HotelManagement\Http\Controllers\Api\HotelController::class)) {
             $result['verified'] = \Modules\HotelManagement\Http\Controllers\Api\HotelController::enrich($result['verified'] ?? [], $request);
             $result['hotel_partners'] = \Modules\HotelManagement\Lib\HotelSettings::enabled();
+        }
+        // Things to do: riders' ratings and the team's guide facts on every card.
+        if (in_array($category, \Modules\PlaceManagement\Entities\PlaceCategory::THINGS, true)) {
+            $result = app(\Modules\PlaceManagement\Service\GuideService::class)->enrichExplore($result);
         }
         return response()->json(responseFormatter(DEFAULT_200, $result));
     }

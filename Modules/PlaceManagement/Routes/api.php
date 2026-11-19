@@ -1,6 +1,7 @@
 <?php
 
 use Illuminate\Support\Facades\Route;
+use Modules\PlaceManagement\Http\Controllers\Api\Customer\GuideController;
 use Modules\PlaceManagement\Http\Controllers\Api\Customer\LandmarkController;
 use Modules\PlaceManagement\Http\Controllers\Api\Customer\ListingController;
 use Modules\PlaceManagement\Http\Controllers\Api\Customer\ListingReservationController;
@@ -18,6 +19,15 @@ Route::group(['prefix' => 'customer', 'middleware' => ['auth:api', 'maintenance_
     // Landmarks: what the place search shows before anything is typed.
     Route::get('landmarks/start', [LandmarkController::class, 'start'])->middleware('throttle:60,1,landmarks');
     Route::get('explore/{category}', [StayController::class, 'explore'])->where('category', '[a-z0-9_]+')->middleware('throttle:30,1,explore');
+
+    // The city and tour guide: Things to do, place guides and ratings, tours. Database only, no Google.
+    Route::middleware('throttle:120,1,guide-read')->group(function () {
+        Route::get('things', [GuideController::class, 'things']);
+        Route::get('places/{id}/guide', [GuideController::class, 'place'])->where('id', '(g:)?[A-Za-z0-9_-]+');
+        Route::get('tours', [GuideController::class, 'tours']);
+        Route::get('tours/{id}', [GuideController::class, 'tour'])->where('id', '[A-Za-z0-9_-]+');
+    });
+    Route::post('places/{id}/rate', [GuideController::class, 'rate'])->where('id', '(g:)?[A-Za-z0-9_-]+')->middleware('throttle:20,1,guide-rate');
 
     // Homes & spaces. Each group has its own limit (a named counter), so a busy
     // screen never uses up another feature's allowance.

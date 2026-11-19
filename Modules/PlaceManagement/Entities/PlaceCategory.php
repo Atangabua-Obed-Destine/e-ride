@@ -16,8 +16,20 @@ class PlaceCategory extends Model
     /** Icons the app can draw. Keep in step with the app's ExploreIcons. */
     public const ICONS = [
         'pharmacy', 'hospital', 'bank', 'bus', 'bed', 'store', 'fuel', 'police', 'school', 'church',
-        'restaurant', 'atm', 'money', 'market', 'place', 'home',
+        'restaurant', 'atm', 'money', 'market', 'place', 'home', 'landmark', 'swim', 'party',
     ];
+
+    /**
+     * Explore categories grouped under "Things to do" in the app (the tour guide),
+     * in display order. The app shows them as one tile, not one tile each.
+     */
+    public const THINGS = ['eat', 'swim', 'party', 'visit', 'market'];
+
+    /**
+     * Categories searched with a Google text search instead of place types,
+     * because Google has no type for them: a pool is mostly part of a hotel.
+     */
+    public const TEXT_SEARCH = ['swim' => 'swimming pool'];
 
     /** Place types an admin can pick for a listing, per category key. Unknown categories use "other". */
     public const TYPES = [
@@ -26,6 +38,11 @@ class PlaceCategory extends Model
         'health' => ['hospital', 'clinic', 'laboratory'],
         'bank' => ['bank', 'atm', 'microfinance'],
         'bus' => ['bus_agency'],
+        'visit' => ['sight', 'museum', 'park', 'waterfall', 'viewpoint', 'art_gallery', 'monument'],
+        'eat' => ['restaurant', 'cafe', 'snack_bar', 'bakery'],
+        'swim' => ['swimming_pool', 'hotel_pool', 'water_park'],
+        'party' => ['night_club', 'bar', 'lounge'],
+        'market' => ['market', 'shopping_mall', 'craft_shop'],
     ];
 
     protected $fillable = ['key', 'name', 'name_fr', 'icon', 'google_types', 'has_price', 'is_active', 'sort'];

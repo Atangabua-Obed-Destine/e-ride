@@ -72,6 +72,25 @@ class PlaceService extends BaseService implements PlaceServiceInterface
             'is_active' => (bool)($data['is_active'] ?? false),
             'sort' => (int)($data['sort'] ?? 0),
         ]);
+        // The guide: only places in Things to do have one. Publishing records who checked it.
+        if (array_key_exists('guide_status', $data)) {
+            $place->fill([
+                'guide_status' => $data['guide_status'] ?? Place::GUIDE_NONE,
+                'story' => self::text($data['story'] ?? null),
+                'story_fr' => self::text($data['story_fr'] ?? null),
+                'entry_fee' => isset($data['entry_fee']) && $data['entry_fee'] !== '' ? (int)$data['entry_fee'] : null,
+                'stay_minutes' => isset($data['stay_minutes']) && $data['stay_minutes'] !== '' ? (int)$data['stay_minutes'] : null,
+                'best_time' => self::text($data['best_time'] ?? null),
+                'best_time_fr' => self::text($data['best_time_fr'] ?? null),
+                'tips' => self::text($data['tips'] ?? null),
+                'tips_fr' => self::text($data['tips_fr'] ?? null),
+            ]);
+            $guideFields = ['guide_status', 'story', 'story_fr', 'entry_fee', 'stay_minutes', 'best_time', 'best_time_fr', 'tips', 'tips_fr'];
+            if ($place->guide_status === Place::GUIDE_PUBLISHED && ($place->isDirty($guideFields) || !$place->guide_checked_at)) {
+                $place->guide_checked_by = auth()->id();
+                $place->guide_checked_at = now();
+            }
+        }
         $place->zone_id = $this->zoneService->getByPoints(new Point($place->latitude, $place->longitude))
             ->where('is_active', 1)->first()?->id;
 
@@ -100,6 +119,12 @@ class PlaceService extends BaseService implements PlaceServiceInterface
         $place->photos = $photos;
         $place->save();
         return $place;
+    }
+
+    private static function text(?string $value): ?string
+    {
+        $value = $value !== null ? trim($value) : null;
+        return filled($value) ? $value : null;
     }
 
     /** Active Explore categories, in display order. */
@@ -132,7 +157,15 @@ class PlaceService extends BaseService implements PlaceServiceInterface
 
         $google = null;
         if ($category && $settings['google_status'] && $latitude !== null && $longitude !== null) {
-            $google = $this->google->nearby($category->google_types ?? [], $latitude, $longitude, $settings['radius_km'], $language);
+            $query = PlaceCategory::TEXT_SEARCH[$categoryKey] ?? null;
+            $google = $query
+                ? $this->google->text($query, $latitude, $longitude, $settings['radius_km'], $language)
+                : $this->google->nearby($category->google_types ?? [], $latitude, $longitude, $settings['radius_km'], $language);
+            if ($query && $google !== null) {
+                // A text search only leans toward the area: keep what is really around.
+                $google = array_values(array_filter($google, fn($g) => isset($g['location']['latitude'])
+                    && PlacePresenter::distance($latitude, $longitude, (float)$g['location']['latitude'], (float)$g['location']['longitude']) <= $settings['radius_km']));
+            }
         }
 
         $topRated = [];
@@ -227,7 +260,10 @@ class PlaceService extends BaseService implements PlaceServiceInterface
     {
         $settings = PlaceSettings::all();
         $types = PlaceCategory::where('key', $categoryKey)->first()?->google_types ?? ['lodging'];
-        $results = $this->google->nearby($types, $latitude, $longitude, $settings['radius_km'], 'en');
+        $query = PlaceCategory::TEXT_SEARCH[$categoryKey] ?? null;
+        $results = $query
+            ? $this->google->text($query, $latitude, $longitude, $settings['radius_km'], 'en')
+            : $this->google->nearby($types, $latitude, $longitude, $settings['radius_km'], 'en');
         if ($results === null) {
             return null;
         }

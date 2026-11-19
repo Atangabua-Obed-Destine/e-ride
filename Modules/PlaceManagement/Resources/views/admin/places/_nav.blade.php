@@ -9,6 +9,12 @@
         <a class="nav-link {{ $active === 'google' ? 'active' : '' }}" href="{{ route('admin.place.google') }}">{{ translate('Google_results') }}</a>
     </li>
     <li class="nav-item">
+        <a class="nav-link {{ $active === 'tours' ? 'active' : '' }}" href="{{ route('admin.place.tours') }}">{{ translate('Tours') }}</a>
+    </li>
+    <li class="nav-item">
+        <a class="nav-link {{ $active === 'ratings' ? 'active' : '' }}" href="{{ route('admin.place.ratings') }}">{{ translate('Riders_ratings') }}</a>
+    </li>
+    <li class="nav-item">
         <a class="nav-link {{ $active === 'categories' ? 'active' : '' }}" href="{{ route('admin.place.categories') }}">{{ translate('Categories') }}</a>
     </li>
     @can('place_edit')

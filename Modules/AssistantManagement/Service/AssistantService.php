@@ -205,6 +205,33 @@ class AssistantService
         return (bool)AssistantQuestion::where('id', $id)->where('user_id', $user->id)->update(['helped' => $helped]);
     }
 
+    /**
+     * A one-off JSON answer from the first provider that gives one, for admin
+     * tools (e.g. drafting a place guide). Uses the same providers, keys and
+     * skip rules as Ask E-Ride. Null when every provider failed or answered
+     * something that is not JSON.
+     */
+    public function draftJson(string $system, string $prompt): ?array
+    {
+        foreach (AssistantSettings::all()['providers'] as $p) {
+            if (!$p['enabled'] || $p['key'] === '' || Cache::has('assistant_skip_' . $p['name']) || !isset($this->clients[$p['name']])) {
+                continue;
+            }
+            try {
+                $raw = $this->clients[$p['name']]->complete($system, $prompt, $p['key'], $p['model']);
+            } catch (ProviderUnavailable $e) {
+                Cache::put('assistant_skip_' . $p['name'], $e->getMessage(), $e->retryAfter);
+                continue;
+            }
+            $data = json_decode(self::jsonPart($raw), true);
+            if (is_array($data)) {
+                return $data + ['_provider' => $p['name']];
+            }
+            Log::warning('AI draft: unreadable answer', ['provider' => $p['name'], 'raw' => mb_substr($raw, 0, 300)]);
+        }
+        return null;
+    }
+
     /** Asks one provider a tiny question, for the admin's Test button. */
     public function test(string $name): array
     {

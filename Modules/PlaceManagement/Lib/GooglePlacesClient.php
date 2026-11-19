@@ -79,6 +79,41 @@ class GooglePlacesClient
     }
 
     /**
+     * A text search near a point ("swimming pool"), for things Google has no
+     * place type for, such as hotels with a pool open to visitors. Same result
+     * shape as nearby(); results can lie outside the radius (it only biases),
+     * so callers filter by distance.
+     */
+    public function text(string $query, float $latitude, float $longitude, float $radiusKm, string $language = 'en'): ?array
+    {
+        $key = $this->key();
+        if (trim($query) === '' || !$key || !$this->spend(self::SEARCH, PlaceSettings::all()['search_cap'])) {
+            return null;
+        }
+        try {
+            $response = Http::timeout(8)
+                ->withHeaders(['X-Goog-Api-Key' => $key, 'X-Goog-FieldMask' => implode(',', self::FIELDS)])
+                ->post('https://places.googleapis.com/v1/places:searchText', [
+                    'textQuery' => $query,
+                    'pageSize' => self::MAX_RESULTS,
+                    'languageCode' => in_array($language, ['en', 'fr'], true) ? $language : 'en',
+                    'locationBias' => ['circle' => [
+                        'center' => ['latitude' => $latitude, 'longitude' => $longitude],
+                        'radius' => min(max($radiusKm, 1), 50) * 1000.0,
+                    ]],
+                ]);
+        } catch (\Throwable $e) {
+            Log::warning('Google Places text search failed', ['error' => $e->getMessage()]);
+            return null;
+        }
+        if (!$response->ok()) {
+            Log::warning('Google Places text search refused', ['status' => $response->status(), 'error' => $response->json('error.message')]);
+            return null;
+        }
+        return $response->json('places') ?? [];
+    }
+
+    /**
      * The image itself, fetched here and handed to the app. Some mobile
      * networks in Cameroon cannot reach Google's image host
      * (lh3.googleusercontent.com) while they reach our server fine, so the
