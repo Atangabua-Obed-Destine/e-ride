@@ -31,8 +31,16 @@ class ProcessScheduledTrips extends Command
                 if ($deposits->awaitingAtBooking($trip)) {
                     continue;
                 }
+                // Claim the trip first: two runs at the same moment (the scheduler and a
+                // stray cron line, or a slow minute) would otherwise both send it, and
+                // drivers would get the same request twice.
+                $claimed = TripRequest::whereKey($trip->id)
+                    ->where('is_notification_sent', false)
+                    ->update(['is_notification_sent' => true]);
+                if ($claimed !== 1) {
+                    continue;
+                }
                 ProcessPushNotifications::dispatch(trip: $trip, radius: $trip->is_health_ride ? $health->radiusKm() : $search_radius);
-                $trip->update(['is_notification_sent' => true]);
             }
         }
     }
