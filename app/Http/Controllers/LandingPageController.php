@@ -43,6 +43,64 @@ class LandingPageController extends Controller
         return filter_var($url, FILTER_VALIDATE_URL) ? $url : null;
     }
 
+    /**
+     * The newest real listings for the hero's Market and Jobs tabs: up to 3 public items or services and
+     * 3 live jobs, each linking to its public page. Anything named "test" (title, shop or employer) is left
+     * out, so test accounts never show on the home page. Cached 5 minutes.
+     */
+    public static function listings(): array
+    {
+        return \Illuminate\Support\Facades\Cache::remember('landing:listings', 300, function () {
+            $isTest = fn(?string $s) => (bool)preg_match('/\btest\b/i', (string)$s);
+            // Only when Market (and below, Jobs) is switched on: their pages answer only then.
+            try {
+                if (!\Modules\MarketManagement\Lib\MarketSettings::enabled()) {
+                    throw new \RuntimeException('market off');
+                }
+                $items = \Modules\MarketManagement\Entities\MarketItem::with(['photos', 'shop'])
+                    ->whereIn('status', \Modules\MarketManagement\Entities\MarketItem::PUBLIC)
+                    ->whereHas('shop', fn($q) => $q->where('status', 'live'))
+                    ->latest()->limit(40)->get()
+                    ->reject(fn($i) => $isTest($i->title) || $isTest($i->shop?->name))
+                    ->take(3)->map(fn($i) => [
+                        'title' => $i->title,
+                        'price' => $i->price !== null ? (float)$i->price : null,
+                        'price_type' => $i->isService() ? ($i->price_type ?: 'fixed') : 'fixed',
+                        'service' => $i->isService(),
+                        'photo' => $i->cover()?->url(),
+                        'by' => $i->shop?->name,
+                        'area' => $i->shop?->area_label,
+                        'url' => \Modules\MarketManagement\Lib\MarketLinks::item($i),
+                    ])->values()->all();
+            } catch (\Throwable) {
+                $items = [];
+            }
+            try {
+                if (!\Modules\MarketManagement\Lib\JobSettings::enabled()) {
+                    throw new \RuntimeException('jobs off');
+                }
+                $jobs = \Modules\MarketManagement\Entities\JobPost::with('employer')->where('status', 'live')
+                    ->where(fn($q) => $q->whereNull('closes_at')->orWhere('closes_at', '>', now()))
+                    ->latest('live_at')->limit(30)->get()
+                    ->reject(fn($j) => $isTest($j->title) || $isTest($j->employer?->name))
+                    ->take(3)->map(fn($j) => [
+                        'title' => $j->title,
+                        'type' => $j->type,
+                        'pay_min' => $j->pay_min !== null ? (float)$j->pay_min : null,
+                        'pay_max' => $j->pay_max !== null ? (float)$j->pay_max : null,
+                        'pay_period' => $j->pay_period,
+                        'by' => $j->employer?->name,
+                        'area' => $j->area_label,
+                        'logo' => $j->employer?->logoUrl(),
+                        'url' => route('jobs.page', ['code' => $j->code]),
+                    ])->values()->all();
+            } catch (\Throwable) {
+                $jobs = [];
+            }
+            return ['market' => $items, 'jobs' => $jobs];
+        });
+    }
+
     /** /city?lat=&lng=: the E-Ride city (active service zone) at a point, for the city guide; null outside them. */
     public function city(\Illuminate\Http\Request $request): \Illuminate\Http\JsonResponse
     {
@@ -120,6 +178,7 @@ class LandingPageController extends Controller
         // Cities where E-Ride is set up (active service zones): the city guide follows the visitor's.
         $cities = \Illuminate\Support\Facades\Cache::remember('landing:zones', 300, fn() => \Modules\ZoneManagement\Entities\Zone::where('is_active', 1)
             ->orderBy('name')->pluck('name')->all());
+        $listings = self::listings();
         $qrDriver = (string)\SimpleSoftwareIO\QrCode\Facades\QrCode::format('svg')->size(144)->margin(0)->errorCorrection('M')->generate(route('get-app', ['app' => 'driver']));
         // The hero's bus search: the cities agencies leave from, and where they go.
         $busSearch = $busWeb ? \Illuminate\Support\Facades\Cache::remember('landing:bus-cities', 300, function () {
@@ -136,7 +195,7 @@ class LandingPageController extends Controller
         $favicon = getSession('favicon');
         $favicon = $favicon ? dynamicStorage(path: 'storage/app/public/business/' . $favicon) : dynamicAsset(path: 'public/landing-page/assets/img/favicon.png');
 
-        return response()->view('landing-page.home', compact('t', 'theme', 'playUrl', 'driverUrl', 'appStoreUrl', 'driverAppStoreUrl', 'contact', 'partnerLink', 'busWeb', 'qr', 'qrDriver', 'favicon', 'explore', 'exploreLabel', 'busSearch', 'social', 'portals', 'cities'));
+        return response()->view('landing-page.home', compact('t', 'theme', 'playUrl', 'driverUrl', 'appStoreUrl', 'driverAppStoreUrl', 'contact', 'partnerLink', 'busWeb', 'qr', 'qrDriver', 'favicon', 'explore', 'exploreLabel', 'busSearch', 'social', 'portals', 'cities', 'listings'));
     }
 
     public function aboutUs()

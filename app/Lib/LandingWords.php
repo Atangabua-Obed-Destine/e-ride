@@ -29,6 +29,10 @@ class LandingWords
         'box_food' => ['Pick a restaurant or shop near you', 'It confirms, then you pay with Mobile Money', 'A rider brings it to your door'],
         'box_parcel' => ['Say what you send and where', 'A rider collects it where you are', 'Follow it live until it arrives'],
         'box_bus_app' => ['Pick a verified agency and a departure', 'Choose your seat on the real seat map', 'Pay with Mobile Money, show the QR at boarding'],
+        'live_market' => 'Newest on E-Ride Market', 'live_jobs' => 'Newest jobs', 'ask_price' => 'Ask the price', 'on_quote' => 'On quote',
+        'price_from' => 'from {p}', 'price_hour' => '{p} an hour', 'pay_up_to' => 'up to {p}',
+        'per' => ['month' => 'a month', 'week' => 'a week', 'day' => 'a day', 'hour' => 'an hour', 'job' => 'for the job'],
+        'job_types' => ['full_time' => 'Full time', 'part_time' => 'Part time', 'day_job' => 'Day job', 'internship' => 'Internship'],
         'box_in_app' => 'Book it in the E-Ride app', 'box_cta_market' => 'Open E-Ride Market in the app', 'box_cta_jobs' => 'See the jobs in the app', 'box_scan' => 'Scan to get the app',
         'how_eyebrow' => 'COMMENT ÇA MARCHE', 'how_title' => 'How a ride works',
         'how' => [
@@ -155,6 +159,10 @@ class LandingWords
         'box_food' => ['Choisissez un restaurant ou une boutique', 'Il confirme, puis vous payez avec Mobile Money', "Un livreur vous l'apporte"],
         'box_parcel' => ['Dites quoi envoyer et où', 'Un livreur le récupère là où vous êtes', "Suivez-le en direct jusqu'à l'arrivée"],
         'box_bus_app' => ['Choisissez une agence vérifiée et un départ', 'Choisissez votre place sur le vrai plan du bus', "Payez avec Mobile Money, montrez le QR à l'embarquement"],
+        'live_market' => 'Nouveau sur E-Ride Market', 'live_jobs' => 'Nouveaux emplois', 'ask_price' => 'Prix à demander', 'on_quote' => 'Sur devis',
+        'price_from' => 'dès {p}', 'price_hour' => "{p} l'heure", 'pay_up_to' => "jusqu'à {p}",
+        'per' => ['month' => 'par mois', 'week' => 'par semaine', 'day' => 'par jour', 'hour' => "de l'heure", 'job' => 'la mission'],
+        'job_types' => ['full_time' => 'Temps plein', 'part_time' => 'Temps partiel', 'day_job' => 'Journée', 'internship' => 'Stage'],
         'box_in_app' => "Réservez dans l'appli E-Ride", 'box_cta_market' => "Ouvrir E-Ride Market dans l'appli", 'box_cta_jobs' => "Voir les emplois dans l'appli", 'box_scan' => "Scannez pour avoir l'appli",
         'how_eyebrow' => 'HOW IT WORKS', 'how_title' => 'Comment marche une course',
         'how' => [

@@ -10,6 +10,23 @@
     $play = '<svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M4 3.5v17l9.5-8.5z"/><path d="M15 9.5l3.6 2-3.6 2-1.8-2z" opacity=".7"/></svg>';
     $check = '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#22C55E" stroke-width="2.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12l5 5 9-10"/></svg>';
     $dayKinds = ['ride', 'food', 'parcel', 'bus', 'hotel'];
+    $money = fn($n) => number_format((float)$n, 0, ',', ' ') . ' FCFA';
+    // How a listing's price or pay reads in the hero.
+    $itemPrice = function (array $i) use ($t, $money) {
+        if ($i['price_type'] === 'quote') return $t('on_quote');
+        if ($i['price'] === null) return $t('ask_price');
+        return match ($i['price_type']) {
+            'from' => str_replace('{p}', $money($i['price']), $t('price_from')),
+            'hour' => str_replace('{p}', $money($i['price']), $t('price_hour')),
+            default => $money($i['price']),
+        };
+    };
+    $jobPay = function (array $j) use ($t, $money) {
+        $per = $t('per')[$j['pay_period']] ?? '';
+        if ($j['pay_min'] && $j['pay_max'] && $j['pay_min'] != $j['pay_max']) return trim($money($j['pay_min']) . ' - ' . $money($j['pay_max']) . ' ' . $per);
+        if ($j['pay_min'] || $j['pay_max']) return trim($money($j['pay_min'] ?: $j['pay_max']) . ' ' . $per);
+        return '';
+    };
     $rolePaths = [
         'bus' => '<rect x="4" y="3" width="16" height="15" rx="3"/><path d="M4 11h16"/><path d="M7 18v3M17 18v3"/>',
         'app' => '<rect x="7" y="2" width="10" height="20" rx="2"/><path d="M11 18h2"/>',
@@ -161,7 +178,9 @@ img{max-width:100%}
 .menu-item svg{flex-shrink:0;margin-top:2px;color:var(--eyebrow)}
 .menu-item b{display:block;font-size:15px}.menu-item small{display:block;font-size:13px;color:var(--muted)}
 /* Hero action box */
-.box{background:var(--surface);border:1px solid var(--line);border-radius:6px;padding:8px 8px 18px;box-shadow:var(--cardshadow);max-width:560px}
+.box{background:var(--surface);border:1px solid var(--line);border-radius:6px;padding:8px 8px 18px;box-shadow:var(--cardshadow);max-width:560px;width:100%;min-width:0}
+.hero > *{min-width:0}
+.live li,.liveitem{min-width:0}
 .tabs{display:flex;gap:4px;padding:4px;background:var(--toggle);border-radius:6px;margin-bottom:14px}
 .tab{flex:1 1 auto;padding:0 10px;min-height:42px;border:0;border-radius:4px;background:transparent;color:var(--muted);font:inherit;font-weight:700;font-size:15px;cursor:pointer}
 .tab[aria-selected=true]{background:var(--toggle-on);color:var(--toggle-on-ink)}
@@ -176,6 +195,16 @@ img{max-width:100%}
 .pane-qr{display:block;width:74px;height:74px;background:#FFFFFF;border-radius:6px;padding:6px;flex-shrink:0}
 .pane-qr svg{width:62px;height:62px;display:block}
 .store{min-height:46px;font-size:14px;padding:0 16px}
+/* The newest listings in the hero */
+.livehead{margin:4px 0 8px;font-size:12px;font-weight:800;letter-spacing:.1em;text-transform:uppercase;color:var(--eyebrow)}
+.live{list-style:none;margin:0 0 14px;padding:0;display:flex;flex-direction:column;gap:6px}
+.liveitem{display:flex;align-items:center;gap:12px;padding:8px;border-radius:6px;background:var(--bg);border:1px solid var(--line);color:var(--ink)}
+.liveitem:hover{border-color:#E02020}
+.thumb{width:44px;height:44px;border-radius:6px;background:var(--toggle);overflow:hidden;flex-shrink:0;display:flex;align-items:center;justify-content:center;font-weight:900;color:var(--muted)}
+.thumb img{width:100%;height:100%;object-fit:cover}
+.livetxt{display:flex;flex-direction:column;min-width:0;flex:1}
+.livetxt b{font-size:14px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.livetxt small{font-size:12.5px;color:var(--muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 /* How a ride works */
 .how{list-style:none;margin:0;padding:0;display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:14px;position:relative}
 .how li{display:flex;flex-direction:column;gap:6px;padding:18px;background:var(--surface);border:1px solid var(--line);border-radius:6px;box-shadow:var(--cardshadow)}
@@ -361,6 +390,7 @@ footer .cols a:hover{color:var(--ink)}
   .hlogo{height:32px}
   .toplang a{height:38px;min-width:38px;padding:0 8px}
   .tabs{display:grid;grid-template-columns:repeat(3,minmax(0,1fr))}
+  .livetxt small{white-space:normal;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical}
   .tab{font-size:13px;line-height:1.15;padding:4px 2px}
   .menu-pop{position:fixed;left:12px;right:12px;top:70px;width:auto}
   .appcards{max-width:none}
@@ -493,6 +523,25 @@ footer .cols a:hover{color:var(--ink)}
             @foreach(['ride', 'food', 'parcel', 'market', 'jobs'] as $key)
                 <div class="pane" role="tabpanel" id="pane-{{ $key }}" aria-labelledby="tab-{{ $key }}" @if($firstTab !== $key) hidden @endif>
                     <ol class="ministeps">@foreach($t('box_' . $key) as $line)<li>{{ $line }}</li>@endforeach</ol>
+                    @if(in_array($key, ['market', 'jobs'], true) && !empty($listings[$key]))
+                        <p class="livehead">{{ $t('live_' . $key) }}</p>
+                        <ul class="live">
+                            @foreach($listings[$key] as $l)
+                                <li><a href="{{ $l['url'] }}" class="liveitem">
+                                    @php($pic = $key === 'market' ? $l['photo'] : $l['logo'])
+                                    <span class="thumb">@if($pic)<img src="{{ $pic }}" alt="" loading="lazy">@else{{ mb_strtoupper(mb_substr((string)($l['by'] ?: $l['title']), 0, 1)) }}@endif</span>
+                                    <span class="livetxt">
+                                        <b>{{ $l['title'] }}</b>
+                                        <small>
+                                            @if($key === 'market'){{ $itemPrice($l) }}@else{{ implode(' · ', array_filter([$t('job_types')[$l['type']] ?? null, $jobPay($l)])) }}@endif
+                                            @if($l['by'] || $l['area']) · {{ implode(', ', array_filter([$l['by'], $l['area']])) }}@endif
+                                        </small>
+                                    </span>
+                                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 6l6 6-6 6"/></svg>
+                                </a></li>
+                            @endforeach
+                        </ul>
+                    @endif
                     <div class="pane-cta">
                         <a class="btn btn-red" href="{{ route('get-app') }}">{{ in_array($key, ['market', 'jobs'], true) ? $t('box_cta_' . $key) : $t('box_in_app') }}{!! $arrow !!}</a>
                         <span class="pane-qr" role="img" aria-label="{{ $t('qr_alt') }}">{!! $qr !!}</span>
