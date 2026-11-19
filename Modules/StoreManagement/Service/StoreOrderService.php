@@ -433,6 +433,10 @@ class StoreOrderService extends BaseService implements StoreOrderServiceInterfac
 
     public function payWithWallet(StoreOrder $order): StoreOrder
     {
+        // Ways to pay: the admin may turn the wallet off.
+        if (!\Modules\TripManagement\Lib\PaymentWays::wallet()) {
+            throw ValidationException::withMessages(['payment' => \Modules\TripManagement\Lib\PaymentWays::refusal('wallet')]);
+        }
         return DB::transaction(function () use ($order) {
             $order = StoreOrder::whereKey($order->id)->lockForUpdate()->firstOrFail();
             if ($order->status !== StoreOrder::AWAITING_PAYMENT || $order->payment_status !== StoreOrder::UNPAID) {

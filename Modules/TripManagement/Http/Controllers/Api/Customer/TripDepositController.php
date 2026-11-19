@@ -39,6 +39,10 @@ class TripDepositController extends Controller
         if (!$trip?->deposit) {
             return response()->json(responseFormatter(TRIP_REQUEST_404), 403);
         }
+        // Ways to pay: the admin may turn the wallet off.
+        if (!\Modules\TripManagement\Lib\PaymentWays::wallet()) {
+            return response()->json(responseFormatter(DEFAULT_400, errors: [['error_code' => 'payment_method', 'message' => \Modules\TripManagement\Lib\PaymentWays::refusal('wallet')]]), 403);
+        }
         try {
             $deposit = $this->deposits->payWithWallet($trip->deposit, auth('api')->user());
         } catch (ValidationException $e) {

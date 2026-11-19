@@ -82,6 +82,10 @@ class ListingReservationService
 
     public function payWithWallet(ListingReservation $reservation, User $seeker): ListingReservation
     {
+        // Ways to pay: the admin may turn the wallet off.
+        if (!\Modules\TripManagement\Lib\PaymentWays::wallet()) {
+            throw ValidationException::withMessages(['payment' => \Modules\TripManagement\Lib\PaymentWays::refusal('wallet')]);
+        }
         return DB::transaction(function () use ($reservation, $seeker) {
             $reservation = $this->locked($reservation);
             if ($reservation->seeker_id !== $seeker->id) {
