@@ -58,6 +58,26 @@ class BusMessenger
         'bus_seat_free' => null,
     ];
 
+    /** Whether an SMS gateway is switched on (3rd party > SMS module). */
+    public static function smsReady(): bool
+    {
+        try {
+            return \Illuminate\Support\Facades\DB::table('settings')->where('settings_type', 'sms_config')->get(['live_values'])
+                ->contains(fn($row) => (int)(json_decode((string)$row->live_values, true)['status'] ?? 0) === 1);
+        } catch (Throwable) {
+            return false;
+        }
+    }
+
+    /** The channels a website traveller can choose: whatsapp when connected, sms when a gateway is on. */
+    public static function channels(): array
+    {
+        return array_values(array_filter([
+            WhatsAppCloud::ready() ? BusMessage::WHATSAPP : null,
+            self::smsReady() ? BusMessage::SMS : null,
+        ]));
+    }
+
     /** Called by BusPush for every bus push: website bookings also get a WhatsApp or SMS. */
     public static function fromPush(string $action, ?string $bookingId, string $title, string $body): void
     {

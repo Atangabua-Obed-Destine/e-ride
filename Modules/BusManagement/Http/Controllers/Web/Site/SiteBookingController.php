@@ -61,6 +61,7 @@ class SiteBookingController extends SiteBase
             'rules' => $rules,
             'askIdNumber' => !$hasId,
             'settings' => BusSettings::all(),
+            'channels' => \Modules\BusManagement\Lib\BusMessenger::channels(),
         ]);
     }
 
@@ -93,7 +94,7 @@ class SiteBookingController extends SiteBase
                 'drop_point_id' => $data['drop_point_id'],
                 'passengers' => $passengers,
                 'booker_id_number' => $data['booker_id_number'] ?? null,
-            ], ['via' => BusBooking::WEB, 'notify_channel' => $data['notify'] ?? 'whatsapp']);
+            ], ['via' => BusBooking::WEB, 'notify_channel' => $data['notify'] ?? (\Modules\BusManagement\Lib\BusMessenger::channels()[0] ?? 'whatsapp')]);
         } catch (ValidationException $e) {
             $errors = $e->errors();
             // A seat taken meanwhile: back to the seat map to choose again.
@@ -133,6 +134,9 @@ class SiteBookingController extends SiteBase
             'appLink' => BusWebLinks::openInApp('bt:' . $booking->code),
             'appPage' => route('bus.web.app', ['to' => 'bt:' . $booking->code, 'back' => route('bus.web.booking', ['code' => $booking->code])]),
             'settings' => BusSettings::all(),
+            'channels' => \Modules\BusManagement\Lib\BusMessenger::channels(),
+            'ticketOnWhatsApp' => \Modules\BusManagement\Entities\BusMessage::where('booking_id', $booking->id)->where('event', 'paid')
+                ->where('channel', 'whatsapp')->whereIn('status', ['sent', 'delivered', 'read'])->exists(),
         ]);
     }
 

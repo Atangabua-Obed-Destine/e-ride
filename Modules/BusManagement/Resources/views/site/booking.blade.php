@@ -7,7 +7,8 @@
     $status = $booking->status;
     $live = in_array($status, ['requested', 'accepted'], true);
     $seatList = $booking->tickets->sortBy(fn($x) => (int)$x->seat)->pluck('seat')->implode(', ');
-    $wa = $booking->notify_channel !== 'sms';
+    // Where the news really goes: the chosen channel if it works, else the other one, else nowhere (follow the page).
+    $via = in_array($booking->notify_channel, $channels, true) ? $booking->notify_channel : ($channels[0] ?? null);
     $phone = $booking->phone ?: $me->phone;
     $answerMin = $agency?->answer_seconds_avg ? max(1, (int)ceil($agency->answer_seconds_avg / 60)) : null;
 @endphp
@@ -48,7 +49,7 @@
             <div class="line"></div>
             <div class="st"><span class="dot" style="background:#F4F6F6;border:2px solid #D5DCDB"></span><span class="sm b muted">{{ $t('your_ticket') }}</span></div>
         </div>
-        <div class="ok row" style="margin:14px 16px 0;align-items:flex-start">{{ $wa ? $t('close_page_wa', ['phone' => $phone]) : $t('close_page_sms', ['phone' => $phone]) }}</div>
+        <div class="ok row" style="margin:14px 16px 0;align-items:flex-start">{{ $via === 'whatsapp' ? $t('close_page_wa', ['phone' => $phone]) : ($via === 'sms' ? $t('close_page_sms', ['phone' => $phone]) : $t('follow_here')) }}</div>
         <form method="POST" action="{{ route('bus.web.booking.cancel', ['code' => $booking->code]) }}" class="sec" onsubmit="return confirm(@json($t('cancel_confirm')))">@csrf<button class="btn ghost" type="submit">{{ $t('cancel_request') }}</button></form>
 
     {{-- Accepted: pay --}}
@@ -78,7 +79,7 @@
 
     {{-- Paid: the ticket --}}
     @elseif($status === 'paid')
-        <div class="row" style="padding:16px 16px 0;gap:8px"><span class="dot" style="width:22px;height:22px;background:#15803D">@include('busmanagement::site._check')</span><span class="sm b" style="color:#15803D">{{ $wa ? $t('paid_banner_wa') : $t('paid_banner') }}</span></div>
+        <div class="row" style="padding:16px 16px 0;gap:8px"><span class="dot" style="width:22px;height:22px;background:#15803D">@include('busmanagement::site._check')</span><span class="sm b" style="color:#15803D">{{ $ticketOnWhatsApp ? $t('paid_banner_wa') : $t('paid_banner') }}</span></div>
         @if($d->status === 'cancelled')<div class="err">{{ $t('departure_cancelled') }} @if($d->cancel_reason){{ $t('reason', ['reason' => $d->cancel_reason]) }}@endif</div>@endif
         @if($collect)
             <div class="ticket" style="margin:12px 16px 0">
@@ -102,7 +103,7 @@
                 </div>
             @endforeach
         @endif
-        <div class="row noprint" style="padding:12px 16px 0;gap:10px">
+        <div class="noprint" style="padding:12px 16px 0">
             <a class="btn line" href="{{ route('bus.web.booking.print', ['code' => $booking->code]) }}" target="_blank" rel="noopener">{{ $t('print') }}</a>
         </div>
         @if(!empty($b['refund']))

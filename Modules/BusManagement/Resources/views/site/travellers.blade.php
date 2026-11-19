@@ -49,11 +49,19 @@
             <div><label class="lbl" for="idn">{{ $t('id_number') }}</label><input class="in" id="idn" name="booker_id_number" required minlength="5" maxlength="40" value="{{ old('booker_id_number') }}"><span class="xs muted">{{ $t('id_number_hint') }}</span></div>
         @endif
 
+        @if($channels)
         <fieldset style="border:0;padding:0;margin:4px 0 0" class="col">
             <legend class="b" style="font-size:14px;margin-bottom:8px">{{ $t('updates_on') }}</legend>
-            <label class="opt"><input type="radio" name="notify" value="whatsapp" @checked(old('notify', 'whatsapp') === 'whatsapp')><span class="col" style="gap:1px"><span class="sm b">{{ $t('whatsapp') }} · {{ $me->phone }}</span><span class="xs muted">{{ $t('whatsapp_hint') }}</span></span></label>
-            <label class="opt"><input type="radio" name="notify" value="sms" @checked(old('notify') === 'sms')><span class="col" style="gap:1px"><span class="sm b">{{ $t('sms') }} · {{ $me->phone }}</span><span class="xs muted">{{ $t('sms_hint') }}</span></span></label>
+            @if(in_array('whatsapp', $channels, true))
+            <label class="opt"><input type="radio" name="notify" value="whatsapp" @checked(old('notify', $channels[0]) === 'whatsapp')><span class="col" style="gap:1px"><span class="sm b">{{ $t('whatsapp') }} · {{ $me->phone }}</span><span class="xs muted">{{ $t('whatsapp_hint') }}</span></span></label>
+            @endif
+            @if(in_array('sms', $channels, true))
+            <label class="opt"><input type="radio" name="notify" value="sms" @checked(old('notify', $channels[0]) === 'sms')><span class="col" style="gap:1px"><span class="sm b">{{ $t('sms') }} · {{ $me->phone }}</span><span class="xs muted">{{ $t('sms_hint') }}</span></span></label>
+            @endif
         </fieldset>
+        @else
+            <div class="xs muted">{{ $t('follow_here') }}</div>
+        @endif
 
         <div class="row" style="justify-content:space-between;margin-top:6px"><span class="sm muted">{{ $t('total_for', ['n' => count($seats)]) }}</span><span class="b" style="font-size:19px" id="total"></span></div>
         <div class="xs muted">{{ $info['instant'] ? $t('instant_hint', ['pay' => $settings['pay_minutes']]) : $t('nothing_yet', ['answer' => $settings['answer_minutes'], 'pay' => $settings['pay_minutes']]) }}</div>
