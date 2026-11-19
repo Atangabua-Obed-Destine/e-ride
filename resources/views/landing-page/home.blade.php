@@ -163,7 +163,7 @@ img{max-width:100%}
 /* Hero action box */
 .box{background:var(--surface);border:1px solid var(--line);border-radius:6px;padding:8px 8px 18px;box-shadow:var(--cardshadow);max-width:560px}
 .tabs{display:flex;gap:4px;padding:4px;background:var(--toggle);border-radius:6px;margin-bottom:14px}
-.tab{flex:1;min-height:42px;border:0;border-radius:4px;background:transparent;color:var(--muted);font:inherit;font-weight:700;font-size:15px;cursor:pointer}
+.tab{flex:1 1 auto;padding:0 10px;min-height:42px;border:0;border-radius:4px;background:transparent;color:var(--muted);font:inherit;font-weight:700;font-size:15px;cursor:pointer}
 .tab[aria-selected=true]{background:var(--toggle-on);color:var(--toggle-on-ink)}
 .pane{padding:0 10px}
 .busform{display:grid;grid-template-columns:1fr 1fr;gap:10px}
@@ -360,6 +360,7 @@ footer .cols a:hover{color:var(--ink)}
   .top{padding-top:12px;padding-bottom:12px}
   .hlogo{height:32px}
   .toplang a{height:38px;min-width:38px;padding:0 8px}
+  .tabs{display:grid;grid-template-columns:repeat(3,minmax(0,1fr))}
   .tab{font-size:13px;line-height:1.15;padding:4px 2px}
   .menu-pop{position:fixed;left:12px;right:12px;top:70px;width:auto}
   .appcards{max-width:none}
@@ -489,11 +490,11 @@ footer .cols a:hover{color:var(--ink)}
                     <a class="btn btn-red" href="#get">{{ $t('box_in_app') }}{!! $arrow !!}</a>
                 @endif
             </div>
-            @foreach(['ride', 'food', 'parcel'] as $key)
+            @foreach(['ride', 'food', 'parcel', 'market', 'jobs'] as $key)
                 <div class="pane" role="tabpanel" id="pane-{{ $key }}" aria-labelledby="tab-{{ $key }}" @if($firstTab !== $key) hidden @endif>
                     <ol class="ministeps">@foreach($t('box_' . $key) as $line)<li>{{ $line }}</li>@endforeach</ol>
                     <div class="pane-cta">
-                        <a class="btn btn-red" href="{{ route('get-app') }}">{{ $t('box_in_app') }}{!! $arrow !!}</a>
+                        <a class="btn btn-red" href="{{ route('get-app') }}">{{ in_array($key, ['market', 'jobs'], true) ? $t('box_cta_' . $key) : $t('box_in_app') }}{!! $arrow !!}</a>
                         <span class="pane-qr" role="img" aria-label="{{ $t('qr_alt') }}">{!! $qr !!}</span>
                     </div>
                 </div>
