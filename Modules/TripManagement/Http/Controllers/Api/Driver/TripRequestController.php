@@ -1314,6 +1314,14 @@ class TripRequestController extends Controller
             'out_for_pickup' => now()
         ]);
         DB::commit();
+        // Over the websocket too (the app's "accepted" handler moves a ride due
+        // soon to the live map): the push alone can be late or lost, and the
+        // customer would never see the driver coming.
+        try {
+            checkReverbConnection() && DriverTripAcceptedEvent::broadcast($trip->fresh());
+        } catch (\Throwable $e) {
+            \Illuminate\Support\Facades\Log::info('Out-for-pickup broadcast failed', ['trip' => $tripId, 'error' => $e->getMessage()]);
+        }
         if ($trip->customer->fcm_token && !$this->isStoreOrderTrip($trip)) {
             $push = getNotification('driver_on_the_way_to_pickup_location');
             sendDeviceNotification(

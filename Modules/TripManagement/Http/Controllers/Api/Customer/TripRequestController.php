@@ -108,6 +108,13 @@ class TripRequestController extends Controller
 
     public function createRideRequest(RideRequestCreate $request): JsonResponse
     {
+        // The same booking sent again (a retry after a slow answer, a double tap):
+        // the trip already made is the answer, not a second one. Bookings by one
+        // customer take turns (trip.lock:customer), so the first is saved by now.
+        if (!$request->trip_request_id && ($duplicate = $this->recentDuplicateBooking($request))) {
+            return response()->json(responseFormatter(TRIP_REQUEST_STORE_200, new TripRequestResource($duplicate)));
+        }
+
         if ($request->type == "ride_request" &&  $request->trip_request_id == null){
             if ($this->tripRequestService->hasIncompleteRegularRide(data: ['type' => RIDE_REQUEST, 'ride_request_type' => 'regular', 'customer_id' => auth('api')->id()])) {
                 return response()->json(responseFormatter(INCOMPLETE_RIDE_403), 403);
@@ -329,6 +336,44 @@ class TripRequestController extends Controller
         }
 
         return response()->json(responseFormatter(TRIP_REQUEST_STORE_200, $trip));
+    }
+
+    /**
+     * A booking this customer made in the last 90 seconds for the same thing:
+     * same type, same pickup and drop-off (within about 30 m), same vehicle
+     * category for a ride, same time for a scheduled ride, and still waiting
+     * for a driver.
+     */
+    private function recentDuplicateBooking($request): ?\Modules\TripManagement\Entities\TripRequest
+    {
+        $pickup = json_decode((string)$request['pickup_coordinates'], true);
+        $drop = json_decode((string)$request['destination_coordinates'], true);
+        if (!is_array($pickup) || !is_array($drop) || count($pickup) < 2 || count($drop) < 2) {
+            return null;
+        }
+        $scheduled = $request->ride_request_type == SCHEDULED;
+        $candidates = \Modules\TripManagement\Entities\TripRequest::with(['driver.lastLocations', 'time', 'coordinate', 'fee', 'parcelRefund'])
+            ->where('customer_id', auth('api')->id())
+            ->where('type', $request->type)
+            ->where('current_status', PENDING)
+            ->whereNull('driver_id')
+            ->where('created_at', '>', now()->subSeconds(90))
+            ->when($request->type == RIDE_REQUEST, fn($q) => $q->where('vehicle_category_id', $request->vehicle_category_id))
+            ->latest()->limit(5)->get();
+        $near = fn($point, array $c) => $point && abs($point->latitude - (float)$c[0]) < 0.0003 && abs($point->longitude - (float)$c[1]) < 0.0003;
+        foreach ($candidates as $trip) {
+            if (!$near($trip->coordinate?->pickup_coordinates, $pickup) || !$near($trip->coordinate?->destination_coordinates, $drop)) {
+                continue;
+            }
+            if (($trip->ride_request_type == SCHEDULED) !== $scheduled) {
+                continue;
+            }
+            if ($scheduled && abs(strtotime((string)$trip->scheduled_at) - strtotime((string)$request['scheduled_at'])) > 60) {
+                continue;
+            }
+            return $trip;
+        }
+        return null;
     }
 
     public function getEstimatedFare(GetEstimatedFaresOrNotRequest $request): JsonResponse
