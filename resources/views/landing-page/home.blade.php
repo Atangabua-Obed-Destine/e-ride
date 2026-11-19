@@ -94,7 +94,7 @@ img{max-width:100%}
 .lead{margin:0;font-size:18px;line-height:1.55;color:var(--muted)}
 .btn{display:inline-flex;align-items:center;justify-content:center;gap:10px;min-height:54px;padding:0 24px;border-radius:6px;font-size:16px;font-weight:700;border:0;cursor:pointer}
 .btn-red{background:#E02020;color:#FFFFFF}.btn-red:hover{background:#C81B1B}
-.btn-line{border:1.5px solid var(--outline);color:var(--ink)}
+.btn-line{border:1.5px solid var(--outline);color:var(--ink);background:transparent}
 .btn-ink{background:#141416;color:#FFFFFF}
 .chip{display:inline-flex;align-items:center;gap:8px;height:34px;padding:0 14px;border-radius:6px;background:var(--chip);border:1px solid var(--chipline);color:var(--soft);font-size:13px;font-weight:600}
 .dot{width:8px;height:8px;border-radius:50%;display:inline-block}
@@ -120,7 +120,7 @@ img{max-width:100%}
 .lang a{height:32px;min-width:40px;padding:0 10px;border-radius:4px;font-size:12px;font-weight:800;display:flex;align-items:center;justify-content:center;color:var(--muted)}
 .lang a.on{background:var(--toggle-on);color:var(--toggle-on-ink)}
 /* Hero */
-.hero{display:grid;grid-template-columns:minmax(0,1fr) 640px;gap:40px;align-items:center;padding-top:20px;padding-bottom:70px}
+.hero{overflow-x:clip;display:grid;grid-template-columns:minmax(0,1fr) 640px;gap:40px;align-items:center;padding-top:20px;padding-bottom:70px}
 .hero h1{margin:0;font-size:68px;line-height:1.02;font-weight:900;letter-spacing:-.035em}
 .orbit-box{position:relative;width:640px;height:640px}
 .orbit-box svg.deco{position:absolute;left:0;top:0}
@@ -209,6 +209,45 @@ footer{display:block!important}
 .foot-bottom{display:flex;justify-content:space-between;gap:16px;flex-wrap:wrap;margin-top:30px;padding-top:18px;border-top:1px solid var(--line);font-size:13px;color:var(--muted)}
 .foot-bottom a{color:var(--muted)}.foot-bottom a:hover{color:var(--ink)}
 .foot-links,.social{display:flex;gap:16px;flex-wrap:wrap}
+/* Burger menu */
+.burger{display:none;width:46px;height:46px;border-radius:6px;border:1.5px solid var(--outline);background:transparent;cursor:pointer;flex-direction:column;justify-content:center;align-items:center;gap:5px;padding:0}
+.burger span{display:block;width:20px;height:2px;background:var(--ink);border-radius:2px}
+.sheet{position:fixed;inset:0;z-index:60;background:var(--bg);overflow-y:auto;animation:sheetIn .35s cubic-bezier(.2,.7,.2,1)}
+.sheet[hidden]{display:none}
+@keyframes sheetIn{from{transform:translateY(-3%);opacity:0}to{transform:none;opacity:1}}
+.sheet-in{padding-top:18px;padding-bottom:30px;display:flex;flex-direction:column;gap:26px;min-height:100%}
+.sheet-head{display:flex;justify-content:space-between;align-items:center}
+.sheet-close{width:46px;height:46px;border-radius:6px;border:1.5px solid var(--outline);background:transparent;color:var(--ink);cursor:pointer;display:flex;align-items:center;justify-content:center}
+.sheet-links{display:flex;flex-direction:column}
+.sheet-links a{display:flex;align-items:baseline;gap:16px;padding:12px 0;border-bottom:1px solid var(--line);font-size:28px;font-weight:800;letter-spacing:-.02em}
+.sheet-links .n{font-size:13px;font-weight:800;color:var(--eyebrow);width:24px}
+.sheet-roles{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:6px}
+.sheet-roles .eyebrow{grid-column:1/-1;margin-bottom:4px}
+.sheet-foot{display:flex;align-items:center;gap:18px;flex-wrap:wrap;margin-top:auto}
+/* Slides: each section arrives like a new slide */
+html{scroll-padding-top:84px}
+@media (max-width:760px){html{scroll-padding-top:74px}}
+@media (min-width:900px) and (prefers-reduced-motion:no-preference){html{scroll-snap-type:y proximity}}
+.slide{scroll-snap-align:start}
+@media (min-width:900px){.sec.slide{min-height:calc(100vh - 84px)}}
+.js-motion .reveal{opacity:0;transform:translateY(56px);transition:opacity .8s cubic-bezier(.2,.7,.2,1),transform .8s cubic-bezier(.2,.7,.2,1)}
+.js-motion .reveal.in{opacity:1;transform:none}
+.js-motion .hero .rise{animation:rise .9s cubic-bezier(.2,.7,.2,1) both}
+@keyframes rise{from{opacity:0;transform:translateY(40px)}to{opacity:1;transform:none}}
+.dots{position:fixed;right:22px;top:50%;transform:translateY(-50%);z-index:15;display:flex;flex-direction:column;gap:12px}
+.dots button{position:relative;width:12px;height:12px;border-radius:50%;border:2px solid var(--muted);background:transparent;padding:0;cursor:pointer;transition:transform .25s,background .25s,border-color .25s}
+.dots button[aria-current=true]{background:#E02020;border-color:#E02020;transform:scale(1.35)}
+.dots button span{position:absolute;right:22px;top:50%;transform:translateY(-50%);white-space:nowrap;font-size:12px;font-weight:700;background:var(--surface);color:var(--ink);border:1px solid var(--line);border-radius:4px;padding:4px 8px;opacity:0;pointer-events:none;transition:opacity .2s}
+.dots button:hover span,.dots button:focus-visible span,.dots button[aria-current=true] span{opacity:1}
+.dots button:not([aria-current=true]):not(:hover):not(:focus-visible) span{opacity:0}
+@media (max-width:1180px){.dots{display:none}}
+.trail-fill{position:absolute;left:0;top:0;width:4px;height:0;background:#E02020;border-radius:2px;opacity:1}
+.trail{background-color:transparent}
+/* City bar */
+.citybar{display:flex;gap:10px;flex-wrap:wrap;align-items:center}
+.citypick{height:44px;border:1.5px solid var(--line);border-radius:6px;background:var(--bg);color:var(--ink);font:inherit;font-weight:700;padding:0 12px;min-width:160px}
+.locate{min-height:44px;font-size:14px;padding:0 14px}
+.citystatus{margin:0;font-size:14px;font-weight:600;color:var(--eyebrow)}
 /* City guide */
 .guide{display:grid;grid-template-columns:minmax(0,1.25fr) minmax(0,1fr);gap:18px}
 .cats{display:flex;flex-wrap:wrap;gap:8px;margin-top:6px}
@@ -259,6 +298,8 @@ footer .cols a:hover{color:var(--ink)}
   .grid4{grid-template-columns:repeat(2,minmax(0,1fr))}
   .rows2{grid-row:auto}
   .safe4,.part4{grid-template-columns:repeat(2,minmax(0,1fr))!important}
+  .top nav .lnk{display:none}
+  .burger{display:flex}
   .steps{grid-template-columns:repeat(2,minmax(0,1fr))}
   .how{grid-template-columns:repeat(2,minmax(0,1fr))}
   .drive{grid-template-columns:1fr}
@@ -304,10 +345,12 @@ footer .cols a:hover{color:var(--ink)}
   .pane-cta .btn{width:100%}
   .top nav .menu summary{padding:0 12px}
   .top nav > .btn-red{display:none}
+  .top nav > .menu,.top nav > .lang{display:none}
+  .sheet-links a{font-size:24px}
+  .sheet-roles{grid-template-columns:1fr}
   .top > a img{height:28px!important;min-width:44px}
   .menu-pop{position:fixed;left:12px;right:12px;top:70px;width:auto}
   .appcards{max-width:none}
-  .appcard .qr{display:none}
   .foot-top .cols{grid-template-columns:1fr 1fr}
   .steps{grid-template-columns:1fr}
   .bw{flex-direction:column;padding-right:20px}
@@ -351,16 +394,48 @@ footer .cols a:hover{color:var(--ink)}
             <a href="{{ url('/?lang=fr') }}" class="{{ $t->lang === 'fr' ? 'on' : '' }}" hreflang="fr" @if($t->lang === 'fr') aria-current="true" @endif>FR</a>
         </div>
         <a class="btn btn-red" href="#get" style="min-height:44px;padding:0 18px;font-size:15px">{{ $t('get_app') }}</a>
+        <button type="button" class="burger" aria-expanded="false" aria-controls="site-menu" aria-label="{{ $t('menu') }}"><span></span><span></span><span></span></button>
     </nav>
 </div>
+<div id="site-menu" class="sheet" hidden>
+    <div class="sheet-in wrap">
+        <div class="sheet-head">
+            <img class="logo-dark" src="{{ $img('logo-on-dark.png') }}" alt="E-Ride" style="height:30px;width:auto">
+            <img class="logo-light" src="{{ $img('logo-on-light.png') }}" alt="E-Ride" style="height:30px;width:auto">
+            <button type="button" class="sheet-close" aria-label="{{ $t('close') }}"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18"/></svg></button>
+        </div>
+        <nav class="sheet-links" aria-label="{{ $t('menu') }}">
+            @foreach([['#services', 'nav_services'], ['#guide', 'nav_guide'], ['#how', 'nav_how'], ['#bus', 'nav_bus'], ['#safe', 'nav_safe'], ['#drive', 'nav_drive'], ['#partners', 'nav_partners']] as $i => [$href, $key])
+                <a href="{{ $href }}"><span class="n">{{ str_pad($i + 1, 2, '0', STR_PAD_LEFT) }}</span>{{ $t($key) }}</a>
+            @endforeach
+        </nav>
+        <div class="sheet-roles">
+            <p class="eyebrow">{{ $t('signin_title') }}</p>
+            @foreach($t('roles') as $key => [$who, $where])
+                @php($href = match ($key) { 'app' => '#get', 'driver' => $driverUrl, default => $portals[$key] ?? null })
+                @continue(!$href)
+                <a href="{{ $href }}" class="menu-item">{!! $roleIcon($key) !!}<span><b>{{ $who }}</b><small>{{ $where }}</small></span></a>
+            @endforeach
+        </div>
+        <div class="sheet-foot">
+            <div class="lang" role="group" aria-label="Language">
+                <a href="{{ url('/?lang=en') }}" class="{{ $t->lang === 'en' ? 'on' : '' }}" hreflang="en">EN</a>
+                <a href="{{ url('/?lang=fr') }}" class="{{ $t->lang === 'fr' ? 'on' : '' }}" hreflang="fr">FR</a>
+            </div>
+            <a href="{{ route('contact-us') }}" style="font-weight:700">{{ $t('help') }}</a>
+            <a class="btn btn-red" href="#get">{{ $t('get_app') }}</a>
+        </div>
+    </div>
+</div>
+<nav class="dots" aria-label="{{ $t('menu') }}"></nav>
 
 <main>
-<section class="wrap hero" aria-labelledby="hero-title">
+<section class="wrap hero slide" data-label="{{ $t('slide_top') }}" aria-labelledby="hero-title">
     <div style="display:flex;flex-direction:column;gap:22px">
         <p class="eyebrow">{{ $t('hero_eyebrow') }}</p>
         <h1 id="hero-title">{{ $t('hero_title') }}</h1>
         <p class="lead" style="max-width:520px">{{ $t('hero_body') }}</p>
-        @php($firstTab = $busWeb ? 'bus' : 'ride')
+        @php($firstTab = 'ride')
         <div class="box">
             <div class="tabs" role="tablist" aria-label="E-Ride">
                 @foreach($t('box_tabs') as $key => $label)
@@ -430,9 +505,9 @@ footer .cols a:hover{color:var(--ink)}
 <div style="overflow:hidden;padding:14px 0"><div class="band" aria-hidden="true"><div>@foreach($t('band') as $i => $w)@if($i)<i>·</i>@endif<span>{{ $w }}</span>@endforeach</div></div></div>
 
 <div class="wrap" style="position:relative">
-<div class="trail" aria-hidden="true"></div>
+<div class="trail" aria-hidden="true"><i class="trail-fill"></i></div>
 
-<section id="services" class="sec" aria-labelledby="s-title">
+<section id="services" class="sec slide" data-label="{{ $t('nav_services') }}" aria-labelledby="s-title">
     <div class="sechead"><span class="stop">1</span><div>
         <p class="eyebrow">{{ $t('s_eyebrow') }}</p><h2 class="h2" id="s-title">{{ $t('s_title') }}</h2><p class="lead">{{ $t('s_lead') }}</p>
     </div></div>
@@ -477,7 +552,7 @@ footer .cols a:hover{color:var(--ink)}
 </section>
 
 
-<section id="guide" class="sec" aria-labelledby="g-title">
+<section id="guide" class="sec slide" data-label="{{ $t('nav_guide') }}" aria-labelledby="g-title">
     <div class="sechead"><span class="stop">2</span><div>
         <p class="eyebrow">{{ $t('g_eyebrow') }}</p><h2 class="h2" id="g-title">{{ $t('g_title') }}</h2><p class="lead">{{ $t('g_lead') }}</p>
     </div></div>
@@ -485,8 +560,18 @@ footer .cols a:hover{color:var(--ink)}
         <article class="card explore-card">
             <div style="display:flex;align-items:center;gap:14px">
                 <img src="{{ $img('explore.webp') }}" alt="" width="56" height="56" style="width:56px;height:56px;object-fit:contain" loading="lazy">
-                <h3 class="cardt" style="font-size:26px">{{ $exploreLabel }}</h3>
+                <h3 class="cardt" style="font-size:26px" data-explore-title data-one="{{ $t('g_explore') }}" data-any="{{ $t('g_explore_any') }}">{{ $cities ? str_replace('{city}', $cities[0], $t('g_explore')) : $t('g_explore_any') }}</h3>
             </div>
+            <div class="citybar" data-cities='@json($cities)' data-in="{{ $t('g_in_service') }}" data-out="{{ $t('g_not_here') }}" data-denied="{{ $t('g_denied') }}" data-locating="{{ $t('g_locating') }}" data-url="{{ route('landing.city') }}">
+                @if($cities)
+                    <label class="sr" for="city-pick">{{ $t('g_city') }}</label>
+                    <select id="city-pick" class="citypick">
+                        @foreach($cities as $c)<option value="{{ $c }}" @selected($loop->first)>{{ $c }}</option>@endforeach
+                    </select>
+                    <button type="button" class="btn btn-line locate"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" aria-hidden="true"><circle cx="12" cy="12" r="3"/><path d="M12 2v3M12 19v3M2 12h3M19 12h3"/><circle cx="12" cy="12" r="8"/></svg>{{ $t('g_locate') }}</button>
+                @endif
+            </div>
+            <p class="citystatus" role="status" aria-live="polite">{{ $cities ? str_replace('{city}', $cities[0], $t('g_in_service')) : $t('g_soon') }}</p>
             <p class="cardb">{{ $t('g_explore_body') }}</p>
             <div class="cats">
                 @foreach($explore as $c)
@@ -513,7 +598,7 @@ footer .cols a:hover{color:var(--ink)}
     </div>
 </section>
 
-<section class="sec" aria-labelledby="h-title">
+<section id="how" class="sec slide" data-label="{{ $t('nav_how') }}" aria-labelledby="h-title">
     <div class="sechead"><span class="stop">3</span><div>
         <p class="eyebrow">{{ $t('how_eyebrow') }}</p><h2 class="h2" id="h-title">{{ $t('how_title') }}</h2>
     </div></div>
@@ -527,7 +612,7 @@ footer .cols a:hover{color:var(--ink)}
     </div>
 </section>
 
-<section class="sec" aria-labelledby="d-title">
+<section id="day" class="sec slide" data-label="{{ $t('day_title') }}" aria-labelledby="d-title">
     <div class="sechead"><span class="stop">4</span><div>
         <p class="eyebrow">{{ $t('day_eyebrow') }}</p><h2 class="h2" id="d-title">{{ $t('day_title') }}</h2><p class="lead">{{ $t('day_lead') }}</p>
     </div></div>
@@ -551,7 +636,7 @@ footer .cols a:hover{color:var(--ink)}
     </div>
 </section>
 
-<section id="bus" class="sec" aria-labelledby="m-title">
+<section id="bus" class="sec slide" data-label="{{ $t('nav_bus') }}" aria-labelledby="m-title">
     <div class="sechead"><span class="stop">5</span><div>
         <p class="eyebrow">{{ $t('m_eyebrow') }}</p><h2 class="h2" id="m-title">{{ $t('m_title') }}</h2>
     </div></div>
@@ -580,7 +665,7 @@ footer .cols a:hover{color:var(--ink)}
     </div>
 </section>
 
-<section id="safe" class="sec" aria-labelledby="safe-title">
+<section id="safe" class="sec slide" data-label="{{ $t('nav_safe') }}" aria-labelledby="safe-title">
     <div class="sechead"><span class="stop">6</span><div>
         <p class="eyebrow">{{ $t('safe_eyebrow') }}</p><h2 class="h2" id="safe-title">{{ $t('safe_title') }}</h2>
     </div></div>
@@ -604,7 +689,7 @@ footer .cols a:hover{color:var(--ink)}
     <p class="indent together" style="margin:0;font-size:40px;line-height:1.1;font-weight:900;letter-spacing:-.02em">{{ $t('together') }}<span style="color:#E02020">!</span></p>
 </section>
 
-<section id="drive" class="sec" aria-labelledby="dr-title">
+<section id="drive" class="sec slide" data-label="{{ $t('nav_drive') }}" aria-labelledby="dr-title">
     <div class="sechead"><span class="stop">7</span><div>
         <p class="eyebrow">{{ $t('drive_eyebrow') }}</p><h2 class="h2" id="dr-title">{{ $t('drive_title') }}</h2><p class="lead">{{ $t('drive_body') }}</p>
     </div></div>
@@ -625,7 +710,7 @@ footer .cols a:hover{color:var(--ink)}
     </div>
 </section>
 
-<section id="partners" class="sec" aria-labelledby="p-title">
+<section id="partners" class="sec slide" data-label="{{ $t('nav_partners') }}" aria-labelledby="p-title">
     <div class="sechead"><span class="stop">8</span><div>
         <p class="eyebrow">{{ $t('p_eyebrow') }}</p><h2 class="h2" id="p-title">{{ $t('p_title') }}</h2>
     </div></div>
@@ -644,7 +729,7 @@ footer .cols a:hover{color:var(--ink)}
 </section>
 </div>
 
-<section id="get" class="wrap" style="padding-top:140px;padding-bottom:50px" aria-labelledby="get-title">
+<section id="get" class="wrap slide" data-label="{{ $t('slide_get') }}" style="padding-top:140px;padding-bottom:50px" aria-labelledby="get-title">
     <div class="get">
         <svg width="700" height="320" viewBox="0 0 700 320" fill="none" aria-hidden="true" style="position:absolute;right:-60px;top:-20px">
             <path d="M0 260 C 160 300, 240 90, 380 140 S 600 300, 700 40" stroke="#FFFFFF" stroke-opacity="0.35" stroke-width="2.5" stroke-dasharray="2 10" stroke-linecap="round"/>
@@ -748,6 +833,93 @@ footer .cols a:hover{color:var(--ink)}
     if (!menu) return;
     document.addEventListener('click', function (e) { if (menu.open && !menu.contains(e.target)) menu.open = false; });
     document.addEventListener('keydown', function (e) { if (e.key === 'Escape' && menu.open) { menu.open = false; menu.querySelector('summary').focus(); } });
+})();
+// The menu sheet (phones and tablets).
+(function () {
+    var btn = document.querySelector('.burger'), sheet = document.getElementById('site-menu');
+    if (!btn || !sheet) return;
+    function set(open) {
+        sheet.hidden = !open; btn.setAttribute('aria-expanded', open ? 'true' : 'false');
+        document.documentElement.style.overflow = open ? 'hidden' : '';
+        (open ? sheet.querySelector('.sheet-close') : btn).focus();
+    }
+    btn.addEventListener('click', function () { set(true); });
+    sheet.querySelector('.sheet-close').addEventListener('click', function () { set(false); });
+    sheet.querySelectorAll('a').forEach(function (a) { a.addEventListener('click', function () { if (a.getAttribute('href').charAt(0) === '#') set(false); }); });
+    document.addEventListener('keydown', function (e) { if (e.key === 'Escape' && !sheet.hidden) set(false); });
+})();
+// Slides: content rises in as each section arrives, side dots follow, the red route fills.
+(function () {
+    var root = document.documentElement;
+    var still = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+    var slides = [].slice.call(document.querySelectorAll('.slide'));
+    if (!still && 'IntersectionObserver' in window) {
+        root.classList.add('js-motion');
+        document.querySelectorAll('.hero > div:first-child > *, .hero .hero-art').forEach(function (el, i) { el.classList.add('rise'); el.style.animationDelay = (i * 0.08) + 's'; });
+        slides.forEach(function (s) {
+            if (s.classList.contains('hero')) return;
+            var items = s.querySelectorAll('.sechead, .indent > :not(.daypanel), .grid4 > *, .how > li, .steps > li, .get > *');
+            [].forEach.call(items, function (el, i) { el.classList.add('reveal'); el.style.transitionDelay = Math.min(i, 8) * 0.07 + 's'; });
+        });
+        var io = new IntersectionObserver(function (entries) {
+            entries.forEach(function (e) { if (e.isIntersecting) { e.target.classList.add('in'); io.unobserve(e.target); } });
+        }, { threshold: 0.12, rootMargin: '0px 0px -6% 0px' });
+        document.querySelectorAll('.reveal').forEach(function (el) { io.observe(el); });
+    }
+    var dots = document.querySelector('.dots');
+    var buttons = slides.map(function (s, i) {
+        var b = document.createElement('button');
+        b.type = 'button';
+        b.setAttribute('aria-label', s.dataset.label || ('' + (i + 1)));
+        b.innerHTML = '<span></span>';
+        b.firstChild.textContent = s.dataset.label || '';
+        b.addEventListener('click', function () { s.scrollIntoView({ behavior: still ? 'auto' : 'smooth', block: 'start' }); });
+        dots.appendChild(b);
+        return b;
+    });
+    var trail = document.querySelector('.trail'), fill = document.querySelector('.trail-fill'), ticking = false;
+    function onScroll() {
+        ticking = false;
+        var mid = window.innerHeight * 0.45, current = 0;
+        slides.forEach(function (s, i) { if (s.getBoundingClientRect().top <= mid) current = i; });
+        buttons.forEach(function (b, i) { b.setAttribute('aria-current', i === current ? 'true' : 'false'); });
+        if (trail && fill) {
+            var r = trail.getBoundingClientRect();
+            fill.style.height = Math.max(0, Math.min(r.height, mid - r.top)) + 'px';
+        }
+    }
+    window.addEventListener('scroll', function () { if (!ticking) { ticking = true; requestAnimationFrame(onScroll); } }, { passive: true });
+    window.addEventListener('resize', onScroll);
+    onScroll();
+})();
+// City guide: the visitor's city, from the list or their location (only cities where E-Ride is set up).
+(function () {
+    var bar = document.querySelector('.citybar');
+    if (!bar) return;
+    var cities = JSON.parse(bar.dataset.cities || '[]'), pick = bar.querySelector('.citypick'), locate = bar.querySelector('.locate');
+    var title = document.querySelector('[data-explore-title]'), status = document.querySelector('.citystatus');
+    function useCity(city) {
+        if (!city) return;
+        title.textContent = title.dataset.one.replace('{city}', city);
+        status.textContent = bar.dataset.in.replace('{city}', city);
+        if (pick) pick.value = city;
+        try { localStorage.setItem('eride_city', city); } catch (e) {}
+    }
+    try { var saved = localStorage.getItem('eride_city'); if (saved && cities.indexOf(saved) !== -1) useCity(saved); } catch (e) {}
+    if (pick) pick.addEventListener('change', function () { useCity(pick.value); });
+    if (locate) locate.addEventListener('click', function () {
+        if (!navigator.geolocation) { status.textContent = bar.dataset.denied; return; }
+        status.textContent = bar.dataset.locating;
+        navigator.geolocation.getCurrentPosition(function (pos) {
+            fetch(bar.dataset.url + '?lat=' + pos.coords.latitude + '&lng=' + pos.coords.longitude, { headers: { 'Accept': 'application/json' } })
+                .then(function (r) { return r.json(); })
+                .then(function (d) {
+                    if (d.city) { useCity(d.city); }
+                    else { title.textContent = title.dataset.any; status.textContent = bar.dataset.out.replace('{list}', cities.join(', ')); }
+                })
+                .catch(function () { status.textContent = bar.dataset.denied; });
+        }, function () { status.textContent = bar.dataset.denied; }, { timeout: 10000, maximumAge: 600000 });
+    });
 })();
 // "A day in Bamenda": one time at a time.
 (function () {

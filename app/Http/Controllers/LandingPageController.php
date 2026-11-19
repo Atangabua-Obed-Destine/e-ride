@@ -43,6 +43,15 @@ class LandingPageController extends Controller
         return filter_var($url, FILTER_VALIDATE_URL) ? $url : null;
     }
 
+    /** /city?lat=&lng=: the E-Ride city (active service zone) at a point, for the city guide; null outside them. */
+    public function city(\Illuminate\Http\Request $request): \Illuminate\Http\JsonResponse
+    {
+        $data = $request->validate(['lat' => 'required|numeric|between:-90,90', 'lng' => 'required|numeric|between:-180,180']);
+        $zone = \Modules\ZoneManagement\Entities\Zone::where('is_active', 1)
+            ->whereContains('coordinates', new \MatanYadaev\EloquentSpatial\Objects\Point((float)$data['lat'], (float)$data['lng']))->first();
+        return response()->json(['city' => $zone?->name]);
+    }
+
     /** /get-app: the QR code and shared links. iPhones go to the App Store (when it is set), other phones to Google Play. */
     public function getApp(\Illuminate\Http\Request $request): \Illuminate\Http\RedirectResponse
     {
@@ -108,6 +117,9 @@ class LandingPageController extends Controller
         $explore = \Illuminate\Support\Facades\Cache::remember('landing:explore', 300, fn() => \Illuminate\Support\Facades\DB::table('place_categories')
             ->where('is_active', 1)->orderBy('sort')->get(['key', 'name', 'name_fr'])->map(fn($c) => (array)$c)->all());
         $exploreLabel = (string)(businessConfig('explore_label')?->value ?: 'Explore Bamenda');
+        // Cities where E-Ride is set up (active service zones): the city guide follows the visitor's.
+        $cities = \Illuminate\Support\Facades\Cache::remember('landing:zones', 300, fn() => \Modules\ZoneManagement\Entities\Zone::where('is_active', 1)
+            ->orderBy('name')->pluck('name')->all());
         $qrDriver = (string)\SimpleSoftwareIO\QrCode\Facades\QrCode::format('svg')->size(144)->margin(0)->errorCorrection('M')->generate(route('get-app', ['app' => 'driver']));
         // The hero's bus search: the cities agencies leave from, and where they go.
         $busSearch = $busWeb ? \Illuminate\Support\Facades\Cache::remember('landing:bus-cities', 300, function () {
@@ -124,7 +136,7 @@ class LandingPageController extends Controller
         $favicon = getSession('favicon');
         $favicon = $favicon ? dynamicStorage(path: 'storage/app/public/business/' . $favicon) : dynamicAsset(path: 'public/landing-page/assets/img/favicon.png');
 
-        return response()->view('landing-page.home', compact('t', 'theme', 'playUrl', 'driverUrl', 'appStoreUrl', 'driverAppStoreUrl', 'contact', 'partnerLink', 'busWeb', 'qr', 'qrDriver', 'favicon', 'explore', 'exploreLabel', 'busSearch', 'social', 'portals'));
+        return response()->view('landing-page.home', compact('t', 'theme', 'playUrl', 'driverUrl', 'appStoreUrl', 'driverAppStoreUrl', 'contact', 'partnerLink', 'busWeb', 'qr', 'qrDriver', 'favicon', 'explore', 'exploreLabel', 'busSearch', 'social', 'portals', 'cities'));
     }
 
     public function aboutUs()
