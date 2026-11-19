@@ -63,7 +63,8 @@
                 <div class="col-12"><label class="form-label small fw-semibold" for="bookerId">{{ translate('ID number of the person paying (optional)') }}</label><input id="bookerId" class="form-control text-uppercase" maxlength="40" autocomplete="off"></div>
                 <div class="col-sm-7"><label class="form-label small fw-semibold" for="drop">{{ translate('Gets off at') }}</label><select id="drop" class="form-select"></select></div>
                 <div class="col-sm-5"><span class="form-label small fw-semibold d-block">{{ translate('Paid by') }}</span>
-                    <div class="seg"><input type="radio" name="method" id="m_cash" value="cash" checked><label for="m_cash">{{ translate('Cash') }}</label><input type="radio" name="method" id="m_momo" value="momo"><label for="m_momo">MoMo</label><input type="radio" name="method" id="m_orange" value="orange"><label for="m_orange">Orange</label></div></div>
+                    @php($counterCash = \Modules\TripManagement\Lib\PaymentWays::cash())
+                    <div class="seg">@if($counterCash)<input type="radio" name="method" id="m_cash" value="cash" checked><label for="m_cash">{{ translate('Cash') }}</label>@endif<input type="radio" name="method" id="m_momo" value="momo" {{ $counterCash ? '' : 'checked' }}><label for="m_momo">MoMo</label><input type="radio" name="method" id="m_orange" value="orange"><label for="m_orange">Orange</label></div></div>
             </div>
             <div class="d-flex align-items-center gap-3 mt-3">
                 <div class="flex-grow-1"><div class="b-hint">{{ translate('Total') }}</div><div class="total" id="total">0</div></div>

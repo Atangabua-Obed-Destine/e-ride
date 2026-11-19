@@ -61,7 +61,9 @@ class TodayController extends Controller
             'departure_id' => $b->departure_id,
             'drop_point' => $b->dropPoint?->name,
             'amount' => getCurrencyFormat($b->amount),
-            'refund' => $b->refund_amount > 0 ? getCurrencyFormat($b->refund_amount) : null,
+            // What to send now (a fare refund, a late or second payment, or both).
+            'refund' => ($owed = $b->refund_status === 'due' ? ((float)$b->refund_owed ?: (float)$b->refund_amount) : (float)$b->refund_amount + (float)$b->extra_refund) > 0
+                ? getCurrencyFormat($owed) : null,
             'seats' => $b->tickets->whereIn('status', [BusTicket::HELD, BusTicket::VALID, BusTicket::CANCELLED])->sortBy(fn($t) => (int)$t->seat)
                 ->map(fn($t) => ['seat' => $t->seat, 'name' => $t->passenger_name, 'id_number' => $t->id_number, 'bags' => $t->bags])->values(),
             'asked_at' => $b->created_at?->toIso8601String(),

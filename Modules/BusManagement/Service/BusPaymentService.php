@@ -220,8 +220,8 @@ class BusPaymentService
             $outcome === 'paid'
                 ? BusPush::send($booking->customer, 'bus_paid', 'Your tickets to {city} are ready',
                     '{agency}, {time}. Show the QR code when you board.', $replace, ['bus_booking_id' => $booking->id])
-                : BusPush::send($booking->customer, 'bus_refund_due', 'Your payment came too late',
-                    'Your seats with {agency} were already gone. The agency sends back {amount} to your Mobile Money.', $replace, ['bus_booking_id' => $booking->id]);
+                : BusPush::send($booking->customer, 'bus_refund_due', 'Your payment was not needed',
+                    'Your seats with {agency} were no longer waiting for it (paid late, paid twice, or the trip stopped). The agency sends back {amount} to your Mobile Money.', $replace, ['bus_booking_id' => $booking->id]);
         }
         return $result;
     }

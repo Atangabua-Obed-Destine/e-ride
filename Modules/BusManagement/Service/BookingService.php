@@ -177,6 +177,10 @@ class BookingService
             if (!$locked || !$locked->isOpen() || (string)$locked->vehicle_id !== (string)$departure->vehicle_id) {
                 throw ValidationException::withMessages(['departure' => translate('This departure just changed. Look at it again.')]);
             }
+            // A lockdown declared a moment ago (it sets this under the same lock).
+            if ($locked->closure_id) {
+                throw ValidationException::withMessages(['departure' => translate('Sales are stopped: a lockdown may affect this departure. The agency decides soon.')]);
+            }
             $booking = BusBooking::create([
                 'code' => $this->newCode(BusBooking::class),
                 'agency_id' => $agency->id,
@@ -371,6 +375,10 @@ class BookingService
             if (!in_array($b->status, [...BusBooking::HOLDING, BusBooking::PAID], true)) {
                 throw ValidationException::withMessages(['booking' => translate('This booking is already closed.')]);
             }
+            // A passenger already on the bus keeps their seat: it must never be sold again.
+            if (BusTicket::where('booking_id', $b->id)->where('status', BusTicket::BOARDED)->exists()) {
+                throw ValidationException::withMessages(['booking' => translate('A passenger of this booking is already on board, so it cannot be cancelled.')]);
+            }
             $this->endBooking($b, 'agency', $b->status === BusBooking::PAID ? $b->amount : 0);
             return $b;
         });
@@ -390,6 +398,9 @@ class BookingService
             $d = BusDeparture::whereKey($departure->id)->lockForUpdate()->first();
             if (!$d->isOpen()) {
                 throw ValidationException::withMessages(['departure' => translate('This departure is already closed.')]);
+            }
+            if (BusTicket::where('departure_id', $d->id)->where('status', BusTicket::BOARDED)->exists()) {
+                throw ValidationException::withMessages(['departure' => translate('Passengers are already on board: this departure can no longer be cancelled.')]);
             }
             $d->update(['status' => BusDeparture::CANCELLED, 'cancelled_at' => now(), 'cancel_reason' => $reason ?: null]);
             $bookings = BusBooking::where('departure_id', $d->id)->whereIn('status', [...BusBooking::HOLDING, BusBooking::PAID])->lockForUpdate()->get();
@@ -433,14 +444,18 @@ class BookingService
         // (A lockdown is different: the passenger is not at the counter, so the refund waits for them.)
         $cash = $wasPaid && $b->source === BusBooking::COUNTER && !in_array($by, ['passenger', 'closure'], true);
         $refund = $cash ? (float)$b->amount : ($wasPaid ? max(0, min((float)$b->amount, $refund)) : 0);
+        // Added to anything already owed on it (a second payment waiting to go back).
+        $alreadyOwed = $b->refund_status === 'due' ? (float)$b->refund_owed : 0;
+        $owed = $alreadyOwed + ($refund > 0 && !$cash ? $refund : 0);
         $b->fill([
             'status' => BusBooking::CANCELLED,
             'cancelled_at' => now(),
             'cancelled_by' => $by,
             'refund_amount' => $refund,
-            'refund_status' => $refund > 0 ? ($cash ? 'sent' : 'due') : 'none',
-            'refund_due_by' => $refund > 0 && !$cash ? now()->addHours(BusSettings::all()['refund_hours']) : null,
-            'refund_sent_at' => $cash ? now() : null,
+            'refund_owed' => $owed,
+            'refund_status' => $owed > 0 ? 'due' : ($refund > 0 ? 'sent' : $b->refund_status),
+            'refund_due_by' => $owed > 0 ? ($alreadyOwed > 0 && $b->refund_due_by ? $b->refund_due_by : now()->addHours(BusSettings::all()['refund_hours'])) : null,
+            'refund_sent_at' => $cash ? now() : $b->refund_sent_at,
         ]);
         if ($wasPaid) {
             // E-Ride takes its commission on what the agency keeps only.
@@ -450,10 +465,10 @@ class BookingService
         $this->release($b);
     }
 
-    /** Frees the seats of a booking that ended without travelling. */
+    /** Frees the seats of a booking that ended without travelling. A boarded seat is never freed. */
     public function release(BusBooking $b): void
     {
-        $ids = BusTicket::where('booking_id', $b->id)->pluck('id');
+        $ids = BusTicket::where('booking_id', $b->id)->where('status', '!=', BusTicket::BOARDED)->pluck('id');
         BusSeatClaim::whereIn('ticket_id', $ids)->delete();
         BusTicket::whereIn('id', $ids)->whereIn('status', [BusTicket::HELD, BusTicket::VALID])->update(['status' => BusTicket::CANCELLED]);
     }
@@ -470,13 +485,21 @@ class BookingService
     {
         if ($b->status === BusBooking::PAID) {
             // Paid twice: the second payment goes back.
-            $b->update(['refund_amount' => (float)$b->refund_amount + $payment->amount, 'refund_status' => 'due',
-                'refund_due_by' => now()->addHours(BusSettings::all()['refund_hours'])]);
+            $this->oweBack($b, (float)$payment->amount);
+            return 'refund_due';
+        }
+        // The departure stopped running meanwhile (cancelled, a lockdown, left):
+        // the seats are not sold, the money goes back. A locking read on the
+        // bookings by whoever cancelled it sees this outcome either way.
+        $departure = BusDeparture::find($b->departure_id);
+        if ($b->status === BusBooking::ACCEPTED && (!$departure || !$departure->isOpen())) {
+            $b->update(['status' => BusBooking::CANCELLED, 'cancelled_at' => now(), 'cancelled_by' => 'departure']);
+            $this->release($b);
+            $this->oweBack($b, (float)$payment->amount);
             return 'refund_due';
         }
         if ($b->status !== BusBooking::ACCEPTED && !$this->reclaim($b)) {
-            $b->update(['refund_amount' => (float)$payment->amount, 'refund_status' => 'due',
-                'refund_due_by' => now()->addHours(BusSettings::all()['refund_hours'])]);
+            $this->oweBack($b, (float)$payment->amount);
             return 'refund_due';
         }
         $b->update([
@@ -489,6 +512,23 @@ class BookingService
         ]);
         BusTicket::where('booking_id', $b->id)->whereIn('status', [BusTicket::HELD, BusTicket::CANCELLED])->update(['status' => BusTicket::VALID]);
         return 'paid';
+    }
+
+    /**
+     * Money paid beyond the fare (late, a second time, or for a departure that
+     * no longer runs) that the agency sends back. Kept apart from the fare
+     * refund, so statements and commission never move; added to what is still
+     * owed, or a new refund when the last one was already sent.
+     */
+    protected function oweBack(BusBooking $b, float $amount): void
+    {
+        $due = $b->refund_status === 'due';
+        $b->update([
+            'extra_refund' => round((float)$b->extra_refund + $amount, 2),
+            'refund_owed' => round(($due ? (float)$b->refund_owed : 0) + $amount, 2),
+            'refund_status' => 'due',
+            'refund_due_by' => $due && $b->refund_due_by ? $b->refund_due_by : now()->addHours(BusSettings::all()['refund_hours']),
+        ]);
     }
 
     /** Takes back the seats of a booking that ran out, when nobody took them since. */
@@ -521,17 +561,21 @@ class BookingService
         if ($reference === '') {
             throw ValidationException::withMessages(['reference' => translate('Add the Mobile Money reference of the refund.')]);
         }
-        $booking = DB::transaction(function () use ($booking, $reference) {
+        $sent = 0.0;
+        $booking = DB::transaction(function () use ($booking, $reference, &$sent) {
             $b = BusBooking::whereKey($booking->id)->lockForUpdate()->first();
             if ($b->refund_status !== 'due') {
                 throw ValidationException::withMessages(['booking' => translate('No refund is owed on this booking.')]);
             }
-            $b->update(['refund_status' => 'sent', 'refund_ref' => $reference, 'refund_sent_at' => now()]);
+            $sent = (float)$b->refund_owed ?: (float)$b->refund_amount;
+            // An earlier refund's reference is kept alongside.
+            $ref = $b->refund_ref && $b->refund_ref !== $reference ? Str::limit($b->refund_ref . ', ' . $reference, 100, '') : $reference;
+            $b->update(['refund_status' => 'sent', 'refund_ref' => $ref, 'refund_sent_at' => now(), 'refund_owed' => 0]);
             return $b;
         });
         BusPush::send($booking->customer, 'bus_refund_sent', '{agency} sent your refund',
             '{amount} sent to your Mobile Money. Reference {ref}.',
-            ['agency' => $agency->name, 'amount' => getCurrencyFormat($booking->refund_amount), 'ref' => $reference], ['bus_booking_id' => $booking->id]);
+            ['agency' => $agency->name, 'amount' => getCurrencyFormat($sent), 'ref' => $reference], ['bus_booking_id' => $booking->id]);
         return $booking->fresh();
     }
 

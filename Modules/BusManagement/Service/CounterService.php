@@ -27,6 +27,12 @@ class CounterService
 {
     public const METHODS = ['cash', 'momo', 'orange'];
 
+    /** Ways to take money at the counter: cash only while the admin's cash switch is on. */
+    public static function methods(): array
+    {
+        return \Modules\TripManagement\Lib\PaymentWays::cash() ? self::METHODS : array_values(array_diff(self::METHODS, ['cash']));
+    }
+
     public function __construct(protected BookingService $bookings)
     {
     }
@@ -56,7 +62,7 @@ class CounterService
             'passengers.*.phone' => 'nullable|string|max:20',
             'passengers.*.id_number' => 'nullable|string|max:40',
             'passengers.*.bags' => 'nullable|integer|min:0|max:9',
-            'method' => ['required', Rule::in(self::METHODS)],
+            'method' => ['required', Rule::in(self::methods())],
             'booker_id_number' => ['nullable', 'string', 'max:40', 'regex:/^[A-Za-z0-9 \-\/]+$/'],
         ], [
             'passengers.*.name.required' => translate('Add the name of every passenger.'),
@@ -79,6 +85,9 @@ class CounterService
             $locked = BusDeparture::whereKey($departure->id)->lockForUpdate()->first();
             if (!$locked->isOpen() || (string)$locked->vehicle_id !== (string)$departure->vehicle_id) {
                 throw ValidationException::withMessages(['departure' => translate('This departure just changed. Look at it again.')]);
+            }
+            if ($locked->closure_id) {
+                throw ValidationException::withMessages(['departure' => translate('A lockdown stops or puts this departure at risk: no sales until it is decided.')]);
             }
             $lines = [];
             foreach ($seats as $i => $seat) {

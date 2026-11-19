@@ -7,6 +7,7 @@ use Illuminate\Database\UniqueConstraintViolationException;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Validator;
 use Illuminate\Support\Str;
 use Illuminate\Validation\Rule;
@@ -150,6 +151,12 @@ class ClosureService
     public function applyTo(BusClosure $closure, BusDeparture $d): void
     {
         $reason = $this->reasonText($closure);
+        // Sales stop first, under the departure's lock: a request or a counter sale
+        // in flight either finished before (and is handled below) or is refused.
+        DB::transaction(function () use ($d, $closure) {
+            BusDeparture::whereKey($d->id)->lockForUpdate()->first()?->update(['closure_id' => $closure->id]);
+        });
+        $d->closure_id = $closure->id;
         // Requests not paid yet end now, with the reason.
         BusBooking::with('customer')->where('departure_id', $d->id)->whereIn('status', BusBooking::HOLDING)->get()->each(function (BusBooking $b) use ($reason, $closure) {
             DB::transaction(function () use ($b, $closure) {
@@ -163,7 +170,6 @@ class ClosureService
                 ['agency' => $closure->agency->name, 'reason' => $reason], ['bus_booking_id' => $b->id]);
         });
 
-        $d->update(['closure_id' => $closure->id]);
         if ($closure->outcome === BusClosure::AT_RISK) {
             $this->eachPaid($d, fn(BusBooking $b) => BusPush::send($b->customer, 'bus_closure_at_risk', 'Your trip to {city} may not go ahead',
                 '{reason} {agency} decides by {time}. You can cancel now for a full refund.',
@@ -178,7 +184,27 @@ class ClosureService
     protected function closeDeparture(BusClosure $closure, BusDeparture $d): void
     {
         $reason = $this->reasonText($closure);
-        foreach (BusBooking::with(['tickets', 'customer'])->where('departure_id', $d->id)->where('status', BusBooking::PAID)->get() as $b) {
+        // The departure stops running first, under its lock: a payment landing now
+        // is sent back instead of selling a seat on a bus that does not run.
+        // Passengers already on board: the bus is effectively leaving, left as is.
+        $stopped = DB::transaction(function () use ($d, $closure, $reason) {
+            $locked = BusDeparture::whereKey($d->id)->lockForUpdate()->first();
+            if (!$locked || !$locked->isOpen()) {
+                return false;
+            }
+            if (BusTicket::where('departure_id', $d->id)->where('status', BusTicket::BOARDED)->exists()) {
+                Log::warning('Bus closure skipped a departure already boarding', ['departure' => $d->id, 'closure' => $closure->id]);
+                return false;
+            }
+            $locked->update(['status' => BusDeparture::CANCELLED, 'cancelled_at' => now(), 'cancel_reason' => Str::limit($reason, 300, ''), 'closure_id' => $closure->id]);
+            return true;
+        });
+        if (!$stopped) {
+            return;
+        }
+        // A locking read: a payment being settled right now finishes first and is seen here.
+        $paidIds = DB::transaction(fn() => BusBooking::where('departure_id', $d->id)->where('status', BusBooking::PAID)->lockForUpdate()->pluck('id'));
+        foreach (BusBooking::with(['tickets', 'customer'])->whereIn('id', $paidIds)->get() as $b) {
             $to = $closure->outcome === BusClosure::MOVE ? $this->moveBooking($closure, $b, $d) : null;
             if ($to) {
                 BusPush::send($b->customer, 'bus_closure_moved', 'Your trip to {city} moved to {when}',
@@ -197,7 +223,7 @@ class ClosureService
                 '{reason} {agency} refunds you in full to your Mobile Money.',
                 ['city' => $d->destination?->city, 'reason' => $reason, 'agency' => $closure->agency->name], ['bus_booking_id' => $b->id]);
         }
-        $d->update(['status' => BusDeparture::CANCELLED, 'cancelled_at' => now(), 'cancel_reason' => Str::limit($reason, 300, ''), 'closure_id' => $closure->id]);
+        $d->refresh();
     }
 
     /** The first departure after the closure with room for the whole booking. Same seats when free. */

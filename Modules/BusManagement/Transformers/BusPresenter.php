@@ -153,7 +153,8 @@ class BusPresenter
             'decline_reason' => $b->decline_reason,
             'cancelled_by' => $b->cancelled_by,
             'refund' => $b->refund_status !== 'none' ? [
-                'amount' => (float)$b->refund_amount,
+                // Owed now while due; everything given back once sent (fare part and any extra payment).
+                'amount' => $b->refund_status === 'due' && (float)$b->refund_owed > 0 ? (float)$b->refund_owed : (float)$b->refund_amount + (float)$b->extra_refund,
                 // due | sent
                 'status' => $b->refund_status,
                 'due_by' => $b->refund_due_by?->toIso8601String(),

@@ -31,7 +31,7 @@ class BusBooking extends Model
     protected $fillable = [
         'code', 'agency_id', 'departure_id', 'customer_id', 'source', 'staff_user_id', 'drop_point_id', 'status', 'respond_by', 'accepted_at',
         'pay_by', 'amount', 'commission_pct', 'commission', 'payment_method', 'paid_at', 'decline_reason', 'cancelled_at', 'cancelled_by',
-        'refund_amount', 'refund_status', 'refund_due_by', 'refund_ref', 'refund_sent_at', 'phone',
+        'refund_amount', 'extra_refund', 'refund_owed', 'refund_status', 'refund_due_by', 'refund_ref', 'refund_sent_at', 'phone',
         'booker_id_type', 'booker_id_number', 'booker_verification_id', 'booker_verified', 'id_checked_by', 'id_checked_at', 'collect_reminded_at',
         'closure_id', 'moved_from_departure_id', 'moved_at', 'move_kept_at',
     ];
@@ -41,6 +41,8 @@ class BusBooking extends Model
         'commission_pct' => 'float',
         'commission' => 'float',
         'refund_amount' => 'float',
+        'extra_refund' => 'float',
+        'refund_owed' => 'float',
         'respond_by' => 'datetime',
         'accepted_at' => 'datetime',
         'pay_by' => 'datetime',
