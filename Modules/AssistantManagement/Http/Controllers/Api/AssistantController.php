@@ -41,8 +41,12 @@ class AssistantController extends Controller
             'screen' => 'nullable|string|max:120',
             'services' => 'nullable|array|max:20',
             'services.*' => 'string|max:20',
+            // Where the customer is, for distances in the suggestions.
+            'latitude' => 'nullable|numeric|between:-90,90',
+            'longitude' => 'nullable|numeric|between:-180,180',
         ]);
-        $answer = $this->assistant->ask($request->user(), $data['question'], $data['screen'] ?? null, $this->lang($request), $data['services'] ?? []);
+        $answer = $this->assistant->ask($request->user(), $data['question'], $data['screen'] ?? null, $this->lang($request), $data['services'] ?? [],
+            'customer', isset($data['latitude']) ? (float)$data['latitude'] : null, isset($data['longitude']) ? (float)$data['longitude'] : null);
         return response()->json(responseFormatter(DEFAULT_200, $answer));
     }
 

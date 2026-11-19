@@ -234,60 +234,254 @@ class ActivityController extends Controller
         return $out;
     }
 
-    /** Market: orders on their way to the buyer, and booked services coming up (what the Market count leaves out). */
+    /**
+     * E-Ride Market, every role: buyer, seller, service client, provider,
+     * bidder and auction seller, the shop owner, and unread chats. (The cart
+     * is on the phone; the app adds it.)
+     */
     protected function market(string $userId): array
     {
         if (!class_exists(\Modules\MarketManagement\Entities\MarketOrder::class)) {
             return [];
         }
+        $M = '\\Modules\\MarketManagement\\Entities\\';
         $out = [];
-        \Modules\MarketManagement\Entities\MarketOrder::with('shop:id,name')->where('buyer_id', $userId)
-            ->whereIn('status', ['confirmed', 'ready', 'on_the_way'])->latest('updated_at')->limit(5)->get()
+        $order = $M . 'MarketOrder';
+        $booking = $M . 'MarketBooking';
+
+        // ---- as the buyer
+        $order::with('shop:id,name')->where('buyer_id', $userId)->whereIn('status', ['requested', 'changes', 'confirmed', 'ready', 'on_the_way'])
+            ->latest('updated_at')->limit(8)->get()
             ->each(function ($o) use (&$out) {
-                $out[] = $this->item('market_order', $o->id, 'progress', null, $o->updated_at, ['shop' => $o->shop?->name ?? '', 'status' => $o->status]);
+                $p = ['shop' => $o->shop?->name ?? '', 'status' => $o->status, 'total' => (float)($o->confirmed_total ?? $o->requested_total)];
+                if ($o->status === 'requested') {
+                    $out[] = $this->item('market_order_waiting', $o->id, 'progress', $o->respond_by, $o->created_at, $p);
+                } elseif ($o->status === 'changes') {
+                    $out[] = $this->item('market_order_changes', $o->id, 'now', $o->agree_by, $o->updated_at, $p);
+                } elseif ($o->auction_id && $o->payment_due_at && !$o->payment_arranged_at && $o->status === 'confirmed') {
+                    // Won an auction: arrange the payment with the seller in time.
+                    $out[] = $this->item('market_auction_pay', $o->id, 'now', $o->payment_due_at, $o->created_at, $p);
+                } else {
+                    $out[] = $this->item('market_order', $o->id, $o->status === 'ready' ? 'now' : 'progress', null, $o->updated_at, $p);
+                }
             });
-        \Modules\MarketManagement\Entities\MarketBooking::with('item:id,title')->where('client_id', $userId)->where('status', 'confirmed')
-            ->whereNotNull('starts_at')->whereBetween('starts_at', [now()->subHours(3), now()->addDays(7)])->orderBy('starts_at')->limit(5)->get()
+        $order::with('shop:id,name')->where('buyer_id', $userId)->where('status', 'completed')->where('completed_at', '>', now()->subDays(7))
+            ->whereDoesntHave('review')->latest('completed_at')->limit(2)->get()
+            ->each(function ($o) use (&$out) {
+                $out[] = $this->item('market_order_rate', $o->id, 'later', null, $o->completed_at, ['shop' => $o->shop?->name ?? '']);
+            });
+
+        // ---- as the seller
+        $order::with('buyer:id,first_name')->where('seller_id', $userId)->whereIn('status', ['requested', 'confirmed', 'ready', 'on_the_way'])
+            ->latest('updated_at')->limit(8)->get()
+            ->each(function ($o) use (&$out) {
+                $p = ['buyer' => $o->buyer?->first_name ?? '', 'total' => (float)($o->confirmed_total ?? $o->requested_total), 'status' => $o->status];
+                $out[] = match ($o->status) {
+                    'requested' => $this->item('market_sell_new', $o->id, 'now', $o->respond_by, $o->created_at, $p),
+                    // An auction sold: wait for the payment; past the time, report a no-show.
+                    'confirmed' => $o->auction_id && $o->payment_due_at && !$o->payment_arranged_at
+                        ? $this->item('market_sell_wait_pay', $o->id, $o->payment_due_at->isPast() ? 'now' : 'progress', $o->payment_due_at, $o->created_at, $p)
+                        : $this->item('market_sell_prepare', $o->id, 'now', null, $o->confirmed_at ?? $o->updated_at, $p),
+                    default => $this->item('market_sell_handover', $o->id, 'progress', null, $o->updated_at, $p),
+                };
+            });
+
+        // ---- services, as the client
+        $booking::with('item:id,title')->where('client_id', $userId)->whereIn('status', ['requested', 'quote_requested', 'suggested', 'quoted', 'confirmed'])
+            ->latest('updated_at')->limit(8)->get()
             ->each(function ($b) use (&$out) {
-                $out[] = $this->item('market_booking', $b->id, 'progress', null, $b->starts_at, ['title' => $b->item?->title ?? '', 'time' => $b->starts_at?->toIso8601String()]);
+                $p = ['title' => $b->item?->title ?? '', 'time' => ($b->suggested_starts_at ?? $b->starts_at)?->toIso8601String(), 'total' => (float)($b->quote_price ?? $b->price)];
+                if (in_array($b->status, ['suggested', 'quoted'], true)) {
+                    $out[] = $this->item($b->status === 'quoted' ? 'market_quote_answer' : 'market_time_answer', $b->id, 'now',
+                        $b->status === 'quoted' ? $b->quote_expires_at : $b->respond_by, $b->updated_at, $p);
+                } elseif (in_array($b->status, ['requested', 'quote_requested'], true)) {
+                    $out[] = $this->item('market_booking_waiting', $b->id, 'progress', $b->respond_by, $b->created_at, $p);
+                } elseif ($b->starts_at && $b->starts_at->between(now()->subHours(3), now()->addDays(7))) {
+                    $out[] = $this->item('market_booking', $b->id, 'progress', null, $b->starts_at, $p);
+                }
             });
+        $booking::with('item:id,title')->where('client_id', $userId)->where('status', 'completed')->where('completed_at', '>', now()->subDays(7))
+            ->whereDoesntHave('review')->latest('completed_at')->limit(2)->get()
+            ->each(function ($b) use (&$out) {
+                $out[] = $this->item('market_booking_rate', $b->id, 'later', null, $b->completed_at, ['title' => $b->item?->title ?? '']);
+            });
+
+        // ---- services, as the provider
+        $booking::with('item:id,title')->where('provider_id', $userId)->whereIn('status', ['requested', 'quote_requested', 'confirmed'])
+            ->latest('updated_at')->limit(8)->get()
+            ->each(function ($b) use (&$out) {
+                $p = ['title' => $b->item?->title ?? '', 'time' => $b->starts_at?->toIso8601String()];
+                if ($b->status !== 'confirmed') {
+                    $out[] = $this->item($b->status === 'quote_requested' ? 'market_quote_request' : 'market_provider_request', $b->id, 'now', $b->respond_by, $b->created_at, $p);
+                } elseif ($b->starts_at && $b->starts_at->between(now()->subHours(3), now()->addDays(2))) {
+                    $out[] = $this->item('market_provider_upcoming', $b->id, 'progress', null, $b->starts_at, $p);
+                }
+            });
+
+        // ---- auctions
+        $auction = $M . 'MarketAuction';
+        // A second chance: the seller offers the item to this bidder.
+        $auction::with('item:id,code,title')->where('offered_to', $userId)->where('offer_expires_at', '>', now())->limit(3)->get()
+            ->each(function ($a) use (&$out) {
+                $out[] = $this->item('market_auction_offer', $a->item?->code ?? '', 'now', $a->offer_expires_at, $a->updated_at,
+                    ['title' => $a->item?->title ?? '', 'total' => (float)$a->offered_price]);
+            });
+        // Live auctions this person bid on: leading, or outbid.
+        $bidOn = ($M . 'MarketBid')::where('user_id', $userId)->distinct()->pluck('auction_id');
+        if ($bidOn->isNotEmpty()) {
+            $auction::with('item:id,code,title')->whereIn('id', $bidOn)->where('status', 'live')->where('ends_at', '>', now())
+                ->orderBy('ends_at')->limit(5)->get()
+                ->each(function ($a) use (&$out, $userId) {
+                    $p = ['title' => $a->item?->title ?? '', 'total' => (float)$a->current_bid, 'time' => $a->ends_at?->toIso8601String()];
+                    $leading = $a->leader_id === $userId;
+                    $out[] = $this->item($leading ? 'market_auction_leading' : 'market_auction_outbid', $a->item?->code ?? '', $leading ? 'progress' : 'now', $a->ends_at, $a->ends_at, $p);
+                });
+        }
+        // The seller's ended auctions with nobody buying: offer to the next bidder or relist.
+        $auction::with('item:id,code,title')->where('seller_id', $userId)->where('status', 'unsold')->where('ended_at', '>', now()->subDays(3))
+            ->whereNull('offered_to')->limit(3)->get()
+            ->each(function ($a) use (&$out) {
+                $out[] = $this->item('market_auction_unsold', $a->item?->code ?? '', 'now', null, $a->ended_at, ['title' => $a->item?->title ?? '']);
+            });
+        // Live auctions on the seller's own items.
+        $auction::with('item:id,code,title')->where('seller_id', $userId)->where('status', 'live')->where('ends_at', '>', now())
+            ->orderBy('ends_at')->limit(3)->get()
+            ->each(function ($a) use (&$out) {
+                $out[] = $this->item('market_auction_selling', $a->item?->code ?? '', 'progress', $a->ends_at, $a->ends_at,
+                    ['title' => $a->item?->title ?? '', 'total' => (float)$a->current_bid, 'count' => (int)$a->bid_count]);
+            });
+
+        // ---- the shop
+        $shop = ($M . 'MarketShop')::where('user_id', $userId)->first();
+        if ($shop) {
+            if ($shop->status === 'closed') {
+                $out[] = $this->item('market_shop_closed', $shop->slug, 'now', null, $shop->closed_at, ['shop' => $shop->name, 'reason' => $shop->closed_reason]);
+            } elseif ($shop->verification_requested_at && !$shop->verified_at) {
+                $out[] = $this->item('market_shop_checking', $shop->slug, 'progress', null, $shop->verification_requested_at, ['shop' => $shop->name]);
+            }
+            $stuck = ($M . 'MarketItem')::where('shop_id', $shop->id)->whereIn('status', ['hidden', 'blocked'])->count();
+            if ($stuck > 0) {
+                $out[] = $this->item('market_items_hidden', $shop->slug, 'now', null, null, ['count' => $stuck]);
+            }
+            $soldOut = ($M . 'MarketItem')::where('shop_id', $shop->id)->where('status', 'sold_out')->count();
+            if ($soldOut > 0) {
+                $out[] = $this->item('market_items_sold_out', $shop->slug, 'later', null, null, ['count' => $soldOut]);
+            }
+        }
+
+        // ---- chats (buyer and seller sides)
+        $user = \Modules\UserManagement\Entities\User::find($userId);
+        $unread = $user ? app(\Modules\MarketManagement\Service\MarketChatService::class)->unread($user) : 0;
+        if ($unread > 0) {
+            $out[] = $this->item('market_chat_unread', 'market_chats', 'now', null, null, ['count' => $unread]);
+        }
         return $out;
     }
 
-    /** Homes, as the one looking: visits coming up, a place reserved, a reservation with a problem. */
+    /**
+     * Homes & spaces, both sides. As the one looking: a new visit time to
+     * answer, how a visit went, a reservation to pay, visits coming up, a home
+     * reserved, a problem. As the owner: visit requests, someone taking the
+     * place, a reservation to accept, changes E-Ride asked for, a place to confirm.
+     */
     protected function homes(string $userId): array
     {
         if (!class_exists(\Modules\PlaceManagement\Entities\ListingVisit::class)) {
             return [];
         }
+        $V = \Modules\PlaceManagement\Entities\ListingVisit::class;
+        $R = \Modules\PlaceManagement\Entities\ListingReservation::class;
+        $L = \Modules\PlaceManagement\Entities\Listing::class;
         $out = [];
-        \Modules\PlaceManagement\Entities\ListingVisit::with('listing:id,title')->where('seeker_id', $userId)->where('status', 'accepted')
-            ->whereDate('visit_date', '>=', today())->orderBy('visit_date')->limit(5)->get()
-            ->each(function ($v) use (&$out) {
-                $out[] = $this->item('home_visit', $v->id, 'progress', null, $v->visit_date, ['title' => $v->listing?->title ?? '', 'time' => $v->visit_date?->toIso8601String(), 'window' => $v->time_window]);
+        $title = fn($x) => ['title' => $x->listing?->title ?? '', 'time' => ($x->proposed_date ?? $x->visit_date)?->toIso8601String()];
+
+        // ---- looking for a place
+        $V::with('listing:id,title')->where('seeker_id', $userId)->whereIn('status', ['proposed', 'accepted', 'done'])
+            ->latest('updated_at')->limit(8)->get()
+            ->each(function ($v) use (&$out, $title) {
+                if ($v->status === 'proposed') {
+                    $out[] = $this->item('home_visit_proposed', $v->id, 'now', null, $v->updated_at, $title($v));
+                } elseif ($v->outcome === null && $v->visit_date && $v->visit_date->lte(today()) && $v->visit_date->gte(today()->subDays(14))) {
+                    $out[] = $this->item('home_visit_outcome', $v->id, 'now', null, $v->visit_date, $title($v));
+                } elseif ($v->status === 'accepted' && $v->visit_date && $v->visit_date->gte(today())) {
+                    $out[] = $this->item('home_visit', $v->id, 'progress', null, $v->visit_date, $title($v) + ['window' => $v->time_window]);
+                }
             });
-        \Modules\PlaceManagement\Entities\ListingReservation::with('listing:id,title')->where('seeker_id', $userId)->whereIn('status', ['reserved', 'problem'])
+        $R::with('listing:id,title')->where('seeker_id', $userId)->whereIn('status', ['awaiting', 'held', 'reserved', 'problem'])
             ->latest('updated_at')->limit(5)->get()
             ->each(function ($r) use (&$out) {
-                $p = ['title' => $r->listing?->title ?? '', 'time' => $r->move_in_date?->toIso8601String()];
-                $out[] = $r->status === 'problem'
-                    ? $this->item('home_problem', $r->id, 'now', null, $r->updated_at, $p)
-                    : $this->item('home_reserved', $r->id, 'progress', null, $r->move_in_date ?? $r->updated_at, $p);
+                $p = ['title' => $r->listing?->title ?? '', 'time' => $r->move_in_date?->toIso8601String(), 'total' => (float)$r->amount];
+                if ($r->status === 'awaiting' && (!$r->pay_due_at || $r->pay_due_at->isFuture())) {
+                    $out[] = $this->item('home_reservation_pay', $r->id, 'now', $r->pay_due_at, $r->created_at, $p);
+                } elseif ($r->status === 'held') {
+                    $out[] = $this->item('home_reservation_waiting', $r->id, 'progress', $r->accept_due_at, $r->paid_at ?? $r->updated_at, $p);
+                } elseif ($r->status === 'problem') {
+                    $out[] = $this->item('home_problem', $r->id, 'now', null, $r->updated_at, $p);
+                } elseif ($r->status === 'reserved') {
+                    $out[] = $this->item('home_reserved', $r->id, 'progress', null, $r->move_in_date ?? $r->updated_at, $p);
+                }
+            });
+
+        // ---- the owner
+        $V::with('listing:id,title,status')->where('owner_id', $userId)
+            ->where(fn($q) => $q->where('status', 'requested')
+                ->orWhere(fn($t) => $t->where('taking', true)->whereIn('status', ['accepted', 'done'])->whereHas('listing', fn($l) => $l->where('status', 'live'))))
+            ->latest('updated_at')->limit(8)->get()
+            ->each(function ($v) use (&$out, $title) {
+                $out[] = $v->status === 'requested'
+                    ? $this->item('home_visit_request', $v->id, 'now', null, $v->created_at, $title($v))
+                    : $this->item('home_taking', $v->id, 'now', null, $v->updated_at, $title($v));
+            });
+        $R::with('listing:id,title')->where('owner_id', $userId)->where('status', 'held')->limit(5)->get()
+            ->each(function ($r) use (&$out) {
+                $out[] = $this->item('home_reservation_accept', $r->id, 'now', $r->accept_due_at, $r->paid_at ?? $r->updated_at,
+                    ['title' => $r->listing?->title ?? '', 'total' => (float)$r->amount]);
+            });
+        $L::where('owner_id', $userId)
+            ->where(fn($q) => $q->where('status', 'changes')->orWhere(fn($l) => $l->where('status', 'live')->where('reminder_stage', '>=', 2)))
+            ->limit(5)->get(['id', 'title', 'status', 'updated_at'])
+            ->each(function ($l) use (&$out) {
+                $out[] = $this->item($l->status === 'changes' ? 'home_listing_changes' : 'home_listing_confirm', $l->id, 'now', null, $l->updated_at, ['title' => $l->title]);
             });
         return $out;
     }
 
-    /** Jobs, as an employer: a job post the team sent back for changes. */
+    /**
+     * Jobs, both sides. Looking for work: the next step from an employer,
+     * a hire to confirm, applications waiting. Hiring: new applicants per job,
+     * a job post sent back for changes.
+     */
     protected function jobs(string $userId): array
     {
         if (!class_exists(\Modules\MarketManagement\Entities\JobPost::class)) {
             return [];
         }
+        $A = \Modules\MarketManagement\Entities\JobApplication::class;
+        $P = \Modules\MarketManagement\Entities\JobPost::class;
         $out = [];
-        \Modules\MarketManagement\Entities\JobPost::whereHas('employer', fn($e) => $e->where('user_id', $userId))->where('status', 'sent_back')
-            ->latest('updated_at')->limit(3)->get(['id', 'code', 'title', 'updated_at'])
+        $A::with('job:id,code,title')->where('user_id', $userId)
+            ->where(fn($q) => $q->where(fn($n) => $n->where('status', 'next_step')->whereNull('next_step_read_at'))
+                ->orWhere(fn($h) => $h->where('status', 'hired')->whereNull('hire_confirmed_at')))
+            ->latest('updated_at')->limit(5)->get()
+            ->each(function ($a) use (&$out) {
+                $p = ['title' => $a->job?->title ?? '', 'time' => $a->next_step_at?->toIso8601String()];
+                $out[] = $a->status === 'hired'
+                    ? $this->item('job_hired', $a->id, 'now', null, $a->updated_at, $p)
+                    : $this->item('job_next_step', $a->id, 'now', null, $a->updated_at, $p);
+            });
+        $open = $A::where('user_id', $userId)->whereIn('status', $A::ACTIVE)->count();
+        if ($open > 0) {
+            $out[] = $this->item('job_applied', 'applications', 'progress', null, null, ['count' => $open]);
+        }
+        $employerJobs = $P::whereHas('employer', fn($e) => $e->where('user_id', $userId));
+        (clone $employerJobs)->where('status', 'sent_back')->latest('updated_at')->limit(3)->get(['id', 'code', 'title', 'updated_at'])
             ->each(function ($j) use (&$out) {
                 $out[] = $this->item('job_sent_back', $j->code, 'now', null, $j->updated_at, ['title' => $j->title]);
+            });
+        (clone $employerJobs)->withCount(['applications as new_count' => fn($q) => $q->where('status', 'sent')])
+            ->having('new_count', '>', 0)->limit(5)->get(['id', 'code', 'title'])
+            ->each(function ($j) use (&$out) {
+                $out[] = $this->item('job_applicants', $j->code, 'now', null, null, ['title' => $j->title, 'count' => (int)$j->new_count]);
             });
         return $out;
     }

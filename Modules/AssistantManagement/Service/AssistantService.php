@@ -8,6 +8,7 @@ use Illuminate\Support\Facades\Log;
 use Modules\AssistantManagement\Entities\AssistantEntry;
 use Modules\AssistantManagement\Entities\AssistantQuestion;
 use Modules\AssistantManagement\Lib\AssistantSettings;
+use Modules\AssistantManagement\Lib\CatalogSearch;
 use Modules\AssistantManagement\Lib\Providers\ChatProvider;
 use Modules\AssistantManagement\Lib\Providers\GeminiClient;
 use Modules\AssistantManagement\Lib\Providers\GrokClient;
@@ -33,9 +34,13 @@ class AssistantService
         'food' => ['service' => 'food', 'what' => 'restaurants and shops that deliver'],
         'bus' => ['service' => 'bus', 'what' => 'bus tickets with verified agencies'],
         'hotels' => ['service' => 'hotels', 'what' => 'hotels and guest houses'],
-        'explore' => ['service' => 'explore', 'what' => 'places near you: pharmacies, banks, clinics'],
-        'market' => ['service' => 'market', 'what' => 'buy and sell'],
-        'jobs' => ['service' => 'jobs', 'what' => 'jobs from verified employers'],
+        'explore' => ['service' => 'explore', 'what' => 'Explore: one category when id is its key (pharmacy, health, bank, stay, homes, bus, eat, swim, party, visit, market)'],
+        'things' => ['service' => 'explore', 'what' => 'Things to do and tours of the city: places to eat, swim, party, sights, markets, rated by riders'],
+        'market' => ['service' => 'market', 'what' => 'E-Ride Market (items, digital products, services); id = words to search, e.g. "ps4"'],
+        'jobs' => ['service' => 'jobs', 'what' => 'jobs from verified employers; id = words to search'],
+        'safety' => ['service' => null, 'what' => 'safety: trusted contacts who see the trip live'],
+        'refer' => ['service' => null, 'what' => 'invite friends and earn'],
+        'coupons' => ['service' => null, 'what' => "the customer's coupons and offers"],
         'activity' => ['service' => null, 'what' => "the customer's orders, bookings and cart"],
         'order' => ['service' => 'food', 'what' => 'one food order (needs its id)', 'id' => true],
         'bus_booking' => ['service' => 'bus', 'what' => 'one bus booking (needs its id)', 'id' => true],
@@ -66,7 +71,7 @@ class AssistantService
      * Buttons a "Did you know?" card may carry: a service, or one Explore
      * category as "explore:<key>" (pharmacy, health, bank, stay, homes...).
      */
-    public const TIP_ACTIONS = ['ride', 'ride_later', 'health_ride', 'parcel', 'move', 'food', 'bus', 'hotels', 'explore', 'market', 'jobs', 'id_verify'];
+    public const TIP_ACTIONS = ['ride', 'ride_later', 'health_ride', 'parcel', 'move', 'food', 'bus', 'hotels', 'explore', 'things', 'market', 'jobs', 'id_verify', 'safety', 'refer', 'coupons'];
 
     /** Where an entry's search words lead when it has no tip button: its service's screen. */
     public const SERVICE_ACTIONS = [
@@ -148,8 +153,12 @@ class AssistantService
      * @param array $services the services switched on in the customer's app (ride, food, bus...)
      * @return array{id: ?string, status: string, reply: string, actions: array}
      */
-    public function ask(User $user, string $question, ?string $screen, string $lang, array $services, string $audience = 'customer'): array
+    /** Catalog matches for this question (customers only): the model suggests from these, the app shows them as cards. */
+    protected array $catalog = ['terms' => [], 'results' => [], 'categories' => []];
+
+    public function ask(User $user, string $question, ?string $screen, string $lang, array $services, string $audience = 'customer', ?float $lat = null, ?float $lng = null): array
     {
+        $this->catalog = ['terms' => [], 'results' => [], 'categories' => []];
         $this->audience = $audience === 'driver' ? 'driver' : 'customer';
         $settings = AssistantSettings::all();
         $lang = $lang === 'fr' ? 'fr' : 'en';
@@ -175,6 +184,11 @@ class AssistantService
         } else {
             $activity = app(ActivityController::class)->itemsFor($user->id);
             $services = array_values(array_intersect($services, array_filter(array_column(self::ACTIONS, 'service'))));
+            try {
+                $this->catalog = CatalogSearch::search($question, $lat, $lng, $services, $lang);
+            } catch (\Throwable $e) {
+                report($e);
+            }
             $system = $this->systemPrompt($services, $activity, $screen);
         }
 
@@ -195,7 +209,14 @@ class AssistantService
                 continue;
             }
             return $this->finish($user, $question, $screen, $lang, $answer['answered'] ? AssistantQuestion::ANSWERED : AssistantQuestion::NO_ANSWER,
-                $p['name'], $answer['reply'], $answer['actions'], $started);
+                $p['name'], $answer['reply'], $answer['actions'], $started, true, $answer['cards']);
+        }
+        // No AI right now: what E-Ride has for the words is still useful.
+        if ($this->catalog['results']) {
+            $cards = array_slice($this->catalog['results'], 0, 4);
+            $actions = in_array('market', $services, true) && $this->catalog['terms']
+                ? [['type' => 'market', 'label' => $lang === 'fr' ? 'Chercher au Market' : 'Search Market', 'id' => implode(' ', $this->catalog['terms'])]] : [];
+            return $this->finish($user, $question, $screen, $lang, AssistantQuestion::ANSWERED, null, self::say('found', $lang), $actions, $started, true, $cards);
         }
         return $this->finish($user, $question, $screen, $lang, AssistantQuestion::BUSY, null, self::say('busy', $lang), [self::support($lang)], $started);
     }
@@ -261,6 +282,13 @@ class AssistantService
         $mine = collect($activity)->map(fn($i) => '- ' . $i['kind'] . ' (id ' . $i['id'] . ', ' . $i['group'] . ')'
             . ($i['deadline'] ? ', deadline ' . Carbon::parse($i['deadline'])->format('H:i') : '')
             . ': ' . json_encode($i['params'], JSON_UNESCAPED_UNICODE))->implode("\n") ?: '- nothing in progress';
+        $terms = $this->catalog['terms'] ? implode(' ', $this->catalog['terms']) : 'nothing to search';
+        $found = collect($this->catalog['results'])->map(fn($r) => '- ' . $r['ref'] . ' [' . $r['source'] . '] ' . $r['title']
+            . ($r['subtitle'] ? ' (' . $r['subtitle'] . ')' : '') . ($r['price'] !== null ? ', ' . number_format($r['price'], 0, '.', ' ') . ' FCFA' : ''))->implode("\n");
+        foreach ($this->catalog['categories'] as $c) {
+            $found .= ($found ? "\n" : '') . '- Explore category "' . $c['key'] . '": ' . $c['name'] . ' (button explore, id ' . $c['key'] . ')';
+        }
+        $found = $found ?: '- nothing found in E-Ride';
 
         return <<<PROMPT
 You are "Ask E-Ride", the helper inside the E-Ride app in Cameroon. You help customers find the right service and understand how things work.
@@ -272,12 +300,17 @@ RULES
 - Refunds, complaints, lost money, accidents or danger: answered false, and offer the "support" button.
 - Offer 1 to 3 buttons, only of the types in BUTTONS. Button labels: 2 to 4 words, in the customer's language. Types order, bus_booking and hotel_chat need the id of an item in CUSTOMER ACTIVITY.
 - Every answer about a service carries the button that opens it, even when the customer only asked how it works or how to pay (for example: paying for food -> "food" button, "Order food"; bus tickets -> "bus"). If an item in CUSTOMER ACTIVITY is what they ask about, put its button first. Give no button only when nothing in BUTTONS fits.
-- Answer with JSON only: {"reply": "...", "answered": true, "actions": [{"type": "...", "label": "...", "id": "..."}]}
+- When the customer is looking for something (a product, a service, food, a place, a job, a home, a bus), suggest only from WHAT E-RIDE HAS. Name the best one or two, and list the refs to show as cards in "cards" (for example ["r1", "r2"], at most 4, best first). Never mention anything that is not in that list.
+- If WHAT E-RIDE HAS is empty or nothing fits, say plainly that E-Ride does not have it yet, then offer the closest button: "market" with id = the words to search (also where they can post what they want), an Explore category ("explore" with id = its key), "food" or "things". Never pretend something exists.
+- Answer with JSON only: {"reply": "...", "answered": true, "actions": [{"type": "...", "label": "...", "id": "..."}], "cards": ["r1"]}
 
 BUTTONS
 {$buttons}
 
-CUSTOMER ACTIVITY (orders, bookings and chats in progress; kinds: food_waiting = restaurant to confirm, food_changes = changes to answer, food_pay = pay now, bus_pay = pay for seats, hotel_reply = reception answered, hotel_kept = room kept)
+WHAT E-RIDE HAS FOR THIS QUESTION (searched for: {$terms})
+{$found}
+
+CUSTOMER ACTIVITY (things in progress or needing the customer; the kind says what: food_*, bus_*, hotel_*, ride_*, parcel_*, market_*, home_*, job_*, lost_*, id_*, tour_*)
 {$mine}
 
 SCREEN THE CUSTOMER IS ON: {$screen}
@@ -346,6 +379,11 @@ PROMPT;
                 continue;
             }
             $id = null;
+            if (in_array($type, ['explore', 'market', 'jobs'], true) && is_scalar($a['id'] ?? null) && trim((string)$a['id']) !== '') {
+                $raw = trim(strip_tags((string)$a['id']));
+                // An Explore category key, or the words to search in Market or Jobs.
+                $id = $type === 'explore' ? (preg_match('/^[a-z_]{2,30}$/', $raw) ? $raw : null) : mb_substr($raw, 0, 60);
+            }
             if (!empty($spec['id'])) {
                 $id = (string)($a['id'] ?? '');
                 $kind = $ids->get($id);
@@ -367,21 +405,31 @@ PROMPT;
         if (!$answered && !collect($actions)->contains('type', 'support')) {
             $actions[] = self::support($lang);
         }
-        return ['reply' => $reply, 'answered' => $answered, 'actions' => array_values($actions)];
+        // Cards: only refs from this question's catalog matches.
+        $byRef = collect($this->catalog['results'])->keyBy('ref');
+        $cards = [];
+        foreach ((array)($data['cards'] ?? []) as $ref) {
+            if (is_string($ref) && $byRef->has($ref) && count($cards) < 4) {
+                $cards[$ref] = $byRef->get($ref);
+            }
+        }
+        return ['reply' => $reply, 'answered' => $answered, 'actions' => array_values($actions), 'cards' => array_values($cards)];
     }
 
-    protected function finish(User $user, string $question, ?string $screen, string $lang, string $status, ?string $provider, string $reply, array $actions, float $started, bool $log = true): array
+    protected function finish(User $user, string $question, ?string $screen, string $lang, string $status, ?string $provider, string $reply, array $actions, float $started, bool $log = true, array $cards = []): array
     {
         $id = null;
         if ($log) {
             $q = AssistantQuestion::create([
                 'user_id' => $user->id, 'audience' => $this->audience, 'question' => $question, 'screen' => $screen ? mb_substr($screen, 0, 80) : null, 'language' => $lang,
-                'status' => $status, 'provider' => $provider, 'reply' => $reply, 'actions' => $actions,
+                'status' => $status, 'provider' => $provider, 'reply' => $reply,
+                // What was shown, for the admin's log: the buttons, then the cards.
+                'actions' => $cards ? array_merge($actions, array_map(fn($c) => ['type' => 'card', 'label' => $c['title'], 'id' => $c['type'] . ':' . $c['id']], $cards)) : $actions,
                 'ms' => (int)round((microtime(true) - $started) * 1000),
             ]);
             $id = $q->id;
         }
-        return ['id' => $id, 'status' => $status, 'reply' => $reply, 'actions' => $actions];
+        return ['id' => $id, 'status' => $status, 'reply' => $reply, 'actions' => $actions, 'cards' => $cards];
     }
 
     // ------------------------------------------------------------------ helpers
@@ -412,6 +460,7 @@ PROMPT;
         $text = [
             'off' => ['en' => 'Ask E-Ride is not available right now. Our support team can help you on WhatsApp.', 'fr' => "Ask E-Ride n'est pas disponible pour le moment. Notre équipe peut vous aider sur WhatsApp."],
             'limit' => ['en' => "You have asked a lot today. Ask again tomorrow, or talk to our support team on WhatsApp.", 'fr' => "Vous avez posé beaucoup de questions aujourd'hui. Revenez demain, ou parlez à notre équipe sur WhatsApp."],
+            'found' => ['en' => 'Here is what I found on E-Ride for you.', 'fr' => "Voici ce que j'ai trouvé sur E-Ride pour vous."],
             'busy' => ['en' => 'Ask E-Ride is busy right now. Try again in a moment, or talk to our support team on WhatsApp.', 'fr' => 'Ask E-Ride est occupé pour le moment. Réessayez dans un instant, ou parlez à notre équipe sur WhatsApp.'],
         ];
         return $text[$what][$lang];

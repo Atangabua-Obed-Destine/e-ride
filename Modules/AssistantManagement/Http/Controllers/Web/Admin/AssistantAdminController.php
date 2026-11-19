@@ -54,7 +54,8 @@ class AssistantAdminController extends Controller
             'ride' => translate('Book a ride'), 'ride_later' => translate('Book a ride for later'), 'health_ride' => translate('Emergency ride'),
             'parcel' => translate('Send a parcel'), 'move' => translate('Move (truck)'), 'food' => translate('Food & Shops'),
             'bus' => translate('Bus tickets'), 'market' => translate('Market'), 'jobs' => translate('Jobs'),
-            'explore' => translate('Explore'), 'id_verify' => translate('E-Ride ID verification'),
+            'explore' => translate('Explore'), 'things' => translate('Things to do and tours'), 'id_verify' => translate('E-Ride ID verification'),
+            'safety' => translate('Safety: trusted contacts'), 'refer' => translate('Refer and earn'), 'coupons' => translate('Coupons and offers'),
         ];
         if (class_exists(\Modules\PlaceManagement\Entities\PlaceCategory::class)) {
             foreach (\Modules\PlaceManagement\Entities\PlaceCategory::where('is_active', true)->orderBy('sort')->get() as $c) {
