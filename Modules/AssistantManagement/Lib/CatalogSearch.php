@@ -141,7 +141,10 @@ class CatalogSearch
         $r = mb_strtolower($rest);
         $s = 0;
         foreach ($terms as $w) {
-            $re = '/(^|[^\p{L}\p{N}])' . preg_quote($w, '/') . '/u';
+            // Short words must be whole words (or their plural): "bus" is not "busy". Longer ones may start a word.
+            $re = mb_strlen($w) <= 4
+                ? '/(^|[^\p{L}\p{N}])' . preg_quote($w, '/') . '(s|es)?($|[^\p{L}\p{N}])/u'
+                : '/(^|[^\p{L}\p{N}])' . preg_quote($w, '/') . '/u';
             if (preg_match($re, $t)) {
                 $s += 3;
             } elseif ($r !== '' && preg_match($re, $r)) {
