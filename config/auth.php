@@ -45,7 +45,12 @@ return [
         'api' => [
             'driver' => 'passport',
             'provider' => 'users',
-        ]
+        ],
+        // Travellers signed in on the bus website (/bus), kept apart from the admin and partner sign-ins.
+        'bus_web' => [
+            'driver' => 'session',
+            'provider' => 'users',
+        ],
     ],
 
     /*

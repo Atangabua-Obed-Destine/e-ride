@@ -1,0 +1,1 @@
+<svg width="13" height="13" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M12 2l2.4 2.1 3.2-.3.8 3.1 2.7 1.8-1.2 3 1.2 3-2.7 1.8-.8 3.1-3.2-.3L12 22l-2.4-2.1-3.2.3-.8-3.1-2.7-1.8 1.2-3-1.2-3 2.7-1.8.8-3.1 3.2.3z"/><path d="M8.5 12.3l2.3 2.2 4.7-4.8" stroke="#fff" stroke-width="2" fill="none"/></svg>

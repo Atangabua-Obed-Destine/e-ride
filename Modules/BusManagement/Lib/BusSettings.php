@@ -47,6 +47,24 @@ class BusSettings
         return self::all()['enabled'];
     }
 
+    /** The website (eride.../bus): its switches, on by default once bus booking itself is on. */
+    public static function web(): array
+    {
+        $get = fn(string $key, $default) => businessConfig($key, self::TYPE)?->value ?? $default;
+        return [
+            // Off: the pages still show departures, with "Book in the app".
+            'booking' => (bool)(int)$get('bus_web_booking', 1),
+            // Off: new people are sent to the app to sign up.
+            'signup' => (bool)(int)$get('bus_web_signup', 1),
+            // An SMS code proves the phone number when someone creates an account on the website.
+            'signup_code' => (bool)(int)$get('bus_web_signup_code', 0),
+            // Search engines may list the agency and route pages.
+            'index' => (bool)(int)$get('bus_web_index', 1),
+            // Messages go by SMS when WhatsApp is not connected or a WhatsApp message fails.
+            'sms_backup' => (bool)(int)$get('bus_web_sms_backup', 1),
+        ];
+    }
+
     /** An agency's rules, with E-Ride's defaults for what it has not set. */
     public static function rules(?array $rules): array
     {

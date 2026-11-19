@@ -110,11 +110,58 @@ Route::group(['prefix' => 'bus', 'as' => 'bus.'], function () {
         ->where('outcome', 'success|fail');
 });
 
+/*
+| The bus website for travellers (eride.../bus): anyone can search and look at seats; booking needs the
+| E-Ride account (its own sign-in, guard bus_web). What needs the camera, refunds or the waitlist stays in the app.
+*/
+Route::group(['prefix' => 'bus', 'as' => 'bus.web.'], function () {
+    $site = \Modules\BusManagement\Http\Controllers\Web\Site\SiteController::class;
+    $auth = \Modules\BusManagement\Http\Controllers\Web\Site\SiteAuthController::class;
+    $book = \Modules\BusManagement\Http\Controllers\Web\Site\SiteBookingController::class;
+    $signedIn = \Modules\BusManagement\Http\Middleware\BusWebAuth::class;
+
+    Route::middleware('throttle:120,1,bus-web-page')->group(function () use ($site) {
+        Route::get('/', [$site, 'home'])->name('home');
+        Route::get('search', [$site, 'search'])->name('search');
+        Route::get('a/{slug}', [$site, 'agency'])->name('agency')->where('slug', '[a-z0-9-]{2,120}');
+        Route::get('d/{id}', [$site, 'departure'])->name('departure')->whereUuid('id');
+        Route::get('app', [$site, 'app'])->name('app');
+    });
+    Route::get('d/{id}/live', [$site, 'liveSeats'])->name('live')->whereUuid('id')->middleware('throttle:60,1,bus-web-live');
+    Route::post('d/{id}/seats', [$site, 'pick'])->name('pick')->whereUuid('id')->middleware('throttle:30,1,bus-web-pick');
+
+    Route::get('login', [$auth, 'showLogin'])->name('login');
+    Route::post('login', [$auth, 'login'])->name('login.submit')->middleware('throttle:10,1,bus-web-login');
+    Route::get('register', [$auth, 'showRegister'])->name('register');
+    Route::post('register', [$auth, 'register'])->name('register.submit')->middleware('throttle:6,1,bus-web-register');
+    Route::get('register/code', [$auth, 'showCode'])->name('register.code');
+    Route::post('register/code', [$auth, 'verifyCode'])->name('register.verify')->middleware('throttle:10,1,bus-web-code');
+    Route::post('logout', [$auth, 'logout'])->name('logout');
+
+    Route::middleware($signedIn)->group(function () use ($book) {
+        Route::get('d/{id}/travellers', [$book, 'travellers'])->name('travellers')->whereUuid('id');
+        Route::post('d/{id}/request', [$book, 'request'])->name('request')->whereUuid('id')->middleware('throttle:10,1,bus-web-request');
+        Route::get('trips', [$book, 'trips'])->name('trips');
+        Route::get('t/{code}', [$book, 'show'])->name('booking')->where('code', '[A-Z0-9]{6,12}');
+        Route::get('t/{code}/status', [$book, 'status'])->name('booking.status')->where('code', '[A-Z0-9]{6,12}')->middleware('throttle:40,1,bus-web-status');
+        Route::get('t/{code}/print', [$book, 'print'])->name('booking.print')->where('code', '[A-Z0-9]{6,12}');
+        Route::post('t/{code}/pay', [$book, 'pay'])->name('booking.pay')->where('code', '[A-Z0-9]{6,12}')->middleware('throttle:10,1,bus-web-pay');
+        Route::post('t/{code}/cancel', [$book, 'cancel'])->name('booking.cancel')->where('code', '[A-Z0-9]{6,12}');
+    });
+
+    // Meta's WhatsApp webhook (delivery statuses of the messages sent to website travellers).
+    $wa = \Modules\BusManagement\Http\Controllers\Web\Site\WhatsAppWebhookController::class;
+    Route::get('whatsapp/webhook', [$wa, 'verify'])->name('whatsapp.verify')->middleware('throttle:30,1,bus-wa');
+    Route::post('whatsapp/webhook', [$wa, 'receive'])->name('whatsapp.webhook')
+        ->withoutMiddleware([VerifyCsrfToken::class])->middleware('throttle:300,1,bus-wa');
+});
+
 // E-Ride admin (sidebar "Bus agencies").
 Route::group(['prefix' => 'admin/bus', 'as' => 'admin.bus.', 'middleware' => 'admin'], function () {
     Route::get('/', [BusAdminController::class, 'index'])->name('index');
     Route::post('start', [BusAdminController::class, 'start'])->name('start');
     Route::post('settings', [BusAdminController::class, 'settings'])->name('settings');
+    Route::post('web-settings', [BusAdminController::class, 'webSettings'])->name('web-settings');
     Route::get('{agency}', [BusAdminController::class, 'show'])->name('show')->whereUuid('agency');
     Route::post('{agency}/details', [BusAdminController::class, 'details'])->name('details')->whereUuid('agency');
     Route::post('{agency}/check', [BusAdminController::class, 'check'])->name('check')->whereUuid('agency');

@@ -43,7 +43,13 @@ class BusAdminController extends Controller
         $settings = BusSettings::all();
         $owed = BusStatement::where('status', BusStatement::DUE)->selectRaw('agency_id, sum(total) as total, min(due_on) as due_on')
             ->groupBy('agency_id')->get()->keyBy('agency_id');
-        return view('busmanagement::admin.agencies', compact('agencies', 'appTickets', 'openDepartures', 'google', 'known', 'settings', 'lat', 'lng', 'owed'));
+        $web = BusSettings::web();
+        $wa = \Modules\Gateways\Services\WhatsAppCloud::settings();
+        $messages = \Modules\BusManagement\Entities\BusMessage::where('created_at', '>=', now()->subDays(30))
+            ->selectRaw('channel, status, count(*) as n')->groupBy('channel', 'status')->get();
+        $webBookings = BusBooking::where('via', BusBooking::WEB)->where('created_at', '>=', $monthStart)->count();
+        return view('busmanagement::admin.agencies', compact('agencies', 'appTickets', 'openDepartures', 'google', 'known', 'settings', 'lat', 'lng', 'owed',
+            'web', 'wa', 'messages', 'webBookings'));
     }
 
     public function start(Request $request): RedirectResponse
@@ -166,6 +172,30 @@ class BusAdminController extends Controller
             updateBusinessSetting(keyName: 'bus_' . $key, settingType: BusSettings::TYPE, value: (string)$value);
         }
         Toastr::success(translate('Bus settings saved'));
+        return back();
+    }
+
+    /** The bus website's switches, and the WhatsApp connection its messages use. */
+    public function webSettings(Request $request): RedirectResponse
+    {
+        $request->validate([
+            'wa_phone_number_id' => 'nullable|string|max:40',
+            'wa_token' => 'nullable|string|max:1000',
+            'wa_app_secret' => 'nullable|string|max:200',
+            'wa_api_version' => 'nullable|string|max:10',
+        ]);
+        foreach (['booking', 'signup', 'signup_code', 'index', 'sms_backup'] as $key) {
+            updateBusinessSetting(keyName: 'bus_web_' . $key, settingType: BusSettings::TYPE, value: $request->boolean('web_' . $key) ? '1' : '0');
+        }
+        \Modules\Gateways\Services\WhatsAppCloud::save([
+            'enabled' => $request->boolean('wa_enabled'),
+            'phone_number_id' => $request->input('wa_phone_number_id'),
+            'token' => $request->input('wa_token'),
+            'app_secret' => $request->input('wa_app_secret'),
+            'api_version' => $request->input('wa_api_version'),
+        ]);
+        \App\Lib\BusinessSettingCache::flush();
+        Toastr::success(translate('Website and messages settings saved'));
         return back();
     }
 }

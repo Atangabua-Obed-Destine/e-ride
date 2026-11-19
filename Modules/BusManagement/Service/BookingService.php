@@ -102,8 +102,11 @@ class BookingService
      * booker_id_number (only when the agency asks for the number alone and the person has no ID on E-Ride).
      * Only the person booking gives an ID (see bookerId()), even when the seats are for others.
      */
-    public function request(User $user, BusDeparture $departure, array $input): BusBooking
+    public function request(User $user, BusDeparture $departure, array $input, array $options = []): BusBooking
     {
+        // options: via (web: booked on the website), notify_channel (whatsapp | sms, website only).
+        $via = ($options['via'] ?? null) === BusBooking::WEB ? BusBooking::WEB : null;
+        $notify = $via && in_array($options['notify_channel'] ?? null, ['whatsapp', 'sms'], true) ? $options['notify_channel'] : ($via ? 'whatsapp' : null);
         $departure->loadMissing(['agency', 'destination']);
         if ($why = $this->onlineBlock($departure)) {
             throw ValidationException::withMessages(['departure' => $why]);
@@ -171,7 +174,7 @@ class BookingService
 
         $now = now();
         $auto = (bool)$departure->auto_accept;
-        $booking = DB::transaction(function () use ($user, $departure, $agency, $drop, $lines, $data, $now, $auto, $settings, $booker) {
+        $booking = DB::transaction(function () use ($user, $departure, $agency, $drop, $lines, $data, $now, $auto, $settings, $booker, $via, $notify) {
             // The departure may have been cancelled or changed bus since it was read: check again under its lock.
             $locked = BusDeparture::whereKey($departure->id)->lockForUpdate()->first();
             if (!$locked || !$locked->isOpen() || (string)$locked->vehicle_id !== (string)$departure->vehicle_id) {
@@ -187,6 +190,8 @@ class BookingService
                 'departure_id' => $departure->id,
                 'customer_id' => $user->id,
                 'source' => BusBooking::APP,
+                'via' => $via,
+                'notify_channel' => $notify,
                 'drop_point_id' => $drop->id,
                 'status' => $auto ? BusBooking::ACCEPTED : BusBooking::REQUESTED,
                 'respond_by' => $auto ? null : $this->earliest($now->copy()->addMinutes($settings['answer_minutes']), $departure->leavesAt()),
@@ -208,7 +213,29 @@ class BookingService
             return $booking;
         });
 
-        return $booking->fresh(['tickets', 'departure', 'agency']);
+        $booking = $booking->fresh(['tickets', 'departure', 'agency']);
+        // Website travellers get the news by WhatsApp or SMS (app users have pushes).
+        \Modules\BusManagement\Lib\BusMessenger::send($booking, $auto ? 'accepted' : 'requested');
+        return $booking;
+    }
+
+    /** Website travellers: a WhatsApp or SMS about 2 hours before their bus leaves. */
+    public function webReminders(): int
+    {
+        $sent = 0;
+        BusBooking::with(['departure'])->where('via', BusBooking::WEB)->where('status', BusBooking::PAID)->whereNull('reminded_at')
+            ->whereHas('departure', fn($q) => $q->whereIn('status', BusDeparture::OPEN)
+                ->whereBetween('date', [today()->subDay()->toDateString(), today()->addDay()->toDateString()]))
+            ->get()
+            ->filter(fn(BusBooking $b) => $b->departure->leavesAt()->isFuture() && $b->departure->leavesAt()->lte(now()->addHours(2)))
+            ->each(function (BusBooking $b) use (&$sent) {
+                // Claimed first, so two ticks never remind twice.
+                if (BusBooking::whereKey($b->id)->whereNull('reminded_at')->update(['reminded_at' => now()]) === 1) {
+                    \Modules\BusManagement\Lib\BusMessenger::send($b, 'reminder');
+                    $sent++;
+                }
+            });
+        return $sent;
     }
 
     /**

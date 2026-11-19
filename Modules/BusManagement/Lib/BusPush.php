@@ -14,12 +14,14 @@ class BusPush
         if (!$user) {
             return;
         }
+        $locale = $user->current_language_key;
+        $title = translate(key: $title, replace: $replace, locale: $locale);
+        $body = translate(key: $body, replace: $replace, locale: $locale);
         try {
-            $locale = $user->current_language_key;
             sendDeviceNotification(
                 fcm_token: $user->fcm_token,
-                title: translate(key: $title, replace: $replace, locale: $locale),
-                description: translate(key: $body, replace: $replace, locale: $locale),
+                title: $title,
+                description: $body,
                 status: 1,
                 type: 'bus',
                 notification_type: 'bus',
@@ -30,5 +32,7 @@ class BusPush
         } catch (Throwable $e) {
             Log::warning('Bus push failed', ['action' => $action, 'user' => $user->id, 'error' => $e->getMessage()]);
         }
+        // Booked on the website: the same news by WhatsApp (or SMS), since they may not have the app.
+        BusMessenger::fromPush($action, $data['bus_booking_id'] ?? null, (string)$title, (string)$body);
     }
 }

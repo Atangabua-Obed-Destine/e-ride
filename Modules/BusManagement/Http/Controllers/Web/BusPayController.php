@@ -80,6 +80,11 @@ class BusPayController extends Controller
     public function end(string $reference, string $outcome)
     {
         $payment = BusPayment::where('external_id', $reference)->firstOrFail();
+        // Booked on the website: back to the booking's page, which shows the ticket or what went wrong.
+        $booking = BusBooking::find($payment->booking_id);
+        if ($booking && $booking->via === BusBooking::WEB) {
+            return redirect()->route('bus.web.booking', ['code' => $booking->code, 'pay' => $outcome === 'success' ? 'done' : 'failed']);
+        }
         return $this->page($payment, $outcome === 'success' ? ($payment->failure_reason ? 'late' : 'paid') : 'failed');
     }
 

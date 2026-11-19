@@ -124,6 +124,65 @@
             </div>
             <div class="card-footer text-end"><button class="btn btn-primary">{{ translate('Save') }}</button></div>
         </form>
+
+        {{-- The bus website (eride.../bus) and the WhatsApp/SMS messages its travellers get. --}}
+        <form method="POST" action="{{ route('admin.bus.web-settings') }}" class="card mt-3" autocomplete="off">
+            @csrf
+            <div class="card-header d-flex justify-content-between align-items-center flex-wrap gap-2">
+                <h5 class="mb-0">{{ translate('Web booking and messages') }}</h5>
+                <a href="{{ route('bus.web.home') }}" target="_blank" rel="noopener" class="fs-12">{{ route('bus.web.home') }}</a>
+            </div>
+            <div class="card-body">
+                <p class="fs-12 text-muted">{{ translate('Web bookings this month') }}: <strong>{{ $webBookings }}</strong>.
+                    {{ translate('Messages in the last 30 days') }}:
+                    @forelse($messages as $m) <span class="badge bg-light text-dark me-1">{{ $m->channel }} · {{ $m->status }}: {{ $m->n }}</span> @empty {{ translate('none') }} @endforelse
+                </p>
+                @foreach([
+                    ['booking', 'Bus booking on the website', 'Off: the pages still show departures, with "Book in the app".'],
+                    ['signup', 'Create an account on the website', 'Off: new people are sent to the app to sign up.'],
+                    ['signup_code', 'SMS code when creating an account', 'Proves the phone number. Needs an SMS gateway switched on (3rd party > SMS). Turn it on before launch so nobody signs up with another person’s number.'],
+                    ['index', 'Show the website on Google', 'Lets search engines list the home, route and agency pages.'],
+                    ['sms_backup', 'SMS backup', 'Messages go by SMS when WhatsApp is not connected or a WhatsApp message fails. Needs an SMS gateway switched on.'],
+                ] as [$key, $label, $hint])
+                    <div class="form-check form-switch mb-2">
+                        <input class="form-check-input" type="checkbox" role="switch" id="web_{{ $key }}" name="web_{{ $key }}" value="1" @checked($web[$key])>
+                        <label class="form-check-label fw-semibold" for="web_{{ $key }}">{{ translate($label) }}</label>
+                        <div class="fs-12 text-muted">{{ translate($hint) }}</div>
+                    </div>
+                @endforeach
+
+                <hr>
+                <div class="d-flex justify-content-between align-items-center flex-wrap gap-2 mb-2">
+                    <h6 class="mb-0">{{ translate('WhatsApp messages (Meta WhatsApp Cloud API)') }}</h6>
+                    @if(\Modules\Gateways\Services\WhatsAppCloud::ready())
+                        <span class="badge bg-success">{{ translate('Connected') }}</span>
+                    @else
+                        <span class="badge bg-warning text-dark">{{ translate('Not connected: messages go by SMS') }}</span>
+                    @endif
+                </div>
+                <div class="form-check form-switch mb-3"><input class="form-check-input" type="checkbox" role="switch" id="wa_enabled" name="wa_enabled" value="1" @checked($wa['enabled'])><label class="form-check-label fw-semibold" for="wa_enabled">{{ translate('Send WhatsApp messages') }}</label></div>
+                <div class="row g-3">
+                    <div class="col-md-6"><label class="form-label" for="wa_phone_number_id">{{ translate('Phone number ID') }}</label><input id="wa_phone_number_id" name="wa_phone_number_id" class="form-control" value="{{ $wa['phone_number_id'] }}" placeholder="{{ translate('From Meta: WhatsApp > API setup') }}"></div>
+                    <div class="col-md-6"><label class="form-label" for="wa_api_version">{{ translate('API version') }}</label><input id="wa_api_version" name="wa_api_version" class="form-control" value="{{ $wa['api_version'] }}"></div>
+                    <div class="col-md-6"><label class="form-label" for="wa_token">{{ translate('Permanent access token') }}</label><input id="wa_token" type="password" name="wa_token" class="form-control" placeholder="{{ $wa['token'] !== '' ? translate('Saved. Type a new one to change it') : translate('System user token from Meta Business') }}"></div>
+                    <div class="col-md-6"><label class="form-label" for="wa_app_secret">{{ translate('App secret') }}</label><input id="wa_app_secret" type="password" name="wa_app_secret" class="form-control" placeholder="{{ $wa['app_secret'] !== '' ? translate('Saved. Type a new one to change it') : translate('Meta app > Settings > Basic') }}"></div>
+                    <div class="col-md-6"><label class="form-label">{{ translate('Webhook callback URL') }}</label><input class="form-control" readonly value="{{ route('bus.web.whatsapp.webhook') }}"></div>
+                    <div class="col-md-6"><label class="form-label">{{ translate('Webhook verify token') }}</label><input class="form-control" readonly value="{{ $wa['verify_token'] !== '' ? $wa['verify_token'] : translate('Shown after the first save') }}"></div>
+                </div>
+                <p class="fs-12 text-muted mt-3 mb-2">{{ translate('Create these message templates in Meta (category Utility), in English (en) and French (fr), each with a "Visit website" button to') }} <code>{{ url('/bus/t') }}/@{{1}}</code>:</p>
+                <div class="table-responsive">
+                    <table class="table table-sm fs-12 mb-0">
+                        <thead><tr><th>{{ translate('Template') }}</th><th>English</th><th>Français</th></tr></thead>
+                        <tbody>
+                        @foreach(\Modules\BusManagement\Lib\BusMessenger::TEMPLATES as $tpl)
+                            <tr><td><code>{{ $tpl['name'] }}</code></td><td>{{ $tpl['en'] }}</td><td>{{ $tpl['fr'] }}</td></tr>
+                        @endforeach
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+            <div class="card-footer text-end"><button class="btn btn-primary">{{ translate('Save') }}</button></div>
+        </form>
     </div>
 </div>
 @endsection
