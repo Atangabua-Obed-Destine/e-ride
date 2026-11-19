@@ -10,6 +10,15 @@
     $play = '<svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M4 3.5v17l9.5-8.5z"/><path d="M15 9.5l3.6 2-3.6 2-1.8-2z" opacity=".7"/></svg>';
     $check = '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#22C55E" stroke-width="2.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12l5 5 9-10"/></svg>';
     $dayKinds = ['ride', 'food', 'parcel', 'bus', 'hotel'];
+    $rolePaths = [
+        'bus' => '<rect x="4" y="3" width="16" height="15" rx="3"/><path d="M4 11h16"/><path d="M7 18v3M17 18v3"/>',
+        'app' => '<rect x="7" y="2" width="10" height="20" rx="2"/><path d="M11 18h2"/>',
+        'driver' => '<circle cx="12" cy="12" r="9"/><circle cx="12" cy="12" r="2.5"/><path d="M12 3v6.5M4.5 15l5.3-2M19.5 15l-5.3-2"/>',
+        'food' => '<path d="M5 3v8a3 3 0 006 0V3M8 3v18M16 3c-1.7 0-3 2-3 5s1.3 4 3 4v9"/>',
+        'agency' => '<path d="M3 21h18M5 21V7l7-4 7 4v14"/><path d="M9 21v-6h6v6"/>',
+        'hotel' => '<path d="M3 18v-6a2 2 0 012-2h14a2 2 0 012 2v6"/><path d="M3 14h18"/><path d="M7 10V7h4v3"/>',
+    ];
+    $roleIcon = fn(string $k) => '<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">' . ($rolePaths[$k] ?? '') . '</svg>';
     $catPaths = [
         'visit' => '<path d="M3 20l6-11 4 6 3-4 5 9z"/><circle cx="17" cy="6" r="2"/>',
         'homes' => '<path d="M3 11l9-7 9 7"/><path d="M5 10v10h14V10"/><path d="M10 20v-5h4v5"/>',
@@ -141,6 +150,65 @@ img{max-width:100%}
 .food .pitch,.food .pts{max-width:330px}
 .food img{position:absolute;right:22px;bottom:0;height:150px;width:auto}
 .svc-icon{width:60px;height:60px;object-fit:contain}
+/* Header menu */
+.top{position:sticky;top:0;z-index:20;background:var(--bg)}
+.menu{position:relative}
+.menu summary{list-style:none;gap:6px}
+.menu summary::-webkit-details-marker{display:none}
+.menu-pop{position:absolute;right:0;top:calc(100% + 8px);width:300px;background:var(--surface);border:1px solid var(--line);border-radius:6px;padding:8px;box-shadow:0 18px 40px rgba(0,0,0,.25);z-index:30}
+.menu-item{display:flex;gap:12px;align-items:flex-start;padding:10px 12px;border-radius:6px;color:var(--ink)}
+.menu-item:hover,.menu-item:focus-visible{background:var(--chip)}
+.menu-item svg{flex-shrink:0;margin-top:2px;color:var(--eyebrow)}
+.menu-item b{display:block;font-size:15px}.menu-item small{display:block;font-size:13px;color:var(--muted)}
+/* Hero action box */
+.box{background:var(--surface);border:1px solid var(--line);border-radius:6px;padding:8px 8px 18px;box-shadow:var(--cardshadow);max-width:560px}
+.tabs{display:flex;gap:4px;padding:4px;background:var(--toggle);border-radius:6px;margin-bottom:14px}
+.tab{flex:1;min-height:42px;border:0;border-radius:4px;background:transparent;color:var(--muted);font:inherit;font-weight:700;font-size:15px;cursor:pointer}
+.tab[aria-selected=true]{background:var(--toggle-on);color:var(--toggle-on-ink)}
+.pane{padding:0 10px}
+.busform{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+.busform label{display:flex;flex-direction:column;gap:4px;font-size:12px;font-weight:700;color:var(--muted)}
+.busform select,.busform input{height:48px;border:1.5px solid var(--line);border-radius:6px;background:var(--bg);color:var(--ink);font:inherit;font-size:16px;padding:0 12px;width:100%}
+.busform label:nth-child(3){grid-column:span 1}
+.busform .btn{grid-column:span 2}
+.ministeps{margin:2px 0 14px;padding-left:22px;display:flex;flex-direction:column;gap:6px;font-size:15px}
+.pane-cta{display:flex;align-items:center;justify-content:space-between;gap:14px}
+.pane-qr{display:block;width:74px;height:74px;background:#FFFFFF;border-radius:6px;padding:6px;flex-shrink:0}
+.pane-qr svg{width:62px;height:62px;display:block}
+.store{min-height:46px;font-size:14px;padding:0 16px}
+/* How a ride works */
+.how{list-style:none;margin:0;padding:0;display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:14px;position:relative}
+.how li{display:flex;flex-direction:column;gap:6px;padding:18px;background:var(--surface);border:1px solid var(--line);border-radius:6px;box-shadow:var(--cardshadow)}
+.how .n{width:32px;height:32px;border-radius:50%;background:#E02020;color:#FFFFFF;font-weight:900;display:flex;align-items:center;justify-content:center;margin-bottom:6px}
+.how b{font-size:17px}.how li > span:last-child{font-size:14px;color:var(--muted);line-height:1.45}
+.later{display:flex;align-items:center;gap:10px;margin:16px 0 0;font-size:15px;font-weight:600;color:var(--soft)}
+.later svg{color:var(--eyebrow);flex-shrink:0}
+/* Drive and earn */
+.drive{display:grid;grid-template-columns:minmax(0,1.2fr) minmax(0,1fr);gap:18px}
+.drive-card{background:#E02020;color:#FFFFFF;border:0;min-height:330px;padding-right:300px}
+.drive-card .pts{color:#FFE9E7}
+.drive-card .btn-line{border-color:rgba(255,255,255,.6);color:#FFFFFF}
+.drive-card .btn-red{background:#FFFFFF;color:#141416}.drive-card .btn-red:hover{background:#F2F2F2}
+.drive-art{position:absolute;right:-10px;bottom:-6px;width:290px;height:auto}
+.drive-steps{list-style:none;margin:4px 0 0;padding:0;display:flex;flex-direction:column;gap:12px}
+.drive-steps li{display:flex;align-items:center;gap:12px;font-size:16px;font-weight:600}
+.drive-steps .n{width:30px;height:30px;border-radius:50%;border:2px solid #E02020;display:flex;align-items:center;justify-content:center;font-size:13px;font-weight:900;flex-shrink:0}
+/* App cards */
+.appcards{display:flex;flex-direction:column;gap:12px;justify-self:end;position:relative;width:100%;max-width:400px}
+.appcard{display:flex;gap:14px;align-items:center;background:#FFFFFF;color:#141416;border-radius:6px;padding:12px}
+.appcard .qr{width:96px;height:96px;padding:6px;flex-shrink:0}
+.appcard .qr svg{width:84px;height:84px}
+.appcard b{display:block;font-size:17px}.appcard small{display:block;font-size:13px;color:#55565F;line-height:1.35;margin:2px 0 6px}
+.appcard em{font-style:normal;font-size:12px;font-weight:800;color:#C41A1A;letter-spacing:.04em;text-transform:uppercase}
+/* Footer */
+footer{display:block!important}
+.foot-top{display:flex;justify-content:space-between;gap:30px;flex-wrap:wrap}
+.foot-top .cols{display:grid;grid-template-columns:repeat(4,minmax(130px,auto));gap:30px}
+.ft{font-weight:800;color:var(--ink)}
+.badge-store{display:inline-flex;align-items:center;gap:6px;height:38px;padding:0 12px;border-radius:6px;border:1px solid var(--line);color:var(--ink);font-size:13px;font-weight:700}
+.foot-bottom{display:flex;justify-content:space-between;gap:16px;flex-wrap:wrap;margin-top:30px;padding-top:18px;border-top:1px solid var(--line);font-size:13px;color:var(--muted)}
+.foot-bottom a{color:var(--muted)}.foot-bottom a:hover{color:var(--ink)}
+.foot-links,.social{display:flex;gap:16px;flex-wrap:wrap}
 /* City guide */
 .guide{display:grid;grid-template-columns:minmax(0,1.25fr) minmax(0,1fr);gap:18px}
 .cats{display:flex;flex-wrap:wrap;gap:8px;margin-top:6px}
@@ -192,6 +260,10 @@ footer .cols a:hover{color:var(--ink)}
   .rows2{grid-row:auto}
   .safe4,.part4{grid-template-columns:repeat(2,minmax(0,1fr))!important}
   .steps{grid-template-columns:repeat(2,minmax(0,1fr))}
+  .how{grid-template-columns:repeat(2,minmax(0,1fr))}
+  .drive{grid-template-columns:1fr}
+  .foot-top .cols{grid-template-columns:repeat(2,minmax(0,1fr))}
+  .part4{grid-template-columns:repeat(2,minmax(0,1fr))!important}
 }
 @media (max-width:760px){
   .wrap{padding:0 20px}
@@ -223,6 +295,20 @@ footer .cols a:hover{color:var(--ink)}
   .daypanel{min-height:260px}.daypanel .cardt{font-size:23px;max-width:200px}.daypanel .art{width:96px;right:12px;bottom:12px}
   .matters{grid-template-columns:1fr!important}
   .guide{grid-template-columns:1fr}
+  .how{grid-template-columns:1fr}
+  .drive-card{padding-right:20px;min-height:0}
+  .drive-art{position:static;width:180px;align-self:flex-end;margin:-6px -14px -10px 0;order:9}
+  .busform{grid-template-columns:1fr}
+  .busform .btn{grid-column:auto}
+  .pane-qr{display:none}
+  .pane-cta .btn{width:100%}
+  .top nav .menu summary{padding:0 12px}
+  .top nav > .btn-red{display:none}
+  .top > a img{height:28px!important;min-width:44px}
+  .menu-pop{position:fixed;left:12px;right:12px;top:70px;width:auto}
+  .appcards{max-width:none}
+  .appcard .qr{display:none}
+  .foot-top .cols{grid-template-columns:1fr 1fr}
   .steps{grid-template-columns:1fr}
   .bw{flex-direction:column;padding-right:20px}
   .bw .shot{align-self:center;margin-bottom:-20px}
@@ -248,6 +334,18 @@ footer .cols a:hover{color:var(--ink)}
         <a class="lnk" href="#bus">{{ $t('nav_bus') }}</a>
         <a class="lnk" href="#safe">{{ $t('nav_safe') }}</a>
         <a class="lnk" href="#partners">{{ $t('nav_partners') }}</a>
+        <a class="lnk" href="{{ route('contact-us') }}">{{ $t('help') }}</a>
+        <details class="menu">
+            <summary class="btn btn-line" style="min-height:44px;padding:0 16px;font-size:15px">{{ $t('signin') }}<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 9l6 6 6-6"/></svg></summary>
+            <div class="menu-pop" role="menu">
+                <p class="eyebrow" style="padding:6px 12px 8px">{{ $t('signin_title') }}</p>
+                @foreach($t('roles') as $key => [$who, $where])
+                    @php($href = match ($key) { 'app' => '#get', 'driver' => $driverUrl, default => $portals[$key] ?? null })
+                    @continue(!$href)
+                    <a role="menuitem" href="{{ $href }}" class="menu-item">{!! $roleIcon($key) !!}<span><b>{{ $who }}</b><small>{{ $where }}</small></span></a>
+                @endforeach
+            </div>
+        </details>
         <div class="lang" role="group" aria-label="Language">
             <a href="{{ url('/?lang=en') }}" class="{{ $t->lang === 'en' ? 'on' : '' }}" hreflang="en" @if($t->lang === 'en') aria-current="true" @endif>EN</a>
             <a href="{{ url('/?lang=fr') }}" class="{{ $t->lang === 'fr' ? 'on' : '' }}" hreflang="fr" @if($t->lang === 'fr') aria-current="true" @endif>FR</a>
@@ -262,13 +360,44 @@ footer .cols a:hover{color:var(--ink)}
         <p class="eyebrow">{{ $t('hero_eyebrow') }}</p>
         <h1 id="hero-title">{{ $t('hero_title') }}</h1>
         <p class="lead" style="max-width:520px">{{ $t('hero_body') }}</p>
-        <div class="btns" style="display:flex;gap:12px;flex-wrap:wrap;margin-top:6px">
-            <a class="btn btn-red" href="{{ $playUrl }}" rel="noopener">{!! $play !!}{{ $t('play') }}</a>
-            @if($appStoreUrl)<a class="btn btn-red" href="{{ $appStoreUrl }}" rel="noopener">{!! $apple !!}{{ $t('appstore') }}</a>
-            @else<span class="btn btn-line" style="cursor:default;opacity:.8">{!! $apple !!}{{ $t('appstore_soon') }}</span>@endif
+        @php($firstTab = $busWeb ? 'bus' : 'ride')
+        <div class="box">
+            <div class="tabs" role="tablist" aria-label="E-Ride">
+                @foreach($t('box_tabs') as $key => $label)
+                    <button type="button" role="tab" class="tab" id="tab-{{ $key }}" aria-controls="pane-{{ $key }}" aria-selected="{{ $key === $firstTab ? 'true' : 'false' }}" tabindex="{{ $key === $firstTab ? '0' : '-1' }}">{{ $label }}</button>
+                @endforeach
+            </div>
+            <div class="pane" role="tabpanel" id="pane-bus" aria-labelledby="tab-bus" @if($firstTab !== 'bus') hidden @endif>
+                @if($busWeb && $busSearch)
+                    <form method="GET" action="{{ route('bus.web.search') }}" class="busform">
+                        <label><span>{{ $t('box_from') }}</span>
+                            <select name="from">@foreach($busSearch['from'] ?: ['Bamenda'] as $c)<option>{{ $c }}</option>@endforeach</select></label>
+                        <label><span>{{ $t('box_to') }}</span>
+                            <input name="to" list="landing-cities" placeholder="{{ $t('box_anywhere') }}" autocomplete="off"></label>
+                        <datalist id="landing-cities">@foreach($busSearch['to'] as $c)<option value="{{ $c }}">@endforeach</datalist>
+                        <label><span>{{ $t('box_date') }}</span>
+                            <input type="date" name="date" value="{{ today()->toDateString() }}" min="{{ today()->toDateString() }}" max="{{ today()->addDays(59)->toDateString() }}"></label>
+                        <button class="btn btn-red" type="submit">{{ $t('box_find') }}{!! $arrow !!}</button>
+                    </form>
+                @else
+                    <ol class="ministeps">@foreach($t('box_bus_app') as $line)<li>{{ $line }}</li>@endforeach</ol>
+                    <a class="btn btn-red" href="#get">{{ $t('box_in_app') }}{!! $arrow !!}</a>
+                @endif
+            </div>
+            @foreach(['ride', 'food', 'parcel'] as $key)
+                <div class="pane" role="tabpanel" id="pane-{{ $key }}" aria-labelledby="tab-{{ $key }}" @if($firstTab !== $key) hidden @endif>
+                    <ol class="ministeps">@foreach($t('box_' . $key) as $line)<li>{{ $line }}</li>@endforeach</ol>
+                    <div class="pane-cta">
+                        <a class="btn btn-red" href="{{ route('get-app') }}">{{ $t('box_in_app') }}{!! $arrow !!}</a>
+                        <span class="pane-qr" role="img" aria-label="{{ $t('qr_alt') }}">{!! $qr !!}</span>
+                    </div>
+                </div>
+            @endforeach
         </div>
-        <div style="display:flex;gap:12px;flex-wrap:wrap">
-            @if($busWeb)<a class="btn btn-line" href="{{ $busWeb }}">{{ $t('bus_cta') }}{!! $arrow !!}</a>@endif
+        <div style="display:flex;gap:10px;flex-wrap:wrap">
+            <a class="btn btn-line store" href="{{ $playUrl }}" rel="noopener">{!! $play !!}{{ $t('play') }}</a>
+            @if($appStoreUrl)<a class="btn btn-line store" href="{{ $appStoreUrl }}" rel="noopener">{!! $apple !!}{{ $t('appstore') }}</a>
+            @else<span class="btn btn-line store" style="cursor:default;opacity:.75">{!! $apple !!}{{ $t('appstore_soon') }}</span>@endif
         </div>
         <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:6px">
             <span class="chip"><span class="dot" style="background:#FFCC00"></span>MTN MoMo</span>
@@ -384,8 +513,22 @@ footer .cols a:hover{color:var(--ink)}
     </div>
 </section>
 
-<section class="sec" aria-labelledby="d-title">
+<section class="sec" aria-labelledby="h-title">
     <div class="sechead"><span class="stop">3</span><div>
+        <p class="eyebrow">{{ $t('how_eyebrow') }}</p><h2 class="h2" id="h-title">{{ $t('how_title') }}</h2>
+    </div></div>
+    <div class="indent">
+        <ol class="how">
+            @foreach($t('how') as $i => [$title, $body])
+                <li><span class="n">{{ $i + 1 }}</span><b>{{ $title }}</b><span>{{ $body }}</span></li>
+            @endforeach
+        </ol>
+        <p class="later"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></svg>{{ $t('how_later') }}</p>
+    </div>
+</section>
+
+<section class="sec" aria-labelledby="d-title">
+    <div class="sechead"><span class="stop">4</span><div>
         <p class="eyebrow">{{ $t('day_eyebrow') }}</p><h2 class="h2" id="d-title">{{ $t('day_title') }}</h2><p class="lead">{{ $t('day_lead') }}</p>
     </div></div>
     <div class="day indent">
@@ -409,7 +552,7 @@ footer .cols a:hover{color:var(--ink)}
 </section>
 
 <section id="bus" class="sec" aria-labelledby="m-title">
-    <div class="sechead"><span class="stop">4</span><div>
+    <div class="sechead"><span class="stop">5</span><div>
         <p class="eyebrow">{{ $t('m_eyebrow') }}</p><h2 class="h2" id="m-title">{{ $t('m_title') }}</h2>
     </div></div>
     <div class="indent matters" style="display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:18px">
@@ -438,7 +581,7 @@ footer .cols a:hover{color:var(--ink)}
 </section>
 
 <section id="safe" class="sec" aria-labelledby="safe-title">
-    <div class="sechead"><span class="stop">5</span><div>
+    <div class="sechead"><span class="stop">6</span><div>
         <p class="eyebrow">{{ $t('safe_eyebrow') }}</p><h2 class="h2" id="safe-title">{{ $t('safe_title') }}</h2>
     </div></div>
     <div class="indent safe4" style="display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:18px">
@@ -461,13 +604,35 @@ footer .cols a:hover{color:var(--ink)}
     <p class="indent together" style="margin:0;font-size:40px;line-height:1.1;font-weight:900;letter-spacing:-.02em">{{ $t('together') }}<span style="color:#E02020">!</span></p>
 </section>
 
+<section id="drive" class="sec" aria-labelledby="dr-title">
+    <div class="sechead"><span class="stop">7</span><div>
+        <p class="eyebrow">{{ $t('drive_eyebrow') }}</p><h2 class="h2" id="dr-title">{{ $t('drive_title') }}</h2><p class="lead">{{ $t('drive_body') }}</p>
+    </div></div>
+    <div class="indent drive">
+        <article class="card drive-card">
+            <img src="{{ $img('ride.webp') }}" alt="" loading="lazy" class="drive-art">
+            <ul class="pts" style="font-size:16px">@foreach($t('drive_pts') as $pt)<li>{{ $pt }}</li>@endforeach</ul>
+            <div style="display:flex;gap:10px;flex-wrap:wrap;margin-top:auto">
+                <a class="btn btn-red" href="{{ $driverUrl }}" rel="noopener">{!! $play !!}{{ $t('drive_cta') }}</a>
+                @if($driverAppStoreUrl)<a class="btn btn-line" href="{{ $driverAppStoreUrl }}" rel="noopener">{!! $apple !!}{{ $t('appstore') }}</a>
+                @else<span class="btn btn-line" style="cursor:default;opacity:.75">{!! $apple !!}{{ $t('appstore_soon') }}</span>@endif
+            </div>
+        </article>
+        <div class="card">
+            <p class="eyebrow">{{ $t('drive_start') }}</p>
+            <ol class="drive-steps">@foreach($t('drive_steps') as $i => $step)<li><span class="n">{{ $i + 1 }}</span>{{ $step }}</li>@endforeach</ol>
+        </div>
+    </div>
+</section>
+
 <section id="partners" class="sec" aria-labelledby="p-title">
-    <div class="sechead"><span class="stop">6</span><div>
+    <div class="sechead"><span class="stop">8</span><div>
         <p class="eyebrow">{{ $t('p_eyebrow') }}</p><h2 class="h2" id="p-title">{{ $t('p_title') }}</h2>
     </div></div>
-    <div class="indent part4" style="display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:18px">
+    <div class="indent part4" style="display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:18px">
         @foreach($t('partners') as [$kicker, $title, $body, $cta, $ask])
-            @php($href = $ask === 'driver' ? $driverUrl : $partnerLink($ask))
+            @continue($ask === 'driver')
+            @php($href = $partnerLink($ask))
             <article class="card" style="min-height:250px">
                 <p class="eyebrow" style="color:var(--kicker)">{{ $kicker }}</p>
                 <h3 class="cardt" style="font-size:20px">{{ $title }}</h3>
@@ -495,37 +660,95 @@ footer .cols a:hover{color:var(--ink)}
                 @if($busWeb)<a class="btn" href="{{ $busWeb }}" style="border:1.5px solid rgba(255,255,255,.6);color:#FFFFFF">{{ $t('bus_cta') }}</a>@endif
             </div>
         </div>
-        <div class="qrcol" style="justify-self:end;display:flex;flex-direction:column;align-items:center;gap:10px;position:relative">
-            <div class="qr" role="img" aria-label="{{ $t('qr_alt') }}">{!! $qr !!}</div>
-            <span style="font-size:13px;font-weight:600;color:#FFE1DE">{{ $t('scan') }}</span>
+        <div class="appcards" aria-label="{{ $t('apps_title') }}">
+            @foreach([[$t('app_rider'), $qr, route('get-app')], [$t('app_driver'), $qrDriver, route('get-app', ['app' => 'driver'])]] as [[$name, $what], $code, $link])
+                <a class="appcard" href="{{ $link }}">
+                    <span class="qr" role="img" aria-label="{{ $t('qr_alt') }}: {{ $name }}">{!! $code !!}</span>
+                    <span class="appcard-txt"><b>{{ $name }}</b><small>{{ $what }}</small><em>{{ $t('scan_one') }}</em></span>
+                </a>
+            @endforeach
         </div>
     </div>
 </section>
 </main>
 
 <footer class="wrap">
-    <div style="display:flex;flex-direction:column;gap:10px;max-width:360px">
-        <img class="logo-dark" src="{{ $img('logo-on-dark.png') }}" alt="E-Ride" style="height:28px;width:auto;align-self:flex-start">
-        <img class="logo-light" src="{{ $img('logo-on-light.png') }}" alt="E-Ride" style="height:28px;width:auto;align-self:flex-start">
-        <span style="font-size:14px;color:var(--muted)">{{ $t('foot_tag') }}</span>
-        <span style="font-size:14px;color:var(--muted)">{{ $t('powered') }} <b style="color:var(--ink);letter-spacing:.02em">I-NNOVA</b></span>
-    </div>
-    <div class="cols">
-        <div><span style="font-weight:800;color:var(--ink)">{{ $t('contact') }}</span>
-            @if($contact['phone'])<a href="tel:{{ preg_replace('/[^\d+]/', '', $contact['phone']) }}">{{ $contact['phone'] }}</a>@endif
-            @if($contact['email'])<a href="mailto:{{ $contact['email'] }}">{{ $contact['email'] }}</a>@endif
-            @if($contact['address'])<span>{{ $contact['address'] }}</span>@endif
+    <div class="foot-top">
+        <div style="display:flex;flex-direction:column;gap:10px;max-width:320px">
+            <img class="logo-dark" src="{{ $img('logo-on-dark.png') }}" alt="E-Ride" style="height:30px;width:auto;align-self:flex-start">
+            <img class="logo-light" src="{{ $img('logo-on-light.png') }}" alt="E-Ride" style="height:30px;width:auto;align-self:flex-start">
+            <span style="font-size:14px;color:var(--muted)">{{ $t('foot_tag') }}</span>
+            <span style="font-size:14px;color:var(--muted)">{{ $t('powered') }} <b style="color:var(--ink);letter-spacing:.02em">I-NNOVA</b></span>
+            <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:6px">
+                <a class="badge-store" href="{{ $playUrl }}" rel="noopener">{!! $play !!}Google Play</a>
+                @if($appStoreUrl)<a class="badge-store" href="{{ $appStoreUrl }}" rel="noopener">{!! $apple !!}App Store</a>
+                @else<span class="badge-store" style="opacity:.7">{!! $apple !!}{{ $t('appstore_soon') }}</span>@endif
+            </div>
         </div>
-        <div><span style="font-weight:800;color:var(--ink)">{{ $t('links') }}</span>
-            @if($busWeb)<a href="{{ $busWeb }}">{{ $t('nav_bus') }}</a>@endif
-            <a href="{{ route('about-us') }}">{{ $t('about') }}</a>
-            <a href="{{ route('contact-us') }}">{{ $t('contact_us') }}</a>
+        <div class="cols">
+            <div><span class="ft">{{ $t('f_services') }}</span>
+                @foreach($t('svc_names') as $i => $name)
+                    @if($i === 3 && $busWeb)<a href="{{ $busWeb }}">{{ $name }}</a>@else<a href="#services">{{ $name }}</a>@endif
+                @endforeach
+            </div>
+            <div><span class="ft">{{ $t('f_partners') }}</span>
+                <a href="#drive">{{ $t('f_drive') }}</a>
+                <a href="{{ $portals['food'] }}">{{ $t('f_portal_food') }}</a>
+                <a href="{{ $portals['agency'] }}">{{ $t('f_portal_bus') }}</a>
+                <a href="{{ $portals['hotel'] }}">{{ $t('f_portal_hotel') }}</a>
+            </div>
+            <div><span class="ft">{{ $t('f_company') }}</span>
+                <a href="{{ route('about-us') }}">{{ $t('about') }}</a>
+                <a href="{{ route('contact-us') }}">{{ $t('contact_us') }}</a>
+                <a href="#safe">{{ $t('f_safety') }}</a>
+            </div>
+            <div><span class="ft">{{ $t('contact') }}</span>
+                @if($contact['phone'])<a href="tel:{{ preg_replace('/[^\d+]/', '', $contact['phone']) }}">{{ $contact['phone'] }}</a>@endif
+                @if($contact['email'])<a href="mailto:{{ $contact['email'] }}">{{ $contact['email'] }}</a>@endif
+                @if($contact['address'])<span>{{ $contact['address'] }}</span>@endif
+            </div>
+        </div>
+    </div>
+    <div class="foot-bottom">
+        <span>&copy; {{ date('Y') }} E-Ride. {{ $t('rights') }}</span>
+        @if($social)
+            <span class="social" aria-label="{{ $t('f_follow') }}">@foreach($social as $l)<a href="{{ $l['link'] }}" rel="noopener" target="_blank">{{ ucfirst($l['name']) }}</a>@endforeach</span>
+        @endif
+        <span class="foot-links">
             <a href="{{ route('privacy') }}">{{ $t('privacy') }}</a>
             <a href="{{ route('terms') }}">{{ $t('terms') }}</a>
-        </div>
+            <a href="{{ url('/?lang=' . $other) }}" hreflang="{{ $other }}">{{ $t('switch_lang') }}</a>
+        </span>
     </div>
 </footer>
 <script>
+// The hero's tabs: Bus, Ride, Food, Parcel (arrow keys move between them).
+(function () {
+    var tabs = [].slice.call(document.querySelectorAll('.tab'));
+    function show(tab) {
+        tabs.forEach(function (x) {
+            var on = x === tab;
+            x.setAttribute('aria-selected', on ? 'true' : 'false');
+            x.tabIndex = on ? 0 : -1;
+            document.getElementById(x.getAttribute('aria-controls')).hidden = !on;
+        });
+    }
+    tabs.forEach(function (tab, i) {
+        tab.addEventListener('click', function () { show(tab); });
+        tab.addEventListener('keydown', function (e) {
+            if (e.key !== 'ArrowRight' && e.key !== 'ArrowLeft') return;
+            var next = tabs[(i + (e.key === 'ArrowRight' ? 1 : tabs.length - 1)) % tabs.length];
+            show(next); next.focus(); e.preventDefault();
+        });
+    });
+})();
+// The sign-in menu closes on a tap outside it, or Escape.
+(function () {
+    var menu = document.querySelector('.menu');
+    if (!menu) return;
+    document.addEventListener('click', function (e) { if (menu.open && !menu.contains(e.target)) menu.open = false; });
+    document.addEventListener('keydown', function (e) { if (e.key === 'Escape' && menu.open) { menu.open = false; menu.querySelector('summary').focus(); } });
+})();
 // "A day in Bamenda": one time at a time.
 (function () {
     var buttons = document.querySelectorAll('.daybtn');

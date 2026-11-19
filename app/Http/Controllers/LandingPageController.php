@@ -37,9 +37,9 @@ class LandingPageController extends Controller
     }
 
     /** The customer app on the App Store, once its link is set (App Version settings); null until then. */
-    public static function appStoreUrl(): ?string
+    public static function appStoreUrl(string $key = CUSTOMER_APP_VERSION_CONTROL_FOR_IOS): ?string
     {
-        $url = trim((string)(businessConfig(key: CUSTOMER_APP_VERSION_CONTROL_FOR_IOS, settingsType: APP_VERSION)?->value['app_url'] ?? ''));
+        $url = trim((string)(businessConfig(key: $key, settingsType: APP_VERSION)?->value['app_url'] ?? ''));
         return filter_var($url, FILTER_VALIDATE_URL) ? $url : null;
     }
 
@@ -48,10 +48,13 @@ class LandingPageController extends Controller
     {
         $ua = (string)$request->userAgent();
         $ios = (bool)preg_match('/iPhone|iPad|iPod/i', $ua);
-        $play = trim((string)(businessConfig(key: CUSTOMER_APP_VERSION_CONTROL_FOR_ANDROID, settingsType: APP_VERSION)?->value['app_url'] ?? ''));
-        $play = filter_var($play, FILTER_VALIDATE_URL) ? $play : 'https://play.google.com/store/apps/details?id=' . config('marketmanagement.android_package', 'com.i_nnova.eride');
+        // ?app=driver: the E-Ride Driver app.
+        $driver = $request->query('app') === 'driver';
+        $play = trim((string)(businessConfig(key: $driver ? DRIVER_APP_VERSION_CONTROL_FOR_ANDROID : CUSTOMER_APP_VERSION_CONTROL_FOR_ANDROID, settingsType: APP_VERSION)?->value['app_url'] ?? ''));
+        $play = filter_var($play, FILTER_VALIDATE_URL) ? $play : 'https://play.google.com/store/apps/details?id=' . ($driver ? 'com.i_nnova.eridedriver' : config('marketmanagement.android_package', 'com.i_nnova.eride'));
         if ($ios) {
-            return ($url = self::appStoreUrl()) ? redirect()->away($url) : redirect()->to(url('/') . '#get');
+            $url = self::appStoreUrl($driver ? DRIVER_APP_VERSION_CONTROL_FOR_IOS : CUSTOMER_APP_VERSION_CONTROL_FOR_IOS);
+            return $url ? redirect()->away($url) : redirect()->to(url('/') . '#get');
         }
         return preg_match('/Android/i', $ua) ? redirect()->away($play) : redirect()->to(url('/') . '#get');
     }
@@ -85,6 +88,7 @@ class LandingPageController extends Controller
         $playUrl = $storeUrl(CUSTOMER_APP_VERSION_CONTROL_FOR_ANDROID, config('marketmanagement.android_package', 'com.i_nnova.eride'));
         $driverUrl = $storeUrl(DRIVER_APP_VERSION_CONTROL_FOR_ANDROID, 'com.i_nnova.eridedriver');
         $appStoreUrl = self::appStoreUrl();
+        $driverAppStoreUrl = self::appStoreUrl(DRIVER_APP_VERSION_CONTROL_FOR_IOS);
 
         $contact = [
             'phone' => businessConfig('business_contact_phone', BUSINESS_INFORMATION)?->value,
@@ -104,10 +108,23 @@ class LandingPageController extends Controller
         $explore = \Illuminate\Support\Facades\Cache::remember('landing:explore', 300, fn() => \Illuminate\Support\Facades\DB::table('place_categories')
             ->where('is_active', 1)->orderBy('sort')->get(['key', 'name', 'name_fr'])->map(fn($c) => (array)$c)->all());
         $exploreLabel = (string)(businessConfig('explore_label')?->value ?: 'Explore Bamenda');
+        $qrDriver = (string)\SimpleSoftwareIO\QrCode\Facades\QrCode::format('svg')->size(144)->margin(0)->errorCorrection('M')->generate(route('get-app', ['app' => 'driver']));
+        // The hero's bus search: the cities agencies leave from, and where they go.
+        $busSearch = $busWeb ? \Illuminate\Support\Facades\Cache::remember('landing:bus-cities', 300, function () {
+            $live = \Modules\BusManagement\Entities\BusAgency::where('status', 'live')->whereNotNull('fapshi_ok_at');
+            return [
+                'from' => (clone $live)->distinct()->orderBy('origin_city')->pluck('origin_city')->all(),
+                'to' => \Modules\BusManagement\Entities\BusDestination::where('active', true)->whereIn('agency_id', (clone $live)->select('id'))->distinct()->orderBy('city')->pluck('city')->all(),
+            ];
+        }) : null;
+        $social = \Illuminate\Support\Facades\Cache::remember('landing:social', 300, fn() => \Illuminate\Support\Facades\DB::table('social_links')
+            ->where('is_active', 1)->whereNotNull('link')->get(['name', 'link'])->map(fn($l) => (array)$l)->all());
+        $portals = ['food' => route('partner.login'), 'agency' => route('bus-partner.login'), 'hotel' => route('hotel-partner.login'),
+            'bus' => $busWeb ? route('bus.web.login') : null];
         $favicon = getSession('favicon');
         $favicon = $favicon ? dynamicStorage(path: 'storage/app/public/business/' . $favicon) : dynamicAsset(path: 'public/landing-page/assets/img/favicon.png');
 
-        return response()->view('landing-page.home', compact('t', 'theme', 'playUrl', 'driverUrl', 'appStoreUrl', 'contact', 'partnerLink', 'busWeb', 'qr', 'favicon', 'explore', 'exploreLabel'));
+        return response()->view('landing-page.home', compact('t', 'theme', 'playUrl', 'driverUrl', 'appStoreUrl', 'driverAppStoreUrl', 'contact', 'partnerLink', 'busWeb', 'qr', 'qrDriver', 'favicon', 'explore', 'exploreLabel', 'busSearch', 'social', 'portals'));
     }
 
     public function aboutUs()
