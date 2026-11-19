@@ -444,12 +444,18 @@ class ConfigController extends Controller
             drivingMode: $drivingMode,
         );
 
+        // No road route from Google (an error array, not a list): a clean "not
+        // found" instead of a server error. Not an empty list: app versions
+        // already installed read the first route of any 200 answer.
+        if (!is_array($getRoutes) || isset($getRoutes['error'])) {
+            return response()->json(responseFormatter(DEFAULT_404), 404);
+        }
         foreach ($getRoutes as $route) {
-            if ($route['drive_mode'] == $drivingMode[0]) {
+            if (is_array($route) && ($route['drive_mode'] ?? null) == $drivingMode[0]) {
                 return [$this->tripRequestService->resolveRouteProgress($trip, $route)];
             }
         }
-
+        return response()->json(responseFormatter(DEFAULT_404), 404);
     }
 
     #

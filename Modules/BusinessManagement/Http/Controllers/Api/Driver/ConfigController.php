@@ -396,6 +396,12 @@ class ConfigController extends Controller
             drivingMode: $drivingMode,
         );
 
+        // No road route from Google (or an error): an empty list, which the app
+        // treats as "measure the straight line" instead of failing.
+        if (!is_array($getRoutes) || isset($getRoutes['error']) || isset($getRoutes['status'])) {
+            return response()->json([]);
+        }
+
         if ((businessConfig('enable_real_time_location_sharing', TRIP_SETTINGS)?->value ?? 0) && $trip->current_status == ONGOING ) {
             $trip->tripNavigation()->firstOrCreate(
                 [],
@@ -404,12 +410,12 @@ class ConfigController extends Controller
         }
 
         foreach ($getRoutes as $route) {
-            if ($route['drive_mode'] == $drivingMode[0]) {
+            if (is_array($route) && ($route['drive_mode'] ?? null) == $drivingMode[0]) {
                 $this->tripRequestService->sendAutoArrivalNotification($trip, $route, auth()->user());
                 return [$this->tripRequestService->resolveRouteProgress($trip, $route)];
             }
         }
-
+        return response()->json([]);
     }
 
     public function predefinedQuestionAnswerList(): JsonResponse
