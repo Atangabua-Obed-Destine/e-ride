@@ -393,7 +393,7 @@ class GuideService
         return ['km' => $km, 'minutes' => $minutes, 'fare' => $fare];
     }
 
-    /** The zone's cheapest ride: lowest base fare and per-km among active vehicle categories. */
+    /** The zone's cheapest ride: lowest base fare and per-km among active vehicle categories with a fare set. */
     private function cheapestRate(string $zoneId): ?array
     {
         return Cache::remember('guide:rate:' . $zoneId, 600, function () use ($zoneId) {
@@ -402,6 +402,8 @@ class GuideService
                 ->where('trip_fares.zone_id', $zoneId)
                 ->where('vehicle_categories.is_active', 1)
                 ->whereNull('vehicle_categories.deleted_at')
+                // A fare left at 0 is not set up (e.g. a goods vehicle), not a free ride.
+                ->whereRaw('trip_fares.base_fare + trip_fares.base_fare_per_km > 0')
                 ->orderByRaw('trip_fares.base_fare + trip_fares.base_fare_per_km * 3')
                 ->first(['trip_fares.base_fare', 'trip_fares.base_fare_per_km']);
             return $row ? ['base' => (float)$row->base_fare, 'per_km' => (float)$row->base_fare_per_km] : null;
