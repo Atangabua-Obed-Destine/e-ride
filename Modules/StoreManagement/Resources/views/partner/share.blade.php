@@ -92,23 +92,51 @@
         text(data.kind, P + 190, P + 40, 44, '500', 'rgba(255,255,255,0.9)');
         // The store: cover, logo, name, open, ways.
         const [coverImg, logoImg] = await Promise.all([load(data.cover), load(data.logo)]);
-        cover(coverImg || logoImg, P, 150, W - 2 * P, 520, 12);
-        if (logoImg && coverImg) {
-            ctx.fillStyle = '#fff'; rr(P + 30, 560, 170, 170, 12); ctx.fill();
-            cover(logoImg, P + 38, 568, 154, 154, 8);
+        if (coverImg) {
+            cover(coverImg, P, 150, W - 2 * P, 520, 12);
+            if (logoImg) {
+                ctx.fillStyle = '#fff'; rr(P + 30, 560, 170, 170, 12); ctx.fill();
+                cover(logoImg, P + 38, 568, 154, 154, 8);
+            }
+        } else {
+            // Only a logo: whole, on white, never cropped.
+            ctx.fillStyle = '#fff'; rr(P, 150, W - 2 * P, 520, 12); ctx.fill();
+            if (logoImg) {
+                const s = Math.min(420 / logoImg.width, 420 / logoImg.height);
+                ctx.drawImage(logoImg, (W - logoImg.width * s) / 2, 150 + (520 - logoImg.height * s) / 2, logoImg.width * s, logoImg.height * s);
+            } else {
+                text(data.name.charAt(0).toUpperCase(), W / 2 - 50, 470, 200, '900', '#E02020');
+            }
         }
         text(data.name, P, 800, 72, '800', '#fff', W - 2 * P);
         text(data.line, P, 868, 36, '500', 'rgba(255,255,255,0.92)', W - 2 * P);
         // Four things with prices.
         const items = await Promise.all(data.items.slice(0, 4).map(async i => ({...i, img: await load(i.image)})));
-        const gw = (W - 2 * P - 28) / 2, gh = 400, gy = 920;
-        items.forEach((it, k) => {
-            const x = P + (k % 2) * (gw + 28), y = gy + Math.floor(k / 2) * (gh + 28);
-            ctx.fillStyle = '#fff'; rr(x, y, gw, gh, 12); ctx.fill();
-            cover(it.img, x + 14, y + 14, gw - 28, gh - 130, 8);
-            text(it.name, x + 22, y + gh - 72, 32, '600', '#1D2D2B', gw - 44);
-            text(it.price, x + 22, y + gh - 26, 38, '800', '#E02020', gw - 44);
-        });
+        const gy = 920;
+        if (items.some(i => i.img)) {
+            // Photos: a 2 x 2 grid.
+            const gw = (W - 2 * P - 28) / 2, gh = 400;
+            items.forEach((it, k) => {
+                const x = P + (k % 2) * (gw + 28), y = gy + Math.floor(k / 2) * (gh + 28);
+                ctx.fillStyle = '#fff'; rr(x, y, gw, gh, 12); ctx.fill();
+                if (it.img) { cover(it.img, x + 14, y + 14, gw - 28, gh - 130, 8); }
+                else { ctx.fillStyle = '#F4F6F6'; rr(x + 14, y + 14, gw - 28, gh - 130, 8); ctx.fill(); }
+                text(it.name, x + 22, y + gh - 72, 32, '600', '#1D2D2B', gw - 44);
+                text(it.price, x + 22, y + gh - 26, 38, '800', '#E02020', gw - 44);
+            });
+        } else if (items.length) {
+            // No photos: a clean price list.
+            const rowH = 118, h = items.length * rowH + 40;
+            ctx.fillStyle = '#fff'; rr(P, gy, W - 2 * P, h, 12); ctx.fill();
+            items.forEach((it, k) => {
+                const y = gy + 20 + k * rowH;
+                if (k) { ctx.fillStyle = '#EEF0F0'; ctx.fillRect(P + 36, y, W - 2 * P - 72, 2); }
+                text(it.name, P + 36, y + 72, 40, '600', '#1D2D2B', W - 2 * P - 380);
+                ctx.textAlign = 'right';
+                text(it.price, W - P - 36, y + 72, 44, '800', '#E02020');
+                ctx.textAlign = 'left';
+            });
+        }
         // Where to tap.
         const by = H - 230;
         ctx.fillStyle = '#fff'; rr(P, by, W - 2 * P, 160, 12); ctx.fill();
