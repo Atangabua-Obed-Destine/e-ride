@@ -33,14 +33,33 @@ class MarketPageController extends Controller
         $this->shops->visit($shop, $request->ip() . '|' . $request->userAgent());
         $items = MarketItem::with('photos')->where('shop_id', $shop->id)->whereIn('status', MarketItem::PUBLIC)->latest()->limit(60)->get();
         $cover = $items->first()?->cover();
+        $shop->loadMissing('venue');
         return response()->view('marketmanagement::web.shop', [
             't' => $t,
             'shop' => $shop,
             'items' => $items,
             'url' => MarketLinks::shop($shop),
-            'ogImage' => $cover?->ogUrl() ?? $shop->logoUrl(),
-            'openApp' => MarketLinks::openInApp('/s/' . $shop->slug, MarketLinks::playStore('s:' . $shop->slug)),
+            // The link picture: the shopfront, else the newest item, else the logo.
+            'ogImage' => $shop->shopfrontUrl() ?? $cover?->ogUrl() ?? $shop->logoUrl(),
+            'openApp' => MarketLinks::openInApp('/s/' . $shop->slug, route('market.shop-app', ['slug' => $shop->slug])),
         ]);
+    }
+
+    /** No app yet, from a shop's page: what E-Ride is, and the Play Store link that opens this shop after installing. */
+    public function shopApp(Request $request, string $slug): Response
+    {
+        $shop = MarketShop::with('venue')->where('slug', $slug)->first();
+        $t = $this->words($request);
+        if (!$shop || !$shop->isLive()) {
+            return $this->unavailable($t, $t['shop_gone'], null, 404);
+        }
+        return response()->view('marketmanagement::web.shop-app', [
+            't' => $t,
+            'shop' => $shop,
+            'shopUrl' => MarketLinks::shop($shop),
+            'playUrl' => MarketLinks::playStore('s:' . $shop->slug),
+            'openApp' => MarketLinks::openInApp('/s/' . $shop->slug, MarketLinks::playStore('s:' . $shop->slug)),
+        ])->header('X-Robots-Tag', 'noindex');
     }
 
     public function item(Request $request, string $code): Response
@@ -173,6 +192,14 @@ class MarketPageController extends Controller
             'where_place' => 'At their place',
             'where_client' => 'Comes to you',
             'where_online' => 'Online or by phone',
+            'shed_title' => 'Find the shed',
+            'shed_walk' => 'Get the app to be guided to the shed',
+            'shed_checked' => 'Shed checked by E-Ride',
+            'sells' => 'Sells',
+            'shop_get_title' => 'See :shop in the E-Ride app',
+            'shop_get_body' => 'Install E-Ride, sign in with your phone number, and this shop opens by itself: its items, chat with the seller, and the way to the shed.',
+            'get_have_shop' => 'I already have E-Ride: open the shop',
+            'back_shop' => 'Back to the shop',
             'sk_hair_beauty' => 'Hair & beauty',
             'sk_repairs' => 'Repairs',
             'sk_tailoring' => 'Tailoring',
@@ -253,6 +280,14 @@ class MarketPageController extends Controller
             'where_place' => 'Chez le prestataire',
             'where_client' => 'Se déplace chez vous',
             'where_online' => 'En ligne ou par téléphone',
+            'shed_title' => 'Trouver le comptoir',
+            'shed_walk' => 'Prenez l\'appli pour être guidé jusqu\'au comptoir',
+            'shed_checked' => 'Comptoir vérifié par E-Ride',
+            'sells' => 'Vend',
+            'shop_get_title' => 'Voir :shop dans l\'appli E-Ride',
+            'shop_get_body' => 'Installez E-Ride, connectez-vous avec votre numéro, et la boutique s\'ouvre toute seule : ses articles, la discussion avec le vendeur et le chemin jusqu\'au comptoir.',
+            'get_have_shop' => 'J\'ai déjà E-Ride : ouvrir la boutique',
+            'back_shop' => 'Retour à la boutique',
             'sk_hair_beauty' => 'Coiffure et beauté',
             'sk_repairs' => 'Réparations',
             'sk_tailoring' => 'Couture',

@@ -80,5 +80,14 @@ Route::group(['prefix' => 'partner', 'as' => 'partner.'], function () {
         Route::put('store', [PortalController::class, 'updateProfile'])->name('store.update');
         Route::post('store/open', [PortalController::class, 'toggleOpen'])->name('store.open');
         Route::get('earnings', [PortalController::class, 'earnings'])->name('earnings');
+        Route::get('share', [PortalController::class, 'share'])->name('share');
     });
+});
+
+/*
+| A partner's public store page, shared on WhatsApp: [domain]/f/<slug>, and "get the app" for it.
+*/
+Route::middleware('throttle:120,1,store-page')->group(function () {
+    Route::get('f/{slug}', [\Modules\StoreManagement\Http\Controllers\Web\StorePageController::class, 'page'])->where('slug', '[a-z0-9-]+')->name('store.page');
+    Route::get('f/{slug}/app', [\Modules\StoreManagement\Http\Controllers\Web\StorePageController::class, 'getApp'])->where('slug', '[a-z0-9-]+')->name('store.get-app');
 });

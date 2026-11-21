@@ -27,6 +27,22 @@
 @if($shop->about)
     <p style="margin:0 16px 4px;font-size:14px">{{ $shop->about }}</p>
 @endif
+@if($shop->inVenue() && $shop->venue)
+    {{-- In a market: the shed, the shopfront to look for, and the way there in the app. --}}
+    <div style="margin:12px 16px;border:1px solid #F3D9B8;background:#FFF8F0;border-radius:8px;overflow:hidden">
+        @if($shop->shopfrontUrl())<img src="{{ $shop->shopfrontUrl() }}" alt="" style="width:100%;aspect-ratio:16/9;object-fit:cover;display:block">@endif
+        <div style="padding:12px">
+            <div style="font-weight:800;font-size:16px">{{ $shop->venue->name }}</div>
+            <div style="color:#B45309;font-weight:700">{{ $shop->shedLabel() }}</div>
+            @if($shop->isVerified())<div class="badge">&#10003; {{ $t['shed_checked'] }}</div>@endif
+            @if($shop->address_note)<div class="muted" style="margin-top:4px">{{ $shop->address_note }}</div>@endif
+            <a class="btn" href="{{ $openApp }}" style="margin:10px 0 0;background:#B45309;height:46px;border-radius:6px;font-size:15px">{{ $t['shed_walk'] }}</a>
+        </div>
+    </div>
+@endif
+@if($shop->sellsList())
+    <div class="chips" style="padding:4px 16px 8px">@foreach($shop->sellsList() as $s)<span class="chip">{{ $s }}</span>@endforeach</div>
+@endif
 <div class="notice">{{ $t['scam_notice'] }}</div>
 <div style="padding:8px 16px;font-weight:700">{{ $items->count() === 1 ? $t['one_item'] : str_replace(':n', $items->count(), $t['items']) }}</div>
 @if($items->isEmpty())

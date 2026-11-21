@@ -11,6 +11,7 @@ Route::middleware('throttle:120,1,market-page')->group(function () {
     Route::get('s/{slug}', [MarketPageController::class, 'shop'])->where('slug', '[a-z0-9-]+')->name('market.shop');
     Route::get('i/{code}', [MarketPageController::class, 'item'])->where('code', '[a-z0-9]+')->name('market.item');
     Route::get('i/{code}/app', [MarketPageController::class, 'getApp'])->where('code', '[a-z0-9]+')->name('market.get-app');
+    Route::get('s/{slug}/app', [MarketPageController::class, 'shopApp'])->where('slug', '[a-z0-9-]+')->name('market.shop-app');
     Route::get('.well-known/assetlinks.json', [MarketPageController::class, 'assetLinks']);
 });
 

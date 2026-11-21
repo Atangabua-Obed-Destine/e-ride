@@ -19,6 +19,9 @@ class StorePresenter
         return [
             'id' => $store->id,
             'brand_id' => $brand->id,
+            // The public page people share ([domain]/f/<slug>).
+            'slug' => $brand->slug,
+            'link' => \Modules\StoreManagement\Lib\StoreLinks::url($brand),
             'branch_name' => $store->branch_name,
             'name' => $brand->name,
             'type' => $brand->type,

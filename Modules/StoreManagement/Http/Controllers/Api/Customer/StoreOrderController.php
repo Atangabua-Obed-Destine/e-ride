@@ -117,6 +117,13 @@ class StoreOrderController extends Controller
      * one of its branches (taken as the preferred branch); ?branch= is the
      * branch the customer chose. The answer says which branch and why.
      */
+    /** The install referrer "f:<slug>": counted once for the store whose link brought the rider. */
+    public function referral(Request $request): JsonResponse
+    {
+        $data = $request->validate(['slug' => ['required', 'string', 'max:140', 'regex:/^[a-z0-9-]+$/']]);
+        return response()->json(responseFormatter(DEFAULT_200, ['counted' => \Modules\StoreManagement\Lib\StoreLinks::claim($request->user(), $data['slug'])]));
+    }
+
     public function store(Request $request, Store $store): JsonResponse
     {
         $brand = $store->brand();

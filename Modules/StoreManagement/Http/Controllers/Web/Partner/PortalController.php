@@ -50,6 +50,36 @@ class PortalController extends Controller
         return back();
     }
 
+    /** Share the store: the public page's link, a WhatsApp Status picture, and what the link brought. */
+    public function share(Request $request): View
+    {
+        $brand = $this->menuStore($request)->brand();
+        $kitchen = $this->menuStore($request);
+        $url = \Modules\StoreManagement\Lib\StoreLinks::url($brand);
+        $items = $brand->items()->where('is_available', true)->get()
+            ->sortByDesc(fn($i) => $i->image ? 1 : 0)->take(4)->values();
+        $hours = $kitchen->hoursFor(now());
+        $ways = array_map(fn($w) => translate(match ($w) { 'delivery' => 'Delivery', 'dine_in' => 'Eat there', default => 'Collect' }), $kitchen->ways());
+        $shareText = translate(key: 'Order from {store} on E-Ride: {link}', replace: ['store' => $brand->name, 'link' => $url]);
+        $card = [
+            'kind' => $brand->type === 'shop' ? 'SHOPS' : 'FOOD',
+            'name' => $brand->name,
+            'line' => implode('  ·  ', array_filter([
+                $hours ? $hours[0] . ' - ' . $hours[1] : null,
+                implode(', ', $ways),
+            ])),
+            'cover' => $brand->coverUrl(),
+            'logo' => $brand->logoUrl(),
+            'items' => $items->map(fn($i) => ['name' => $i->name, 'price' => getCurrencyFormat((float)$i->price), 'image' => $i->imageUrl()])->all(),
+            'cta' => translate('Order in the E-Ride app'),
+            'link' => preg_replace('#^https?://#', '', $url),
+            'page' => $url,
+            'share_text' => $shareText,
+            'file' => 'eride-' . $brand->slug . '.png',
+        ];
+        return view('storemanagement::partner.share', compact('brand', 'url', 'card', 'shareText'));
+    }
+
     /** The big open/closed switch at the top of every portal page. */
     public function toggleOpen(Request $request): JsonResponse|RedirectResponse
     {
