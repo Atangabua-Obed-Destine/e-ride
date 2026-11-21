@@ -26,6 +26,16 @@
                             <label class="form-label fw-semibold">{{ translate('Minimum_order_(FCFA)') }}</label>
                             <input type="number" name="min_order_amount" class="form-control" min="0" step="1" value="{{ old('min_order_amount', (int)$store->min_order_amount) }}">
                         </div>
+                        <div class="col-12">
+                            <input type="hidden" name="offers_delivery" value="0">
+                            <div class="form-check form-switch">
+                                <input class="form-check-input" type="checkbox" role="switch" id="offers_delivery" name="offers_delivery" value="1" {{ old('offers_delivery', $store->offers_delivery ?? true) ? 'checked' : '' }}>
+                                <label class="form-check-label fw-semibold" for="offers_delivery">{{ translate('Delivery_by_E-Ride_riders') }}</label>
+                            </div>
+                            <div class="form-text">{{ $store->type === 'restaurant'
+                                ? translate('Customers can always eat here or collect. Turn this off if you do not want deliveries.')
+                                : translate('Customers can always collect. Turn this off if you do not want deliveries.') }}</div>
+                        </div>
                     </div>
                 </div>
             </div>

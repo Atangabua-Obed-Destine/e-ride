@@ -80,8 +80,10 @@ class StoreOrderService extends BaseService implements StoreOrderServiceInterfac
     {
         $problems = [];
         if (!in_array($way, $store->ways(), true)) {
-            $problems[] = translate(key: '{store} does not offer this. Choose another way to get your order.', replace: ['store' => $store->displayName()]);
-            $way = StoreOrder::DELIVERY;
+            $problems[] = $way === StoreOrder::DELIVERY
+                ? translate(key: '{store} does not deliver. Eat there or collect your order.', replace: ['store' => $store->displayName()])
+                : translate(key: '{store} does not offer this. Choose another way to get your order.', replace: ['store' => $store->displayName()]);
+            $way = $store->ways()[0];
         }
         if (!StoreSettings::enabled()) {
             $problems[] = translate('Ordering is not available right now.');
@@ -915,6 +917,9 @@ class StoreOrderService extends BaseService implements StoreOrderServiceInterfac
             $open = in_array($order->status, [StoreOrder::AWAITING_CONFIRMATION, StoreOrder::AWAITING_PAYMENT, StoreOrder::ACCEPTED], true);
             if ($order->isDelivery() || !$open) {
                 throw ValidationException::withMessages(['order' => translate('This order can no longer be changed to a delivery.')]);
+            }
+            if (!$order->store->delivers()) {
+                throw ValidationException::withMessages(['order' => translate(key: '{store} does not deliver.', replace: ['store' => $order->store->displayName()])]);
             }
             // Throws when E-Ride cannot deliver there.
             $quote = $this->deliveryQuote($order->store, (float)$drop['drop_latitude'], (float)$drop['drop_longitude']);

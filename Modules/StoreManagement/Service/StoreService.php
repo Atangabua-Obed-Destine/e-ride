@@ -100,7 +100,7 @@ class StoreService extends BaseService implements StoreServiceInterface
     public function updateProfile(Store $store, array $data): Store
     {
         $store->fill(array_intersect_key($data, array_flip([
-            'phone', 'whatsapp', 'description', 'is_open', 'default_prep_minutes', 'min_order_amount',
+            'phone', 'whatsapp', 'description', 'is_open', 'offers_delivery', 'default_prep_minutes', 'min_order_amount',
             'payout_method', 'payout_number', 'payout_name',
         ])));
         if (array_key_exists('opening_hours', $data)) {
@@ -252,6 +252,7 @@ class StoreService extends BaseService implements StoreServiceInterface
             'min_order_amount' => (float)($data['min_order_amount'] ?? 0),
             'is_active' => (bool)($data['is_active'] ?? false),
             'is_open' => (bool)($data['is_open'] ?? true),
+            'offers_delivery' => (bool)($data['offers_delivery'] ?? true),
             'sort' => (int)($data['sort'] ?? 0),
             'payout_method' => $data['payout_method'] ?? null,
             'payout_number' => $data['payout_number'] ?? null,

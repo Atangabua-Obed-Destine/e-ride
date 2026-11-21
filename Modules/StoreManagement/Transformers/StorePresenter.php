@@ -166,7 +166,7 @@ class StorePresenter
             'ready_told' => $order->ready_told_at !== null,
             'store_place' => $order->store ? ['address' => $order->store->address, 'latitude' => $order->store->latitude, 'longitude' => $order->store->longitude] : null,
             // "Deliver it instead", while the order is still open and not a delivery.
-            'can_deliver' => !$order->isDelivery() && in_array($order->status, [StoreOrder::AWAITING_CONFIRMATION, StoreOrder::AWAITING_PAYMENT, StoreOrder::ACCEPTED], true),
+            'can_deliver' => !$order->isDelivery() && (bool)$order->store?->delivers() && in_array($order->status, [StoreOrder::AWAITING_CONFIRMATION, StoreOrder::AWAITING_PAYMENT, StoreOrder::ACCEPTED], true),
             // A change to delivery waiting for its fee.
             'delivery_change' => $order->switch && !$order->isDelivery() && \Illuminate\Support\Carbon::parse($order->switch['pay_by'] ?? now())->isFuture()
                 ? ['fee' => (float)$order->switch['fee'], 'address' => $order->switch['drop_address'], 'pay_by' => $order->switch['pay_by'],

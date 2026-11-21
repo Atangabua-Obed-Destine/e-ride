@@ -164,7 +164,15 @@
                                         <span class="switcher_control"></span>
                                     </span>
                                 </label>
-                                <p class="fs-12 text-muted mt-2 mb-0">{{ translate('The partner can also switch the store open or closed from their portal.') }}</p>
+                                <label class="d-flex justify-content-between align-items-center form-control mt-2">
+                                    <span>{{ translate('Delivery_by_E-Ride_riders') }}</span>
+                                    <span class="switcher">
+                                        <input type="hidden" name="offers_delivery" value="0">
+                                        <input class="switcher_input" type="checkbox" name="offers_delivery" value="1" {{ old('offers_delivery', $store->offers_delivery ?? true) ? 'checked' : '' }}>
+                                        <span class="switcher_control"></span>
+                                    </span>
+                                </label>
+                                <p class="fs-12 text-muted mt-2 mb-0">{{ translate('Customers can always eat there (restaurants) or collect. The partner can also switch the store open or closed, and delivery on or off, from their portal.') }}</p>
                             </div>
                         </div>
 

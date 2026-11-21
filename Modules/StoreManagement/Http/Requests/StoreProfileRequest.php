@@ -22,6 +22,7 @@ class StoreProfileRequest extends FormRequest
             'description' => 'nullable|string|max:1000',
             'default_prep_minutes' => 'required|integer|min:5|max:180',
             'min_order_amount' => 'nullable|numeric|min:0',
+            'offers_delivery' => 'nullable|boolean',
             'payout_method' => 'nullable|string|max:30',
             'payout_number' => 'nullable|string|max:40',
             'payout_name' => 'nullable|string|max:120',

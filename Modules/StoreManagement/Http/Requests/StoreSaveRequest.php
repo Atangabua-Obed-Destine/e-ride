@@ -34,6 +34,7 @@ class StoreSaveRequest extends FormRequest
             'min_order_amount' => 'nullable|numeric|min:0',
             'is_active' => 'nullable|boolean',
             'is_open' => 'nullable|boolean',
+            'offers_delivery' => 'nullable|boolean',
             'sort' => 'nullable|integer',
             'payout_method' => 'nullable|string|max:30',
             'payout_number' => 'nullable|string|max:40',
