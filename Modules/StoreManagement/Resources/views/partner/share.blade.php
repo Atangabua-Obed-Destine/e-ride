@@ -15,9 +15,16 @@
 
     <div class="row g-3">
         <div class="col-md-6">
+            <div class="btn-group w-100 mb-2" role="group" aria-label="{{ translate('Picture') }}" style="max-width:380px;margin:0 auto;display:flex">
+                <button type="button" class="btn btn-primary" data-pick="status">{{ translate('WhatsApp Status') }}</button>
+                <button type="button" class="btn btn-outline-primary" data-pick="poster">{{ translate('Poster to print') }}</button>
+            </div>
             <div class="p-card p-2 mb-3" style="max-width:380px;margin:0 auto">
                 <canvas id="statusCard" width="1080" height="1920" style="width:100%;height:auto;display:block;border-radius:6px;background:#E02020"
                         aria-label="{{ translate('Your WhatsApp Status picture') }}"></canvas>
+                <canvas id="posterCard" width="1240" height="1754" style="width:100%;height:auto;display:none;border-radius:6px;background:#fff;border:1px solid #E8ECEB"
+                        aria-label="{{ translate('Your poster to print') }}"></canvas>
+                <p class="text-muted text-center mt-2 mb-0" style="font-size:12px" id="posterHint" hidden>{{ translate('Print it and put it on your counter or your door: customers scan it to see your menu and order.') }}</p>
             </div>
         </div>
         <div class="col-md-6">
@@ -146,13 +153,71 @@
                 ctx.textAlign = 'left';
             });
         }
-        // Where to tap.
-        const by = H - 230;
-        ctx.fillStyle = '#fff'; rr(P, by, W - 2 * P, 160, 12); ctx.fill();
-        text(data.cta, P + 36, by + 70, 42, '800', '#1D2D2B', W - 2 * P - 72);
-        text(data.link, P + 36, by + 122, 32, '500', '#48615E', W - 2 * P - 72);
+        // Where to tap, and the QR code to scan.
+        const bh = 250, by = H - bh - 50;
+        ctx.fillStyle = '#fff'; rr(P, by, W - 2 * P, bh, 12); ctx.fill();
+        qr(ctx, W - P - 24 - 210, by + 20, 210);
+        text(data.cta, P + 36, by + 90, 44, '800', '#1D2D2B', W - 2 * P - 330);
+        text(data.scan_short, P + 36, by + 145, 32, '600', '#E02020', W - 2 * P - 330);
+        text(data.link, P + 36, by + 200, 26, '500', '#48615E', W - 2 * P - 330);
         try { canvas.toDataURL('image/png'); } catch (e) { tainted = true; }
     }
+
+    /** The link's QR code, dark squares on white, at (x, y), size s. */
+    function qr(c, x, y, s) {
+        const n = data.qr.length, m = s / (n + 2);
+        c.fillStyle = '#fff'; c.fillRect(x, y, s, s);
+        c.fillStyle = '#111';
+        data.qr.forEach((row, r) => {
+            for (let k = 0; k < row.length; k++) {
+                if (row[k] === '1') c.fillRect(Math.floor(x + (k + 1) * m), Math.floor(y + (r + 1) * m), Math.ceil(m), Math.ceil(m));
+            }
+        });
+    }
+
+    // The poster to print: white, the name, a big QR code, how to order.
+    const poster = document.getElementById('posterCard');
+    const pc = poster.getContext('2d');
+    async function drawPoster() {
+        const PW = 1240, PH = 1754;
+        pc.fillStyle = '#fff'; pc.fillRect(0, 0, PW, PH);
+        pc.fillStyle = '#E02020'; pc.fillRect(0, 0, PW, 150);
+        pc.font = '900 64px system-ui, -apple-system, Roboto, sans-serif'; pc.fillStyle = '#fff'; pc.fillText('E-RIDE', 80, 100);
+        pc.font = '500 64px system-ui, -apple-system, Roboto, sans-serif'; pc.fillText(data.kind, 330, 100);
+        const logo = await load(data.logo);
+        let y = 260;
+        if (logo) {
+            const s = Math.min(180 / logo.width, 180 / logo.height);
+            pc.drawImage(logo, (PW - logo.width * s) / 2, y, logo.width * s, logo.height * s);
+            y += 220;
+        }
+        pc.textAlign = 'center';
+        pc.fillStyle = '#1D2D2B'; pc.font = '800 84px system-ui, -apple-system, Roboto, sans-serif';
+        let name = String(data.name);
+        while (name.length > 1 && pc.measureText(name).width > PW - 160) name = name.slice(0, -2) + '…';
+        pc.fillText(name, PW / 2, y + 40);
+        pc.fillStyle = '#6B7675'; pc.font = '500 40px system-ui, -apple-system, Roboto, sans-serif';
+        pc.fillText(data.type + '  ·  ' + data.ways.join(', '), PW / 2, y + 110);
+        pc.fillStyle = '#E02020'; pc.font = '800 64px system-ui, -apple-system, Roboto, sans-serif';
+        pc.fillText(data.scan, PW / 2, y + 230);
+        qr(pc, (PW - 720) / 2, y + 290, 720);
+        pc.fillStyle = '#1D2D2B'; pc.font = '600 38px system-ui, -apple-system, Roboto, sans-serif';
+        pc.fillText(data.link, PW / 2, y + 1070);
+        pc.fillStyle = '#6B7675'; pc.font = '500 34px system-ui, -apple-system, Roboto, sans-serif';
+        pc.fillText(data.no_app, PW / 2, y + 1125);
+        pc.textAlign = 'left';
+    }
+
+    let active = canvas;
+    document.querySelectorAll('[data-pick]').forEach(b => b.addEventListener('click', () => {
+        const posterOn = b.dataset.pick === 'poster';
+        active = posterOn ? poster : canvas;
+        canvas.style.display = posterOn ? 'none' : 'block';
+        poster.style.display = posterOn ? 'block' : 'none';
+        document.getElementById('posterHint').hidden = !posterOn;
+        document.querySelectorAll('[data-pick]').forEach(x => x.className = 'btn ' + (x === b ? 'btn-primary' : 'btn-outline-primary'));
+        document.getElementById('sharePicture').lastChild.textContent = ' ' + (posterOn ? @json(translate('Save or share the poster')) : @json(translate('Share the picture')));
+    }));
 
     async function copyLink() {
         const link = document.getElementById('storeLink').value;
@@ -169,8 +234,8 @@
     document.getElementById('sharePicture').addEventListener('click', async () => {
         await copyLink();
         if (tainted) { window.open(data.page, '_blank'); return; }
-        canvas.toBlob(async blob => {
-            const file = new File([blob], data.file, {type: 'image/png'});
+        active.toBlob(async blob => {
+            const file = new File([blob], (active === poster ? 'poster-' : '') + data.file, {type: 'image/png'});
             if (navigator.canShare && navigator.canShare({files: [file]})) {
                 try { await navigator.share({files: [file], text: data.share_text}); } catch (e) {}
             } else {
@@ -182,6 +247,7 @@
     });
 
     draw();
+    drawPoster();
 })();
 </script>
 @endpush

@@ -76,8 +76,30 @@ class PortalController extends Controller
             'page' => $url,
             'share_text' => $shareText,
             'file' => 'eride-' . $brand->slug . '.png',
+            // The link as a QR code: rows of 1 (dark) and 0, drawn by the page.
+            'qr' => self::qrRows($url),
+            'scan' => translate('Scan to see the menu and order'),
+            'scan_short' => translate('Scan or tap the link'),
+            'no_app' => translate('No app? The menu opens in your browser.'),
+            'ways' => array_values($ways),
+            'type' => $brand->type === 'shop' ? translate('Shop') : translate('Restaurant'),
         ];
         return view('storemanagement::partner.share', compact('brand', 'url', 'card', 'shareText'));
+    }
+
+    /** A QR code of $text as rows of "0"/"1". */
+    private static function qrRows(string $text): array
+    {
+        $matrix = \BaconQrCode\Encoder\Encoder::encode($text, \BaconQrCode\Common\ErrorCorrectionLevel::M(), 'UTF-8')->getMatrix();
+        $rows = [];
+        for ($y = 0; $y < $matrix->getHeight(); $y++) {
+            $row = '';
+            for ($x = 0; $x < $matrix->getWidth(); $x++) {
+                $row .= $matrix->get($x, $y) === 1 ? '1' : '0';
+            }
+            $rows[] = $row;
+        }
+        return $rows;
     }
 
     /** The big open/closed switch at the top of every portal page. */
