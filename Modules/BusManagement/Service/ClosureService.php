@@ -261,7 +261,7 @@ class ClosureService
                         $t->update(['departure_id' => $toLocked->id, 'seat' => $seat]);
                     }
                     $x->update(['departure_id' => $toLocked->id, 'moved_from_departure_id' => $from->id, 'moved_at' => now(), 'closure_id' => $closure->id,
-                        'move_kept_at' => null]);
+                        'move_kept_at' => null, 'reminded_at' => null, 'eve_reminded_at' => null, 'collect_reminded_at' => null]);
                     return true;
                 });
             } catch (UniqueConstraintViolationException) {

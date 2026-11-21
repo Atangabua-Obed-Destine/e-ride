@@ -700,6 +700,100 @@ class BookingService
         return $closed;
     }
 
+    /** The evening reminder goes out between these hours (the agency's local time), for buses leaving the next day. */
+    public const REMIND_EVENING_FROM = 19;
+    public const REMIND_EVENING_UNTIL = 22;
+    /** The second reminder goes out this long before the bus leaves. */
+    public const REMIND_HOURS_BEFORE = 2;
+    /** "Be there by": this long before the bus leaves. */
+    public const REMIND_BE_THERE_MINUTES = 30;
+
+    /**
+     * App passengers are reminded of their bus so they do not miss it: the
+     * evening before, and two hours before it leaves. Tapping the push opens
+     * the booking, which has the ticket and "Ride to the agency".
+     *
+     * Not sent to someone who has only just booked (they know), nor, for the
+     * two-hour one, to someone who still has to collect a printed ticket: the
+     * "collect your ticket" reminder goes out at the same time and says it all.
+     * Website bookings get theirs by WhatsApp (webReminders).
+     */
+    public function travelReminders(?CarbonInterface $now = null): int
+    {
+        $now = Carbon::instance($now ?? now());
+        $sent = 0;
+        $evening = $now->hour >= self::REMIND_EVENING_FROM && $now->hour < self::REMIND_EVENING_UNTIL;
+        $tomorrow = $now->copy()->addDay()->toDateString();
+        BusBooking::with(['agency', 'departure.destination', 'customer', 'tickets'])
+            ->where('source', BusBooking::APP)->where('status', BusBooking::PAID)->whereNotNull('customer_id')
+            ->where(fn($q) => $q->whereNull('via')->orWhere('via', '!=', BusBooking::WEB))
+            ->where(fn($q) => $q->whereNull('reminded_at')->orWhereNull('eve_reminded_at'))
+            ->whereIn('departure_id', BusDeparture::whereIn('status', BusDeparture::OPEN)->whereBetween('date', [$now->toDateString(), $tomorrow])->select('id'))
+            ->limit(500)->get()
+            ->each(function (BusBooking $b) use ($now, $evening, $tomorrow, &$sent) {
+                $d = $b->departure;
+                if (!$d || !$b->customer || !$b->agency) {
+                    return;
+                }
+                $leaves = $d->leavesAt();
+                // Someone still travelling: a ticket not yet boarded or cancelled.
+                if ($leaves->lte($now) || !$b->tickets->contains(fn($t) => $t->status === BusTicket::VALID)) {
+                    return;
+                }
+                $collects = BusSettings::rules($b->agency->rules)['tickets'] === 'collect'
+                    && $b->tickets->contains(fn($t) => $t->status === BusTicket::VALID && $t->collected_at === null);
+                $whenFull = $d->kind === 'when_full';
+                $words = [
+                    'city' => (string)$d->destination?->city,
+                    'agency' => $b->agency->name,
+                    'time' => $leaves->format('H:i'),
+                    // A bus that leaves when full can go at its time: be there by then.
+                    'early' => $whenFull ? $leaves->format('H:i') : $leaves->copy()->subMinutes(self::REMIND_BE_THERE_MINUTES)->format('H:i'),
+                    'code' => $b->code,
+                ];
+
+                // Two hours before. Claimed first, so two runs never remind twice.
+                if ($b->reminded_at === null && $leaves->lte($now->copy()->addHours(self::REMIND_HOURS_BEFORE))) {
+                    if (BusBooking::whereKey($b->id)->whereNull('reminded_at')->update(['reminded_at' => $now]) !== 1) {
+                        return;
+                    }
+                    $justBooked = $b->paid_at && $b->paid_at->gt($leaves->copy()->subHours(self::REMIND_HOURS_BEFORE));
+                    if ($justBooked || $collects) {
+                        return;
+                    }
+                    BusPush::send($b->customer, 'bus_reminder',
+                        $whenFull ? 'Your bus to {city} boards from {time}' : 'Your bus to {city} leaves at {time}',
+                        $whenFull
+                            ? 'It leaves as soon as it is full. Be at {agency} by {early}. Open your ticket here, and book a ride to the agency if you need one.'
+                            : 'Be at {agency} by {early}. Open your ticket here, and book a ride to the agency if you need one.',
+                        $words, ['bus_booking_id' => $b->id]);
+                    $sent++;
+                    return;
+                }
+
+                // The evening before a bus that leaves tomorrow.
+                if ($b->eve_reminded_at === null && $evening && $d->date->toDateString() === $tomorrow) {
+                    if (BusBooking::whereKey($b->id)->whereNull('eve_reminded_at')->update(['eve_reminded_at' => $now]) !== 1) {
+                        return;
+                    }
+                    // Booked this evening: they have just seen all of this.
+                    if ($b->paid_at && $b->paid_at->gt($now->copy()->subHours(3))) {
+                        return;
+                    }
+                    BusPush::send($b->customer, 'bus_reminder_eve',
+                        $whenFull ? 'Tomorrow from {time}: your bus to {city}' : 'Tomorrow at {time}: your bus to {city}',
+                        $collects
+                            ? 'With {agency}. Be there by {early} to collect your ticket at the counter with code {code}.'
+                            : ($whenFull
+                                ? 'With {agency}. It leaves as soon as it is full, so be there by {early}. Your ticket is in the app.'
+                                : 'With {agency}. Be there by {early}. Your ticket is in the app.'),
+                        $words, ['bus_booking_id' => $b->id]);
+                    $sent++;
+                }
+            });
+        return $sent;
+    }
+
     /** Tickets printed at the counter: app passengers who have not collected theirs get a reminder 2 hours before. */
     public function collectReminders(?CarbonInterface $now = null): int
     {
