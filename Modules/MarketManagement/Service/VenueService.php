@@ -48,7 +48,7 @@ class VenueService
             $itemHits = MarketItem::whereIn('shop_id', (clone $base)->pluck('id'))->whereIn('status', MarketItem::PUBLIC)
                 ->where(function ($q) use ($words) {
                     foreach ($words as $w) {
-                        $q->orWhere('title', 'like', '%' . $w . '%')->orWhere('tags_search', 'like', '%|' . $w . '%');
+                        $q->orWhere('title', 'like', '%' . $w . '%')->orWhere('tags_search', 'like', '%' . $w . '%');
                     }
                 })->get(['shop_id', 'title']);
             foreach ($itemHits as $hit) {
@@ -61,7 +61,7 @@ class VenueService
                     $q->orWhere('name', 'like', '%' . $w . '%')
                         ->orWhere('shed_number', $w)
                         ->orWhere('shed_block', 'like', '%' . $w . '%')
-                        ->orWhere('sells_search', 'like', '%|' . $w . '%')
+                        ->orWhere('sells_search', 'like', '%' . $w . '%')
                         ->orWhere('categories', 'like', '%"' . $w . '%');
                 }
                 if ($matches) {
