@@ -53,7 +53,7 @@ class Place extends Model
     }
 
     protected $fillable = [
-        'name', 'category', 'explore_category', 'google_place_id', 'description', 'address', 'latitude', 'longitude', 'zone_id',
+        'name', 'category', 'explore_category', 'google_place_id', 'store_id', 'description', 'address', 'latitude', 'longitude', 'zone_id',
         'phone', 'whatsapp', 'website', 'price_min', 'price_max', 'amenities', 'photos', 'check_in', 'check_out',
         'reception_24h', 'on_duty_from', 'on_duty_until', 'is_featured', 'is_active', 'sort',
         'guide_status', 'story', 'story_fr', 'entry_fee', 'stay_minutes', 'best_time', 'best_time_fr', 'tips', 'tips_fr',

@@ -57,6 +57,62 @@ class StoreOrderController extends Controller
     }
 
     /**
+     * Search every store at once: "rice" finds each store that has it, with the
+     * matching products. One group per brand (in the customer's zone), stores
+     * whose name matches first, then by how many products match.
+     */
+    public function search(Request $request): JsonResponse
+    {
+        $data = $request->validate(['q' => 'required|string|min:2|max:60']);
+        if (!StoreSettings::enabled()) {
+            return response()->json(responseFormatter(DEFAULT_200, ['results' => []]));
+        }
+        $lat = $request->filled('latitude') ? (float)$request->query('latitude') : null;
+        $lng = $request->filled('longitude') ? (float)$request->query('longitude') : null;
+        $zoneId = $request->header('zoneId');
+        $words = array_values(array_filter(preg_split('/\s+/u', mb_strtolower(trim($data['q']))), fn($w) => mb_strlen($w) >= 2));
+        $results = Store::where('is_active', 1)->whereNull('parent_id')->with(['branches', 'categories', 'items'])->get()
+            ->map(function (Store $brand) use ($words, $lat, $lng, $zoneId) {
+                $kitchens = $brand->kitchens(true)->filter(fn(Store $k) => $k->zone_id && (!$zoneId || $k->zone_id === $zoneId));
+                if ($kitchens->isEmpty()) {
+                    return null;
+                }
+                $hits = $brand->items->filter(function ($it) use ($words) {
+                    $text = mb_strtolower($it->name . ' ' . $it->description);
+                    foreach ($words as $w) {
+                        if (!str_contains($text, $w)) {
+                            return false;
+                        }
+                    }
+                    return true;
+                });
+                $nameHit = collect($words)->every(fn($w) => str_contains(mb_strtolower($brand->name . ' ' . $brand->description), $w));
+                if ($hits->isEmpty() && !$nameHit) {
+                    return null;
+                }
+                $pick = StoreBranches::pick($brand, $lat, $lng, null, $zoneId);
+                $sections = $brand->categories->keyBy('id');
+                return [
+                    'store' => StorePresenter::store($pick['kitchen'], $lat, $lng) + ['id' => $brand->id],
+                    'name_match' => $nameHit,
+                    'items' => $hits->sortByDesc(fn($it) => (int)$it->is_available)->take(8)->map(fn($it) => [
+                        'id' => $it->id,
+                        'name' => $it->name,
+                        'price' => (float)$it->price,
+                        'image' => $it->imageUrl(),
+                        'section' => $sections->get($it->store_menu_category_id)?->name,
+                        'is_available' => (bool)$it->is_available,
+                    ])->values()->all(),
+                    'count' => $hits->count(),
+                ];
+            })
+            ->filter()
+            ->sortBy(fn($r) => [$r['name_match'] ? 0 : 1, $r['store']['open_now'] ? 0 : 1, -$r['count']])
+            ->take(15)->values();
+        return response()->json(responseFormatter(DEFAULT_200, ['results' => $results]));
+    }
+
+    /**
      * A brand's menu as served by one of its kitchens. {store} is the brand or
      * one of its branches (taken as the preferred branch); ?branch= is the
      * branch the customer chose. The answer says which branch and why.

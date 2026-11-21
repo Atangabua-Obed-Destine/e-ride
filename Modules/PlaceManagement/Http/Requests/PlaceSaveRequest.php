@@ -28,6 +28,8 @@ class PlaceSaveRequest extends FormRequest
             'category' => ['required', Rule::in(PlaceCategory::allTypes())],
             'google_place_id' => ['nullable', 'string', 'max:255', 'regex:/^[A-Za-z0-9_-]+$/',
                 Rule::unique('places', 'google_place_id')->ignore($place?->id)->whereNull('deleted_at')],
+            // The E-Ride partner store (Food & Shops) this place is, when the names differ.
+            'store_id' => 'nullable|string|max:40',
             'description' => 'nullable|string|max:1500',
             'address' => 'required|string|max:255',
             'latitude' => 'required|numeric|between:-90,90',

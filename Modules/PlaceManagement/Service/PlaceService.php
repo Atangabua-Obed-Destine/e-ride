@@ -54,6 +54,7 @@ class PlaceService extends BaseService implements PlaceServiceInterface
             'category' => $data['category'],
             'google_place_id' => filled($data['google_place_id'] ?? null) ? trim($data['google_place_id']) : null,
             'description' => $data['description'] ?? null,
+            'store_id' => filled($data['store_id'] ?? null) ? $data['store_id'] : null,
             'address' => trim($data['address']),
             'latitude' => (float)$data['latitude'],
             'longitude' => (float)$data['longitude'],

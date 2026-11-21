@@ -90,7 +90,8 @@ class GuideService
         }
         $ratings = $this->ratingsFor($keys);
         $verifiedIds = array_values(array_filter(array_map(fn($c) => ($c['source'] ?? '') === 'eride' ? $c['id'] : null, $cards)));
-        $guides = $verifiedIds ? Place::whereIn('id', $verifiedIds)->get(['id', 'guide_status', 'stay_minutes', 'entry_fee'])->keyBy('id') : collect();
+        $guides = $verifiedIds ? Place::whereIn('id', $verifiedIds)->get(['id', 'guide_status', 'stay_minutes', 'entry_fee', 'store_id'])->keyBy('id') : collect();
+        $partners = new \Modules\PlaceManagement\Lib\PartnerStores();
 
         foreach ($cards as &$c) {
             $sum = 0.0;
@@ -110,6 +111,8 @@ class GuideService
             $c['has_guide'] = (bool)$g?->hasGuide();
             $c['stay_minutes'] = $g?->hasGuide() ? $g->stay_minutes : null;
             $c['entry_fee'] = $g?->hasGuide() ? $g->entry_fee : null;
+            // An E-Ride partner (Food & Shops): the app offers "Order" on it.
+            $c['partner_store'] = $partners->of($c, $g?->store_id);
         }
         unset($c);
         return $cards;

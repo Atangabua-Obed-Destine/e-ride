@@ -290,6 +290,22 @@
                             </div>
                         </div>
 
+                        @if(class_exists(\Modules\StoreManagement\Entities\Store::class))
+                            @php($partnerStores = \Modules\StoreManagement\Entities\Store::whereNull('parent_id')->orderBy('name')->get(['id', 'name', 'is_active']))
+                            <div class="card mb-3">
+                                <div class="card-body">
+                                    <h5 class="mb-1">{{ translate('E-Ride_partner_store') }}</h5>
+                                    <p class="fs-12 text-muted">{{ translate('When this place is also a Food & Shops partner, the app shows an Order button on it. Places with the same name as a store close by are linked on their own; choose the store here only when the names differ.') }}</p>
+                                    <select name="store_id" class="form-select">
+                                        <option value="">{{ translate('Link_by_name_and_location') }}</option>
+                                        @foreach($partnerStores as $ps)
+                                            <option value="{{ $ps->id }}" {{ old('store_id', $place->store_id) === $ps->id ? 'selected' : '' }}>{{ $ps->name }}{{ $ps->is_active ? '' : ' (' . translate('inactive') . ')' }}</option>
+                                        @endforeach
+                                    </select>
+                                </div>
+                            </div>
+                        @endif
+
                         <div class="d-flex justify-content-end gap-2">
                             @if($place->exists)
                                 @can('place_delete')
