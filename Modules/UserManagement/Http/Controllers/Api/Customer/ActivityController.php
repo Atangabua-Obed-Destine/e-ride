@@ -78,7 +78,9 @@ class ActivityController extends Controller
                 StoreOrder::AWAITING_CONFIRMATION, StoreOrder::PLACED => $this->item('food_waiting', $o->id, 'progress', $o->placed_at?->copy()->addMinutes($respond), $o->placed_at, $p),
                 StoreOrder::CHANGES_PROPOSED => $this->item('food_changes', $o->id, 'now', $o->proposed_at?->copy()->addMinutes(StoreOrderService::ANSWER_MINUTES), $o->proposed_at, $p),
                 StoreOrder::AWAITING_PAYMENT => $this->item('food_pay', $o->id, 'now', $o->pay_by, $o->confirmed_at, $p),
-                StoreOrder::ACCEPTED => $this->item('food_preparing', $o->id, 'progress', null, $o->accepted_at, $p + ['time' => $o->ready_at?->toIso8601String()]),
+                // Eat there or collect: the way, and "it is ready" needs them now.
+                StoreOrder::ACCEPTED => $this->item('food_preparing', $o->id, !$o->isDelivery() && $o->ready_told_at ? 'now' : 'progress', null, $o->accepted_at,
+                    $p + ['time' => $o->ready_at?->toIso8601String(), 'way' => $o->fulfilment ?? StoreOrder::DELIVERY, 'ready' => !$o->isDelivery() && $o->ready_told_at !== null]),
                 StoreOrder::RIDER_REQUESTED => $this->item('food_rider', $o->id, 'progress', null, $o->rider_requested_at, $p),
                 default => $this->item('food_on_the_way', $o->id, 'progress', null, $o->picked_up_at, $p),
             };
