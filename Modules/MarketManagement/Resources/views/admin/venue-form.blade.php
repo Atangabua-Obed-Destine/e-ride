@@ -56,6 +56,11 @@
                                 <div class="form-text">{{ translate('One per line: name | latitude, longitude. Riders are dropped at the gate nearest the shed.') }}</div>
                             </div>
                             <div class="mb-3">
+                                <label class="form-label">{{ translate('Buildings') }}</label>
+                                <textarea name="buildings" class="form-control fs-12" rows="3" placeholder="Main hall | 3&#10;New block | 2">{{ old('buildings', collect($venue->buildingList())->map(fn($b) => $b['name'] . ' | ' . $b['floors'])->implode("\n")) }}</textarea>
+                                <div class="form-text">{{ translate('One per line: name | number of floors (with the ground floor). Leave empty when the market is open-air.') }}</div>
+                            </div>
+                            <div class="mb-3">
                                 <label class="form-label">{{ translate('Blocks or lines') }}</label>
                                 <textarea name="blocks" class="form-control fs-12" rows="3" placeholder="Block A&#10;Block B">{{ old('blocks', implode("\n", $venue->blockList())) }}</textarea>
                                 <div class="form-text">{{ translate('Suggested to shop owners when they give their shed. They can also type their own.') }}</div>

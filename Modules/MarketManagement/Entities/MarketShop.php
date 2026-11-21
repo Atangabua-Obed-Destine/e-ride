@@ -23,7 +23,7 @@ class MarketShop extends Model
     public const MAX_SELLS = 12;
 
     protected $fillable = [
-        'user_id', 'kind', 'venue_id', 'shed_number', 'shed_block', 'shopfront', 'sells', 'sells_search', 'shed_changed_at', 'map_visible', 'address_note', 'name', 'slug', 'category', 'categories', 'about', 'area_label', 'pickup_lat', 'pickup_lng', 'pickup_address', 'logo',
+        'user_id', 'kind', 'venue_id', 'shed_building', 'shed_floor', 'shed_number', 'shed_block', 'shopfront', 'sells', 'sells_search', 'shed_changed_at', 'map_visible', 'address_note', 'name', 'slug', 'category', 'categories', 'about', 'area_label', 'pickup_lat', 'pickup_lng', 'pickup_address', 'logo',
         'status', 'closed_reason', 'closed_at', 'verification_requested_at', 'verified_at', 'verified_by',
         'visits', 'chats', 'new_users', 'followers_notified_at',
         'taking_orders', 'fulfilment', 'pay_methods', 'open_from', 'open_to', 'min_order', 'rating', 'rating_count', 'orders_completed',
@@ -46,6 +46,7 @@ class MarketShop extends Model
         'new_users' => 'integer',
         'categories' => 'array',
         'sells' => 'array',
+        'shed_floor' => 'integer',
         'shed_changed_at' => 'datetime',
         'map_visible' => 'boolean',
         'taking_orders' => 'boolean',
@@ -107,10 +108,25 @@ class MarketShop extends Model
         return $this->venue_id !== null && !$this->isPrivate();
     }
 
-    /** "Block C, shed 112", or what there is of it. */
+    /** "Ground floor", "Floor 2", "Basement". */
+    public function floorLabel(): ?string
+    {
+        if ($this->shed_floor === null) {
+            return null;
+        }
+        return match (true) {
+            $this->shed_floor === 0 => translate('Ground floor'),
+            $this->shed_floor < 0 => translate('Basement') . ($this->shed_floor < -1 ? ' ' . abs($this->shed_floor) : ''),
+            default => translate(key: 'Floor {n}', replace: ['n' => $this->shed_floor]),
+        };
+    }
+
+    /** "Main hall, Floor 1, Block C, Shed 112", or what there is of it. */
     public function shedLabel(): ?string
     {
         $parts = array_filter([
+            $this->shed_building ? trim($this->shed_building) : null,
+            $this->floorLabel(),
             $this->shed_block ? trim($this->shed_block) : null,
             $this->shed_number ? translate(key: 'shed {n}', replace: ['n' => trim($this->shed_number)]) : null,
         ]);

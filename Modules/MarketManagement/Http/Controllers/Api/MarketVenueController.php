@@ -33,7 +33,8 @@ class MarketVenueController extends Controller
             ->withCount(['liveShops as shops_count', 'liveShops as verified_count' => fn($q) => $q->whereNotNull('verified_at')])
             ->firstOrFail();
         $block = trim((string)$request->query('block', '')) ?: null;
-        $result = $this->venues->shops($venue, mb_substr(trim((string)$request->query('q', '')), 0, 60), $request->boolean('verified'), $block);
+        $building = trim((string)$request->query('building', '')) ?: null;
+        $result = $this->venues->shops($venue, mb_substr(trim((string)$request->query('q', '')), 0, 60), $request->boolean('verified'), $block, $building);
         $viewer = $request->user()?->id;
         return response()->json(responseFormatter(DEFAULT_200, [
             'venue' => MarketPresenter::venue($venue),

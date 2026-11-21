@@ -29,7 +29,7 @@
                                 <td><span class="fw-semibold">{{ $venue->name }}</span>
                                     <div class="fs-11 text-muted">{{ $venue->area_label ?: $venue->city }} ·
                                         <a href="https://www.google.com/maps?q={{ $venue->latitude }},{{ $venue->longitude }}" target="_blank" rel="noopener">{{ translate('Map') }}</a></div></td>
-                                <td>{{ count($venue->entrances ?? []) }}<div class="fs-11 text-muted">{{ implode(', ', array_slice($venue->blockList(), 0, 4)) }}</div></td>
+                                <td>{{ count($venue->entrances ?? []) }}<div class="fs-11 text-muted">{{ implode(', ', array_merge(array_map(fn($b) => $b['name'] . ' (' . $b['floors'] . ')', $venue->buildingList()), array_slice($venue->blockList(), 0, 4))) }}</div></td>
                                 <td>{{ $venue->shops_count }} · <span class="text-info">{{ $venue->verified_count }} {{ translate('verified') }}</span>
                                     @if($venue->waiting_count)
                                         <div class="fs-11"><a href="{{ route('admin.market.shops', ['filter' => 'requests', 'venue' => $venue->id]) }}">{{ $venue->waiting_count }} {{ translate('asking to be verified') }}</a></div>

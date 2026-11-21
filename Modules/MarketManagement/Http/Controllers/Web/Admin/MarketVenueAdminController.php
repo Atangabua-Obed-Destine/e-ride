@@ -41,6 +41,7 @@ class MarketVenueAdminController extends Controller
             'longitude' => 'required|numeric|between:-180,180',
             'entrances' => 'nullable|string|max:2000',
             'blocks' => 'nullable|string|max:2000',
+            'buildings' => 'nullable|string|max:2000',
             'is_active' => 'nullable|boolean',
             'sort' => 'nullable|integer|min:0|max:999',
         ]);

@@ -110,6 +110,7 @@ class ShopService
             $this->fail('shop', translate('This shop is closed.'));
         }
         $before = ['venue' => $shop->venue_id, 'shed' => mb_strtolower(trim((string)$shop->shed_number)), 'block' => mb_strtolower(trim((string)$shop->shed_block)),
+            'building' => mb_strtolower(trim((string)$shop->shed_building)), 'floor' => $shop->shed_floor,
             'lat' => $shop->pickup_lat, 'lng' => $shop->pickup_lng];
         $shop->fill($this->fields($data));
         $this->applyVenue($shop, $data, $shopfront);
@@ -125,6 +126,8 @@ class ShopService
         $moved = $before['venue'] !== $shop->venue_id
             || $before['shed'] !== mb_strtolower(trim((string)$shop->shed_number))
             || $before['block'] !== mb_strtolower(trim((string)$shop->shed_block))
+            || $before['building'] !== mb_strtolower(trim((string)$shop->shed_building))
+            || $before['floor'] !== $shop->shed_floor
             || ($shop->venue_id && $before['lat'] !== null && $shop->pickup_lat !== null
                 && VenueService::km((float)$before['lat'], (float)$before['lng'], (float)$shop->pickup_lat, (float)$shop->pickup_lng) > 0.03);
         if ($moved) {
@@ -152,6 +155,8 @@ class ShopService
                 $shop->venue_id = null;
                 $shop->shed_number = null;
                 $shop->shed_block = null;
+                $shop->shed_building = null;
+                $shop->shed_floor = null;
             } else {
                 if (!MarketVenue::whereKey($id)->where('is_active', true)->exists()) {
                     $this->fail('venue_id', translate('Choose one of the markets in the list.'));
@@ -159,7 +164,11 @@ class ShopService
                 $shop->venue_id = $id;
             }
         }
-        foreach (['shed_number' => 30, 'shed_block' => 40] as $field => $max) {
+        if (array_key_exists('shed_floor', $data) && $shop->venue_id) {
+            $floor = trim((string)$data['shed_floor']);
+            $shop->shed_floor = $floor === '' || !is_numeric($floor) ? null : max(-3, min(30, (int)$floor));
+        }
+        foreach (['shed_number' => 30, 'shed_block' => 40, 'shed_building' => 60] as $field => $max) {
             if (array_key_exists($field, $data) && $shop->venue_id) {
                 $value = trim(preg_replace('/\s+/u', ' ', (string)$data[$field]));
                 $shop->{$field} = $value === '' ? null : mb_substr($value, 0, $max);

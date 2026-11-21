@@ -111,6 +111,9 @@ class MarketPresenter
             'name' => $venue->name,
             'shed_number' => $shop->shed_number,
             'shed_block' => $shop->shed_block,
+            'shed_building' => $shop->shed_building,
+            // 0 = ground floor, 1 = first floor, -1 = basement; null when not in a building.
+            'shed_floor' => $shop->shed_floor,
             'label' => $shop->shedLabel(),
             'shopfront' => $shop->shopfrontUrl(),
             // Verified in a market: E-Ride checked the shed, its place and what it sells.
@@ -133,6 +136,7 @@ class MarketPresenter
             'lng' => $v->longitude,
             'entrances' => $v->entranceList(),
             'blocks' => $v->blockList(),
+            'buildings' => $v->buildingList(),
             'shops_count' => (int)($v->shops_count ?? 0),
             'verified_count' => (int)($v->verified_count ?? 0),
             'distance_km' => $v->distance_km ?? null,

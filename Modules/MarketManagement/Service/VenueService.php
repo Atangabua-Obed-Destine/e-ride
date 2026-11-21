@@ -37,11 +37,12 @@ class VenueService
      *
      * @return array{shops: Collection, matches: array<string, string[]>, searched: bool}
      */
-    public function shops(MarketVenue $venue, string $query = '', bool $verifiedOnly = false, ?string $block = null): array
+    public function shops(MarketVenue $venue, string $query = '', bool $verifiedOnly = false, ?string $block = null, ?string $building = null): array
     {
         $base = $venue->liveShops()->with('venue')
             ->when($verifiedOnly, fn($q) => $q->whereNotNull('verified_at'))
-            ->when($block, fn($q) => $q->where('shed_block', $block));
+            ->when($block, fn($q) => $q->where('shed_block', $block))
+            ->when($building, fn($q) => $q->where('shed_building', $building));
         $words = $this->terms($query);
         $matches = [];
         if ($words) {
@@ -61,6 +62,7 @@ class VenueService
                     $q->orWhere('name', 'like', '%' . $w . '%')
                         ->orWhere('shed_number', $w)
                         ->orWhere('shed_block', 'like', '%' . $w . '%')
+                        ->orWhere('shed_building', 'like', '%' . $w . '%')
                         ->orWhere('sells_search', 'like', '%' . $w . '%')
                         ->orWhere('categories', 'like', '%"' . $w . '%');
                 }
@@ -69,7 +71,7 @@ class VenueService
                 }
             });
         }
-        $shops = $base->orderByRaw('verified_at IS NULL')->orderBy('shed_block')->orderBy('shed_number')->orderBy('name')->limit(200)->get();
+        $shops = $base->orderByRaw('verified_at IS NULL')->orderBy('shed_building')->orderBy('shed_floor')->orderBy('shed_block')->orderBy('shed_number')->orderBy('name')->limit(200)->get();
         if ($words) {
             MarketTags::record($query, $shops->isNotEmpty());
         }
@@ -118,6 +120,7 @@ class VenueService
             'longitude' => (float)$data['longitude'],
             'entrances' => $this->parseEntrances((string)($data['entrances'] ?? '')),
             'blocks' => array_values(array_filter(array_map('trim', preg_split('/[\n,]+/u', (string)($data['blocks'] ?? ''))))),
+            'buildings' => $this->parseBuildings((string)($data['buildings'] ?? '')),
             'is_active' => (bool)($data['is_active'] ?? true),
             'sort' => (int)($data['sort'] ?? 0),
         ]);
@@ -131,6 +134,20 @@ class VenueService
         }
         $venue->save();
         return $venue;
+    }
+
+    /** One building per line: "Main hall | 3" (3 floors with the ground floor), or just "Main hall". */
+    private function parseBuildings(string $text): ?array
+    {
+        $out = [];
+        foreach (preg_split('/\n+/', $text) as $line) {
+            $parts = array_map('trim', explode('|', $line));
+            if (($parts[0] ?? '') === '') {
+                continue;
+            }
+            $out[] = ['name' => mb_substr($parts[0], 0, 60), 'floors' => max(1, min(30, (int)($parts[1] ?? 1) ?: 1))];
+        }
+        return $out ?: null;
     }
 
     /** One gate per line: "Main gate | 5.9601, 10.1512". */

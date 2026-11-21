@@ -11,13 +11,14 @@ class MarketVenue extends Model
 {
     use HasUuid;
 
-    protected $fillable = ['name', 'slug', 'city', 'area_label', 'about', 'latitude', 'longitude', 'entrances', 'blocks', 'is_active', 'sort'];
+    protected $fillable = ['name', 'slug', 'city', 'area_label', 'about', 'latitude', 'longitude', 'entrances', 'blocks', 'buildings', 'is_active', 'sort'];
 
     protected $casts = [
         'latitude' => 'float',
         'longitude' => 'float',
         'entrances' => 'array',
         'blocks' => 'array',
+        'buildings' => 'array',
         'is_active' => 'boolean',
         'sort' => 'integer',
     ];
@@ -43,6 +44,18 @@ class MarketVenue extends Model
             }
         }
         return $out ?: [['name' => '', 'lat' => (float)$this->latitude, 'lng' => (float)$this->longitude]];
+    }
+
+    /** @return array<int, array{name: string, floors: int}> floors counts the ground floor (1 = ground only). */
+    public function buildingList(): array
+    {
+        $out = [];
+        foreach ((array)($this->buildings ?? []) as $b) {
+            if (is_array($b) && trim((string)($b['name'] ?? '')) !== '') {
+                $out[] = ['name' => trim((string)$b['name']), 'floors' => max(1, min(30, (int)($b['floors'] ?? 1)))];
+            }
+        }
+        return $out;
     }
 
     /** @return string[] */

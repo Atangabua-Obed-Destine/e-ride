@@ -63,6 +63,8 @@ class MarketSellerController extends Controller
             'venue_id' => 'nullable|string|max:40',
             'shed_number' => 'nullable|string|max:30',
             'shed_block' => 'nullable|string|max:40',
+            'shed_building' => 'nullable|string|max:60',
+            'shed_floor' => 'nullable',
             'sells' => 'nullable',
             'shopfront' => 'nullable|image|max:' . convertBytesToKiloBytes(maxUploadSize('image')),
         ]);
