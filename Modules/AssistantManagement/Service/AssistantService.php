@@ -329,6 +329,25 @@ class AssistantService
         return implode("\n", $lines) ?: '- nothing known';
     }
 
+    /**
+     * Quarters and landmarks of the launch city plus the admin's landmarks
+     * (most used first), so a spoken "Nkwen" is not written "inquin".
+     */
+    protected function placeNames(): string
+    {
+        $names = ['Bamenda', 'Nkwen', 'Up Station', 'Commercial Avenue', 'Hospital Roundabout', 'Food Market', 'Main Market', 'Mile 2', 'Mile 3', 'Mile 4',
+            'Mile 90', 'Ntarikon', 'Mankon', 'Bambili', 'Bambui', 'Nkwen Market', 'City Chemist Roundabout', 'Old Town', 'Ntamulung', 'Azire', 'Atuakom',
+            'Foncha Street', 'Sonac Street', 'Finance Junction', 'Cow Street', 'Hospital Street', 'Small Mankon', 'Ngomgham', 'Bayelle', 'Alakuma', 'Mbengwi Road', 'Bali'];
+        try {
+            $names = array_merge($names, Cache::remember('assistant_voice_places', 3600, fn() => \Modules\PlaceManagement\Entities\Landmark::where('is_active', 1)
+                ->orderByDesc('uses')->limit(120)->get(['name', 'area'])
+                ->flatMap(fn($l) => [$l->name, $l->area])->filter()->map(fn($n) => trim((string)$n))->all()));
+        } catch (\Throwable $e) {
+            report($e);
+        }
+        return implode(', ', array_slice(array_values(array_unique($names)), 0, 150));
+    }
+
     protected function conversation(): string
     {
         if (!$this->history) {
@@ -555,6 +574,7 @@ PROMPT;
         }
         $categories = implode(', ', array_map(fn($c) => '"' . mb_substr(trim((string)$c), 0, 60) . '"', array_slice($parcelCategories, 0, 30)));
         $what = $kind === 'parcel' ? 'sending a parcel' : 'booking a ride';
+        $places = $this->placeNames();
         $system = <<<PROMPT
 You listen to a voice note that a customer of E-Ride, a ride-hailing and delivery app in Cameroon, recorded while {$what}. The note is for the driver. People speak English, French, Cameroonian Pidgin, or mix them, and name local places: quarters, junctions, churches, schools, markets, shops, filling stations.
 Answer with JSON only:
@@ -565,6 +585,7 @@ Answer with JSON only:
 - note: anything else the driver should know (bags, waiting inside a shop, call on arrival), at most 120 characters, their language. "" if nothing.
 - parcel: only when sending a parcel, else null: {"what": "what is sent", "weight_kg": number or null, "fragile": true or false, "receiver_name": "" , "receiver_phone": "", "category": one of [{$categories}] or ""}.
 - understood: false when the recording is silent, only noise, or not about the trip; then every other field is "" or null.
+- Local place names people use, spelled the way to write them (when you hear one of these, write it like this): {$places}
 PROMPT;
         foreach ($settings['providers'] as $p) {
             if ($p['name'] !== 'gemini' || !$p['enabled'] || $p['key'] === '' || Cache::has('assistant_skip_gemini') || !($this->clients['gemini'] instanceof GeminiClient)) {
