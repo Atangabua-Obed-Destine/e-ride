@@ -25,6 +25,7 @@ Route::group(['prefix' => 'admin/market', 'as' => 'admin.market.', 'middleware' 
         Route::get('orders', [MarketAdminController::class, 'orders'])->name('orders');
         Route::get('auctions', [MarketAdminController::class, 'auctions'])->name('auctions');
         Route::get('services', [MarketAdminController::class, 'services'])->name('services');
+        Route::get('venues', [\Modules\MarketManagement\Http\Controllers\Web\Admin\MarketVenueAdminController::class, 'index'])->name('venues');
     });
     Route::middleware('can:place_edit')->group(function () {
         Route::post('items/{item}/decide', [MarketAdminController::class, 'decide'])->name('decide');
@@ -36,6 +37,10 @@ Route::group(['prefix' => 'admin/market', 'as' => 'admin.market.', 'middleware' 
         Route::post('auction-rules', [MarketAdminController::class, 'saveAuctionRules'])->name('auction-rules');
         Route::post('service-rules', [MarketAdminController::class, 'saveServiceRules'])->name('service-rules');
         Route::post('reviews/{review}/hide', [MarketAdminController::class, 'hideReview'])->name('review-hide');
+        Route::get('venues/create', [\Modules\MarketManagement\Http\Controllers\Web\Admin\MarketVenueAdminController::class, 'form'])->name('venue-create');
+        Route::get('venues/{venue}/edit', [\Modules\MarketManagement\Http\Controllers\Web\Admin\MarketVenueAdminController::class, 'form'])->name('venue-edit');
+        Route::post('venues', [\Modules\MarketManagement\Http\Controllers\Web\Admin\MarketVenueAdminController::class, 'save'])->name('venue-store');
+        Route::post('venues/{venue}', [\Modules\MarketManagement\Http\Controllers\Web\Admin\MarketVenueAdminController::class, 'save'])->name('venue-update');
     });
 });
 

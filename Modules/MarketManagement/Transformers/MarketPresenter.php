@@ -42,6 +42,9 @@ class MarketPresenter
             'mine' => $mine,
             // shop | private (a person selling things they own)
             'kind' => $shop->kind ?? 'shop',
+            // In one of E-Ride's markets: which, the shed, the shopfront, what it sells.
+            'venue' => self::shopVenue($shop),
+            'sells' => $shop->isPrivate() ? [] : $shop->sellsList(),
             // A shop's place (pin, address, how to find it); private sellers never.
             'map' => $shop->onMap() ? ['lat' => $shop->pickup_lat, 'lng' => $shop->pickup_lng, 'address' => $shop->pickup_address,
                 'note' => $shop->address_note] : null,
@@ -96,6 +99,46 @@ class MarketPresenter
         return $data;
     }
 
+    /** The shop's market and shed, or null when it is not in one. */
+    public static function shopVenue(MarketShop $shop): ?array
+    {
+        if (!$shop->inVenue() || !($venue = $shop->venue)) {
+            return null;
+        }
+        return [
+            'id' => $venue->id,
+            'slug' => $venue->slug,
+            'name' => $venue->name,
+            'shed_number' => $shop->shed_number,
+            'shed_block' => $shop->shed_block,
+            'label' => $shop->shedLabel(),
+            'shopfront' => $shop->shopfrontUrl(),
+            // Verified in a market: E-Ride checked the shed, its place and what it sells.
+            'checked' => $shop->isVerified(),
+            'entrances' => $venue->entranceList(),
+        ];
+    }
+
+    /** A market for buyers: where, the gates, how many shops and how many verified. */
+    public static function venue(\Modules\MarketManagement\Entities\MarketVenue $v): array
+    {
+        return [
+            'id' => $v->id,
+            'slug' => $v->slug,
+            'name' => $v->name,
+            'city' => $v->city,
+            'area' => $v->area_label,
+            'about' => $v->about,
+            'lat' => $v->latitude,
+            'lng' => $v->longitude,
+            'entrances' => $v->entranceList(),
+            'blocks' => $v->blockList(),
+            'shops_count' => (int)($v->shops_count ?? 0),
+            'verified_count' => (int)($v->verified_count ?? 0),
+            'distance_km' => $v->distance_km ?? null,
+        ];
+    }
+
     public static function item(MarketItem $item, ?string $viewer = null, bool $full = false): array
     {
         $shop = $item->shop;
@@ -117,8 +160,8 @@ class MarketPresenter
             'status' => $item->status,
             'cover' => $cover?->url(),
             'link' => MarketLinks::item($item),
-            'shop' => $shop ? ['slug' => $shop->slug, 'name' => $shop->name, 'area' => $shop->area_label, 'verified' => $shop->isVerified(),
-                'logo' => $shop->logoUrl(), 'kind' => $shop->kind ?? 'shop'] : null,
+            'shop' => $shop ? ['slug' => $shop->slug, 'name' => $shop->name, 'area' => $shop->venueLabel() ?? $shop->area_label, 'verified' => $shop->isVerified(),
+                'logo' => $shop->logoUrl(), 'kind' => $shop->kind ?? 'shop', 'in_market' => $shop->inVenue()] : null,
             'sale_type' => $item->sale_type ?? 'fixed',
             'used_grade' => $item->used_grade,
             'mine' => $mine,

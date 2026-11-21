@@ -33,7 +33,24 @@
                         @forelse($shops as $shop)
                             <tr>
                                 <td><a href="{{ \Modules\MarketManagement\Lib\MarketLinks::shop($shop) }}" target="_blank" rel="noopener" class="fw-semibold">{{ $shop->name }}</a>
-                                    <div class="fs-11 text-muted">{{ $shop->category ? translate('market_category_' . $shop->category) : '' }} {{ $shop->area_label ? '· ' . $shop->area_label : '' }}</div></td>
+                                    <div class="fs-11 text-muted">{{ $shop->category ? translate('market_category_' . $shop->category) : '' }} {{ $shop->area_label ? '· ' . $shop->area_label : '' }}</div>
+                                    @if($shop->inVenue())
+                                        <div class="fs-12 mt-1 p-2 rounded" style="background:#fff7ed">
+                                            <strong>{{ $shop->venue?->name }}</strong> · {{ $shop->shedLabel() ?: translate('no shed number yet') }}
+                                            @if($shop->pickup_lat)
+                                                · <a href="https://www.google.com/maps?q={{ $shop->pickup_lat }},{{ $shop->pickup_lng }}" target="_blank" rel="noopener">{{ translate('Pin') }}</a>
+                                                @if($shop->venue)<span class="text-muted">({{ (int)round(\Modules\MarketManagement\Service\VenueService::km($shop->venue->latitude, $shop->venue->longitude, $shop->pickup_lat, $shop->pickup_lng) * 1000) }} m {{ translate('from the market centre') }})</span>@endif
+                                            @else
+                                                · <span class="text-danger">{{ translate('no pin') }}</span>
+                                            @endif
+                                            @if($shop->shopfrontUrl())
+                                                · <a href="{{ $shop->shopfrontUrl() }}" target="_blank" rel="noopener">{{ translate('Shopfront photo') }}</a>
+                                            @endif
+                                            @if($shop->address_note)<div class="text-muted">{{ $shop->address_note }}</div>@endif
+                                            <div>{{ translate('Sells') }}: {{ implode(', ', $shop->sellsList()) ?: '-' }}</div>
+                                            @if($shop->shed_changed_at && $shop->verification_requested_at)<div class="text-primary">{{ translate('Moved or changed shed on') }} {{ $shop->shed_changed_at->format('d M') }}</div>@endif
+                                        </div>
+                                    @endif</td>
                                 <td>{{ trim($shop->owner?->first_name . ' ' . $shop->owner?->last_name) }}
                                     <div class="fs-11 text-muted">{{ $shop->owner?->phone }} · {{ translate('rider since') }} {{ $shop->owner?->created_at?->format('M Y') }}</div></td>
                                 <td>{{ $shop->items_count }} {{ translate('items') }}<div class="fs-11 text-muted">{{ $shop->visits }} {{ translate('visits') }} · {{ $shop->chats }} {{ translate('chats') }} · {{ $shop->new_users }} {{ translate('new riders') }}</div></td>
@@ -57,6 +74,9 @@
                                                 @if($shop->verification_requested_at)<div class="fs-11 text-primary">{{ translate('Asked on') }} {{ $shop->verification_requested_at->format('d M') }}</div>@endif
                                                 <label class="fs-12"><input type="checkbox" name="id_seen" value="1"> {{ translate('ID seen') }}</label>
                                                 <label class="fs-12"><input type="checkbox" name="shop_checked" value="1"> {{ translate('Shop visited or video call') }}</label>
+                                                @if($shop->inVenue())
+                                                    <label class="fs-12"><input type="checkbox" name="shed_checked" value="1"> {{ translate('Shed number, pin and what it sells checked') }}</label>
+                                                @endif
                                                 <div class="d-flex gap-1">
                                                     @if($shop->verification_requested_at)<button name="decision" value="decline" class="btn btn-sm btn-outline-secondary">{{ translate('Not yet') }}</button>@endif
                                                     <button name="decision" value="verify" class="btn btn-sm btn-primary">{{ translate('Verify') }}</button>

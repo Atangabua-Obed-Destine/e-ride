@@ -7,6 +7,7 @@ use Modules\MarketManagement\Http\Controllers\Api\MarketOrderController;
 use Modules\MarketManagement\Http\Controllers\Api\MarketAuctionController;
 use Modules\MarketManagement\Http\Controllers\Api\MarketBookingController;
 use Modules\MarketManagement\Http\Controllers\Api\MarketSellerController;
+use Modules\MarketManagement\Http\Controllers\Api\MarketVenueController;
 
 /*
 | E-Ride Market, customer app. Shops and items are found by their public slug / code.
@@ -16,6 +17,9 @@ Route::group(['prefix' => 'customer/market', 'middleware' => ['auth:api', 'maint
         Route::get('meta', [MarketController::class, 'meta']);
         Route::get('feed', [MarketController::class, 'feed']);
         Route::get('tags/suggest', [MarketController::class, 'tagSuggestions']);
+        // Markets (Bamenda Main Market...) and their sheds.
+        Route::get('venues', [MarketVenueController::class, 'index']);
+        Route::get('venues/{slug}', [MarketVenueController::class, 'show'])->where('slug', '[a-z0-9-]+');
         Route::get('shops/{slug}', [MarketController::class, 'shop'])->where('slug', '[a-z0-9-]+');
         Route::get('items/{code}', [MarketController::class, 'item'])->where('code', '[a-z0-9]+');
         Route::get('shop', [MarketSellerController::class, 'myShop']);

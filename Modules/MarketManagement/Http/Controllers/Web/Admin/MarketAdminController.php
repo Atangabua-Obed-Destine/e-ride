@@ -75,11 +75,13 @@ class MarketAdminController extends Controller
     {
         $search = trim((string)$request->query('search', ''));
         $filter = in_array($request->query('filter'), ['requests', 'verified', 'closed'], true) ? $request->query('filter') : null;
-        $shops = MarketShop::with('owner')->withCount(['items' => fn($q) => $q->whereIn('status', MarketItem::PUBLIC)])
+        $venueId = (string)$request->query('venue', '');
+        $shops = MarketShop::with(['owner', 'venue'])->withCount(['items' => fn($q) => $q->whereIn('status', MarketItem::PUBLIC)])
             ->when($search !== '', fn($q) => $q->where('name', 'like', '%' . $search . '%'))
             ->when($filter === 'requests', fn($q) => $q->whereNotNull('verification_requested_at')->whereNull('verified_at'))
             ->when($filter === 'verified', fn($q) => $q->whereNotNull('verified_at'))
             ->when($filter === 'closed', fn($q) => $q->where('status', MarketShop::CLOSED))
+            ->when($venueId !== '', fn($q) => $q->where('venue_id', $venueId))
             ->orderByRaw('verification_requested_at IS NULL')->latest()
             ->paginate(paginationLimit())->withQueryString();
         $requests = MarketShop::whereNotNull('verification_requested_at')->whereNull('verified_at')->count();
@@ -88,10 +90,16 @@ class MarketAdminController extends Controller
 
     public function verify(Request $request, MarketShop $shop): RedirectResponse
     {
-        $data = $request->validate(['decision' => ['required', Rule::in(['verify', 'decline', 'unverify'])], 'id_seen' => 'nullable|boolean', 'shop_checked' => 'nullable|boolean']);
+        $data = $request->validate(['decision' => ['required', Rule::in(['verify', 'decline', 'unverify'])], 'id_seen' => 'nullable|boolean',
+            'shop_checked' => 'nullable|boolean', 'shed_checked' => 'nullable|boolean']);
         if ($data['decision'] === 'verify') {
             if (!$request->boolean('id_seen') || !$request->boolean('shop_checked')) {
                 Toastr::error(translate('Tick both checks before verifying.'));
+                return back();
+            }
+            // In a market: the shed, its place on the map and what it sells were checked on the spot.
+            if ($shop->inVenue() && !$request->boolean('shed_checked')) {
+                Toastr::error(translate('Tick that the shed number, its place and what it sells were checked.'));
                 return back();
             }
             $this->shops->verify($shop, $request->user());

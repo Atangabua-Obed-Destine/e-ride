@@ -12,6 +12,7 @@ use Modules\MarketManagement\Entities\MarketFollow;
 use Modules\MarketManagement\Entities\MarketItem;
 use Modules\MarketManagement\Entities\MarketReferral;
 use Modules\MarketManagement\Entities\MarketShop;
+use Modules\MarketManagement\Entities\MarketVenue;
 use Modules\MarketManagement\Entities\MarketVisit;
 use Modules\MarketManagement\Lib\MarketPush;
 use Modules\MarketManagement\Lib\MarketSettings;
@@ -39,15 +40,15 @@ class ShopService
         return MarketShop::where('user_id', $user->id)->first();
     }
 
-    public function open(User $user, array $data, ?UploadedFile $logo = null): MarketShop
+    public function open(User $user, array $data, ?UploadedFile $logo = null, ?UploadedFile $shopfront = null): MarketShop
     {
         if ($reason = $this->cannotOpenReason($user)) {
             $this->fail('shop', $reason);
         }
         if ($existing = $this->mine($user)) {
-            return $this->update($existing, $data, $logo);
+            return $this->update($existing, $data, $logo, $shopfront);
         }
-        return DB::transaction(function () use ($user, $data, $logo) {
+        return DB::transaction(function () use ($user, $data, $logo, $shopfront) {
             $shop = new MarketShop($this->fields($data));
             $shop->user_id = $user->id;
             $shop->slug = $this->slugFor((string)$data['name']);
@@ -55,6 +56,7 @@ class ShopService
             if ($logo) {
                 $shop->logo = fileUploader(MarketShop::LOGO_DIR, APPLICATION_IMAGE_FORMAT, $logo);
             }
+            $this->applyVenue($shop, $data, $shopfront);
             $shop->save();
             return $shop->fresh();
         });
@@ -89,34 +91,92 @@ class ShopService
     }
 
     /** A private seller who grows: their profile becomes a shop (items, ratings and followers stay). */
-    public function turnIntoShop(MarketShop $shop, array $data, ?UploadedFile $logo = null): MarketShop
+    public function turnIntoShop(MarketShop $shop, array $data, ?UploadedFile $logo = null, ?UploadedFile $shopfront = null): MarketShop
     {
         if (!$shop->isPrivate()) {
-            return $this->update($shop, $data, $logo);
+            return $this->update($shop, $data, $logo, $shopfront);
         }
         if (trim((string)($data['name'] ?? '')) === '') {
             $this->fail('name', translate('Give your shop a name.'));
         }
         $shop->kind = MarketShop::KIND_SHOP;
         $shop->map_visible = true;
-        return $this->update($shop, $data, $logo);
+        return $this->update($shop, $data, $logo, $shopfront);
     }
 
-    public function update(MarketShop $shop, array $data, ?UploadedFile $logo = null): MarketShop
+    public function update(MarketShop $shop, array $data, ?UploadedFile $logo = null, ?UploadedFile $shopfront = null): MarketShop
     {
         if (!$shop->isLive()) {
             $this->fail('shop', translate('This shop is closed.'));
         }
+        $before = ['venue' => $shop->venue_id, 'shed' => mb_strtolower(trim((string)$shop->shed_number)), 'block' => mb_strtolower(trim((string)$shop->shed_block)),
+            'lat' => $shop->pickup_lat, 'lng' => $shop->pickup_lng];
         $shop->fill($this->fields($data));
+        $this->applyVenue($shop, $data, $shopfront);
         if ($shop->isPrivate()) {
-            // A person's place is never on the map.
+            // A person's place is never on the map, and never in a market.
             $shop->map_visible = false;
+            $shop->venue_id = null;
         }
         if ($logo) {
             $shop->logo = fileUploader(MarketShop::LOGO_DIR, APPLICATION_IMAGE_FORMAT, $logo, $shop->logo);
         }
+        // A verified shop in a market that moves (another market, shed or block, or its pin 30 m away) is checked again.
+        $moved = $before['venue'] !== $shop->venue_id
+            || $before['shed'] !== mb_strtolower(trim((string)$shop->shed_number))
+            || $before['block'] !== mb_strtolower(trim((string)$shop->shed_block))
+            || ($shop->venue_id && $before['lat'] !== null && $shop->pickup_lat !== null
+                && VenueService::km((float)$before['lat'], (float)$before['lng'], (float)$shop->pickup_lat, (float)$shop->pickup_lng) > 0.03);
+        if ($moved) {
+            $shop->shed_changed_at = now();
+            if ($shop->isVerified() && ($before['venue'] || $shop->venue_id)) {
+                $shop->verified_at = null;
+                $shop->verified_by = null;
+                $shop->verification_requested_at = now();
+                $this->safely(fn() => AdminNotification::create(['model' => 'market_shop', 'model_id' => $shop->id, 'message' => 'Verified market shop moved: check its shed again']));
+            }
+        }
         $shop->save();
         return $shop->fresh();
+    }
+
+    /**
+     * The shop's market and shed: venue_id ("" leaves the market), shed_number, shed_block,
+     * sells (what it sells) and a photo of the shopfront. A shop in a market is on the map.
+     */
+    private function applyVenue(MarketShop $shop, array $data, ?UploadedFile $shopfront): void
+    {
+        if (array_key_exists('venue_id', $data)) {
+            $id = trim((string)$data['venue_id']);
+            if ($id === '') {
+                $shop->venue_id = null;
+                $shop->shed_number = null;
+                $shop->shed_block = null;
+            } else {
+                if (!MarketVenue::whereKey($id)->where('is_active', true)->exists()) {
+                    $this->fail('venue_id', translate('Choose one of the markets in the list.'));
+                }
+                $shop->venue_id = $id;
+            }
+        }
+        foreach (['shed_number' => 30, 'shed_block' => 40] as $field => $max) {
+            if (array_key_exists($field, $data) && $shop->venue_id) {
+                $value = trim(preg_replace('/\s+/u', ' ', (string)$data[$field]));
+                $shop->{$field} = $value === '' ? null : mb_substr($value, 0, $max);
+            }
+        }
+        if (array_key_exists('sells', $data)) {
+            $sells = VenueService::sells($data['sells']);
+            $shop->sells = $sells ?: null;
+            $shop->sells_search = $sells ? mb_substr('|' . implode('|', $sells) . '|', 0, 700) : null;
+        }
+        if ($shopfront) {
+            $shop->shopfront = fileUploader(MarketShop::SHOPFRONT_DIR, APPLICATION_IMAGE_FORMAT, $shopfront, $shop->shopfront);
+        }
+        if ($shop->venue_id) {
+            // Buyers walk to it: the shed is on the map.
+            $shop->map_visible = true;
+        }
     }
 
     /** How the shop takes orders: on or paused, ways to get items, ways to pay, hours, minimum. */
@@ -205,6 +265,15 @@ class ShopService
     {
         if (!$shop->isLive() || $shop->isVerified()) {
             return $shop;
+        }
+        // In a market, E-Ride checks the shed, its place and what it sells: they must be there to check.
+        if ($shop->inVenue()) {
+            if (!$shop->shed_number || $shop->pickup_lat === null) {
+                $this->fail('shed_number', translate('Add your shed number and set your shed on the map first.'));
+            }
+            if (!$shop->sellsList()) {
+                $this->fail('sells', translate('Say what your shop sells first.'));
+            }
         }
         if (!$shop->verification_requested_at) {
             $shop->update(['verification_requested_at' => now()]);

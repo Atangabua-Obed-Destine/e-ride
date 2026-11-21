@@ -19,9 +19,11 @@ class MarketShop extends Model
     public const KIND_PRIVATE = 'private';
     public const CLOSED = 'closed';
     public const LOGO_DIR = 'market/shop/';
+    public const SHOPFRONT_DIR = 'market/shopfront/';
+    public const MAX_SELLS = 12;
 
     protected $fillable = [
-        'user_id', 'kind', 'map_visible', 'address_note', 'name', 'slug', 'category', 'categories', 'about', 'area_label', 'pickup_lat', 'pickup_lng', 'pickup_address', 'logo',
+        'user_id', 'kind', 'venue_id', 'shed_number', 'shed_block', 'shopfront', 'sells', 'sells_search', 'shed_changed_at', 'map_visible', 'address_note', 'name', 'slug', 'category', 'categories', 'about', 'area_label', 'pickup_lat', 'pickup_lng', 'pickup_address', 'logo',
         'status', 'closed_reason', 'closed_at', 'verification_requested_at', 'verified_at', 'verified_by',
         'visits', 'chats', 'new_users', 'followers_notified_at',
         'taking_orders', 'fulfilment', 'pay_methods', 'open_from', 'open_to', 'min_order', 'rating', 'rating_count', 'orders_completed',
@@ -43,6 +45,8 @@ class MarketShop extends Model
         'chats' => 'integer',
         'new_users' => 'integer',
         'categories' => 'array',
+        'sells' => 'array',
+        'shed_changed_at' => 'datetime',
         'map_visible' => 'boolean',
         'taking_orders' => 'boolean',
         'fulfilment' => 'array',
@@ -90,6 +94,48 @@ class MarketShop extends Model
     public function owner(): BelongsTo
     {
         return $this->belongsTo(User::class, 'user_id');
+    }
+
+    public function venue(): BelongsTo
+    {
+        return $this->belongsTo(MarketVenue::class, 'venue_id');
+    }
+
+    /** A shop with a shed in one of E-Ride's markets. */
+    public function inVenue(): bool
+    {
+        return $this->venue_id !== null && !$this->isPrivate();
+    }
+
+    /** "Block C, shed 112", or what there is of it. */
+    public function shedLabel(): ?string
+    {
+        $parts = array_filter([
+            $this->shed_block ? trim($this->shed_block) : null,
+            $this->shed_number ? translate(key: 'shed {n}', replace: ['n' => trim($this->shed_number)]) : null,
+        ]);
+        return $parts ? implode(', ', $parts) : null;
+    }
+
+    /** "Bamenda Main Market, shed 112": where buyers find the shop. */
+    public function venueLabel(): ?string
+    {
+        if (!$this->inVenue() || !$this->venue) {
+            return null;
+        }
+        $shed = $this->shed_number ? translate(key: 'shed {n}', replace: ['n' => trim($this->shed_number)]) : null;
+        return implode(', ', array_filter([$this->venue->name, $shed]));
+    }
+
+    public function shopfrontUrl(): ?string
+    {
+        return $this->shopfront ? rtrim(dynamicStorage('storage/app/public/' . self::SHOPFRONT_DIR), '/') . '/' . $this->shopfront : null;
+    }
+
+    /** @return string[] */
+    public function sellsList(): array
+    {
+        return array_values(array_filter((array)($this->sells ?? []), 'is_string'));
     }
 
     public function items(): HasMany

@@ -59,6 +59,12 @@ class MarketSellerController extends Controller
             'pickup_address' => 'nullable|string|max:191',
             'logo' => 'nullable|image|max:' . convertBytesToKiloBytes(maxUploadSize('image')),
             'agree_rules' => 'nullable|boolean',
+            // In a market: which one ("" leaves it), the shed, what the shop sells, the shopfront.
+            'venue_id' => 'nullable|string|max:40',
+            'shed_number' => 'nullable|string|max:30',
+            'shed_block' => 'nullable|string|max:40',
+            'sells' => 'nullable',
+            'shopfront' => 'nullable|image|max:' . convertBytesToKiloBytes(maxUploadSize('image')),
         ]);
         if ($validator->fails()) {
             return response()->json(responseFormatter(DEFAULT_400, errors: errorProcessor($validator)), 403);
@@ -69,6 +75,10 @@ class MarketSellerController extends Controller
             return $this->fail('agree_rules', translate('Agree to the E-Ride Market rules to open a shop.'));
         }
         $data = $validator->validated();
+        // "venue_id" sent empty means "not in a market": keep the key.
+        if ($request->has('venue_id')) {
+            $data['venue_id'] = (string)$request->input('venue_id', '');
+        }
         if (array_key_exists('map_visible', $data)) {
             $data['map_visible'] = $request->boolean('map_visible');
         }
@@ -80,14 +90,14 @@ class MarketSellerController extends Controller
                 $shop = $this->shops->update($shop, $rest);
             }
         } elseif ($existing && $existing->isPrivate() && $kind === 'shop') {
-            $shop = $this->shops->turnIntoShop($existing, $data, $request->file('logo'));
+            $shop = $this->shops->turnIntoShop($existing, $data, $request->file('logo'), $request->file('shopfront'));
         } elseif ($existing) {
             if ($existing->isPrivate()) {
                 unset($data['name']);
             }
-            $shop = $this->shops->update($existing, $data, $request->file('logo'));
+            $shop = $this->shops->update($existing, $data, $request->file('logo'), $request->file('shopfront'));
         } else {
-            $shop = $this->shops->open($user, $data, $request->file('logo'));
+            $shop = $this->shops->open($user, $data, $request->file('logo'), $request->file('shopfront'));
         }
         return response()->json(responseFormatter(DEFAULT_STORE_200, MarketPresenter::shop($shop, $user->id, true)));
     }
