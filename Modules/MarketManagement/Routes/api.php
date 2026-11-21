@@ -15,6 +15,7 @@ Route::group(['prefix' => 'customer/market', 'middleware' => ['auth:api', 'maint
     Route::middleware('throttle:120,1,market-read')->group(function () {
         Route::get('meta', [MarketController::class, 'meta']);
         Route::get('feed', [MarketController::class, 'feed']);
+        Route::get('tags/suggest', [MarketController::class, 'tagSuggestions']);
         Route::get('shops/{slug}', [MarketController::class, 'shop'])->where('slug', '[a-z0-9-]+');
         Route::get('items/{code}', [MarketController::class, 'item'])->where('code', '[a-z0-9]+');
         Route::get('shop', [MarketSellerController::class, 'myShop']);

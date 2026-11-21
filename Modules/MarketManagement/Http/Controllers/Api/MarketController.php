@@ -76,6 +76,31 @@ class MarketController extends Controller
         ]));
     }
 
+    /**
+     * While posting: tags to tap (other names for the title's words, the
+     * category's words, what other sellers use) and what people looked for
+     * this week without finding it.
+     */
+    public function tagSuggestions(Request $request): JsonResponse
+    {
+        $data = $request->validate([
+            'title' => 'nullable|string|max:120',
+            'category' => 'nullable|string|max:40',
+            'service_kind' => 'nullable|string|max:40',
+            'tags' => 'nullable',
+        ]);
+        $title = (string)($data['title'] ?? '');
+        $suggested = \Modules\MarketManagement\Lib\MarketTags::suggest($title, $data['category'] ?? null, $data['service_kind'] ?? null, (array)($data['tags'] ?? []));
+        $wanted = \Modules\MarketManagement\Lib\MarketTags::wanted(array_merge(\Modules\MarketManagement\Lib\MarketTags::words($title), array_slice($suggested, 0, 6)));
+        return response()->json(responseFormatter(DEFAULT_200, [
+            'suggested' => $suggested,
+            'wanted' => $wanted['related'],
+            'wanted_top' => $wanted['top'],
+            'max' => \Modules\MarketManagement\Lib\MarketTags::MAX_TAGS,
+            'good' => \Modules\MarketManagement\Lib\MarketTags::MIN_GOOD,
+        ]));
+    }
+
     public function feed(Request $request): JsonResponse
     {
         $request->validate([
@@ -106,6 +131,10 @@ class MarketController extends Controller
             $filters['lng'] = (float)$request->query('lng');
         }
         $result = $this->feed->items($viewer, $filters, $offset, $limit);
+        // What people look for, and what they do not find: sellers see it when posting.
+        if ($offset === 0 && filled($filters['q'] ?? null) && empty($filters['shop'])) {
+            \Modules\MarketManagement\Lib\MarketTags::record((string)$filters['q'], $result['total'] > 0);
+        }
         return response()->json(responseFormatter(DEFAULT_200, [
             'total' => $result['total'],
             'items' => $result['items']->map(fn(MarketItem $i) => MarketPresenter::item($i, $viewer))->all(),

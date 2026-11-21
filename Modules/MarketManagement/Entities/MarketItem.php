@@ -28,7 +28,7 @@ class MarketItem extends Model
     public const MAX_PREVIEWS = 3;
 
     protected $fillable = [
-        'shop_id', 'code', 'title', 'description', 'price', 'negotiable', 'condition', 'digital_kind', 'category', 'quantity',
+        'shop_id', 'code', 'title', 'description', 'price', 'negotiable', 'condition', 'digital_kind', 'category', 'tags', 'tags_search', 'quantity',
         'pickup', 'eride_delivery', 'seller_delivers', 'status', 'blocked_word', 'status_note', 'report_count', 'visits', 'chats',
         'options', 'stock', 'wholesale_price', 'wholesale_min', 'orders', 'sale_type', 'used_grade',
         'price_type', 'duration_minutes', 'service_where', 'extras', 'service_kind',
@@ -45,6 +45,7 @@ class MarketItem extends Model
     public const USED_GRADES = ['like_new', 'good', 'fair', 'parts'];
 
     protected $casts = [
+        'tags' => 'array',
         'price' => 'float',
         'negotiable' => 'boolean',
         'quantity' => 'integer',

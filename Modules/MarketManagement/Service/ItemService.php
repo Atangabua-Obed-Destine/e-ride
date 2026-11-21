@@ -56,7 +56,7 @@ class ItemService
             $item->shop_id = $shop->id;
             $item->code = $this->newCode();
             $item->quantity ??= 1;
-            $word = $this->bannedWordIn($item->title . ' ' . $item->description);
+            $word = $this->bannedWordIn($item->title . ' ' . $item->description . ' ' . implode(' ', $item->tags ?? []));
             $item->status = $word ? MarketItem::BLOCKED : ($item->quantity < 1 ? MarketItem::SOLD_OUT : MarketItem::LIVE);
             $item->blocked_word = $word;
             $item->save();
@@ -117,7 +117,7 @@ class ItemService
                 $this->fail('photos', translate('Add at least one photo.'));
             }
             // The filter runs again on every edit: a blocked post that no longer matches goes live.
-            $word = $this->bannedWordIn($item->title . ' ' . $item->description);
+            $word = $this->bannedWordIn($item->title . ' ' . $item->description . ' ' . implode(' ', $item->tags ?? []));
             if ($word) {
                 $item->status = MarketItem::BLOCKED;
             } elseif (in_array($item->status, [MarketItem::BLOCKED, MarketItem::LIVE, MarketItem::SOLD_OUT], true)) {
@@ -195,6 +195,11 @@ class ItemService
         $fields['service_kind'] = in_array($fields['service_kind'] ?? null, MarketItem::SERVICE_KINDS, true) ? $fields['service_kind'] : 'other';
         if (isset($fields['title'])) {
             $fields['title'] = trim(preg_replace('/\s+/', ' ', $fields['title']));
+        }
+        // Tags: the other words buyers use for it (MarketTags).
+        if (array_key_exists('tags', $data)) {
+            $fields['tags'] = \Modules\MarketManagement\Lib\MarketTags::normalize($data['tags']) ?: null;
+            $fields['tags_search'] = \Modules\MarketManagement\Lib\MarketTags::searchText($fields['tags'] ?? []);
         }
         return array_merge($fields, [
             'category' => 'services', 'sale_type' => 'fixed', 'negotiable' => false, 'quantity' => 1, 'used_grade' => null,

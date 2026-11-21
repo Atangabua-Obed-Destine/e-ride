@@ -112,6 +112,7 @@ class MarketPresenter
             'condition' => $item->condition,
             'digital_kind' => $item->digital_kind,
             'category' => $item->category,
+            'tags' => array_values($item->tags ?? []),
             'quantity' => $item->quantity,
             'status' => $item->status,
             'cover' => $cover?->url(),

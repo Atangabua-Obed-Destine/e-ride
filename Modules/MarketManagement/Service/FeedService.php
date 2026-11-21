@@ -61,6 +61,7 @@ class FeedService
         if (($q = trim((string)($filters['q'] ?? ''))) !== '') {
             $like = '%' . str_replace(['%', '_'], ['\%', '\_'], $q) . '%';
             $query->where(fn($w) => $w->where('market_items.title', 'like', $like)->orWhere('market_items.description', 'like', $like)
+                ->orWhere('market_items.tags_search', 'like', $like)
                 ->orWhereHas('shop', fn($s) => $s->where('name', 'like', $like)));
         }
         $total = (clone $query)->count();

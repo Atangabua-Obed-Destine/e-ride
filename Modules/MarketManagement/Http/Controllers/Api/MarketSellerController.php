@@ -241,6 +241,8 @@ class MarketSellerController extends Controller
             'condition' => [$creating ? 'required' : 'sometimes', Rule::in(MarketItem::CONDITIONS)],
             'digital_kind' => ['nullable', Rule::in(MarketSettings::DIGITAL_KINDS)],
             'category' => ['nullable', Rule::in(MarketSettings::CATEGORIES)],
+            // Tags: an array, or "a, b, c". Cleaned and cut to 8 by MarketTags.
+            'tags' => 'nullable',
             'quantity' => 'nullable|integer|min:0|max:100000',
             'pickup' => 'nullable|boolean',
             'eride_delivery' => 'nullable|boolean',

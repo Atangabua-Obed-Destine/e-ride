@@ -179,7 +179,7 @@ class CatalogSearch
         }
         $out = [];
         $items = self::like(\Modules\MarketManagement\Entities\MarketItem::with(['shop:id,name,slug,area_label', 'photos'])->where('status', 'live')
-            ->whereHas('shop', fn($s) => $s->where('status', '!=', 'closed')), ['title', 'description'], $terms)
+            ->whereHas('shop', fn($s) => $s->where('status', '!=', 'closed')), ['title', 'description', 'tags_search'], $terms)
             ->latest()->limit(20)->get();
         foreach ($items as $it) {
             $service = $it->condition === 'service';
@@ -191,11 +191,15 @@ class CatalogSearch
                 'price' => $it->price !== null ? (float)$it->price : null,
                 'photo' => $it->cover()?->url(),
                 'source' => $service ? 'market_service' : 'market',
-                'score' => self::bonus(self::score($terms, $it->title, (string)$it->description), 1),
+                'score' => self::bonus(self::score($terms, $it->title . ' ' . implode(' ', $it->tags ?? []), (string)$it->description), 1),
             ];
         }
         usort($out, fn($a, $b) => $b['score'] <=> $a['score']);
-        $out = array_slice($out, 0, self::PER_SOURCE);
+        $out = array_slice(array_values(array_filter($out, fn($r) => $r['score'] > 0)), 0, self::PER_SOURCE);
+        // Asked for and not on the Market: sellers see it when posting.
+        if (class_exists(\Modules\MarketManagement\Lib\MarketTags::class)) {
+            \Modules\MarketManagement\Lib\MarketTags::record(implode(' ', array_slice($terms, 0, 3)), (bool)$out);
+        }
         $shops = self::like(\Modules\MarketManagement\Entities\MarketShop::where('status', '!=', 'closed'), ['name', 'about'], $terms)->limit(3)->get();
         foreach ($shops as $sh) {
             $out[] = [
