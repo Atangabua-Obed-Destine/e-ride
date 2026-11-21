@@ -108,8 +108,17 @@
                 text(data.name.charAt(0).toUpperCase(), W / 2 - 50, 470, 200, '900', '#E02020');
             }
         }
-        text(data.name, P, 800, 72, '800', '#fff', W - 2 * P);
-        text(data.line, P, 868, 36, '500', 'rgba(255,255,255,0.92)', W - 2 * P);
+        // The name on up to two lines, then the hours and ways.
+        ctx.font = '800 68px system-ui, -apple-system, Roboto, sans-serif';
+        const words = String(data.name).split(' '), lines = [''];
+        words.forEach(w => {
+            const tryLine = (lines[lines.length - 1] + ' ' + w).trim();
+            if (ctx.measureText(tryLine).width > W - 2 * P && lines[lines.length - 1] !== '' && lines.length < 2) lines.push(w);
+            else lines[lines.length - 1] = tryLine;
+        });
+        const nameY = lines.length > 1 ? 770 : 800;
+        lines.forEach((l, k) => text(l, P, nameY + k * 72, 68, '800', '#fff', W - 2 * P));
+        text(data.line, P, nameY + (lines.length - 1) * 72 + 62, 36, '500', 'rgba(255,255,255,0.92)', W - 2 * P);
         // Four things with prices.
         const items = await Promise.all(data.items.slice(0, 4).map(async i => ({...i, img: await load(i.image)})));
         const gy = 920;

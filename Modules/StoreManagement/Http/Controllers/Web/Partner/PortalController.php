@@ -65,7 +65,7 @@ class PortalController extends Controller
             'kind' => $brand->type === 'shop' ? 'SHOPS' : 'FOOD',
             'name' => $brand->name,
             'line' => implode('  ·  ', array_filter([
-                $hours ? $hours[0] . ' - ' . $hours[1] : null,
+                $hours ? ($hours === ['00:00', '23:59'] ? translate('Open all day') : $hours[0] . ' - ' . $hours[1]) : null,
                 implode(', ', $ways),
             ])),
             'cover' => $brand->coverUrl(),
