@@ -23,10 +23,10 @@ class MarketTags
 
     /** Words that mean the same thing. A word from the title brings the rest of its group. */
     private const GROUPS = [
-        ['phone', 'smartphone', 'téléphone', 'portable', 'android', 'iphone', 'mobile'],
+        ['phone', 'smartphone', 'téléphone', 'portable', 'mobile'],
         ['iphone', 'apple', 'ios'],
         ['samsung', 'galaxy', 'android'],
-        ['tecno', 'infinix', 'itel', 'android', 'phone'],
+        ['tecno', 'infinix', 'itel', 'android'],
         ['laptop', 'ordinateur', 'pc', 'computer', 'notebook', 'macbook'],
         ['ps4', 'ps5', 'playstation', 'console', 'jeux vidéo', 'video game', 'game', 'manette'],
         ['xbox', 'console', 'jeux vidéo', 'video game'],
