@@ -21,6 +21,7 @@ Route::group(['prefix' => 'customer', 'middleware' => ['auth:api', 'maintenance_
     Route::post('store-orders/{order}/changes', [StoreOrderController::class, 'changes'])->middleware('throttle:10,1,store-changes');
     Route::post('store-orders/{order}/review', [StoreOrderController::class, 'review'])->middleware('throttle:10,1,store-review');
     Route::post('store-orders/{order}/deliver', [StoreOrderController::class, 'deliver'])->middleware('throttle:15,1,store-deliver');
+    Route::post('store-orders/{order}/keep-way', [StoreOrderController::class, 'keepWay']);
     Route::get('store-orders/{order}/pay', [StoreOrderController::class, 'pay'])
         ->name('store-order.pay')
         ->withoutMiddleware('auth:api');

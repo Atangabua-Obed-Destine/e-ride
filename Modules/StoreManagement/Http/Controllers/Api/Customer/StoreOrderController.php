@@ -274,6 +274,14 @@ class StoreOrderController extends Controller
         ]));
     }
 
+    /** "Keep it as it was": drop a change to delivery that waits for its fee. */
+    public function keepWay(StoreOrder $order): JsonResponse
+    {
+        abort_unless($order->customer_id === auth('api')->id(), 404);
+        $order = $this->orders->keepWay($order);
+        return response()->json(responseFormatter(DEFAULT_200, StorePresenter::order($order->fresh()->load(['store', 'items']))));
+    }
+
     /** Opened in the app's payment webview: the delivery fee of a change to delivery. */
     public function payDelivery(Request $request, StoreOrder $order): RedirectResponse|JsonResponse
     {

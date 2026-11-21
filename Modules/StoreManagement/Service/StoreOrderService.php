@@ -942,6 +942,17 @@ class StoreOrderService extends BaseService implements StoreOrderServiceInterfac
         return ['order' => $order, 'pay_url' => $payUrl];
     }
 
+    public function keepWay(StoreOrder $order): StoreOrder
+    {
+        return $this->locked($order, function (StoreOrder $order) {
+            if ($order->switch && !$order->isDelivery()) {
+                $order->switch = null;
+                $order->save();
+            }
+            return $order;
+        });
+    }
+
     /** The order becomes a delivery to the address of the change. Caller holds the lock and saves. */
     protected function applySwitch(StoreOrder $order, array $change, bool $feePaid): void
     {

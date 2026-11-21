@@ -169,7 +169,9 @@ class StorePresenter
             'can_deliver' => !$order->isDelivery() && in_array($order->status, [StoreOrder::AWAITING_CONFIRMATION, StoreOrder::AWAITING_PAYMENT, StoreOrder::ACCEPTED], true),
             // A change to delivery waiting for its fee.
             'delivery_change' => $order->switch && !$order->isDelivery() && \Illuminate\Support\Carbon::parse($order->switch['pay_by'] ?? now())->isFuture()
-                ? ['fee' => (float)$order->switch['fee'], 'address' => $order->switch['drop_address'], 'pay_by' => $order->switch['pay_by']] : null,
+                ? ['fee' => (float)$order->switch['fee'], 'address' => $order->switch['drop_address'], 'pay_by' => $order->switch['pay_by'],
+                    // To open the fee's page again (left without paying).
+                    'pay_url' => route('store-order.pay-delivery', ['order' => $order->id, 'payment_method' => $order->switch['method'] ?? ''])] : null,
             'cancel_reason' => $order->cancel_reason,
             // A paid order is cancelled (and refunded) by the customer only when refunds are on.
             'can_cancel' => in_array($order->status, [StoreOrder::AWAITING_CONFIRMATION, StoreOrder::CHANGES_PROPOSED, StoreOrder::AWAITING_PAYMENT, StoreOrder::PLACED], true)

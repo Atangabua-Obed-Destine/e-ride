@@ -21,6 +21,9 @@ interface StoreOrderServiceInterface extends BaseServiceInterface
 
     public function deliveryFeeLink(StoreOrder $order, string $gateway): string;
 
+    /** The customer keeps eating there or collecting: a change to delivery waiting for its fee is dropped. */
+    public function keepWay(StoreOrder $order): StoreOrder;
+
     /** Payment hook (storeOrderDeliveryPaid). */
     public function onDeliveryFeePaid(PaymentRequest $paymentRequest): void;
 
