@@ -62,7 +62,7 @@
         @foreach($section['items'] as $it)
             @php($off = !($it['is_available'] ?? false))
             <a class="row {{ $off ? 'off' : '' }}" href="{{ $openApp }}" style="text-decoration:none;color:inherit">
-                @if($it['image'])<img src="{{ $it['image'] }}" alt="" loading="lazy">@else<div class="noimg"></div>@endif
+                @if($it['image'])<img src="{{ $it['image'] }}" alt="" loading="lazy">@endif
                 <div style="flex:1;min-width:0">
                     <div class="n">{{ $it['name'] }}</div>
                     @if($it['description'])<div class="d">{{ $it['description'] }}</div>@endif
