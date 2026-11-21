@@ -77,7 +77,7 @@
                             <div class="r-meta">
                                 <span class="r-dot {{ $r['online'] ? 'on' : '' }}"></span>{{ $r['online'] ? translate('Online') : translate('Offline') }}
                                 @if($r['rating']) · <i class="bi bi-star-fill"></i> {{ $r['rating'] }}@endif
-                                · {{ $r['deliveries'] }} {{ translate('deliveries for you') }}
+                                · {{ translate('Deliveries for you') }}: {{ $r['deliveries'] }}
                             </div>
                             <a class="r-meta" href="tel:{{ $r['phone'] }}">{{ $r['phone'] }}</a>
                         </div>
@@ -102,7 +102,7 @@
                                 <div class="r-name text-truncate">{{ $r['name'] }}</div>
                                 <div class="r-meta">
                                     @if($r['rating'])<i class="bi bi-star-fill"></i> {{ $r['rating'] }} · @endif
-                                    {{ $r['deliveries'] }} {{ translate('deliveries for you') }}
+                                    {{ translate('Deliveries for you') }}: {{ $r['deliveries'] }}
                                 </div>
                             </div>
                             <form action="{{ route('partner.riders.add') }}" method="POST" class="m-0">

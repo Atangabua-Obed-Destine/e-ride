@@ -76,7 +76,7 @@
     .who button small { display: block; font-weight: 600; color: var(--muted); }
     .who button.is-on { border-color: var(--red); background: var(--red-soft); color: var(--red); }
     .who button.is-on small { color: var(--red); }
-    .o__own { margin: 6px 0; padding: 8px 10px; border-radius: 6px; background: #E0F2FE; color: #075985; font-size: 13px; }
+    .o__own { margin: 0; padding: 8px 10px; border-radius: 6px; background: #E0F2FE; color: #075985; font-size: 13px; }
     .o__own b { display: block; font-size: 13px; letter-spacing: .02em; }
     .o__own a { color: inherit; font-weight: 700; }
     .o__link { background: none; border: 0; color: var(--ink); font-size: 13px; font-weight: 700; text-decoration: underline; padding: 0; align-self: center; }
@@ -367,9 +367,9 @@
                 (o.fulfilment === 'dine_in' && o.guests ? ' · ' + o.guests + ' ' + T.people : '') + '</div>';
         }
         // The store's own staff bring it: say so, with where they go.
-        var byStaff = o.delivered_by === 'store';
+        var byStaff = o.delivered_by === 'store', staffBanner = '';
         if (byStaff) {
-            head += '<div class="o__own"><b><i class="bi bi-person-walking"></i> ' + T.staffBring + ' · ' + esc(o.delivery_fee_text) + '</b>' +
+            staffBanner = '<div class="o__own"><b><i class="bi bi-person-walking"></i> ' + T.staffBring + ' · ' + esc(o.delivery_fee_text) + '</b>' +
                 esc(o.drop_address || '') + (o.drop_map ? ' · <a target="_blank" rel="noopener" href="' + esc(o.drop_map) + '">' + T.map + '</a>' : '') + '</div>';
         }
         var body = o.status === 'changes_proposed' ? proposalHtml(o) : itemsHtml(o), actions = '';
@@ -425,7 +425,7 @@
         var extra = contactHtml(o) + (o.can_cancel && !isNew ? '<button type="button" class="o__cancel" data-cancel="' + o.id + '">' + T.cancelOrder + '</button>' : '');
         var arrived = !rendered[o.id + o.status];
         var cls = isNew ? 'is-new' : (o.status === 'changes_proposed' || o.status === 'awaiting_payment' ? 'is-waiting' : '');
-        return '<article class="o ' + cls + (arrived ? ' is-arrived' : '') + '" data-order="' + o.id + '">' + head + body + actions + extra + '</article>';
+        return '<article class="o ' + cls + (arrived ? ' is-arrived' : '') + '" data-order="' + o.id + '">' + head + staffBanner + body + actions + extra + '</article>';
     }
     function doneRow(o) {
         var map = {delivered: ['ok', T.delivered], rejected: ['no', T.rejected], cancelled: ['no', T.cancelled], expired: ['no', T.expired], delivery_failed: ['no', T.failed]};
