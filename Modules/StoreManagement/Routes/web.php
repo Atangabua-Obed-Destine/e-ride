@@ -65,6 +65,7 @@ Route::group(['prefix' => 'partner', 'as' => 'partner.'], function () {
         Route::post('orders/{order}/accept', [PartnerOrderController::class, 'accept'])->name('orders.accept');
         Route::post('orders/{order}/reject', [PartnerOrderController::class, 'reject'])->name('orders.reject');
         Route::post('orders/{order}/ready', [PartnerOrderController::class, 'ready'])->name('orders.ready');
+        Route::post('orders/{order}/hand-over', [PartnerOrderController::class, 'handOver'])->name('orders.hand-over');
         Route::get('orders/{order}/swaps', [PartnerOrderController::class, 'swaps'])->name('orders.swaps');
         Route::post('orders/{order}/propose', [PartnerOrderController::class, 'propose'])->name('orders.propose');
 

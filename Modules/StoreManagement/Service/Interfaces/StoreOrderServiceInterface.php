@@ -11,7 +11,18 @@ use Modules\UserManagement\Entities\User;
 interface StoreOrderServiceInterface extends BaseServiceInterface
 {
     /** Prices, delivery fee and problems for a cart. Never trusts client amounts. */
-    public function quote(Store $store, array $lines, array $drop): array;
+    public function quote(Store $store, array $lines, array $drop, string $way = StoreOrder::DELIVERY, ?\Illuminate\Support\Carbon $arriveAt = null): array;
+
+    /** Eat there or collect: the staff type the customer's code and the order is done. */
+    public function handOver(StoreOrder $order, string $code): StoreOrder;
+
+    /** An eat-there or collect order becomes a delivery; pay_url is the delivery fee's page when the order was already paid. */
+    public function switchToDelivery(StoreOrder $order, array $drop, ?string $method = null): array;
+
+    public function deliveryFeeLink(StoreOrder $order, string $gateway): string;
+
+    /** Payment hook (storeOrderDeliveryPaid). */
+    public function onDeliveryFeePaid(PaymentRequest $paymentRequest): void;
 
     /** Pay a confirmed order: wallet now (returns null) or a payment page URL for a gateway. */
     public function payConfirmed(StoreOrder $order, string $method): ?string;

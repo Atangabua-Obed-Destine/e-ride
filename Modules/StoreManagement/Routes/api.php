@@ -20,7 +20,11 @@ Route::group(['prefix' => 'customer', 'middleware' => ['auth:api', 'maintenance_
     Route::post('store-orders/{order}/payment', [StoreOrderController::class, 'payment'])->middleware('throttle:10,1,store-payment');
     Route::post('store-orders/{order}/changes', [StoreOrderController::class, 'changes'])->middleware('throttle:10,1,store-changes');
     Route::post('store-orders/{order}/review', [StoreOrderController::class, 'review'])->middleware('throttle:10,1,store-review');
+    Route::post('store-orders/{order}/deliver', [StoreOrderController::class, 'deliver'])->middleware('throttle:15,1,store-deliver');
     Route::get('store-orders/{order}/pay', [StoreOrderController::class, 'pay'])
         ->name('store-order.pay')
+        ->withoutMiddleware('auth:api');
+    Route::get('store-orders/{order}/pay-delivery', [StoreOrderController::class, 'payDelivery'])
+        ->name('store-order.pay-delivery')
         ->withoutMiddleware('auth:api');
 });

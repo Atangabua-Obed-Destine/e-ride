@@ -187,7 +187,8 @@ class StoreOrderController extends Controller
         if (!$store || !$store->brand()->is_active) {
             return $this->problem(translate('This store is not available.'));
         }
-        $quote = $this->orders->quote($store, $data['items'], ['latitude' => $data['drop_latitude'], 'longitude' => $data['drop_longitude']]);
+        $quote = $this->orders->quote($store, $data['items'], ['latitude' => $data['drop_latitude'] ?? null, 'longitude' => $data['drop_longitude'] ?? null],
+            $data['fulfilment'] ?? StoreOrder::DELIVERY, filled($data['arrive_at'] ?? null) ? \Illuminate\Support\Carbon::parse($data['arrive_at']) : null);
         unset($quote['delivery']);
         return response()->json(responseFormatter(DEFAULT_200, $quote));
     }
@@ -196,7 +197,7 @@ class StoreOrderController extends Controller
     {
         $gateways = collect(app(\Modules\BusinessManagement\Http\Controllers\Api\Customer\ConfigController::class)->getPaymentMethods())->pluck('gateway')->all();
         $data = $this->validateCart($request, [
-            'drop_address' => 'required|string|max:255',
+            'drop_address' => [Rule::requiredIf(fn() => !in_array($request->input('fulfilment'), [StoreOrder::DINE_IN, StoreOrder::PICKUP], true)), 'nullable', 'string', 'max:255'],
             'receiver_name' => 'nullable|string|max:120',
             'receiver_phone' => 'nullable|string|max:25',
             'note' => 'nullable|string|max:300',
@@ -237,6 +238,50 @@ class StoreOrderController extends Controller
             'order' => StorePresenter::order($order->fresh()->load(['store', 'items'])),
             'pay_url' => $payUrl,
         ]));
+    }
+
+    /**
+     * "Deliver it instead": an eat-there or collect order becomes a delivery to
+     * this address. pay_url is the delivery fee's page when the order was paid.
+     */
+    public function deliver(Request $request, StoreOrder $order): JsonResponse
+    {
+        abort_unless($order->customer_id === auth('api')->id(), 404);
+        $gateways = collect(app(\Modules\BusinessManagement\Http\Controllers\Api\Customer\ConfigController::class)->getPaymentMethods())->pluck('gateway')->all();
+        $data = $request->validate([
+            'drop_address' => 'required|string|max:255',
+            'drop_latitude' => 'required|numeric|between:-90,90',
+            'drop_longitude' => 'required|numeric|between:-180,180',
+            'payment_method' => ['nullable', 'string', Rule::in($gateways)],
+            // true: only say what the delivery would cost.
+            'preview' => 'nullable|boolean',
+        ]);
+        if ($request->boolean('preview')) {
+            $fee = $this->orders->deliveryFee($order->store, (float)$data['drop_latitude'], (float)$data['drop_longitude']);
+            if ($fee === null) {
+                return $this->problem(translate('E-Ride cannot deliver this order to that address.'));
+            }
+            return response()->json(responseFormatter(DEFAULT_200, ['fee' => $fee, 'paid' => $order->payment_status === StoreOrder::PAID]));
+        }
+        try {
+            $result = $this->orders->switchToDelivery($order, $data, $data['payment_method'] ?? null);
+        } catch (ValidationException $e) {
+            return $this->problem(collect($e->errors())->flatten()->first());
+        }
+        return response()->json(responseFormatter(DEFAULT_200, [
+            'order' => StorePresenter::order($result['order']->fresh()->load(['store', 'items'])),
+            'pay_url' => $result['pay_url'],
+        ]));
+    }
+
+    /** Opened in the app's payment webview: the delivery fee of a change to delivery. */
+    public function payDelivery(Request $request, StoreOrder $order): RedirectResponse|JsonResponse
+    {
+        try {
+            return redirect($this->orders->deliveryFeeLink($order, (string)$request->query('payment_method', '')));
+        } catch (\Throwable $e) {
+            return redirect()->route($order->isDelivery() ? 'payment-success' : 'payment-fail');
+        }
     }
 
     /** The customer's answer to changes the restaurant suggested. */
@@ -336,8 +381,12 @@ class StoreOrderController extends Controller
             'items' => 'required|array|min:1|max:50',
             'items.*.item_id' => 'required|uuid',
             'items.*.quantity' => 'required|integer|min:1|max:' . \Modules\StoreManagement\Service\StoreOrderService::MAX_QTY,
-            'drop_latitude' => 'required|numeric|between:-90,90',
-            'drop_longitude' => 'required|numeric|between:-180,180',
+            // delivery (default), dine_in (eat there) or pickup (collect): no address for the last two.
+            'fulfilment' => ['nullable', Rule::in(StoreOrder::WAYS)],
+            'arrive_at' => 'nullable|date',
+            'guests' => 'nullable|integer|min:1|max:30',
+            'drop_latitude' => [Rule::requiredIf(fn() => !in_array($request->input('fulfilment'), [StoreOrder::DINE_IN, StoreOrder::PICKUP], true)), 'nullable', 'numeric', 'between:-90,90'],
+            'drop_longitude' => [Rule::requiredIf(fn() => !in_array($request->input('fulfilment'), [StoreOrder::DINE_IN, StoreOrder::PICKUP], true)), 'nullable', 'numeric', 'between:-180,180'],
         ], $extra))->validate();
     }
 

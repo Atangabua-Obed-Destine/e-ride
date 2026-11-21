@@ -14,3 +14,11 @@ if (!function_exists('storeOrderPaymentUpdate')) {
         app(StoreOrderServiceInterface::class)->onGatewayPaid($data);
     }
 }
+
+if (!function_exists('storeOrderDeliveryPaid')) {
+    /** Payment hook: the delivery fee of an eat-there or collect order changed to delivery. */
+    function storeOrderDeliveryPaid($data): void
+    {
+        app(StoreOrderServiceInterface::class)->onDeliveryFeePaid($data);
+    }
+}

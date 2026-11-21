@@ -43,12 +43,19 @@ class StoreOrder extends Model
     public const BEFORE_PAYMENT = [self::AWAITING_CONFIRMATION, self::CHANGES_PROPOSED, self::AWAITING_PAYMENT];
     public const FINAL = [self::DELIVERED, self::REJECTED, self::CANCELLED, self::EXPIRED, self::DELIVERY_FAILED];
 
+    /** How the customer gets it. */
+    public const DELIVERY = 'delivery';
+    public const DINE_IN = 'dine_in';
+    public const PICKUP = 'pickup';
+    public const WAYS = [self::DELIVERY, self::DINE_IN, self::PICKUP];
+
     public const UNPAID = 'unpaid';
     public const PAID = 'paid';
     public const REFUNDED = 'refunded';
 
     protected $fillable = [
-        'customer_id', 'store_id', 'zone_id', 'status', 'items_subtotal', 'delivery_fee', 'total',
+        'customer_id', 'store_id', 'zone_id', 'status', 'fulfilment', 'arrive_at', 'guests', 'collect_code', 'ready_told_at', 'switch',
+        'delivery_payment_request_id', 'items_subtotal', 'delivery_fee', 'total',
         'payment_method', 'payment_status', 'payment_request_id', 'paid_at', 'refunded_amount', 'refunded_at',
         'drop_address', 'drop_latitude', 'drop_longitude', 'receiver_name', 'receiver_phone', 'note',
         'delivery_quote', 'quote_expires_at', 'prep_minutes', 'ready_at', 'trip_request_id', 'rider_attempts',
@@ -58,6 +65,10 @@ class StoreOrder extends Model
 
     protected $casts = [
         'ref_id' => 'integer',
+        'arrive_at' => 'datetime',
+        'guests' => 'integer',
+        'ready_told_at' => 'datetime',
+        'switch' => 'array',
         'items_subtotal' => 'float',
         'delivery_fee' => 'float',
         'total' => 'float',
@@ -90,6 +101,12 @@ class StoreOrder extends Model
         static::creating(function (StoreOrder $order) {
             $order->ref_id = (static::max('ref_id') ?? 1000) + 1;
         });
+    }
+
+    /** Delivered by a rider (the default), not eaten there or collected. */
+    public function isDelivery(): bool
+    {
+        return ($this->fulfilment ?? self::DELIVERY) === self::DELIVERY;
     }
 
     public function store(): BelongsTo

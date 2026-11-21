@@ -30,7 +30,7 @@ class Store extends Model
 
     protected $fillable = [
         'user_id', 'name', 'slug', 'type', 'phone', 'whatsapp', 'address', 'latitude', 'longitude', 'zone_id',
-        'logo', 'cover', 'description', 'opening_hours', 'is_open', 'default_prep_minutes', 'min_order_amount',
+        'logo', 'cover', 'description', 'opening_hours', 'is_open', 'offers_dine_in', 'offers_pickup', 'default_prep_minutes', 'min_order_amount',
         'is_active', 'sort', 'payout_method', 'payout_number', 'payout_name', 'parent_id', 'branch_name',
     ];
 
@@ -39,6 +39,8 @@ class Store extends Model
         'longitude' => 'float',
         'opening_hours' => 'array',
         'is_open' => 'boolean',
+        'offers_dine_in' => 'boolean',
+        'offers_pickup' => 'boolean',
         'is_active' => 'boolean',
         'default_prep_minutes' => 'integer',
         'min_order_amount' => 'float',
@@ -78,6 +80,16 @@ class Store extends Model
         $brand = $this->brand();
         $all = collect([$brand])->merge($brand->relationLoaded('branches') ? $brand->branches : $brand->branches()->get());
         return ($activeOnly ? $all->filter(fn(Store $k) => $k->is_active) : $all)->values();
+    }
+
+    /** The ways an order can be had here: delivery always; eating there only at restaurants. */
+    public function ways(): array
+    {
+        return array_values(array_filter([
+            'delivery',
+            $this->type === 'restaurant' && ($this->offers_dine_in ?? true) ? 'dine_in' : null,
+            ($this->offers_pickup ?? true) ? 'pickup' : null,
+        ]));
     }
 
     /** "Romz · Mile 6" for a kitchen with a branch name, else the brand name. */

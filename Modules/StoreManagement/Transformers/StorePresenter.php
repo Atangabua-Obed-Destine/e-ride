@@ -33,6 +33,8 @@ class StorePresenter
             'today_hours' => $hours ? ['open' => $hours[0], 'close' => $hours[1]] : null,
             'prep_minutes' => $store->default_prep_minutes,
             'min_order_amount' => $store->min_order_amount,
+            // How an order can be had here: delivery, dine_in (eat there), pickup (collect).
+            'ways' => $store->ways(),
             ...$brand->brandRatingSummary(),
             'distance_km' => ($lat !== null && $lng !== null) ? round(self::distanceKm($lat, $lng, $store->latitude, $store->longitude), 1) : null,
         ];
@@ -155,6 +157,19 @@ class StorePresenter
                 'store_comment' => $review->comment,
                 'rider_rating' => $riderReview?->rating,
             ] : null,
+            // delivery | dine_in (eat there) | pickup (collect), the time they come and for how many.
+            'fulfilment' => $order->fulfilment ?? StoreOrder::DELIVERY,
+            'arrive_at' => $order->arrive_at?->toIso8601String(),
+            'guests' => $order->guests,
+            // Shown at the restaurant once paid, until the order is handed over.
+            'collect_code' => !$order->isDelivery() && $order->status === StoreOrder::ACCEPTED ? $order->collect_code : null,
+            'ready_told' => $order->ready_told_at !== null,
+            'store_place' => $order->store ? ['address' => $order->store->address, 'latitude' => $order->store->latitude, 'longitude' => $order->store->longitude] : null,
+            // "Deliver it instead", while the order is still open and not a delivery.
+            'can_deliver' => !$order->isDelivery() && in_array($order->status, [StoreOrder::AWAITING_CONFIRMATION, StoreOrder::AWAITING_PAYMENT, StoreOrder::ACCEPTED], true),
+            // A change to delivery waiting for its fee.
+            'delivery_change' => $order->switch && !$order->isDelivery() && \Illuminate\Support\Carbon::parse($order->switch['pay_by'] ?? now())->isFuture()
+                ? ['fee' => (float)$order->switch['fee'], 'address' => $order->switch['drop_address'], 'pay_by' => $order->switch['pay_by']] : null,
             'cancel_reason' => $order->cancel_reason,
             // A paid order is cancelled (and refunded) by the customer only when refunds are on.
             'can_cancel' => in_array($order->status, [StoreOrder::AWAITING_CONFIRMATION, StoreOrder::CHANGES_PROPOSED, StoreOrder::AWAITING_PAYMENT, StoreOrder::PLACED], true)

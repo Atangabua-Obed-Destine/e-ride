@@ -4,6 +4,7 @@ namespace Modules\StoreManagement\Service;
 
 use App\Jobs\ProcessPushNotifications;
 use App\Service\BaseService;
+use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
@@ -75,9 +76,13 @@ class StoreOrderService extends BaseService implements StoreOrderServiceInterfac
 
     /* ------------------------------------------------------------ quote */
 
-    public function quote(Store $store, array $lines, array $drop): array
+    public function quote(Store $store, array $lines, array $drop, string $way = StoreOrder::DELIVERY, ?Carbon $arriveAt = null): array
     {
         $problems = [];
+        if (!in_array($way, $store->ways(), true)) {
+            $problems[] = translate(key: '{store} does not offer this. Choose another way to get your order.', replace: ['store' => $store->displayName()]);
+            $way = StoreOrder::DELIVERY;
+        }
         if (!StoreSettings::enabled()) {
             $problems[] = translate('Ordering is not available right now.');
         }
@@ -140,10 +145,25 @@ class StoreOrderService extends BaseService implements StoreOrderServiceInterfac
 
         $delivery = null;
         $deliveryProblem = null;
-        try {
-            $delivery = $this->deliveryQuote($store, (float)$drop['latitude'], (float)$drop['longitude']);
-        } catch (ValidationException $e) {
-            $deliveryProblem = collect($e->errors())->flatten()->first();
+        if ($way === StoreOrder::DELIVERY) {
+            try {
+                $delivery = $this->deliveryQuote($store, (float)($drop['latitude'] ?? 0), (float)($drop['longitude'] ?? 0));
+            } catch (ValidationException $e) {
+                $deliveryProblem = collect($e->errors())->flatten()->first();
+            }
+        } else {
+            // Eat there or collect: no rider, no fee. The time must be reachable and inside opening hours.
+            $earliest = now()->addMinutes(max(5, (int)$store->default_prep_minutes) - 1);
+            if (!$arriveAt) {
+                $deliveryProblem = translate('Say what time you will come.');
+            } elseif ($arriveAt->lt($earliest)) {
+                $deliveryProblem = translate(key: 'The earliest time is {time}: they need about {minutes} minutes to prepare.', replace: [
+                    'time' => $earliest->copy()->addMinute()->format('H:i'), 'minutes' => (int)$store->default_prep_minutes]);
+            } elseif ($arriveAt->gt(now()->addHours(24))) {
+                $deliveryProblem = translate('Choose a time within the next 24 hours.');
+            } elseif (!$store->isOpenNow($arriveAt)) {
+                $deliveryProblem = translate(key: '{store} is closed at that time.', replace: ['store' => $store->displayName()]);
+            }
         }
         if ($deliveryProblem) {
             $problems[] = $deliveryProblem;
@@ -161,6 +181,8 @@ class StoreOrderService extends BaseService implements StoreOrderServiceInterfac
             'duration_min' => $delivery['duration_min'] ?? null,
             'prep_minutes' => $store->default_prep_minutes,
             'delivery' => $delivery,
+            'way' => $way,
+            'ways' => $store->ways(),
         ];
     }
 
@@ -251,17 +273,28 @@ class StoreOrderService extends BaseService implements StoreOrderServiceInterfac
 
     public function place(User $customer, Store $store, array $input): StoreOrder
     {
-        $drop = ['latitude' => $input['drop_latitude'], 'longitude' => $input['drop_longitude']];
-        $quote = $this->quote($store, $input['items'] ?? [], $drop);
+        $way = in_array($input['fulfilment'] ?? null, StoreOrder::WAYS, true) ? $input['fulfilment'] : StoreOrder::DELIVERY;
+        $arriveAt = $way !== StoreOrder::DELIVERY && filled($input['arrive_at'] ?? null) ? Carbon::parse($input['arrive_at']) : null;
+        $drop = ['latitude' => $input['drop_latitude'] ?? null, 'longitude' => $input['drop_longitude'] ?? null];
+        $quote = $this->quote($store, $input['items'] ?? [], $drop, $way, $arriveAt);
         if (!$quote['ok']) {
             throw ValidationException::withMessages(['order' => $quote['problems']]);
         }
+        if ($way !== StoreOrder::DELIVERY) {
+            // No address to deliver to: the order is had at the store.
+            $input['drop_address'] = $store->address;
+            $input['drop_latitude'] = $store->latitude;
+            $input['drop_longitude'] = $store->longitude;
+        }
 
-        $order = DB::transaction(function () use ($customer, $store, $input, $quote) {
+        $order = DB::transaction(function () use ($customer, $store, $input, $quote, $way, $arriveAt) {
             $order = StoreOrder::create([
                 'customer_id' => $customer->id,
                 'store_id' => $store->id,
-                'zone_id' => $quote['delivery']['zone_id'],
+                'zone_id' => $quote['delivery']['zone_id'] ?? $store->zone_id,
+                'fulfilment' => $way,
+                'arrive_at' => $arriveAt,
+                'guests' => $way === StoreOrder::DINE_IN ? max(1, min(30, (int)($input['guests'] ?? 2))) : null,
                 // Sent to the restaurant: the customer pays once it is confirmed.
                 'status' => StoreOrder::AWAITING_CONFIRMATION,
                 'placed_at' => now(),
@@ -600,6 +633,16 @@ class StoreOrderService extends BaseService implements StoreOrderServiceInterfac
             $order->status = StoreOrder::ACCEPTED;
             $order->accepted_at = now();
             $order->ready_at = now()->addMinutes(max(5, (int)$order->prep_minutes));
+            if (!$order->isDelivery()) {
+                // Ready for when they come, and a code they show at the restaurant.
+                if ($order->arrive_at && $order->arrive_at->gt($order->ready_at)) {
+                    $order->ready_at = $order->arrive_at;
+                }
+                $order->collect_code = (string)random_int(1000, 9999);
+                $order->save();
+                DB::afterCommit(fn() => $this->notifyCustomer($order, 'accepted_here'));
+                return $order;
+            }
             $order->save();
             DB::afterCommit(fn() => $this->notifyCustomer($order, 'accepted'));
             if ((int)$order->prep_minutes <= StoreSettings::all()['rider_lead_minutes']) {
@@ -815,10 +858,171 @@ class StoreOrderService extends BaseService implements StoreOrderServiceInterfac
         return $this->locked($order, function (StoreOrder $order) {
             if ($order->status === StoreOrder::ACCEPTED) {
                 $order->ready_at = now();
+                if (!$order->isDelivery()) {
+                    $first = $order->ready_told_at === null;
+                    $order->ready_told_at = now();
+                    $order->save();
+                    if ($first) {
+                        DB::afterCommit(fn() => $this->notifyCustomer($order, 'ready_here'));
+                    }
+                    return $order;
+                }
                 $order->save();
                 $this->requestRiderLocked($order);
             }
             return $order;
+        });
+    }
+
+    /**
+     * Eat there or collect: the customer is here and shows their code; the
+     * staff type it and the order is done.
+     *
+     * @throws ValidationException when the code is wrong or the order is not waiting to be handed over
+     */
+    public function handOver(StoreOrder $order, string $code): StoreOrder
+    {
+        return $this->locked($order, function (StoreOrder $order) use ($code) {
+            if ($order->isDelivery() || $order->status !== StoreOrder::ACCEPTED) {
+                throw ValidationException::withMessages(['order' => translate('This order is not waiting to be handed over.')]);
+            }
+            if (!hash_equals((string)$order->collect_code, trim($code))) {
+                throw ValidationException::withMessages(['code' => translate('That is not the code of this order. Ask the customer to open the order in the app.')]);
+            }
+            $order->status = StoreOrder::DELIVERED;
+            $order->delivered_at = now();
+            $order->partner_earning = $order->items_subtotal;
+            $order->switch = null;
+            $order->save();
+            DB::afterCommit(fn() => $this->notifyCustomer($order, 'handed_over'));
+            return $order;
+        });
+    }
+
+    /**
+     * "Deliver it instead": an eat-there or collect order becomes a delivery.
+     * Before payment the order simply changes (the total now has the delivery
+     * fee). After payment the change waits for the delivery fee: the answer is
+     * the page to pay it, and the order changes when the money lands.
+     *
+     * @return array{order: StoreOrder, pay_url: ?string}
+     * @throws ValidationException
+     */
+    public function switchToDelivery(StoreOrder $order, array $drop, ?string $method = null): array
+    {
+        $payUrl = null;
+        $order = $this->locked($order, function (StoreOrder $order) use ($drop, $method, &$payUrl) {
+            $open = in_array($order->status, [StoreOrder::AWAITING_CONFIRMATION, StoreOrder::AWAITING_PAYMENT, StoreOrder::ACCEPTED], true);
+            if ($order->isDelivery() || !$open) {
+                throw ValidationException::withMessages(['order' => translate('This order can no longer be changed to a delivery.')]);
+            }
+            // Throws when E-Ride cannot deliver there.
+            $quote = $this->deliveryQuote($order->store, (float)$drop['drop_latitude'], (float)$drop['drop_longitude']);
+            $change = [
+                'fee' => (float)$quote['fee'],
+                'quote' => $quote,
+                'drop_address' => trim($drop['drop_address']),
+                'drop_latitude' => (float)$drop['drop_latitude'],
+                'drop_longitude' => (float)$drop['drop_longitude'],
+            ];
+            if ($order->payment_status !== StoreOrder::PAID) {
+                $this->applySwitch($order, $change, false);
+                $order->save();
+                return $order;
+            }
+            // Paid: the fee first.
+            if (!$method) {
+                throw ValidationException::withMessages(['payment_method' => translate('Choose how to pay the delivery fee.')]);
+            }
+            $order->switch = $change + ['pay_by' => now()->addMinutes(self::PAY_MINUTES)->toIso8601String(), 'method' => $method];
+            $order->save();
+            $payUrl = route('store-order.pay-delivery', ['order' => $order->id, 'payment_method' => $method]);
+            return $order;
+        });
+        return ['order' => $order, 'pay_url' => $payUrl];
+    }
+
+    /** The order becomes a delivery to the address of the change. Caller holds the lock and saves. */
+    protected function applySwitch(StoreOrder $order, array $change, bool $feePaid): void
+    {
+        $order->fulfilment = StoreOrder::DELIVERY;
+        $order->drop_address = $change['drop_address'];
+        $order->drop_latitude = $change['drop_latitude'];
+        $order->drop_longitude = $change['drop_longitude'];
+        $order->delivery_quote = $change['quote'];
+        $order->zone_id = $change['quote']['zone_id'] ?? $order->zone_id;
+        $order->delivery_fee = $change['fee'];
+        $order->total = round((float)$order->items_subtotal + (float)$change['fee'], 2);
+        $order->arrive_at = null;
+        $order->guests = null;
+        $order->collect_code = null;
+        $order->switch = null;
+        if ($feePaid && $order->status === StoreOrder::ACCEPTED) {
+            // The kitchen may be ahead already: a rider as soon as the food is close to ready.
+            $soonest = now()->addMinutes(5);
+            if (!$order->ready_at || $order->ready_at->gt(now()->addMinutes(max(5, (int)$order->prep_minutes)))) {
+                $order->ready_at = now()->addMinutes(max(5, (int)$order->prep_minutes));
+            } elseif ($order->ready_at->lt($soonest)) {
+                $order->ready_at = $soonest;
+            }
+        }
+    }
+
+    /** The page to pay the delivery fee of a pending change to delivery. */
+    public function deliveryFeeLink(StoreOrder $order, string $gateway): string
+    {
+        $change = $order->switch;
+        if (!$change || $order->isDelivery() || $order->status !== StoreOrder::ACCEPTED || Carbon::parse($change['pay_by'])->isPast()) {
+            throw ValidationException::withMessages(['order' => translate('There is no delivery fee to pay for this order.')]);
+        }
+        $customer = $order->customer;
+        $paymentInfo = new PaymentInfo(
+            hook: 'storeOrderDeliveryPaid',
+            currencyCode: businessConfig('currency_code')?->value ?? 'XAF',
+            paymentMethod: $gateway,
+            paymentPlatform: 'mono',
+            payerId: $customer->id,
+            receiverId: '100',
+            additionalData: [
+                'business_name' => businessConfig('business_name')?->value,
+                'business_logo' => dynamicStorage('storage/app/public/business') . '/' . businessConfig('header_logo')?->value,
+            ],
+            paymentAmount: (float)$change['fee'],
+            externalRedirectLink: null,
+            attribute: 'store_order_delivery',
+            attributeId: $order->id,
+        );
+        $payer = new Payer(name: $customer->first_name, email: $customer->email, phone: $customer->phone, address: '');
+        $link = $this->generate_link($payer, $paymentInfo, new Receiver('receiver_name', 'example.png'));
+        if (!$link) {
+            throw ValidationException::withMessages(['payment_method' => translate('This payment method is not available.')]);
+        }
+        return $link;
+    }
+
+    /** The delivery fee of a change to delivery was paid: the order becomes a delivery. */
+    public function onDeliveryFeePaid(PaymentRequest $paymentRequest): void
+    {
+        if (!(int)$paymentRequest->is_paid) {
+            return;
+        }
+        DB::transaction(function () use ($paymentRequest) {
+            $order = StoreOrder::whereKey($paymentRequest->attribute_id)->lockForUpdate()->first();
+            if (!$order || $order->delivery_payment_request_id === $paymentRequest->id) {
+                return;
+            }
+            if ($order->switch && !$order->isDelivery() && $order->status === StoreOrder::ACCEPTED) {
+                $order->delivery_payment_request_id = $paymentRequest->id;
+                $this->applySwitch($order, $order->switch, true);
+                $order->save();
+                DB::afterCommit(fn() => $this->notifyCustomer($order, 'now_delivery'));
+                if ($order->ready_at && $order->ready_at->lte(now()->addMinutes(StoreSettings::all()['rider_lead_minutes']))) {
+                    $this->requestRiderLocked($order);
+                }
+                return;
+            }
+            // Paid when the change no longer applies (handed over meanwhile): flagged like any late payment.
+            $this->onLatePayment($order->id, (float)$paymentRequest->payment_amount, (string)$paymentRequest->id);
         });
     }
 
@@ -832,7 +1036,7 @@ class StoreOrderService extends BaseService implements StoreOrderServiceInterfac
     /** Creates the paid parcel trip and calls nearby riders. Caller holds the lock. */
     protected function requestRiderLocked(StoreOrder $order): StoreOrder
     {
-        if (!in_array($order->status, [StoreOrder::ACCEPTED, StoreOrder::RIDER_REQUESTED], true)) {
+        if (!in_array($order->status, [StoreOrder::ACCEPTED, StoreOrder::RIDER_REQUESTED], true) || !$order->isDelivery()) {
             return $order;
         }
         if ($order->trip_request_id) {
@@ -1123,7 +1327,25 @@ class StoreOrderService extends BaseService implements StoreOrderServiceInterfac
                 $counts['timed_out']++;
             });
 
+        // Eat there or collect, never handed over: closed 6 hours after the time (paid, the restaurant prepared it).
+        StoreOrder::where('status', StoreOrder::ACCEPTED)->where('fulfilment', '!=', StoreOrder::DELIVERY)
+            ->where('arrive_at', '<', now()->subHours(6))
+            ->pluck('id')->each(function ($id) {
+                $this->locked(StoreOrder::find($id), function (StoreOrder $order) {
+                    if ($order->status === StoreOrder::ACCEPTED && !$order->isDelivery()) {
+                        $order->status = StoreOrder::DELIVERED;
+                        $order->delivered_at = now();
+                        $order->partner_earning = $order->items_subtotal;
+                        $order->cancel_reason = translate('Closed on its own: the customer did not show the code.');
+                        $order->switch = null;
+                        $order->save();
+                    }
+                    return $order;
+                });
+            });
+
         StoreOrder::where('status', StoreOrder::ACCEPTED)
+            ->where('fulfilment', StoreOrder::DELIVERY)
             ->whereNull('trip_request_id')
             ->where('ready_at', '<=', now()->addMinutes($settings['rider_lead_minutes']))
             ->get()->each(function (StoreOrder $order) use (&$counts) {
@@ -1211,6 +1433,24 @@ class StoreOrderService extends BaseService implements StoreOrderServiceInterfac
                 'accepted' => [
                     translate(key: '{store} is preparing your order', replace: ['store' => $store], locale: $locale),
                     translate(key: 'Ready in about {minutes} min. A rider will bring it to you.', replace: ['minutes' => $order->prep_minutes], locale: $locale),
+                ],
+                'accepted_here' => [
+                    translate(key: '{store} is preparing your order', replace: ['store' => $store], locale: $locale),
+                    $order->arrive_at
+                        ? translate(key: 'It will be ready for {time}. Show your code {code} when you arrive.', replace: ['time' => $order->arrive_at->format('H:i'), 'code' => $order->collect_code], locale: $locale)
+                        : translate(key: 'Show your code {code} when you arrive.', replace: ['code' => $order->collect_code], locale: $locale),
+                ],
+                'ready_here' => [
+                    translate(key: 'Your order is ready at {store}', replace: ['store' => $store], locale: $locale),
+                    translate(key: 'Show your code {code} when you arrive.', replace: ['code' => $order->collect_code], locale: $locale),
+                ],
+                'handed_over' => [
+                    translate(key: 'Enjoy! Your order at {store} is complete', replace: ['store' => $store], locale: $locale),
+                    translate(key: 'Tell others how it was: rate {store} in the app.', replace: ['store' => $store], locale: $locale),
+                ],
+                'now_delivery' => [
+                    translate(key: 'Your order from {store} will be delivered', replace: ['store' => $store], locale: $locale),
+                    translate(key: 'A rider will bring it to {address}.', replace: ['address' => mb_substr((string)$order->drop_address, 0, 80)], locale: $locale),
                 ],
                 'sent' => [
                     translate(key: 'Order sent to {store}', replace: ['store' => $store], locale: $locale),
@@ -1332,13 +1572,18 @@ class StoreOrderService extends BaseService implements StoreOrderServiceInterfac
             return;
         }
         try {
+            $how = match ($order->fulfilment) {
+                StoreOrder::DINE_IN => ' ' . translate(key: 'To eat there at {time}, {guests} people.', replace: ['time' => $order->arrive_at?->format('H:i'), 'guests' => (int)$order->guests]),
+                StoreOrder::PICKUP => ' ' . translate(key: 'To collect at {time}.', replace: ['time' => $order->arrive_at?->format('H:i')]),
+                default => '',
+            };
             $message = translate(key: 'E-Ride: new order #{ref} for {store}, {count} items, {amount}. Accept it in the partner portal: {url}', replace: [
                 'ref' => $order->ref_id,
                 'store' => $store->displayName(),
                 'count' => (int)$order->items()->sum('quantity'),
                 'amount' => getCurrencyFormat($order->items_subtotal),
                 'url' => route('partner.orders'),
-            ]);
+            ]) . $how;
             (new class {
                 use SmsGatewayForMessage;
             })::send($store->phone, $message);

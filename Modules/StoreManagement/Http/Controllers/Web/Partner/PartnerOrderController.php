@@ -150,6 +150,18 @@ class PartnerOrderController extends Controller
         return response()->json(['ok' => true, 'order' => $this->present($order->fresh(['items', 'store', 'trip.driver', 'trip.vehicle']), StoreSettings::all()['partner_response_minutes'])]);
     }
 
+    /** Eat there or collect: the customer is here, the staff type their code. */
+    public function handOver(Request $request, StoreOrder $order): JsonResponse
+    {
+        $data = $request->validate(['code' => 'required|string|max:6']);
+        try {
+            $order = $this->orders->handOver($this->own($request, $order), $data['code']);
+        } catch (ValidationException $e) {
+            return response()->json(['ok' => false, 'message' => collect($e->errors())->flatten()->first()], 422);
+        }
+        return response()->json(['ok' => true, 'order' => $this->present($order->fresh(['items', 'store', 'trip.driver', 'trip.vehicle']), StoreSettings::all()['partner_response_minutes'])]);
+    }
+
     /** Says so when the order had already moved on (another tap, a timeout). */
     protected function answer(StoreOrder $order, string $expectedBefore, ?string $statusBefore = null): JsonResponse
     {
@@ -191,6 +203,11 @@ class PartnerOrderController extends Controller
             'items_subtotal' => $o->items_subtotal,
             'items_subtotal_text' => getCurrencyFormat($o->items_subtotal),
             'note' => $o->note,
+            // How it is had: delivery, dine_in (eat there) or pickup (collect), and when they come.
+            'fulfilment' => $o->fulfilment ?? StoreOrder::DELIVERY,
+            'arrive_at' => $o->arrive_at?->toIso8601String(),
+            'guests' => $o->guests,
+            'ready_told' => $o->ready_told_at !== null,
             'customer_name' => $o->receiver_name,
             'placed_at' => $o->placed_at?->toIso8601String(),
             'respond_by' => in_array($o->status, [StoreOrder::AWAITING_CONFIRMATION, StoreOrder::PLACED], true) && $o->placed_at ? $o->placed_at->copy()->addMinutes($responseMinutes)->toIso8601String() : null,

@@ -150,6 +150,15 @@
         decline: @json(translate('Decline')),
         readyIn: @json(translate('Ready in (min)')),
         ready: @json(translate('Food is ready, call a rider')),
+        readyHere: @json(translate('It is ready: tell the customer')),
+        toldReady: @json(translate('Customer told it is ready')),
+        eatHere: @json(translate('EAT HERE')),
+        collect: @json(translate('COLLECT')),
+        people: @json(translate('people')),
+        codeHint: @json(translate('Customer code')),
+        handOver: @json(translate('Hand over')),
+        handedOver: @json(translate('Order handed over')),
+        customerTold: @json(translate('The customer has been told')),
         respondIn: @json(translate('Answer in')),
         readyAt: @json(translate('Ready at')),
         late: @json(translate('Late')),
@@ -211,6 +220,7 @@
         accept: @json(route('partner.orders.accept', ['order' => '__ID__'])),
         reject: @json(route('partner.orders.reject', ['order' => '__ID__'])),
         ready: @json(route('partner.orders.ready', ['order' => '__ID__'])),
+        handover: @json(route('partner.orders.hand-over', ['order' => '__ID__'])),
         swaps: @json(route('partner.orders.swaps', ['order' => '__ID__'])),
         propose: @json(route('partner.orders.propose', ['order' => '__ID__'])),
     };
@@ -307,6 +317,14 @@
             head += '<span class="o__timer ' + (late ? 'is-hot' : 'is-ok') + '">' + (late ? T.late : T.readyAt + ' ' + clock(o.ready_at)) + '</span>';
         }
         head += '</div>';
+        // Not a delivery: say so loudly, with the time they come.
+        var here = o.fulfilment === 'dine_in' || o.fulfilment === 'pickup';
+        if (here) {
+            head += '<div style="margin:6px 0;padding:6px 10px;border-radius:6px;background:#FEF3C7;color:#92400E;font-weight:700;font-size:13px">' +
+                '<i class="bi ' + (o.fulfilment === 'dine_in' ? 'bi-cup-hot' : 'bi-bag-check') + '"></i> ' +
+                (o.fulfilment === 'dine_in' ? T.eatHere : T.collect) + (o.arrive_at ? ' · ' + clock(o.arrive_at) : '') +
+                (o.fulfilment === 'dine_in' && o.guests ? ' · ' + o.guests + ' ' + T.people : '') + '</div>';
+        }
         var body = o.status === 'changes_proposed' ? proposalHtml(o) : itemsHtml(o), actions = '';
         var isNew = o.status === 'awaiting_confirmation' || o.status === 'placed';
         if (isNew) {
@@ -324,6 +342,13 @@
             actions = '<div class="o__wait"><i class="bi bi-hourglass-split"></i> ' + T.waitAnswer + '</div>';
         } else if (o.status === 'awaiting_payment') {
             actions = '<div class="o__wait"><i class="bi bi-hourglass-split"></i> ' + T.waitPay + '</div>';
+        } else if (o.status === 'accepted' && here) {
+            // Eat here or collect: tell them it is ready, then type their code when they are here.
+            actions = (o.ready_told
+                    ? '<div class="o__wait"><i class="bi bi-check2-circle"></i> ' + T.toldReady + '</div>'
+                    : '<button type="button" class="btn btn-outline-dark w-100" style="min-height:48px" data-ready="' + o.id + '" data-here="1"><i class="bi bi-bell"></i> ' + T.readyHere + '</button>') +
+                '<div class="o__actions" style="margin-top:8px"><input type="text" inputmode="numeric" maxlength="4" class="form-control" style="min-height:48px;flex:1;font-size:18px;letter-spacing:4px;text-align:center" placeholder="' + esc(T.codeHint) + '" aria-label="' + esc(T.codeHint) + '" data-code-for="' + o.id + '">' +
+                '<button type="button" class="btn btn-primary" data-handover="' + o.id + '">' + T.handOver + '</button></div>';
         } else if (o.status === 'accepted') {
             actions = '<button type="button" class="btn btn-primary w-100" style="min-height:52px" data-ready="' + o.id + '"><i class="bi bi-bell"></i> ' + T.ready + '</button>';
         } else if (o.status === 'rider_requested' || o.status === 'picked_up') {
@@ -436,7 +461,15 @@
         }
         if (t.dataset.change) { openChanges(t.dataset.change); return; }
         if (t.dataset.cancel) { openReject(t.dataset.cancel, true); return; }
-        if (t.dataset.ready) { t.disabled = true; act('ready', t.dataset.ready, {}, T.riderCalled); return; }
+        if (t.dataset.ready) { t.disabled = true; act('ready', t.dataset.ready, {}, t.dataset.here ? T.customerTold : T.riderCalled); return; }
+        if (t.dataset.handover) {
+            var input = board.querySelector('[data-code-for="' + t.dataset.handover + '"]');
+            var code = input ? input.value.trim() : '';
+            if (code.length < 4) { if (input) input.focus(); return; }
+            t.disabled = true;
+            act('handover', t.dataset.handover, {code: code}, T.handedOver);
+            return;
+        }
         if (t.dataset.reject) { openReject(t.dataset.reject, false); }
     });
     function openReject(id, cancelling) {
