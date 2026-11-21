@@ -90,7 +90,7 @@ class PortalController extends Controller
     /** A QR code of $text as rows of "0"/"1". */
     private static function qrRows(string $text): array
     {
-        $matrix = \BaconQrCode\Encoder\Encoder::encode($text, \BaconQrCode\Common\ErrorCorrectionLevel::M(), 'UTF-8')->getMatrix();
+        $matrix = \BaconQrCode\Encoder\Encoder::encode($text, \BaconQrCode\Common\ErrorCorrectionLevel::M())->getMatrix();
         $rows = [];
         for ($y = 0; $y < $matrix->getHeight(); $y++) {
             $row = '';
