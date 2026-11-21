@@ -192,10 +192,15 @@
             y += 220;
         }
         pc.textAlign = 'center';
-        pc.fillStyle = '#1D2D2B'; pc.font = '800 84px system-ui, -apple-system, Roboto, sans-serif';
-        let name = String(data.name);
-        while (name.length > 1 && pc.measureText(name).width > PW - 160) name = name.slice(0, -2) + '…';
-        pc.fillText(name, PW / 2, y + 40);
+        pc.fillStyle = '#1D2D2B'; pc.font = '800 80px system-ui, -apple-system, Roboto, sans-serif';
+        // The name on up to two lines.
+        const pw = String(data.name).split(' '), pl = [''];
+        pw.forEach(w => {
+            const t = (pl[pl.length - 1] + ' ' + w).trim();
+            if (pc.measureText(t).width > PW - 160 && pl[pl.length - 1] !== '' && pl.length < 2) pl.push(w); else pl[pl.length - 1] = t;
+        });
+        pl.forEach((l, k) => pc.fillText(l, PW / 2, y + 40 + k * 88));
+        y += (pl.length - 1) * 88;
         pc.fillStyle = '#6B7675'; pc.font = '500 40px system-ui, -apple-system, Roboto, sans-serif';
         pc.fillText(data.type + '  ·  ' + data.ways.join(', '), PW / 2, y + 110);
         pc.fillStyle = '#E02020'; pc.font = '800 64px system-ui, -apple-system, Roboto, sans-serif';

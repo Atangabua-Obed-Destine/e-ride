@@ -80,7 +80,7 @@ class PortalController extends Controller
             'qr' => self::qrRows($url),
             'scan' => translate('Scan to see the menu and order'),
             'scan_short' => translate('Scan or tap the link'),
-            'no_app' => translate('No app? The menu opens in your browser.'),
+            'no_app' => translate('No app needed: the menu opens in the browser.'),
             'ways' => array_values($ways),
             'type' => $brand->type === 'shop' ? translate('Shop') : translate('Restaurant'),
         ];
