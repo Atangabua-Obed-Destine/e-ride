@@ -205,6 +205,17 @@
                             </div>
                         </li>
                     @endif
+                    @if($trip->voice_note)
+                        <li>
+                            <div class="p-10px fs-14 title-color bg-info-5 rounded-10">
+                                <span class="text-info">{{ translate('Voice note for the driver') }}:</span>
+                                <audio controls preload="none" class="w-100 mt-2" src="{{ app(\Modules\TripManagement\Service\TripVoiceNoteService::class)->url($trip->voice_note) }}"></audio>
+                                @if($trip->voice_note_text)
+                                    <div class="mt-1 fst-italic">"{{ $trip->voice_note_text }}"</div>
+                                @endif
+                            </div>
+                        </li>
+                    @endif
                 </ul>
             </div>
         </div>

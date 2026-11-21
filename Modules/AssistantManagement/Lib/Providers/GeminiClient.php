@@ -26,6 +26,17 @@ class GeminiClient implements ChatProvider
 
     public function complete(string $system, string $user, string $key, string $model): string
     {
+        return $this->ask($system, [['text' => $user]], $key, $model);
+    }
+
+    /** Listens to a recording (base64) and answers $instruction about it, as JSON. */
+    public function completeAudio(string $system, string $instruction, string $audioBase64, string $mime, string $key, string $model): string
+    {
+        return $this->ask($system, [['inline_data' => ['mime_type' => $mime, 'data' => $audioBase64]], ['text' => $instruction]], $key, $model);
+    }
+
+    protected function ask(string $system, array $parts, string $key, string $model): string
+    {
         if ($key === '') {
             throw new ProviderUnavailable('Gemini: no API key', 1800);
         }
@@ -37,7 +48,7 @@ class GeminiClient implements ChatProvider
                 break;
             }
             try {
-                $text = $this->once($system, $user, $key, $m, min(self::TRY_SECONDS, $left));
+                $text = $this->once($system, $parts, $key, $m, min(self::TRY_SECONDS, $left));
                 Cache::put(self::GOOD, $m, 600);
                 return $text;
             } catch (ProviderUnavailable $e) {
@@ -75,14 +86,14 @@ class GeminiClient implements ChatProvider
         return array_values(array_unique(array_merge([$model], self::BACKUP_MODELS)));
     }
 
-    protected function once(string $system, string $user, string $key, string $model, int $timeout): string
+    protected function once(string $system, array $parts, string $key, string $model, int $timeout): string
     {
         try {
             $r = Http::timeout($timeout)->acceptJson()->post(
                 'https://generativelanguage.googleapis.com/v1beta/models/' . rawurlencode($model) . ':generateContent?key=' . urlencode($key),
                 [
                     'systemInstruction' => ['parts' => [['text' => $system]]],
-                    'contents' => [['role' => 'user', 'parts' => [['text' => $user]]]],
+                    'contents' => [['role' => 'user', 'parts' => $parts]],
                     'generationConfig' => ['responseMimeType' => 'application/json', 'temperature' => 0.3, 'maxOutputTokens' => 1200],
                 ]
             );

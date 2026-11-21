@@ -26,11 +26,12 @@ class AssistantService
 {
     /** Buttons the app knows how to open, and the service each needs. */
     public const ACTIONS = [
-        'ride' => ['service' => 'ride', 'what' => 'book a ride now'],
-        'ride_later' => ['service' => 'ride', 'what' => 'book a ride for later (1 hour to 3 days ahead)'],
+        'ride' => ['service' => 'ride', 'what' => 'book a ride now; id = the place they want to go, as they named it (e.g. "Up Station"), to fill the destination'],
+        'ride_later' => ['service' => 'ride', 'what' => 'book a ride for later (1 hour to 3 days ahead); id = the place, if named'],
         'health_ride' => ['service' => 'health', 'what' => 'emergency ride (course d\'urgence): urgent ride to a hospital, clinic or pharmacy'],
-        'parcel' => ['service' => 'parcel', 'what' => 'send a parcel'],
-        'move' => ['service' => 'move', 'what' => 'book a truck to move goods'],
+        'parcel' => ['service' => 'parcel', 'what' => 'send a parcel; id = where it goes, if named'],
+        'move' => ['service' => 'move', 'what' => 'book a truck to move goods; id = where to, if named'],
+        'guide' => ['service' => null, 'what' => 'the getting-started guide: first steps in E-Ride, for new customers or anyone asking how to start'],
         'food' => ['service' => 'food', 'what' => 'restaurants and shops that deliver'],
         'bus' => ['service' => 'bus', 'what' => 'bus tickets with verified agencies'],
         'hotels' => ['service' => 'hotels', 'what' => 'hotels and guest houses'],
@@ -156,8 +157,26 @@ class AssistantService
     /** Catalog matches for this question (customers only): the model suggests from these, the app shows them as cards. */
     protected array $catalog = ['terms' => [], 'results' => [], 'categories' => []];
 
-    public function ask(User $user, string $question, ?string $screen, string $lang, array $services, string $audience = 'customer', ?float $lat = null, ?float $lng = null): array
+    /** The conversation so far (oldest first, at most 4 turns), so follow-ups make sense. */
+    protected array $history = [];
+
+    /** Where the customer's saved address is: the zone, for "in Bamenda". */
+    protected ?string $zoneId = null;
+
+    /**
+     * @param array $history earlier turns of this conversation: [['q' => ..., 'a' => ...], ...]
+     */
+    public function ask(User $user, string $question, ?string $screen, string $lang, array $services, string $audience = 'customer', ?float $lat = null, ?float $lng = null, array $history = [], ?string $zoneId = null): array
     {
+        $this->history = [];
+        foreach (array_slice($history, -4) as $turn) {
+            $q = self::clean((string)($turn['q'] ?? ''));
+            $a = mb_substr(trim(strip_tags((string)($turn['a'] ?? ''))), 0, 500);
+            if ($q !== '') {
+                $this->history[] = ['q' => $q, 'a' => $a];
+            }
+        }
+        $this->zoneId = $zoneId;
         $this->catalog = ['terms' => [], 'results' => [], 'categories' => []];
         $this->audience = $audience === 'driver' ? 'driver' : 'customer';
         $settings = AssistantSettings::all();
@@ -189,7 +208,7 @@ class AssistantService
             } catch (\Throwable $e) {
                 report($e);
             }
-            $system = $this->systemPrompt($services, $activity, $screen);
+            $system = $this->systemPrompt($services, $activity, $screen, $this->about($user));
         }
 
         foreach ($settings['providers'] as $p) {
@@ -209,7 +228,7 @@ class AssistantService
                 continue;
             }
             return $this->finish($user, $question, $screen, $lang, $answer['answered'] ? AssistantQuestion::ANSWERED : AssistantQuestion::NO_ANSWER,
-                $p['name'], $answer['reply'], $answer['actions'], $started, true, $answer['cards']);
+                $p['name'], $answer['reply'], $answer['actions'], $started, true, $answer['cards'], $answer['steps'], $answer['follow_ups']);
         }
         // No AI right now: what E-Ride has for the words is still useful.
         if ($this->audience === 'customer' && ($this->catalog['results'] || $this->catalog['categories'])) {
@@ -278,8 +297,49 @@ class AssistantService
 
     // ------------------------------------------------------------------ prompt
 
-    protected function systemPrompt(array $services, array $activity, ?string $screen): string
+    /**
+     * What helps to answer this customer well, without who they are: no name,
+     * phone or address ever reaches the AI. How long they have used E-Ride,
+     * what they have done, and what is set up.
+     */
+    protected function about(User $user): string
     {
+        $lines = [];
+        try {
+            $days = $user->created_at ? (int)$user->created_at->diffInDays(now()) : null;
+            $trips = \Modules\TripManagement\Entities\TripRequest::where('customer_id', $user->id)->where('current_status', 'completed')
+                ->selectRaw("SUM(type = 'parcel') as parcels, SUM(type <> 'parcel') as rides")->first();
+            $rides = (int)($trips->rides ?? 0);
+            $parcels = (int)($trips->parcels ?? 0);
+            $new = ($days !== null && $days < 14) || ($rides + $parcels) === 0;
+            $lines[] = '- with E-Ride for ' . ($days === null ? 'an unknown time' : $days . ' days') . '; completed rides: ' . $rides . '; parcels sent: ' . $parcels;
+            $lines[] = '- new customer: ' . ($new ? 'yes (explain simply, step by step, and offer the "guide" button when it fits)' : 'no');
+            $labels = \Modules\UserManagement\Entities\UserAddress::where('user_id', $user->id)->pluck('address_label')->map(fn($l) => strtolower((string)$l))->all();
+            $lines[] = '- saved places: home ' . (in_array('home', $labels, true) ? 'yes' : 'no') . ', work ' . (in_array('office', $labels, true) || in_array('work', $labels, true) ? 'yes' : 'no') . ', ' . count($labels) . ' in all';
+            $lines[] = '- trusted contacts for safety: ' . \Modules\TripManagement\Entities\TrustedContact::where('user_id', $user->id)->count();
+            $id = \Modules\UserManagement\Entities\IdVerification::where('user_id', $user->id)->latest()->first();
+            $lines[] = '- E-Ride ID verified: ' . ($id?->isVerified() ? 'yes' : ($id ? 'sent, ' . $id->status : 'no'));
+            if ($this->zoneId) {
+                $zone = \Modules\ZoneManagement\Entities\Zone::whereKey($this->zoneId)->value('name');
+                $zone && $lines[] = '- area: ' . $zone;
+            }
+        } catch (\Throwable $e) {
+            report($e);
+        }
+        return implode("\n", $lines) ?: '- nothing known';
+    }
+
+    protected function conversation(): string
+    {
+        if (!$this->history) {
+            return '- this is the first question';
+        }
+        return collect($this->history)->map(fn($t) => 'Customer: ' . $t['q'] . "\nAsk E-Ride: " . ($t['a'] ?: '(no answer)'))->implode("\n");
+    }
+
+    protected function systemPrompt(array $services, array $activity, ?string $screen, string $about = '- nothing known'): string
+    {
+        $conversation = $this->conversation();
         $facts = $this->facts('customer');
         $buttons = collect(self::ACTIONS)
             ->filter(fn($a) => $a['service'] === null || in_array($a['service'], $services, true))
@@ -307,7 +367,11 @@ RULES
 - Every answer about a service carries the button that opens it, even when the customer only asked how it works or how to pay (for example: paying for food -> "food" button, "Order food"; bus tickets -> "bus"). If an item in CUSTOMER ACTIVITY is what they ask about, put its button first. Give no button only when nothing in BUTTONS fits.
 - When the customer is looking for something (a product, a service, food, a place, a job, a home, a bus), suggest only from WHAT E-RIDE HAS. Name the best one or two, and list the refs to show as cards in "cards" (for example ["r1", "r2"], at most 4, best first). Never mention anything that is not in that list, and show only what is really what they asked for (a phone repair service is not a phone to buy).
 - If WHAT E-RIDE HAS is empty or nothing fits, say plainly that E-Ride does not have it yet (that is still an answer: "answered" true), then offer the closest button: "market" with id = the one or two main words to search, as a seller would write them (e.g. "phone", "ps4") (also where they can post what they want), an Explore category ("explore" with id = its key), "food" or "things". Never pretend something exists.
-- Answer with JSON only: {"reply": "...", "answered": true, "actions": [{"type": "...", "label": "...", "id": "..."}], "cards": ["r1"]}
+- Read CONVERSATION SO FAR: a short follow-up ("how much?", "and for tomorrow?", "e dey far?") is about the last topic. Do not repeat what you already said.
+- When the customer wants to go somewhere or send something there and names the place, give the "ride" (or "ride_later", "parcel", "move") button with id = that place as they said it, label like "Ride to Up Station".
+- For "how do I..." questions, put the way in "steps": 2 to 4 short steps (each under 90 characters) in the customer's language, and keep "reply" to one sentence. Otherwise "steps" is [].
+- "follow_ups": 2 or 3 short next questions this customer would likely ask now (each under 40 characters, their language, from FACTS only). [] when the answer closes the topic.
+- Answer with JSON only: {"reply": "...", "answered": true, "steps": [], "actions": [{"type": "...", "label": "...", "id": "..."}], "cards": ["r1"], "follow_ups": []}
 
 BUTTONS
 {$buttons}
@@ -317,6 +381,12 @@ WHAT E-RIDE HAS FOR THIS QUESTION (searched for: {$terms})
 
 CUSTOMER ACTIVITY (things in progress or needing the customer; the kind says what: food_*, bus_*, hotel_*, ride_*, parcel_*, market_*, home_*, job_*, lost_*, id_*, tour_*)
 {$mine}
+
+ABOUT THIS CUSTOMER
+{$about}
+
+CONVERSATION SO FAR
+{$conversation}
 
 SCREEN THE CUSTOMER IS ON: {$screen}
 TIME NOW: {$this->now()}
@@ -389,6 +459,11 @@ PROMPT;
                 // An Explore category key, or the words to search in Market or Jobs.
                 $id = $type === 'explore' ? (preg_match('/^[a-z_]{2,30}$/', $raw) ? $raw : null) : mb_substr($raw, 0, 60);
             }
+            if (in_array($type, ['ride', 'ride_later', 'parcel', 'move'], true) && is_scalar($a['id'] ?? null)) {
+                // The place to fill in as the destination, as the customer named it.
+                $place = trim(self::clean(strip_tags((string)$a['id'])));
+                $id = ($place !== '' && !str_contains($place, '[phone]') && !str_contains($place, '[email]')) ? mb_substr($place, 0, 80) : null;
+            }
             if (!empty($spec['id'])) {
                 $id = (string)($a['id'] ?? '');
                 $kind = $ids->get($id);
@@ -418,23 +493,131 @@ PROMPT;
                 $cards[$ref] = $byRef->get($ref);
             }
         }
-        return ['reply' => $reply, 'answered' => $answered, 'actions' => array_values($actions), 'cards' => array_values($cards)];
+        $lines = function ($list, int $max, int $len): array {
+            $out = [];
+            foreach (is_array($list) ? $list : [] as $line) {
+                $line = is_scalar($line) ? trim(strip_tags((string)$line)) : '';
+                if ($line !== '' && count($out) < $max) {
+                    $out[] = mb_substr($line, 0, $len);
+                }
+            }
+            return $out;
+        };
+        return ['reply' => $reply, 'answered' => $answered, 'actions' => array_values($actions), 'cards' => array_values($cards),
+            'steps' => $lines($data['steps'] ?? [], 4, 140), 'follow_ups' => $answered ? $lines($data['follow_ups'] ?? [], 3, 60) : []];
     }
 
-    protected function finish(User $user, string $question, ?string $screen, string $lang, string $status, ?string $provider, string $reply, array $actions, float $started, bool $log = true, array $cards = []): array
+    protected function finish(User $user, string $question, ?string $screen, string $lang, string $status, ?string $provider, string $reply, array $actions, float $started, bool $log = true, array $cards = [], array $steps = [], array $followUps = []): array
     {
+        // The log keeps the steps with the reply, so the admin sees the whole answer.
+        $logged = $steps ? $reply . "\n" . implode("\n", array_map(fn($s, $i) => ($i + 1) . '. ' . $s, $steps, array_keys($steps))) : $reply;
         $id = null;
         if ($log) {
             $q = AssistantQuestion::create([
                 'user_id' => $user->id, 'audience' => $this->audience, 'question' => $question, 'screen' => $screen ? mb_substr($screen, 0, 80) : null, 'language' => $lang,
-                'status' => $status, 'provider' => $provider, 'reply' => $reply,
+                'status' => $status, 'provider' => $provider, 'reply' => $logged,
                 // What was shown, for the admin's log: the buttons, then the cards.
                 'actions' => $cards ? array_merge($actions, array_map(fn($c) => ['type' => 'card', 'label' => $c['title'], 'id' => $c['type'] . ':' . $c['id']], $cards)) : $actions,
                 'ms' => (int)round((microtime(true) - $started) * 1000),
             ]);
             $id = $q->id;
         }
-        return ['id' => $id, 'status' => $status, 'reply' => $reply, 'actions' => $actions, 'cards' => $cards];
+        return ['id' => $id, 'status' => $status, 'reply' => $reply, 'actions' => $actions, 'cards' => $cards, 'steps' => $steps, 'follow_ups' => $followUps];
+    }
+
+    // ------------------------------------------------------------------ voice notes
+
+    /**
+     * Listens to the voice note a customer recorded while booking a ride or a
+     * parcel, and writes out what they said, where to find them, where they go
+     * and (parcels) what is sent. Only Gemini hears audio. Never blocks the
+     * booking: when the AI is off, busy or out of quota, the note still goes
+     * to the driver, unread.
+     *
+     * @return array{understood: bool, transcript: string, pickup: string, destination: string, note: string, parcel: ?array, why?: string}
+     */
+    public function understandVoice(User $user, string $path, string $mime, string $kind, string $lang, array $parcelCategories = []): array
+    {
+        $nothing = ['understood' => false, 'transcript' => '', 'pickup' => '', 'destination' => '', 'note' => '', 'parcel' => null];
+        $settings = AssistantSettings::all();
+        $lang = $lang === 'fr' ? 'fr' : 'en';
+        $kind = $kind === 'parcel' ? 'parcel' : 'ride';
+        if (!$settings['enabled']) {
+            return $nothing + ['why' => 'off'];
+        }
+        $today = AssistantQuestion::where('created_at', '>=', now()->startOfDay())->whereIn('status', [AssistantQuestion::ANSWERED, AssistantQuestion::NO_ANSWER]);
+        if ((clone $today)->where('user_id', $user->id)->count() >= $settings['per_user_daily'] + 10 || (clone $today)->count() >= $settings['app_daily']) {
+            return $nothing + ['why' => 'limit'];
+        }
+        $audio = @file_get_contents($path);
+        if ($audio === false || strlen($audio) < 400) {
+            return $nothing + ['why' => 'empty'];
+        }
+        $categories = implode(', ', array_map(fn($c) => '"' . mb_substr(trim((string)$c), 0, 60) . '"', array_slice($parcelCategories, 0, 30)));
+        $what = $kind === 'parcel' ? 'sending a parcel' : 'booking a ride';
+        $system = <<<PROMPT
+You listen to a voice note that a customer of E-Ride, a ride-hailing and delivery app in Cameroon, recorded while {$what}. The note is for the driver. People speak English, French, Cameroonian Pidgin, or mix them, and name local places: quarters, junctions, churches, schools, markets, shops, filling stations.
+Answer with JSON only:
+{"understood": true, "transcript": "...", "pickup": "...", "destination": "...", "note": "...", "parcel": null}
+- transcript: what they said, word for word, in the language they used (write Pidgin as spoken), at most 400 characters.
+- pickup: how the driver finds them where they are now (landmarks, the gate, colours, what is opposite, which side of the road), in their own words and language, at most 200 characters. "" if they did not say.
+- destination: where they want to go (a ride) or where the parcel goes, as words to search on a map: the place and its area, e.g. "Up Station" or "Total Nkwen" or "Hospital Roundabout". "" if they did not say. Never guess.
+- note: anything else the driver should know (bags, waiting inside a shop, call on arrival), at most 120 characters, their language. "" if nothing.
+- parcel: only when sending a parcel, else null: {"what": "what is sent", "weight_kg": number or null, "fragile": true or false, "receiver_name": "" , "receiver_phone": "", "category": one of [{$categories}] or ""}.
+- understood: false when the recording is silent, only noise, or not about the trip; then every other field is "" or null.
+PROMPT;
+        foreach ($settings['providers'] as $p) {
+            if ($p['name'] !== 'gemini' || !$p['enabled'] || $p['key'] === '' || Cache::has('assistant_skip_gemini') || !($this->clients['gemini'] instanceof GeminiClient)) {
+                continue;
+            }
+            $started = microtime(true);
+            try {
+                $raw = $this->clients['gemini']->completeAudio($system, 'Listen to the voice note and answer with the JSON.', base64_encode($audio), $mime, $p['key'], $p['model']);
+            } catch (ProviderUnavailable $e) {
+                if (!$e->busy) {
+                    Cache::put('assistant_skip_gemini', $e->getMessage(), $e->retryAfter);
+                }
+                Log::info('Voice note: not understood', ['why' => $e->getMessage()]);
+                return $nothing + ['why' => 'busy'];
+            }
+            $data = json_decode(self::jsonPart($raw), true);
+            if (!is_array($data)) {
+                Log::warning('Voice note: unreadable answer', ['raw' => mb_substr($raw, 0, 300)]);
+                return $nothing + ['why' => 'busy'];
+            }
+            $text = fn($v, int $len) => is_scalar($v) ? mb_substr(trim(strip_tags((string)$v)), 0, $len) : '';
+            $understood = ($data['understood'] ?? false) === true && $text($data['transcript'] ?? '', 400) !== '';
+            $parcel = null;
+            if ($kind === 'parcel' && $understood && is_array($data['parcel'] ?? null)) {
+                $pd = $data['parcel'];
+                $category = $text($pd['category'] ?? '', 60);
+                $parcel = [
+                    'what' => $text($pd['what'] ?? '', 120),
+                    'weight_kg' => is_numeric($pd['weight_kg'] ?? null) && $pd['weight_kg'] > 0 ? round((float)$pd['weight_kg'], 1) : null,
+                    'fragile' => ($pd['fragile'] ?? false) === true,
+                    'receiver_name' => $text($pd['receiver_name'] ?? '', 60),
+                    'receiver_phone' => preg_replace('/[^0-9+]/', '', $text($pd['receiver_phone'] ?? '', 20)),
+                    'category' => in_array($category, $parcelCategories, true) ? $category : '',
+                ];
+            }
+            $answer = [
+                'understood' => $understood,
+                'transcript' => $understood ? $text($data['transcript'] ?? '', 400) : '',
+                'pickup' => $understood ? $text($data['pickup'] ?? '', 200) : '',
+                'destination' => $understood ? $text($data['destination'] ?? '', 80) : '',
+                'note' => $understood ? $text($data['note'] ?? '', 120) : '',
+                'parcel' => $parcel,
+            ];
+            // In the admin's log like a question, so voice notes count in the daily limits and can be checked.
+            AssistantQuestion::create([
+                'user_id' => $user->id, 'audience' => 'customer', 'question' => '[voice note, ' . $kind . '] ' . ($answer['transcript'] ?: '(not understood)'),
+                'screen' => 'voice_' . $kind, 'language' => $lang, 'status' => $understood ? AssistantQuestion::ANSWERED : AssistantQuestion::NO_ANSWER,
+                'provider' => 'gemini', 'reply' => trim('Pickup: ' . $answer['pickup'] . "\nTo: " . $answer['destination'] . "\nNote: " . $answer['note']),
+                'actions' => [], 'ms' => (int)round((microtime(true) - $started) * 1000),
+            ]);
+            return $answer;
+        }
+        return $nothing + ['why' => 'busy'];
     }
 
     // ------------------------------------------------------------------ helpers

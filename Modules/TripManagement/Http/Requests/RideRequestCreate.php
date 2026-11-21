@@ -63,7 +63,8 @@ class RideRequestCreate extends FormRequest
                 $this->input('type') === RIDE_REQUEST ? 'boolean' : 'nullable',
             ],
             'scheduled_at' => 'required_if:ride_request_type,scheduled',
-            'pickup_note' => 'nullable|string|max:100',
+            'pickup_note' => 'nullable|string|max:200',
+            'voice_note' => 'nullable|string|max:120',
 
             // Sender and Receiver Information (required only for parcel type)
             'sender_name' => 'required_if:type,parcel',

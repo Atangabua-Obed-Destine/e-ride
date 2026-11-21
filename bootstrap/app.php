@@ -152,6 +152,8 @@ $app = Application::configure(basePath: dirname(__DIR__))
         $job('trip-checkins:tick')->everyMinute();
         $job('lost-items:tick')->everyFiveMinutes();
         $job('scheduled-rides:tick')->everyMinute();
+        // Voice notes for drivers are kept 30 days.
+        $schedule->call(fn() => app(\Modules\TripManagement\Service\TripVoiceNoteService::class)->sweep())->name('trip-voice-notes:sweep')->dailyAt('03:20')->withoutOverlapping(60);
     })
     ->create();
 

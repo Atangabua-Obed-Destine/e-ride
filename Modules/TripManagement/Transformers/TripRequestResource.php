@@ -88,6 +88,10 @@ class TripRequestResource extends JsonResource
             'discount_amount' => $this->discount_amount === null ? null : round((double)$this->discount_amount, 2),
             'note' => $this->note,
             'pickup_note' => $this->pickup_note ?? null,
+            // The customer's voice note for the driver: where to find them, in their own words.
+            'voice_note' => app(\Modules\TripManagement\Service\TripVoiceNoteService::class)->url($this->voice_note),
+            'voice_note_seconds' => $this->voice_note ? (int)$this->voice_note_seconds : null,
+            'voice_note_text' => $this->voice_note ? $this->voice_note_text : null,
             'otp' => $this->otp,
             'rise_request_count' => $this->rise_request_count,
             'type' => $this->type == PARCEL ? PARCEL : ($this->ride_request_type == 'scheduled' ? 'scheduled_request' : RIDE_REQUEST),

@@ -278,6 +278,9 @@ class TripRequestController extends Controller
                     'rise_request_count' => $riseRequestCount,
                     'is_move' => $isMove,
                     'move_photos' => $isMove ? app(\Modules\TripManagement\Service\MoveTripService::class)->validPhotoNames($request->input('move_photos')) : null,
+                    // The customer's voice note for the driver, recorded while booking.
+                    'voice_note' => null, 'voice_note_seconds' => null, 'voice_note_text' => null,
+                    ...app(\Modules\TripManagement\Service\TripVoiceNoteService::class)->attributes($request->input('voice_note'), auth('api')->id()),
                 ]);
                 $save_trip = $this->tripRequestService->createRideRequest(attributes: $request->all());
             }
