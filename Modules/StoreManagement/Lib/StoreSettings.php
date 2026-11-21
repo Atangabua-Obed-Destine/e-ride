@@ -17,6 +17,14 @@ class StoreSettings
             'parcel_category_id' => $get('store_order_parcel_category_id', null),
             // Off by default: paid food orders are not refunded (see refunds()).
             'refund_status' => (string)$get('store_refund_status', '0') === '1',
+            // "The shop brings it": a store's own staff deliver close by.
+            'own_delivery_status' => (string)$get('store_own_delivery_status', '1') === '1',
+            'own_delivery_max_km' => max(0.1, (float)$get('store_own_delivery_max_km', 1)),
+            // E-Ride's part of the store's own delivery fee, in percent (0 = the store keeps it all).
+            'own_delivery_share_percent' => min(100, max(0, (float)$get('store_own_delivery_share_percent', 0))),
+            // "My riders": a store's deliveries ring the riders it chose first, or only them.
+            'my_riders_status' => (string)$get('store_my_riders_status', '1') === '1',
+            'my_riders_first_seconds' => max(20, (int)$get('store_my_riders_first_seconds', 60)),
         ];
     }
 

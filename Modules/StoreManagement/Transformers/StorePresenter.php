@@ -164,8 +164,14 @@ class StorePresenter
             'fulfilment' => $order->fulfilment ?? StoreOrder::DELIVERY,
             'arrive_at' => $order->arrive_at?->toIso8601String(),
             'guests' => $order->guests,
-            // Shown at the restaurant once paid, until the order is handed over.
-            'collect_code' => !$order->isDelivery() && $order->status === StoreOrder::ACCEPTED ? $order->collect_code : null,
+            // Shown at the restaurant once paid, until the order is handed over. "The shop
+            // brings it": given to the staff member at the door.
+            'collect_code' => (!$order->isDelivery() && $order->status === StoreOrder::ACCEPTED)
+                || ($order->byStore() && in_array($order->status, [StoreOrder::ACCEPTED, StoreOrder::PICKED_UP], true)) ? $order->collect_code : null,
+            // Who brings a delivery: rider (E-Ride) or store (its own staff, close by). Null when not a delivery.
+            'delivered_by' => $order->isDelivery() ? ($order->delivered_by ?? StoreOrder::BY_RIDER) : null,
+            // "The shop brings it", on its way: the customer can say they have it.
+            'can_confirm_received' => $order->byStore() && $order->status === StoreOrder::PICKED_UP,
             'ready_told' => $order->ready_told_at !== null,
             'store_place' => $order->store ? ['address' => $order->store->address, 'latitude' => $order->store->latitude, 'longitude' => $order->store->longitude] : null,
             // "Deliver it instead", while the order is still open and not a delivery.

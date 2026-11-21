@@ -34,7 +34,7 @@ interface StoreOrderServiceInterface extends BaseServiceInterface
     public function swapOptions(StoreOrder $order): array;
 
     /** The restaurant suggests changes; one entry per order line: quantity (0 = removed), swap_item_id. */
-    public function proposeChanges(StoreOrder $order, array $changes, ?string $note): StoreOrder;
+    public function proposeChanges(StoreOrder $order, array $changes, ?string $note, bool $byStore = false): StoreOrder;
 
     /** The customer accepts the suggested changes (then pays) or refuses them (cancelled). */
     public function answerChanges(StoreOrder $order, bool $accept): StoreOrder;
@@ -62,7 +62,22 @@ interface StoreOrderServiceInterface extends BaseServiceInterface
     /** SMS to the store: the rider brings the order back; the return code to give them. */
     public function tellStoreReturnCode(StoreOrder $order, string $code): void;
 
-    public function accept(StoreOrder $order, int $prepMinutes): StoreOrder;
+    public function accept(StoreOrder $order, int $prepMinutes, bool $byStore = false): StoreOrder;
+
+    /** "The shop brings it": what the store's own staff would charge for a quoted delivery, or null. */
+    public function ownDeliveryOffer(Store $store, ?array $quote): ?array;
+
+    /** "The shop brings it": the staff leave with the order. */
+    public function sendOut(StoreOrder $order): StoreOrder;
+
+    /** "The shop brings it": the customer says they have their order. */
+    public function confirmReceived(StoreOrder $order): StoreOrder;
+
+    /** "The shop brings it", paid, and the staff cannot go: an E-Ride rider instead (the store pays the difference). */
+    public function useRider(StoreOrder $order): StoreOrder;
+
+    /** "My riders": stop waiting for the store's own riders on this order and ring everyone. */
+    public function openToAllRiders(StoreOrder $order): StoreOrder;
 
     public function reject(StoreOrder $order, string $reason, string $by = 'partner'): StoreOrder;
 

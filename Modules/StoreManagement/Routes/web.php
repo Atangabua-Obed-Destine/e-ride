@@ -6,6 +6,7 @@ use Modules\StoreManagement\Http\Controllers\Web\Admin\StoreOrderController;
 use Modules\StoreManagement\Http\Controllers\Web\Admin\StoreSettingController;
 use Modules\StoreManagement\Http\Controllers\Web\Partner\AuthController;
 use Modules\StoreManagement\Http\Controllers\Web\Partner\PartnerOrderController;
+use Modules\StoreManagement\Http\Controllers\Web\Partner\PartnerRiderController;
 use Modules\StoreManagement\Http\Controllers\Web\Partner\PortalController;
 use Modules\StoreManagement\Http\Middleware\PartnerMiddleware;
 
@@ -66,6 +67,9 @@ Route::group(['prefix' => 'partner', 'as' => 'partner.'], function () {
         Route::post('orders/{order}/reject', [PartnerOrderController::class, 'reject'])->name('orders.reject');
         Route::post('orders/{order}/ready', [PartnerOrderController::class, 'ready'])->name('orders.ready');
         Route::post('orders/{order}/hand-over', [PartnerOrderController::class, 'handOver'])->name('orders.hand-over');
+        Route::post('orders/{order}/out', [PartnerOrderController::class, 'out'])->name('orders.out');
+        Route::post('orders/{order}/use-rider', [PartnerOrderController::class, 'useRider'])->name('orders.use-rider');
+        Route::post('orders/{order}/open-riders', [PartnerOrderController::class, 'openRiders'])->name('orders.open-riders');
         Route::get('orders/{order}/swaps', [PartnerOrderController::class, 'swaps'])->name('orders.swaps');
         Route::post('orders/{order}/propose', [PartnerOrderController::class, 'propose'])->name('orders.propose');
 
@@ -79,6 +83,10 @@ Route::group(['prefix' => 'partner', 'as' => 'partner.'], function () {
         Route::get('store', [PortalController::class, 'profile'])->name('store');
         Route::put('store', [PortalController::class, 'updateProfile'])->name('store.update');
         Route::post('store/open', [PortalController::class, 'toggleOpen'])->name('store.open');
+        Route::get('riders', [PartnerRiderController::class, 'index'])->name('riders');
+        Route::post('riders', [PartnerRiderController::class, 'add'])->name('riders.add');
+        Route::post('riders/mode', [PartnerRiderController::class, 'mode'])->name('riders.mode');
+        Route::delete('riders/{driver}', [PartnerRiderController::class, 'remove'])->name('riders.remove');
         Route::get('earnings', [PortalController::class, 'earnings'])->name('earnings');
         Route::get('share', [PortalController::class, 'share'])->name('share');
     });

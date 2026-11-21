@@ -2,6 +2,7 @@
 
 use Illuminate\Support\Facades\Route;
 use Modules\StoreManagement\Http\Controllers\Api\Customer\StoreOrderController;
+use Modules\StoreManagement\Http\Controllers\Api\Driver\StoreTeamController;
 
 /*
 | Food & Shops, customer app.
@@ -24,10 +25,20 @@ Route::group(['prefix' => 'customer', 'middleware' => ['auth:api', 'maintenance_
     Route::post('store-orders/{order}/review', [StoreOrderController::class, 'review'])->middleware('throttle:10,1,store-review');
     Route::post('store-orders/{order}/deliver', [StoreOrderController::class, 'deliver'])->middleware('throttle:15,1,store-deliver');
     Route::post('store-orders/{order}/keep-way', [StoreOrderController::class, 'keepWay']);
+    // "The shop brings it": the customer has their order.
+    Route::post('store-orders/{order}/received', [StoreOrderController::class, 'received'])->middleware('throttle:15,1,store-received');
     Route::get('store-orders/{order}/pay', [StoreOrderController::class, 'pay'])
         ->name('store-order.pay')
         ->withoutMiddleware('auth:api');
     Route::get('store-orders/{order}/pay-delivery', [StoreOrderController::class, 'payDelivery'])
         ->name('store-order.pay-delivery')
         ->withoutMiddleware('auth:api');
+});
+
+/*
+| Driver app: the stores that chose this rider for their deliveries ("My riders").
+*/
+Route::group(['prefix' => 'driver', 'middleware' => ['auth:api', 'maintenance_mode']], function () {
+    Route::get('store-teams', [StoreTeamController::class, 'index']);
+    Route::post('store-teams/{id}/leave', [StoreTeamController::class, 'leave'])->middleware('throttle:20,1,store-team');
 });

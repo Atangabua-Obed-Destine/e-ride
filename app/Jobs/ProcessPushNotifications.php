@@ -9,6 +9,7 @@ use Illuminate\Foundation\Bus\Dispatchable;
 use Illuminate\Queue\InteractsWithQueue;
 use Illuminate\Queue\SerializesModels;
 use Modules\TripManagement\Entities\TempTripNotification;
+use Modules\TripManagement\Lib\TripReservation;
 use Modules\TripManagement\Service\Interfaces\TripRequestServiceInterface;
 
 class ProcessPushNotifications implements ShouldQueue
@@ -19,12 +20,15 @@ class ProcessPushNotifications implements ShouldQueue
     protected $trip;
     protected $parcelWeight;
     protected $exceptDriverId;
-    public function __construct( $radius, $trip, $parcelWeight = null, $exceptDriverId = null)
+    /** A second round for the same request: drivers already rung are left alone. */
+    protected $skipNotified;
+    public function __construct( $radius, $trip, $parcelWeight = null, $exceptDriverId = null, $skipNotified = false)
     {
         $this->radius = $radius;
         $this->trip = $trip;
         $this->parcelWeight = $parcelWeight;
         $this->exceptDriverId = $exceptDriverId;
+        $this->skipNotified = $skipNotified;
     }
 
 
@@ -50,6 +54,24 @@ class ProcessPushNotifications implements ShouldQueue
             if (empty($find_drivers)) {
                 return;
             }
+
+            // A store's delivery held for the riders it chose: only they are rung.
+            // "My riders first" opens to everyone at once when none of them is near.
+            if (TripReservation::active($this->trip)) {
+                $chosen = collect($find_drivers)->filter(fn($d) => in_array((string)$d?->user?->id, (array)$this->trip->reserved_for, true))->values();
+                if ($chosen->isNotEmpty()) {
+                    $find_drivers = $chosen;
+                } elseif ($this->trip->reserved_until !== null) {
+                    \Modules\TripManagement\Entities\TripRequest::whereKey($this->trip->id)->update(['reserved_for' => null, 'reserved_until' => null]);
+                    $this->trip->reserved_for = null;
+                    $this->trip->reserved_until = null;
+                } else {
+                    return;
+                }
+            }
+            $alreadyRung = $this->skipNotified
+                ? TempTripNotification::where('trip_request_id', $this->trip->id)->pluck('user_id')->map(fn($id) => (string)$id)->all()
+                : [];
 
             $requestType = $this->trip->type == PARCEL ? 'parcel_request' : (
             $this->trip->ride_request_type == SCHEDULED ? 'schedule_trip_request' : 'ride_request'
@@ -86,6 +108,9 @@ class ProcessPushNotifications implements ShouldQueue
 
             foreach ($find_drivers as $data) {
                 if ($this->exceptDriverId && $data?->user?->id == $this->exceptDriverId) {
+                    continue;
+                }
+                if ($alreadyRung && in_array((string)$data?->user?->id, $alreadyRung, true)) {
                     continue;
                 }
                 try {

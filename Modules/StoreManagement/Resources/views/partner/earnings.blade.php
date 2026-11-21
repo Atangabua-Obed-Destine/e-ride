@@ -15,7 +15,7 @@
                 @else
                     <div class="fs-12" style="color:#a3a3ad">{{ translate('E-Ride owes you') }}</div>
                     <div class="fs-2 fw-bold">{{ getCurrencyFormat($balance) }}</div>
-                    <div class="fs-12" style="color:#a3a3ad">{{ $showBranch ? translate('All branches: the full food price of delivered orders, minus payouts received.') : translate('The full food price of delivered orders, minus payouts received.') }}</div>
+                    <div class="fs-12" style="color:#a3a3ad">{{ $showBranch ? translate('All branches: the full food price of delivered orders and your own delivery fees, minus payouts received.') : translate('The full food price of delivered orders and your own delivery fees, minus payouts received.') }}</div>
                 @endif
             </div>
         </div>

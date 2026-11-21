@@ -248,6 +248,8 @@ class TripRequestRepository extends BaseRepository implements TripRequestReposit
             ->where(fn($query) => $query->where('vehicle_category_id', $attributes['vehicle_category_id'])
                 ->orWhereNull('vehicle_category_id')
             )
+            // A store's delivery held for the riders it chose is hidden from the others.
+            ->tap(fn($query) => \Modules\TripManagement\Lib\TripReservation::visibleTo($query, auth('api')->id() ?? auth()->id()))
             ->where(['zone_id' => $attributes['zone_id'], 'current_status' => PENDING,])
             ->orderBy('created_at', 'desc')
             ->paginate(perPage: $attributes['limit'], page: $attributes['offset']);

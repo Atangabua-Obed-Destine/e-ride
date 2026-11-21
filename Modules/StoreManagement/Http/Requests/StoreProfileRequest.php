@@ -23,6 +23,10 @@ class StoreProfileRequest extends FormRequest
             'default_prep_minutes' => 'required|integer|min:5|max:180',
             'min_order_amount' => 'nullable|numeric|min:0',
             'offers_delivery' => 'nullable|boolean',
+            // "The shop brings it": its own staff, its own fee, close by.
+            'own_delivery' => 'nullable|boolean',
+            'own_delivery_fee' => 'nullable|numeric|min:0|max:100000',
+            'own_delivery_km' => 'nullable|numeric|min:0.1|max:50',
             'payout_method' => 'nullable|string|max:30',
             'payout_number' => 'nullable|string|max:40',
             'payout_name' => 'nullable|string|max:120',

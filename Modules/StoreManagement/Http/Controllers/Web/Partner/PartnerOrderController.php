@@ -90,9 +90,14 @@ class PartnerOrderController extends Controller
     /** Confirm a new order (the customer then pays), or accept an older paid one. */
     public function accept(Request $request, StoreOrder $order): JsonResponse
     {
-        $data = $request->validate(['prep_minutes' => 'required|integer|min:5|max:180']);
+        // by_store: "Our staff will bring it" (a customer close by), instead of an E-Ride rider.
+        $data = $request->validate(['prep_minutes' => 'required|integer|min:5|max:180', 'by_store' => 'nullable|boolean']);
         $before = $this->own($request, $order)->status;
-        $order = $this->orders->accept($order, (int)$data['prep_minutes']);
+        try {
+            $order = $this->orders->accept($order, (int)$data['prep_minutes'], $request->boolean('by_store'));
+        } catch (ValidationException $e) {
+            return response()->json(['ok' => false, 'message' => collect($e->errors())->flatten()->first()], 422);
+        }
         return $this->answer($order, in_array($before, [StoreOrder::AWAITING_CONFIRMATION, StoreOrder::PLACED], true) ? $before : StoreOrder::AWAITING_CONFIRMATION, $before);
     }
 
@@ -130,10 +135,11 @@ class PartnerOrderController extends Controller
             'changes.*.quantity' => 'required|integer|min:0|max:' . \Modules\StoreManagement\Service\StoreOrderService::MAX_QTY,
             'changes.*.swap_item_id' => 'nullable|uuid',
             'note' => 'nullable|string|max:300',
+            'by_store' => 'nullable|boolean',
         ]);
         $this->own($request, $order);
         try {
-            $order = $this->orders->proposeChanges($order, $data['changes'], $data['note'] ?? null);
+            $order = $this->orders->proposeChanges($order, $data['changes'], $data['note'] ?? null, $request->boolean('by_store'));
         } catch (ValidationException $e) {
             return response()->json(['ok' => false, 'message' => collect($e->errors())->flatten()->first()], 422);
         }
@@ -156,6 +162,35 @@ class PartnerOrderController extends Controller
         $data = $request->validate(['code' => 'required|string|max:6']);
         try {
             $order = $this->orders->handOver($this->own($request, $order), $data['code']);
+        } catch (ValidationException $e) {
+            return response()->json(['ok' => false, 'message' => collect($e->errors())->flatten()->first()], 422);
+        }
+        return response()->json(['ok' => true, 'order' => $this->present($order->fresh(['items', 'store', 'trip.driver', 'trip.vehicle']), StoreSettings::all()['partner_response_minutes'])]);
+    }
+
+    /** "The shop brings it": the staff member leaves with the order. */
+    public function out(Request $request, StoreOrder $order): JsonResponse
+    {
+        return $this->act(fn() => $this->orders->sendOut($this->own($request, $order)));
+    }
+
+    /** "The shop brings it", paid, and nobody can go: an E-Ride rider instead. */
+    public function useRider(Request $request, StoreOrder $order): JsonResponse
+    {
+        return $this->act(fn() => $this->orders->useRider($this->own($request, $order)));
+    }
+
+    /** "My riders": ring every rider for this order, not only the store's own. */
+    public function openRiders(Request $request, StoreOrder $order): JsonResponse
+    {
+        return $this->act(fn() => $this->orders->openToAllRiders($this->own($request, $order)));
+    }
+
+    /** Runs a board action and answers with the order as it now is, or the reason it was refused. */
+    protected function act(callable $do): JsonResponse
+    {
+        try {
+            $order = $do();
         } catch (ValidationException $e) {
             return response()->json(['ok' => false, 'message' => collect($e->errors())->flatten()->first()], 422);
         }
@@ -192,7 +227,30 @@ class PartnerOrderController extends Controller
         $showCode = (businessConfig('driver_otp_confirmation_for_trip')?->value ?? 0) == 1;
         $noRider = $o->status === StoreOrder::RIDER_REQUESTED && $o->payment_status === StoreOrder::PAID
             && !($trip?->driver_id && in_array($trip->current_status, [ACCEPTED, OUT_FOR_PICKUP, ONGOING, COMPLETED], true));
+        $byStore = $o->byStore();
+        // A new delivery close enough for the store's own staff: it chooses who brings it.
+        $own = $o->status === StoreOrder::AWAITING_CONFIRMATION && $o->isDelivery() && $o->store
+            ? $this->orders->ownDeliveryOffer($o->store, $o->delivery_quote) : null;
+        // "My riders": still held for the store's own riders.
+        $held = $noRider && $trip && $trip->current_status === PENDING && \Modules\TripManagement\Lib\TripReservation::active($trip);
         return [
+            // rider | store ("The shop brings it").
+            'delivered_by' => $o->isDelivery() ? ($o->delivered_by ?? StoreOrder::BY_RIDER) : null,
+            'own_offer' => $own ? [
+                'fee_text' => getCurrencyFormat($own['fee']),
+                'rider_fee_text' => getCurrencyFormat($own['rider_fee']),
+                'distance_text' => $own['distance_km'] < 1 ? round($own['distance_km'] * 1000) . ' m' : $own['distance_km'] . ' km',
+            ] : null,
+            'delivery_fee_text' => $o->isDelivery() ? getCurrencyFormat($o->delivery_fee) : null,
+            // Where the staff go, and the code the customer gives them at the door (never shown here: the staff must ask for it).
+            'drop_address' => $byStore || $own ? $o->drop_address : null,
+            'drop_map' => $byStore && $o->isActive() ? 'https://www.google.com/maps/search/?api=1&query=' . $o->drop_latitude . ',' . $o->drop_longitude : null,
+            // Paid and the staff cannot go after all: a rider, and what that costs the store.
+            'can_use_rider' => $byStore && $o->status === StoreOrder::ACCEPTED && $o->payment_status === StoreOrder::PAID && $o->rider_fee !== null,
+            'rider_extra' => $byStore && $o->rider_fee !== null ? max(0, (float)$o->rider_fee - (float)$o->delivery_fee) : null,
+            'rider_extra_text' => $byStore && $o->rider_fee !== null ? getCurrencyFormat(max(0, (float)$o->rider_fee - (float)$o->delivery_fee)) : null,
+            'store_covers_text' => $o->store_covers > 0 ? getCurrencyFormat($o->store_covers) : null,
+            'riders_held' => $held ? ($trip->reserved_until === null ? 'only' : 'first') : null,
             'id' => $o->id,
             'ref' => $o->ref_id,
             'status' => $o->status,

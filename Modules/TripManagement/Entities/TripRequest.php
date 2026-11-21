@@ -75,6 +75,9 @@ class TripRequest extends Model
         'voice_note',
         'voice_note_seconds',
         'voice_note_text',
+        // A store's delivery held for the riders it chose (TripReservation).
+        'reserved_for',
+        'reserved_until',
         'share_token',
         'shared_at',
         'scheduled_at',
@@ -97,6 +100,8 @@ class TripRequest extends Model
     protected $casts = [
         // Scheduled rides: what was already sent (safety heads-ups, "still looking"), see ScheduledRideService.
         'schedule_marks' => 'array',
+        'reserved_for' => 'array',
+        'reserved_until' => 'datetime',
         'estimated_fare' => 'float',
         'actual_fare' => 'float',
         'return_fee' => 'float',

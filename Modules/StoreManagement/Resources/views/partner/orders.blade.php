@@ -71,6 +71,15 @@
     .cm-qty { margin-left: auto; display: flex; align-items: center; gap: 6px; }
     .cm-qty button { width: 36px; height: 36px; border-radius: 10px; border: 1px solid var(--line); background: #fff; font-weight: 900; font-size: 18px; line-height: 1; }
     .cm-qty b { min-width: 22px; text-align: center; }
+    .who { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; }
+    .who button { min-height: 52px; border-radius: 12px; border: 1px solid var(--line); background: #fff; font-weight: 700; font-size: 13px; line-height: 1.2; padding: 6px; }
+    .who button small { display: block; font-weight: 600; color: var(--muted); }
+    .who button.is-on { border-color: var(--red); background: var(--red-soft); color: var(--red); }
+    .who button.is-on small { color: var(--red); }
+    .o__own { margin: 6px 0; padding: 8px 10px; border-radius: 6px; background: #E0F2FE; color: #075985; font-size: 13px; }
+    .o__own b { display: block; font-size: 13px; letter-spacing: .02em; }
+    .o__own a { color: inherit; font-weight: 700; }
+    .o__link { background: none; border: 0; color: var(--ink); font-size: 13px; font-weight: 700; text-decoration: underline; padding: 0; align-self: center; }
 </style>
 @endpush
 
@@ -214,6 +223,28 @@
         loading: @json(translate('Loading')),
         items: @json(translate('items')).toLowerCase(),
         item: @json(translate('item')).toLowerCase(),
+        whoBrings: @json(translate('This customer is close by. Who brings it')),
+        byRider: @json(translate('E-Ride rider')),
+        byStaff: @json(translate('Our staff')),
+        customerPays: @json(translate('customer pays')),
+        staffBring: @json(translate('OUR STAFF BRING IT')),
+        map: @json(translate('Map')),
+        staffLeave: @json(translate('Our staff are leaving with it')),
+        staffOut: @json(translate('Your staff are on the way. Ask the customer for their code at the door.')),
+        staffHint: @json(translate('When it is ready, send your staff. They ask the customer for the code at the door.')),
+        deliveredBtn: @json(translate('Delivered')),
+        staffGone: @json(translate('The customer has been told it is on the way')),
+        staffDelivered: @json(translate('Order delivered')),
+        markReady: @json(translate('It is ready')),
+        useRider: @json(translate('Nobody can go: send a rider instead')),
+        useRiderAsk: @json(translate('Send an E-Ride rider instead of your staff? The customer pays nothing more. This amount comes out of what you earn on this order:')),
+        useRiderFree: @json(translate('Send an E-Ride rider instead of your staff? It costs you nothing more.')),
+        riderInstead: @json(translate('A rider is being called')),
+        youPay: @json(translate('You pay towards the rider')),
+        heldFirst: @json(translate('Calling your riders first')),
+        heldOnly: @json(translate('Calling only your riders')),
+        openRiders: @json(translate('Call every rider nearby')),
+        ridersOpened: @json(translate('Every rider nearby is being called')),
     };
     var urls = {
         feed: @json(route('partner.orders.feed')),
@@ -223,12 +254,17 @@
         handover: @json(route('partner.orders.hand-over', ['order' => '__ID__'])),
         swaps: @json(route('partner.orders.swaps', ['order' => '__ID__'])),
         propose: @json(route('partner.orders.propose', ['order' => '__ID__'])),
+        out: @json(route('partner.orders.out', ['order' => '__ID__'])),
+        userider: @json(route('partner.orders.use-rider', ['order' => '__ID__'])),
+        openriders: @json(route('partner.orders.open-riders', ['order' => '__ID__'])),
     };
     var defaultPrep = {{ (int)$store->default_prep_minutes }};
     var board = document.querySelector('[data-board]');
     var badge = document.querySelector('[data-new-badge]');
     var live = document.querySelector('[data-live]');
     var seen = null, orders = [], serverOffset = 0, prepChoice = {}, rejecting = null, rendered = {}, lastStatus = {};
+    // "Our staff will bring it", chosen on a new order from a customer close by.
+    var staffChoice = {};
 
     /* ---------- sound: a loud two-tone alarm that repeats until someone acts */
     var ctx = null, ringing = null;
@@ -282,7 +318,12 @@
     }
     function riderHtml(o) {
         if (o.status === 'picked_up') return '<div class="o__state" style="color:var(--ok)"><i class="bi bi-bicycle"></i>' + T.pickedUp + '</div>';
-        if (!o.rider) return '<div class="o__state searching">' + T.searching + (o.rider_attempts > 1 ? ' · ' + T.tries + ' ' + o.rider_attempts : '') + '</div>';
+        if (!o.rider) {
+            var looking = o.riders_held ? (o.riders_held === 'only' ? T.heldOnly : T.heldFirst) : T.searching;
+            return '<div class="o__state searching">' + looking + (o.rider_attempts > 1 ? ' · ' + T.tries + ' ' + o.rider_attempts : '') + '</div>' +
+                (o.store_covers_text ? '<div class="o__who">' + T.youPay + ': ' + esc(o.store_covers_text) + '</div>' : '') +
+                (o.riders_held ? '<button type="button" class="btn btn-outline-dark w-100" style="min-height:44px" data-openriders="' + o.id + '"><i class="bi bi-broadcast"></i> ' + T.openRiders + '</button>' : '');
+        }
         return '<div class="o__rider"><i class="bi bi-person-circle"></i><div><b>' + esc(o.rider.name) + '</b><br>' +
             '<a href="tel:' + esc(o.rider.phone) + '">' + esc(o.rider.phone) + '</a>' + (o.rider.vehicle ? ' · ' + esc(o.rider.vehicle) : '') + '</div>' +
             (o.rider.pickup_code ? '<div class="o__code"><b>' + esc(o.rider.pickup_code) + '</b><small>' + T.pickupCode + '</small></div>' : '') + '</div>' +
@@ -325,15 +366,34 @@
                 (o.fulfilment === 'dine_in' ? T.eatHere : T.collect) + (o.arrive_at ? ' · ' + clock(o.arrive_at) : '') +
                 (o.fulfilment === 'dine_in' && o.guests ? ' · ' + o.guests + ' ' + T.people : '') + '</div>';
         }
+        // The store's own staff bring it: say so, with where they go.
+        var byStaff = o.delivered_by === 'store';
+        if (byStaff) {
+            head += '<div class="o__own"><b><i class="bi bi-person-walking"></i> ' + T.staffBring + ' · ' + esc(o.delivery_fee_text) + '</b>' +
+                esc(o.drop_address || '') + (o.drop_map ? ' · <a target="_blank" rel="noopener" href="' + esc(o.drop_map) + '">' + T.map + '</a>' : '') + '</div>';
+        }
         var body = o.status === 'changes_proposed' ? proposalHtml(o) : itemsHtml(o), actions = '';
         var isNew = o.status === 'awaiting_confirmation' || o.status === 'placed';
+        var codeRow = function (label) {
+            return '<div class="o__actions" style="margin-top:8px"><input type="text" inputmode="numeric" maxlength="4" class="form-control" style="min-height:48px;flex:1;font-size:18px;letter-spacing:4px;text-align:center" placeholder="' + esc(T.codeHint) + '" aria-label="' + esc(T.codeHint) + '" data-code-for="' + o.id + '">' +
+                '<button type="button" class="btn btn-primary" data-handover="' + o.id + '"' + (byStaff ? ' data-staff="1"' : '') + '>' + label + '</button></div>';
+        };
         if (isNew) {
             var p = prepChoice[o.id] || defaultPrep;
             var opts = [10, 15, 20, 30, 45, 60];
             if (opts.indexOf(defaultPrep) < 0) opts.splice(2, 0, defaultPrep);
             // A new order is confirmed before payment, and can be changed; an older paid one is only accepted.
             var fresh = o.status === 'awaiting_confirmation';
-            actions = '<div class="fw-bold" style="font-size:13px">' + T.readyIn + '</div><div class="prep">' +
+            // Close by: an E-Ride rider (the default) or the store's own staff, each with what the customer pays.
+            var who = '';
+            if (fresh && o.own_offer) {
+                var staff = !!staffChoice[o.id];
+                who = '<div class="fw-bold" style="font-size:13px">' + T.whoBrings + ' (' + esc(o.own_offer.distance_text) + ')</div>' +
+                    '<div class="o__who" style="margin-top:-6px">' + esc(o.drop_address || '') + '</div><div class="who">' +
+                    '<button type="button" class="' + (staff ? '' : 'is-on') + '" data-who="rider" data-id="' + o.id + '"><i class="bi bi-bicycle"></i> ' + T.byRider + '<small>' + T.customerPays + ' ' + esc(o.own_offer.rider_fee_text) + '</small></button>' +
+                    '<button type="button" class="' + (staff ? 'is-on' : '') + '" data-who="staff" data-id="' + o.id + '"><i class="bi bi-person-walking"></i> ' + T.byStaff + '<small>' + T.customerPays + ' ' + esc(o.own_offer.fee_text) + '</small></button></div>';
+            }
+            actions = who + '<div class="fw-bold" style="font-size:13px">' + T.readyIn + '</div><div class="prep">' +
                 opts.map(function (m) { return '<button type="button" class="' + (m === p ? 'is-on' : '') + '" data-prep="' + m + '" data-id="' + o.id + '">' + m + '</button>'; }).join('') +
                 '</div><div class="o__actions"><button type="button" class="btn btn-outline-secondary" data-reject="' + o.id + '">' + T.decline + '</button>' +
                 (fresh ? '<button type="button" class="btn btn-outline-dark" data-change="' + o.id + '"><i class="bi bi-pencil"></i> ' + T.suggest + '</button>' : '') +
@@ -347,8 +407,15 @@
             actions = (o.ready_told
                     ? '<div class="o__wait"><i class="bi bi-check2-circle"></i> ' + T.toldReady + '</div>'
                     : '<button type="button" class="btn btn-outline-dark w-100" style="min-height:48px" data-ready="' + o.id + '" data-here="1"><i class="bi bi-bell"></i> ' + T.readyHere + '</button>') +
-                '<div class="o__actions" style="margin-top:8px"><input type="text" inputmode="numeric" maxlength="4" class="form-control" style="min-height:48px;flex:1;font-size:18px;letter-spacing:4px;text-align:center" placeholder="' + esc(T.codeHint) + '" aria-label="' + esc(T.codeHint) + '" data-code-for="' + o.id + '">' +
-                '<button type="button" class="btn btn-primary" data-handover="' + o.id + '">' + T.handOver + '</button></div>';
+                codeRow(T.handOver);
+        } else if (o.status === 'accepted' && byStaff) {
+            // Paid: cook, then a staff member leaves with it and asks for the code at the door.
+            actions = '<div class="o__wait"><i class="bi bi-info-circle"></i> ' + T.staffHint + '</div>' +
+                '<button type="button" class="btn btn-primary w-100" style="min-height:52px;margin-top:8px" data-out="' + o.id + '"><i class="bi bi-person-walking"></i> ' + T.staffLeave + '</button>' +
+                codeRow(T.deliveredBtn) +
+                (o.can_use_rider ? '<button type="button" class="o__link" style="margin-top:6px" data-userider="' + o.id + '" data-extra="' + (o.rider_extra > 0 ? esc(o.rider_extra_text) : '') + '">' + T.useRider + '</button>' : '');
+        } else if (o.status === 'picked_up' && byStaff) {
+            actions = '<div class="o__state" style="color:var(--ok)"><i class="bi bi-person-walking"></i>' + T.staffOut + '</div>' + codeRow(T.deliveredBtn);
         } else if (o.status === 'accepted') {
             actions = '<button type="button" class="btn btn-primary w-100" style="min-height:52px" data-ready="' + o.id + '"><i class="bi bi-bell"></i> ' + T.ready + '</button>';
         } else if (o.status === 'rider_requested' || o.status === 'picked_up') {
@@ -453,12 +520,22 @@
         var t = e.target.closest('button');
         if (!t) return;
         if (t.dataset.prep) { prepChoice[t.dataset.id] = parseInt(t.dataset.prep, 10); render(); return; }
+        if (t.dataset.who) { staffChoice[t.dataset.id] = t.dataset.who === 'staff'; render(); return; }
         if (t.dataset.accept) {
             t.disabled = true;
             var o0 = orders.find(function (o) { return o.id === t.dataset.accept; });
-            act('accept', t.dataset.accept, {prep_minutes: prepChoice[t.dataset.accept] || defaultPrep}, o0 && o0.status === 'awaiting_confirmation' ? T.confirmed : T.accepted);
+            act('accept', t.dataset.accept, {prep_minutes: prepChoice[t.dataset.accept] || defaultPrep, by_store: !!(o0 && o0.own_offer && staffChoice[t.dataset.accept])}, o0 && o0.status === 'awaiting_confirmation' ? T.confirmed : T.accepted);
             return;
         }
+        if (t.dataset.out) { t.disabled = true; act('out', t.dataset.out, {}, T.staffGone); return; }
+        if (t.dataset.userider) {
+            var extra = t.dataset.extra || '';
+            if (!confirm(extra ? T.useRiderAsk + ' ' + extra : T.useRiderFree)) return;
+            t.disabled = true;
+            act('userider', t.dataset.userider, {}, T.riderInstead);
+            return;
+        }
+        if (t.dataset.openriders) { t.disabled = true; act('openriders', t.dataset.openriders, {}, T.ridersOpened); return; }
         if (t.dataset.change) { openChanges(t.dataset.change); return; }
         if (t.dataset.cancel) { openReject(t.dataset.cancel, true); return; }
         if (t.dataset.ready) { t.disabled = true; act('ready', t.dataset.ready, {}, t.dataset.here ? T.customerTold : T.riderCalled); return; }
@@ -467,7 +544,7 @@
             var code = input ? input.value.trim() : '';
             if (code.length < 4) { if (input) input.focus(); return; }
             t.disabled = true;
-            act('handover', t.dataset.handover, {code: code}, T.handedOver);
+            act('handover', t.dataset.handover, {code: code}, t.dataset.staff ? T.staffDelivered : T.handedOver);
             return;
         }
         if (t.dataset.reject) { openReject(t.dataset.reject, false); }
@@ -536,7 +613,8 @@
         bootstrap.Modal.getInstance(cmEl).hide();
         act('propose', id, {
             changes: cmRows.map(function (r) { return {quantity: r.quantity, swap_item_id: r.swap || null}; }),
-            note: cmEl.querySelector('[data-cm-note]').value.trim()
+            note: cmEl.querySelector('[data-cm-note]').value.trim(),
+            by_store: !!((orders.find(function (x) { return x.id === id; }) || {}).own_offer && staffChoice[id])
         }, T.changesSent);
         cmOrder = null;
     });

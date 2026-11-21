@@ -69,6 +69,57 @@
 
                 <div class="card mb-3">
                     <div class="card-body">
+                        <div class="d-flex flex-wrap align-items-center justify-content-between gap-3 mb-3">
+                            <div class="flex-grow-1" style="min-width: 240px">
+                                <h5 class="mb-1">{{ translate('The_shop_brings_it') }}</h5>
+                                <p class="fs-12 text-muted mb-0">{{ translate('When on, a store can choose to send its own staff to a customer close by instead of an E-Ride rider. The store sets its own fee (never more than a rider would cost), the customer pays it with the order, and gives a code at the door.') }}</p>
+                            </div>
+                            <label class="switcher">
+                                <input type="hidden" name="own_delivery_status" value="0">
+                                <input class="switcher_input" type="checkbox" name="own_delivery_status" value="1" {{ $settings['own_delivery_status'] ? 'checked' : '' }}>
+                                <span class="switcher_control"></span>
+                            </label>
+                        </div>
+                        <div class="row g-3">
+                            <div class="col-sm-6">
+                                <label class="form-label">{{ translate('Farthest_a_store_may_go_(km)') }}</label>
+                                <input type="number" name="own_delivery_max_km" class="form-control" required min="0.1" max="20" step="0.1" value="{{ $settings['own_delivery_max_km'] }}">
+                                <div class="fs-12 text-muted mt-1">{{ translate('By road, from the store to the customer. Beyond this, only riders deliver.') }}</div>
+                            </div>
+                            <div class="col-sm-6">
+                                <label class="form-label">{{ translate('E-Ride_share_of_the_store_fee_(%)') }}</label>
+                                <input type="number" name="own_delivery_share_percent" class="form-control" required min="0" max="100" step="0.5" value="{{ $settings['own_delivery_share_percent'] }}">
+                                <div class="fs-12 text-muted mt-1">{{ translate('0 = the store keeps its whole delivery fee.') }}</div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="card mb-3">
+                    <div class="card-body">
+                        <div class="d-flex flex-wrap align-items-center justify-content-between gap-3 mb-3">
+                            <div class="flex-grow-1" style="min-width: 240px">
+                                <h5 class="mb-1">{{ translate('My_riders') }}</h5>
+                                <p class="fs-12 text-muted mb-0">{{ translate('When on, a store can keep a list of the E-Ride riders it trusts. Its deliveries call them first, or only them if the store chooses so. A store adds riders who already delivered for it, or by phone number; the rider is told and can leave.') }}</p>
+                            </div>
+                            <label class="switcher">
+                                <input type="hidden" name="my_riders_status" value="0">
+                                <input class="switcher_input" type="checkbox" name="my_riders_status" value="1" {{ $settings['my_riders_status'] ? 'checked' : '' }}>
+                                <span class="switcher_control"></span>
+                            </label>
+                        </div>
+                        <div class="row g-3">
+                            <div class="col-sm-6">
+                                <label class="form-label">{{ translate('Call_the_store_riders_alone_for_(seconds)') }}</label>
+                                <input type="number" name="my_riders_first_seconds" class="form-control" required min="20" max="600" value="{{ $settings['my_riders_first_seconds'] }}">
+                                <div class="fs-12 text-muted mt-1">{{ translate('For "my riders first": after this, every rider nearby is called. It can take up to a minute more.') }}</div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="card mb-3">
+                    <div class="card-body">
                         <h5 class="mb-1">{{ translate('Delivery_fee') }}</h5>
                         <p class="fs-12 text-muted mb-2">
                             {{ translate('The delivery fee uses the parcel fare of the category below, for the weight above, in the store zone. Set it in Parcel Delivery Fare Setup.') }}

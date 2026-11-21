@@ -101,8 +101,11 @@ class StoreService extends BaseService implements StoreServiceInterface
     {
         $store->fill(array_intersect_key($data, array_flip([
             'phone', 'whatsapp', 'description', 'is_open', 'offers_delivery', 'default_prep_minutes', 'min_order_amount',
-            'payout_method', 'payout_number', 'payout_name',
+            'payout_method', 'payout_number', 'payout_name', 'own_delivery', 'own_delivery_km',
         ])));
+        if (array_key_exists('own_delivery_fee', $data)) {
+            $store->own_delivery_fee = (float)($data['own_delivery_fee'] ?? 0);
+        }
         if (array_key_exists('opening_hours', $data)) {
             $store->opening_hours = $this->normaliseHours($data['opening_hours']);
         }

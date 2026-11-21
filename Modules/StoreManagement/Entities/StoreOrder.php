@@ -49,12 +49,17 @@ class StoreOrder extends Model
     public const PICKUP = 'pickup';
     public const WAYS = [self::DELIVERY, self::DINE_IN, self::PICKUP];
 
+    /** Who brings a delivery: an E-Ride rider, or the store's own staff (close by). */
+    public const BY_RIDER = 'rider';
+    public const BY_STORE = 'store';
+
     public const UNPAID = 'unpaid';
     public const PAID = 'paid';
     public const REFUNDED = 'refunded';
 
     protected $fillable = [
         'customer_id', 'store_id', 'zone_id', 'status', 'fulfilment', 'arrive_at', 'guests', 'collect_code', 'ready_told_at', 'switch',
+        'delivered_by', 'rider_fee', 'store_covers', 'own_delivery_share', 'out_at', 'riders_open',
         'delivery_payment_request_id', 'items_subtotal', 'delivery_fee', 'total',
         'payment_method', 'payment_status', 'payment_request_id', 'paid_at', 'refunded_amount', 'refunded_at',
         'drop_address', 'drop_latitude', 'drop_longitude', 'receiver_name', 'receiver_phone', 'note',
@@ -71,6 +76,11 @@ class StoreOrder extends Model
         'switch' => 'array',
         'items_subtotal' => 'float',
         'delivery_fee' => 'float',
+        'rider_fee' => 'float',
+        'store_covers' => 'float',
+        'own_delivery_share' => 'float',
+        'out_at' => 'datetime',
+        'riders_open' => 'boolean',
         'total' => 'float',
         'refunded_amount' => 'float',
         'partner_earning' => 'float',
@@ -107,6 +117,22 @@ class StoreOrder extends Model
     public function isDelivery(): bool
     {
         return ($this->fulfilment ?? self::DELIVERY) === self::DELIVERY;
+    }
+
+    /** A delivery the store's own staff bring: no rider, a code at the door. */
+    public function byStore(): bool
+    {
+        return $this->isDelivery() && $this->delivered_by === self::BY_STORE;
+    }
+
+    /**
+     * What the rider's trip is worth. Normally what the customer paid for
+     * delivery; the full rider fare when the store first chose to bring it
+     * itself and then asked for a rider (it pays the difference).
+     */
+    public function riderFare(): float
+    {
+        return $this->store_covers > 0 ? (float)$this->rider_fee : (float)$this->delivery_fee;
     }
 
     public function store(): BelongsTo

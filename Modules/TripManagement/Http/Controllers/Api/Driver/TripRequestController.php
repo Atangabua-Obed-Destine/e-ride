@@ -1032,6 +1032,13 @@ class TripRequestController extends Controller
         if ($trip->current_status !== PENDING) {
             return response()->json(responseFormatter(DRIVER_REQUEST_ACCEPT_TIMEOUT_408), 403);
         }
+        // A store's delivery held for the riders it chose (an old notification, another phone).
+        if (!\Modules\TripManagement\Lib\TripReservation::allows($trip, (string)$user->id)) {
+            return response()->json(responseFormatter(constant: [
+                'response_code' => 'trip_cannot_be_accepted_403',
+                'message' => translate(key: 'This delivery is kept for the riders the shop chose.', locale: $user?->current_language_key),
+            ]), 403);
+        }
         // One regular ride at a time: the pending list already hides new ones while a
         // pickup is under way, but an old notification or a double tap could still accept.
         if ($trip->type == RIDE_REQUEST && $trip->ride_request_type != SCHEDULED

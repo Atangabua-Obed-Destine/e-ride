@@ -74,7 +74,7 @@
 <nav class="p-nav" aria-label="{{ translate('Partner_menu') }}">
     <a href="{{ route('partner.orders') }}" class="{{ request()->routeIs('partner.orders') ? 'active' : '' }}"><i class="bi bi-receipt"></i>{{ translate('Orders') }}<span class="p-badge" data-new-badge></span></a>
     <a href="{{ route('partner.menu') }}" class="{{ request()->routeIs('partner.menu') ? 'active' : '' }}"><i class="bi bi-card-list"></i>{{ translate('Menu') }}</a>
-    <a href="{{ route('partner.store') }}" class="{{ request()->routeIs('partner.store') ? 'active' : '' }}"><i class="bi bi-shop"></i>{{ translate('Store') }}</a>
+    <a href="{{ route('partner.store') }}" class="{{ request()->routeIs('partner.store') || request()->routeIs('partner.riders') ? 'active' : '' }}"><i class="bi bi-shop"></i>{{ translate('Store') }}</a>
     <a href="{{ route('partner.earnings') }}" class="{{ request()->routeIs('partner.earnings') || request()->routeIs('partner.orders.history') ? 'active' : '' }}"><i class="bi bi-wallet2"></i>{{ translate('Earnings') }}</a>
     <a href="{{ route('partner.share') }}" class="{{ request()->routeIs('partner.share') ? 'active' : '' }}"><i class="bi bi-share"></i>{{ translate('Share') }}</a>
 </nav>

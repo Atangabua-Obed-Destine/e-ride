@@ -31,6 +31,7 @@ class Store extends Model
     protected $fillable = [
         'user_id', 'name', 'slug', 'type', 'phone', 'whatsapp', 'address', 'latitude', 'longitude', 'zone_id',
         'logo', 'cover', 'description', 'opening_hours', 'is_open', 'offers_delivery', 'default_prep_minutes', 'min_order_amount',
+        'own_delivery', 'own_delivery_fee', 'own_delivery_km', 'riders_mode',
         'is_active', 'sort', 'payout_method', 'payout_number', 'payout_name', 'parent_id', 'branch_name',
     ];
 
@@ -40,6 +41,9 @@ class Store extends Model
         'opening_hours' => 'array',
         'is_open' => 'boolean',
         'offers_delivery' => 'boolean',
+        'own_delivery' => 'boolean',
+        'own_delivery_fee' => 'float',
+        'own_delivery_km' => 'float',
         'is_active' => 'boolean',
         'default_prep_minutes' => 'integer',
         'min_order_amount' => 'float',
@@ -94,6 +98,32 @@ class Store extends Model
     public function delivers(): bool
     {
         return in_array('delivery', $this->ways(), true);
+    }
+
+    /** "The shop brings it": its own staff take orders to customers close by. */
+    public function bringsItself(): bool
+    {
+        return (bool)$this->own_delivery && $this->delivers() && \Modules\StoreManagement\Lib\StoreSettings::all()['own_delivery_status'];
+    }
+
+    /** How far its staff go, never past E-Ride's maximum. */
+    public function ownDeliveryKm(): float
+    {
+        $max = \Modules\StoreManagement\Lib\StoreSettings::all()['own_delivery_max_km'];
+        return $this->own_delivery_km > 0 ? min((float)$this->own_delivery_km, $max) : $max;
+    }
+
+    /** all, first (its riders, then everyone) or only. "all" when the feature is off. */
+    public function ridersMode(): string
+    {
+        return \Modules\StoreManagement\Lib\StoreSettings::all()['my_riders_status'] && in_array($this->riders_mode, ['first', 'only'], true)
+            ? $this->riders_mode : 'all';
+    }
+
+    /** The riders this kitchen chose, current ones only. */
+    public function riders(): HasMany
+    {
+        return $this->hasMany(StoreRider::class)->where('status', StoreRider::ACTIVE);
     }
 
     /** "Romz · Mile 6" for a kitchen with a branch name, else the brand name. */

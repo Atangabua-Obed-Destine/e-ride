@@ -20,7 +20,13 @@
                         @endforeach
                         <hr>
                         <div class="d-flex justify-content-between"><span>{{ translate('Food') }}</span><span>{{ getCurrencyFormat($order->items_subtotal) }}</span></div>
-                        <div class="d-flex justify-content-between"><span>{{ translate('Delivery') }}</span><span>{{ getCurrencyFormat($order->delivery_fee) }}</span></div>
+                        <div class="d-flex justify-content-between"><span>{{ $order->byStore() ? translate('Delivery_by_the_store_staff') : translate('Delivery') }}</span><span>{{ getCurrencyFormat($order->delivery_fee) }}</span></div>
+                        @if($order->byStore() && $order->own_delivery_share > 0)
+                            <div class="d-flex justify-content-between fs-12 text-muted"><span>{{ translate('E-Ride_share_of_that_fee') }}</span><span>{{ getCurrencyFormat($order->own_delivery_share) }}</span></div>
+                        @endif
+                        @if($order->store_covers > 0)
+                            <div class="d-flex justify-content-between fs-12 text-muted"><span>{{ translate('Rider_fare') }} {{ getCurrencyFormat($order->rider_fee) }}: {{ translate('the_store_pays_the_difference') }}</span><span>{{ getCurrencyFormat($order->store_covers) }}</span></div>
+                        @endif
                         <div class="d-flex justify-content-between fw-bold fs-16 mt-1"><span>{{ translate('Total_paid') }}</span><span>{{ getCurrencyFormat($order->total) }}</span></div>
                         <div class="fs-12 text-muted mt-1">{{ translate('Payment') }}: {{ $order->payment_method }} · {{ $order->payment_status }}{{ $order->paid_at ? ' · ' . $order->paid_at->format('d M H:i') : '' }}</div>
                         @if($order->refunded_amount > 0)
@@ -70,6 +76,14 @@
                         <div class="fw-semibold">{{ $order->receiver_name }}</div>
                         <div><a href="tel:{{ $order->receiver_phone }}">{{ $order->receiver_phone }}</a></div>
                         <div class="fs-12 text-muted">{{ $order->drop_address }}</div>
+                        @if($order->byStore())
+                            <hr>
+                            <h6>{{ translate('The_shop_brings_it') }}</h6>
+                            <div class="fs-12">{{ translate('The store sends its own staff: no rider, no trip.') }}
+                                @if($order->out_at) {{ translate('Left the store') }}: {{ $order->out_at->format('d M H:i') }}. @endif
+                                @if($order->collect_code && !in_array($order->status, \Modules\StoreManagement\Entities\StoreOrder::FINAL, true)) {{ translate('Customer code') }}: <b>{{ $order->collect_code }}</b> @endif
+                            </div>
+                        @endif
                         @if($order->trip)
                             <hr>
                             <h6>{{ translate('Delivery_trip') }}</h6>

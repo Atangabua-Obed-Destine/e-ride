@@ -28,6 +28,9 @@ class StoreSettingController extends Controller
             'partner_response_minutes' => 'required|integer|min:2|max:60',
             'rider_lead_minutes' => 'required|integer|min:0|max:60',
             'parcel_weight' => 'required|numeric|min:0.1|max:100',
+            'own_delivery_max_km' => 'required|numeric|min:0.1|max:20',
+            'own_delivery_share_percent' => 'required|numeric|min:0|max:100',
+            'my_riders_first_seconds' => 'required|integer|min:20|max:600',
         ]);
         updateBusinessSetting(keyName: 'store_ordering_status', settingType: STORE_SETTINGS, value: $request->boolean('status') ? '1' : '0');
         updateBusinessSetting(keyName: 'store_refund_status', settingType: STORE_SETTINGS, value: $request->boolean('refund_status') ? '1' : '0');
@@ -35,6 +38,11 @@ class StoreSettingController extends Controller
         updateBusinessSetting(keyName: 'store_partner_response_minutes', settingType: STORE_SETTINGS, value: (string)$data['partner_response_minutes']);
         updateBusinessSetting(keyName: 'store_rider_lead_minutes', settingType: STORE_SETTINGS, value: (string)$data['rider_lead_minutes']);
         updateBusinessSetting(keyName: 'store_order_parcel_weight', settingType: STORE_SETTINGS, value: (string)$data['parcel_weight']);
+        updateBusinessSetting(keyName: 'store_own_delivery_status', settingType: STORE_SETTINGS, value: $request->boolean('own_delivery_status') ? '1' : '0');
+        updateBusinessSetting(keyName: 'store_own_delivery_max_km', settingType: STORE_SETTINGS, value: (string)$data['own_delivery_max_km']);
+        updateBusinessSetting(keyName: 'store_own_delivery_share_percent', settingType: STORE_SETTINGS, value: (string)$data['own_delivery_share_percent']);
+        updateBusinessSetting(keyName: 'store_my_riders_status', settingType: STORE_SETTINGS, value: $request->boolean('my_riders_status') ? '1' : '0');
+        updateBusinessSetting(keyName: 'store_my_riders_first_seconds', settingType: STORE_SETTINGS, value: (string)$data['my_riders_first_seconds']);
         Cache::forget(CACHE_BUSINESS_SETTINGS);
         Toastr::success(translate('Food & Shops settings saved'));
         return back();

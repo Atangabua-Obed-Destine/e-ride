@@ -281,6 +281,18 @@ class StoreOrderController extends Controller
         ]));
     }
 
+    /** "The shop brings it": the customer says they have their order, which closes it. */
+    public function received(StoreOrder $order): JsonResponse
+    {
+        abort_unless($order->customer_id === auth('api')->id(), 404);
+        try {
+            $order = $this->orders->confirmReceived($order);
+        } catch (ValidationException $e) {
+            return $this->problem(collect($e->errors())->flatten()->first());
+        }
+        return response()->json(responseFormatter(DEFAULT_200, StorePresenter::order($order->fresh()->load(['store', 'items', 'review']))));
+    }
+
     /** "Keep it as it was": drop a change to delivery that waits for its fee. */
     public function keepWay(StoreOrder $order): JsonResponse
     {
