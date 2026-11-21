@@ -23,6 +23,7 @@ class GeminiClient implements ChatProvider
     public const TRY_SECONDS = 12;
     protected const GOOD = 'assistant_gemini_good';
     protected const REST = 'assistant_gemini_rest_';
+    protected const REFUSED = 'assistant_gemini_refused_';
 
     public function complete(string $system, string $user, string $key, string $model): string
     {
@@ -40,45 +41,60 @@ class GeminiClient implements ChatProvider
         if ($key === '') {
             throw new ProviderUnavailable('Gemini: no API key', 1800);
         }
+        // Text and recordings are refused separately: a model that cannot hear still answers questions.
+        $kind = isset($parts[0]['inline_data']) ? 'audio' : 'text';
         $deadline = microtime(true) + self::BUDGET_SECONDS;
         $first = null;
-        foreach ($this->order($model) as $m) {
-            $left = (int)floor($deadline - microtime(true));
-            if ($left < 4) {
-                break;
+        $models = $this->order($model, $kind);
+        // Google turns free traffic away in bursts (503): every model is tried,
+        // then once more a moment later, which often passes.
+        for ($pass = 0; $pass < 2 && $models; $pass++) {
+            if ($pass > 0) {
+                usleep(700000);
             }
-            try {
-                $text = $this->once($system, $parts, $key, $m, min(self::TRY_SECONDS, $left));
-                Cache::put(self::GOOD, $m, 600);
-                return $text;
-            } catch (ProviderUnavailable $e) {
-                if (!$e->busy) {
-                    // A refused backup (unknown model, say) is skipped; a refused key or quota stops here.
-                    if ($m !== $model && str_contains($e->getMessage(), 'request refused')) {
-                        Cache::put(self::REST . $m, true, 3600);
-                        continue;
-                    }
-                    throw $e;
+            foreach ($models as $i => $m) {
+                $left = (int)floor($deadline - microtime(true));
+                if ($left < 4) {
+                    break 2;
                 }
-                Cache::put(self::REST . $m, true, 60);
-                $first ??= $e;
+                try {
+                    $text = $this->once($system, $parts, $key, $m, min(self::TRY_SECONDS, $left));
+                    Cache::put(self::GOOD, $m, 600);
+                    return $text;
+                } catch (ProviderUnavailable $e) {
+                    if (!$e->busy) {
+                        // A refused backup (unknown model, say) is skipped; a refused key or quota stops here.
+                        if ($m !== $model && str_contains($e->getMessage(), 'request refused')) {
+                            Cache::put(self::REFUSED . $kind . '_' . $m, true, 3600);
+                            unset($models[$i]);
+                            continue;
+                        }
+                        throw $e;
+                    }
+                    Cache::put(self::REST . $m, true, 60);
+                    $first ??= $e;
+                }
             }
         }
-        $e = new ProviderUnavailable($first?->getMessage() ?? 'Gemini: all models resting', 20);
+        $e = new ProviderUnavailable($first?->getMessage() ?? 'Gemini: all models resting', 8);
         $e->busy = true;
         throw $e;
     }
 
-    /** The admin's model, then the backups; the last one that answered first; resting ones last. */
-    protected function order(string $model): array
+    /**
+     * The admin's model, then the backups: the last one that answered first,
+     * the ones that just failed last (still tried), refused ones left out.
+     */
+    protected function order(string $model, string $kind = 'text'): array
     {
-        $models = $this->models($model);
+        $models = array_values(array_filter($this->models($model), fn($m) => $m === $model || !Cache::has(self::REFUSED . $kind . '_' . $m)));
         $good = Cache::get(self::GOOD);
         if ($good && in_array($good, $models, true)) {
             $models = array_values(array_unique(array_merge([$good], $models)));
         }
         $awake = array_values(array_filter($models, fn($m) => !Cache::has(self::REST . $m)));
-        return $awake ?: $models;
+        $resting = array_values(array_filter($models, fn($m) => Cache::has(self::REST . $m)));
+        return array_merge($awake, $resting);
     }
 
     protected function models(string $model): array
