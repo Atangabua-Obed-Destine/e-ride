@@ -595,7 +595,9 @@ PROMPT;
             try {
                 $raw = $this->clients['gemini']->completeAudio($system, 'Listen to the voice note and answer with the JSON.', base64_encode($audio), $mime, $p['key'], $p['model']);
             } catch (ProviderUnavailable $e) {
-                if (!$e->busy) {
+                // Out of quota or a refused key stops Gemini for chat too; a refused
+                // recording (its format, say) concerns this note only.
+                if (!$e->busy && !str_contains($e->getMessage(), 'request refused')) {
                     Cache::put('assistant_skip_gemini', $e->getMessage(), $e->retryAfter);
                 }
                 Log::info('Voice note: not understood', ['why' => $e->getMessage()]);
