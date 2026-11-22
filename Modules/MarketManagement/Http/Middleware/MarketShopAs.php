@@ -24,7 +24,8 @@ class MarketShopAs
     public function handle(Request $request, Closure $next)
     {
         $shopId = $request->header('X-Shop-As');
-        if (!$shopId) {
+        // team/mine is about the person themselves (the shops they work for), whatever shop they work as.
+        if (!$shopId || str_starts_with($request->path(), 'api/customer/market/team/mine')) {
             return $next($request);
         }
         $user = $request->user();
