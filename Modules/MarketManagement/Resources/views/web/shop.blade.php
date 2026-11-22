@@ -44,14 +44,24 @@
     <div class="chips" style="padding:4px 16px 8px">@foreach($shop->sellsList() as $s)<span class="chip">{{ $s }}</span>@endforeach</div>
 @endif
 <div class="notice">{{ $t['scam_notice'] }}</div>
-<div style="padding:8px 16px;font-weight:700">{{ $items->count() === 1 ? $t['one_item'] : str_replace(':n', $items->count(), $t['items']) }}</div>
-@if($items->isEmpty())
+@if($total > 1)
+{{-- Search in this shop: filters as you type; "Search" also asks the server (shops with more than 60 items). --}}
+<form method="get" action="{{ $url }}" class="shop-search" role="search">
+    <input id="shop-q" type="search" name="q" value="{{ $q }}" placeholder="{{ $t['search_shop'] }}" aria-label="{{ $t['search_shop'] }}" autocomplete="off" maxlength="80">
+    <button type="submit">{{ $t['search'] }}</button>
+</form>
+@endif
+<div id="shop-count" style="padding:8px 16px;font-weight:700"
+     data-one="{{ $t['one_item'] }}" data-many="{{ $t['items'] }}" data-found="{{ $t['found'] }}">{{ $q !== '' ? str_replace(':n', $items->count(), $t['found']) : ($total === 1 ? $t['one_item'] : str_replace(':n', $total, $t['items'])) }}</div>
+<p id="shop-none" class="muted" style="padding:0 16px 24px;{{ $q !== '' && $items->isEmpty() ? '' : 'display:none' }}" data-text="{{ $t['no_match'] }}">{{ str_replace(':q', $q, $t['no_match']) }}
+    @if($q !== '')<br><a href="{{ $url }}">{{ $t['show_all'] }}</a>@endif</p>
+@if($items->isEmpty() && $q === '')
     <p class="muted" style="padding:0 16px 24px">{{ $t['no_items'] }}</p>
-@else
-<div class="grid">
+@elseif($items->isNotEmpty())
+<div class="grid" id="shop-grid">
     @foreach($items as $it)
         @php($c = $it->cover())
-        <a class="card" href="{{ \Modules\MarketManagement\Lib\MarketLinks::item($it) }}">
+        <a class="card" href="{{ \Modules\MarketManagement\Lib\MarketLinks::item($it) }}" data-s="{{ mb_strtolower($it->title . ' ' . $it->tags_search . ' ' . $it->category) }}">
             @if($c)<img src="{{ $c->url() }}" alt="{{ $it->title }}" loading="lazy">@else<div class="ph"></div>@endif
             <div class="in">
                 <div class="t">{{ $it->title }}</div>
@@ -61,6 +71,36 @@
         </a>
     @endforeach
 </div>
+@endif
+@if($total > 1)
+<style>
+.shop-search{display:flex;gap:8px;padding:4px 16px 0}
+.shop-search input{flex:1;min-width:0;border:1px solid #D5DBDA;border-radius:6px;padding:10px 12px;font-size:15px;background:#fff;color:#1D2D2B}
+.shop-search input:focus{outline:2px solid #E02020;outline-offset:-1px}
+.shop-search button{border:0;border-radius:6px;background:#E02020;color:#fff;font-weight:700;padding:0 14px;font-size:14px}
+</style>
+<script>
+(function () {
+    var input = document.getElementById('shop-q'), grid = document.getElementById('shop-grid'),
+        count = document.getElementById('shop-count'), none = document.getElementById('shop-none');
+    if (!input || !grid) return;
+    var cards = grid.querySelectorAll('.card'), fold = function (s) {
+        return (s || '').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+    };
+    input.addEventListener('input', function () {
+        var words = fold(input.value).split(/\s+/).filter(Boolean), shown = 0;
+        cards.forEach(function (c) {
+            var text = fold(c.getAttribute('data-s')), hit = words.every(function (w) { return text.indexOf(w) !== -1; });
+            c.style.display = hit ? '' : 'none';
+            if (hit) shown++;
+        });
+        count.textContent = words.length ? count.dataset.found.replace(':n', shown)
+            : (cards.length === 1 ? count.dataset.one : count.dataset.many.replace(':n', cards.length));
+        none.style.display = words.length && !shown ? '' : 'none';
+        if (words.length && !shown) none.firstChild.textContent = none.dataset.text.replace(':q', input.value.trim());
+    });
+})();
+</script>
 @endif
 <a class="btn" href="{{ $openApp }}">{{ $t['chat'] }}</a>
 <div class="foot"><span class="muted">{{ $t['no_phone'] }}</span><a href="{{ $openApp }}">{{ $t['report'] }}</a></div>

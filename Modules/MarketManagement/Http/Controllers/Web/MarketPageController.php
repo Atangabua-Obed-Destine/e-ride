@@ -31,13 +31,23 @@ class MarketPageController extends Controller
             return $this->unavailable($t, $t['shop_gone'], null, 404);
         }
         $this->shops->visit($shop, $request->ip() . '|' . $request->userAgent());
-        $items = MarketItem::with('photos')->where('shop_id', $shop->id)->whereIn('status', MarketItem::PUBLIC)->where('zama_only', false)->latest()->limit(60)->get();
-        $cover = $items->first()?->cover();
+        $base = MarketItem::with('photos')->where('shop_id', $shop->id)->whereIn('status', MarketItem::PUBLIC)->where('zama_only', false);
+        $total = (clone $base)->count();
+        // Search in this shop: title, description and tags (the page also filters as you type).
+        $q = trim(mb_substr((string)$request->query('q', ''), 0, 80));
+        if ($q !== '') {
+            $like = '%' . str_replace(['%', '_'], ['\%', '\_'], $q) . '%';
+            $base->where(fn($w) => $w->where('title', 'like', $like)->orWhere('description', 'like', $like)->orWhere('tags_search', 'like', $like));
+        }
+        $items = $base->latest()->limit(60)->get();
+        $cover = MarketItem::with('photos')->where('shop_id', $shop->id)->whereIn('status', MarketItem::PUBLIC)->where('zama_only', false)->latest()->first()?->cover();
         $shop->loadMissing('venue');
         return response()->view('marketmanagement::web.shop', [
             't' => $t,
             'shop' => $shop,
             'items' => $items,
+            'total' => $total,
+            'q' => $q,
             'url' => MarketLinks::shop($shop),
             // The link picture: the shopfront, else the newest item, else the logo.
             'ogImage' => $shop->shopfrontUrl() ?? $cover?->ogUrl() ?? $shop->logoUrl(),
@@ -140,6 +150,11 @@ class MarketPageController extends Controller
             'items' => ':n items',
             'one_item' => '1 item',
             'no_items' => 'No items yet.',
+            'search_shop' => 'Search in this shop',
+            'search' => 'Search',
+            'no_match' => 'Nothing here matches “:q”.',
+            'found' => ':n found',
+            'show_all' => 'Show all items',
             'negotiable' => 'Price can be discussed',
             'ask_price' => 'Ask the seller',
             'new' => 'New',
@@ -230,6 +245,11 @@ class MarketPageController extends Controller
             'items' => ':n articles',
             'one_item' => '1 article',
             'no_items' => 'Pas encore d’articles.',
+            'search_shop' => 'Chercher dans cette boutique',
+            'search' => 'Chercher',
+            'no_match' => 'Rien ici ne correspond à « :q ».',
+            'found' => ':n trouvé(s)',
+            'show_all' => 'Voir tous les articles',
             'negotiable' => 'Prix à débattre',
             'ask_price' => 'Demandez au vendeur',
             'new' => 'Neuf',
