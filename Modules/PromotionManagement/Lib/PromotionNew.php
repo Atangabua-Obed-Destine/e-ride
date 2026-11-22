@@ -16,7 +16,7 @@ if (!function_exists('appNotificationData')) {
         $flat = array_merge(is_array($notificationData['extra'] ?? null) ? $notificationData['extra'] : [], $notificationData);
         $keep = array_filter(array_intersect_key($flat, array_flip([
             'conversation_id', 'item_code', 'shop_slug', 'order_id', 'booking_id', 'job_code', 'application_id', 'listing_id', 'sender_name',
-            'bus_booking_id', 'bus_departure_id', 'hotel_inquiry_id',
+            'bus_booking_id', 'bus_departure_id', 'hotel_inquiry_id', 'zama_deal_id',
         ])), fn($v) => is_scalar($v) && (string)$v !== '');
         $name = trim((string)($user_name ?? ''));
         if ($name !== '') {
@@ -231,7 +231,9 @@ function buildDeviceNotificationPayload($fcm_token, $title, $description, $statu
             + array_map('strval', array_filter(array_intersect_key($notificationData,
                 array_flip(['conversation_id', 'item_code', 'shop_slug', 'order_id', 'booking_id', 'job_code', 'application_id',
                     // E-Ride Bus Travel: the booking, or the departure a seat freed up on.
-                    'bus_booking_id', 'bus_departure_id', 'hotel_inquiry_id'])), fn($v) => $v !== null && $v !== '')),
+                    'bus_booking_id', 'bus_departure_id', 'hotel_inquiry_id',
+                    // Zama: the deal between a reseller and a shop.
+                    'zama_deal_id'])), fn($v) => $v !== null && $v !== '')),
             'notification' => [
                 'title' => (string)$title,
                 'body' => (string)$description,
