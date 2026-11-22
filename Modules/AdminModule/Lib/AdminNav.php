@@ -60,7 +60,7 @@ class AdminNav
                     ['title' => 'Move settings', 'route' => 'admin.move.settings', 'active' => ['admin/move/settings*'], 'setting' => true],
                 ]],
                 ['title' => 'Booking deposits', 'route' => 'admin.booking-deposit.index', 'icon' => 'bi-wallet2', 'gate' => $trip, 'active' => ['admin/booking-deposit*'], 'words' => 'deposit book later'],
-                ['title' => 'Ways to pay', 'route' => 'admin.payment-ways.index', 'icon' => 'bi-cash-coin', 'gate' => $trip, 'active' => ['admin/payment-ways*'], 'words' => 'payment methods momo'],
+                ['title' => 'Ways to pay', 'route' => 'admin.payment-ways.index', 'icon' => 'bi-cash-coin', 'gate' => $trip, 'active' => ['admin/payment-ways*'], 'words' => 'payment methods mobile money momo orange cash wallet'],
                 ['title' => 'Safety alerts', 'route' => 'admin.safety-alert.index', 'params' => ['customer'], 'icon' => 'bi-shield-fill-check', 'gate' => $trip, 'active' => ['admin/safety-alert/*'], 'words' => 'sos solved'],
                 ['title' => 'Driver reports', 'route' => 'admin.driver-report.index', 'icon' => 'bi-flag', 'gate' => $trip, 'active' => ['admin/driver-report*'], 'badge' => 'driver_reports', 'words' => 'complaints'],
                 ['title' => 'Lost & found', 'route' => 'admin.lost-item.index', 'icon' => 'bi-bag-check', 'gate' => $trip, 'active' => ['admin/lost-items*'], 'badge' => 'lost_items', 'words' => 'forgotten items'],
@@ -175,7 +175,7 @@ class AdminNav
                     ['title' => 'Additional data', 'route' => 'admin.business.pages-media.additional-data-setup.index', 'params' => ['customer'], 'active' => ['admin/business/pages-media/additional-data-setup*']],
                 ]],
                 ['title' => 'Connections', 'icon' => 'bi-plug', 'gate' => 'business', 'active' => ['admin/business/configuration*'], 'words' => 'third party api keys', 'children' => [
-                    ['title' => 'Payment methods', 'route' => 'admin.business.configuration.third-party.payment-method.index', 'active' => ['admin/business/configuration/third-party/payment-method*'], 'words' => 'fapshi momo orange money', 'setting' => true],
+                    ['title' => 'Payment methods', 'route' => 'admin.business.configuration.third-party.payment-method.index', 'active' => ['admin/business/configuration/third-party/payment-method*'], 'words' => 'fapshi mobile money momo mtn orange money keys', 'setting' => true],
                     ['title' => 'SMS gateway', 'route' => 'admin.business.configuration.third-party.sms-gateway.index', 'active' => ['admin/business/configuration/third-party/sms-gateway*'], 'setting' => true],
                     ['title' => 'Google Maps', 'route' => 'admin.business.configuration.third-party.google-map.index', 'active' => ['admin/business/configuration/third-party/google-map*'], 'words' => 'maps key', 'setting' => true],
                     ['title' => 'Email', 'route' => 'admin.business.configuration.third-party.email-config.index', 'active' => ['admin/business/configuration/third-party/email-config*'], 'words' => 'smtp mail', 'setting' => true],
@@ -257,7 +257,35 @@ class AdminNav
             }
         }
         // The same page twice (Settings center in two places): once.
-        return array_values(collect($out)->unique('u')->all());
+        $out = array_values(collect($out)->unique('u')->all());
+
+        // Settings center cards: their plain words find the page ("mobile money" finds
+        // the Fapshi keys), and a card with no menu entry becomes its own result.
+        $byUrl = [];
+        foreach ($out as $i => $p) {
+            $byUrl[$p['u']] = $i;
+        }
+        foreach (SettingsCatalog::groups() as $group) {
+            foreach ($group['cards'] as $card) {
+                if (!self::allowed($card['gate'] ?? null) || !Route::has($card['route'])) {
+                    continue;
+                }
+                try {
+                    $url = route($card['route'], $card['params'] ?? []);
+                } catch (Throwable) {
+                    continue;
+                }
+                $words = translate($card['title']) . ' ' . translate($card['about'] ?? '') . ' ' . $card['title'] . ' ' . ($card['about'] ?? '');
+                if (isset($byUrl[$url])) {
+                    $out[$byUrl[$url]]['w'] = trim($out[$byUrl[$url]]['w'] . ' ' . $words);
+                    continue;
+                }
+                $byUrl[$url] = count($out);
+                $out[] = ['t' => translate($card['title']), 'u' => $url, 'g' => translate('Settings center') . ' › ' . translate($group['title']),
+                    'i' => $card['icon'] ?? 'bi-gear', 'w' => $words, 's' => true];
+            }
+        }
+        return $out;
     }
 
     public static function allowed(string|array|null $gate): bool
