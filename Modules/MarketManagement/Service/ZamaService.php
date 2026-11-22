@@ -295,7 +295,7 @@ class ZamaService
             $text = $accept ? translate(key: 'Agreed: {price}', replace: ['price' => getCurrencyFormat($meta['price'])]) : translate('Price declined');
             $this->touchChat($chat, 'buyer', $text);
             if ($accept) {
-                MarketPush::send($chat->seller, 'market_zama_accepted', '{buyer} accepted {price}', '{title}. Now ask the owner to keep it.', [
+                MarketPush::send($chat->seller, 'market_zama_accepted', '{buyer} accepted {price}', '{title}. Now ask the shop to keep it.', [
                     'buyer' => trim((string)$buyer->first_name) ?: translate('The buyer'), 'price' => getCurrencyFormat($meta['price']), 'title' => $copy->title,
                 ], ['conversation_id' => $chat->id]);
             }
