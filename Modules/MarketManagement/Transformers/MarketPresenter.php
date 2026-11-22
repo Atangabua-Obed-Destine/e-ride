@@ -342,7 +342,12 @@ class MarketPresenter
                 'copy_code' => $d->copy?->code,
             ];
         }
-        // The owner: who the reseller is, to pay their zama and to talk.
+        // The owner: who the reseller is, to pay their zama and to talk. When the reseller
+        // delivers, what they agreed with their buyer is theirs: the owner sees only their own price.
+        if ($d->way === \Modules\MarketManagement\Entities\MarketZamaDeal::DELIVER) {
+            $data['price'] = null;
+            $data['margin'] = null;
+        }
         return $data + [
             'reseller' => ['id' => $d->reseller_id, 'name' => trim($d->reseller?->first_name . ' ' . $d->reseller?->last_name) ?: translate('Reseller'),
                 'phone' => $d->way === \Modules\MarketManagement\Entities\MarketZamaDeal::SEND_BUYER && $d->status === 'done' ? $d->reseller?->phone : null],
