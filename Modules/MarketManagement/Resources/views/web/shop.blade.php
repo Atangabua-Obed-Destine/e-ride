@@ -45,17 +45,34 @@
 @endif
 <div class="notice">{{ $t['scam_notice'] }}</div>
 @if($total > 1)
-{{-- Search in this shop: filters as you type; "Search" also asks the server (shops with more than 60 items). --}}
-<form method="get" action="{{ $url }}" class="shop-search" role="search">
+{{-- Search in this shop (filters as you type; "Search" also asks the server, for shops with more than 60 items),
+     its categories, the order, and "hide sold out". The choices stay in the link, so it can be shared. --}}
+@php($keep = fn(array $change) => $url . '?' . http_build_query(array_filter(array_merge(['q' => $q, 'cat' => $cat, 'sort' => $sort === 'new' ? null : $sort, 'stock' => $inStock ? 1 : null], $change), fn($v) => $v !== null && $v !== '')))
+<form method="get" action="{{ $url }}" class="shop-search" role="search" id="shop-form">
     <input id="shop-q" type="search" name="q" value="{{ $q }}" placeholder="{{ $t['search_shop'] }}" aria-label="{{ $t['search_shop'] }}" autocomplete="off" maxlength="80">
+    @if($cat)<input type="hidden" name="cat" value="{{ $cat }}">@endif
     <button type="submit">{{ $t['search'] }}</button>
+    <div class="shop-tools">
+        <select name="sort" aria-label="{{ $t['sort_new'] }}" onchange="this.form.submit()">
+            @foreach(['new', 'low', 'high'] as $s)<option value="{{ $s }}" {{ $sort === $s ? 'selected' : '' }}>{{ $t['sort_' . $s] }}</option>@endforeach
+        </select>
+        <label><input type="checkbox" name="stock" value="1" {{ $inStock ? 'checked' : '' }} onchange="this.form.submit()"> {{ $t['in_stock'] }}</label>
+    </div>
 </form>
+@if(count($categories) > 1)
+<nav class="shop-cats" aria-label="{{ $t['all'] }}">
+    <a href="{{ $keep(['cat' => null]) }}" class="{{ $cat ? '' : 'on' }}">{{ $t['all'] }} <span>{{ $total }}</span></a>
+    @foreach($categories as $key => $n)
+        <a href="{{ $keep(['cat' => $key]) }}" class="{{ $cat === $key ? 'on' : '' }}">{{ $t['cat_' . $key] ?? ucfirst($key) }} <span>{{ $n }}</span></a>
+    @endforeach
+</nav>
+@endif
 @endif
 <div id="shop-count" style="padding:8px 16px;font-weight:700"
-     data-one="{{ $t['one_item'] }}" data-many="{{ $t['items'] }}" data-found="{{ $t['found'] }}">{{ $q !== '' ? str_replace(':n', $items->count(), $t['found']) : ($total === 1 ? $t['one_item'] : str_replace(':n', $total, $t['items'])) }}</div>
-<p id="shop-none" class="muted" style="padding:0 16px 24px;{{ $q !== '' && $items->isEmpty() ? '' : 'display:none' }}" data-text="{{ $t['no_match'] }}">{{ str_replace(':q', $q, $t['no_match']) }}
-    @if($q !== '')<br><a href="{{ $url }}">{{ $t['show_all'] }}</a>@endif</p>
-@if($items->isEmpty() && $q === '')
+     data-one="{{ $t['one_item'] }}" data-many="{{ $t['items'] }}" data-found="{{ $t['found'] }}">{{ $filtered ? str_replace(':n', $items->count(), $t['found']) : ($total === 1 ? $t['one_item'] : str_replace(':n', $total, $t['items'])) }}</div>
+<p id="shop-none" class="muted" style="padding:0 16px 24px;{{ $filtered && $items->isEmpty() ? '' : 'display:none' }}" data-text="{{ $t['no_match'] }}">{{ $q !== '' ? str_replace(':q', $q, $t['no_match']) : $t['no_filter_match'] }}
+    @if($filtered)<br><a href="{{ $url }}">{{ $t['show_all'] }}</a>@endif</p>
+@if($items->isEmpty() && !$filtered)
     <p class="muted" style="padding:0 16px 24px">{{ $t['no_items'] }}</p>
 @elseif($items->isNotEmpty())
 <div class="grid" id="shop-grid">
@@ -77,7 +94,17 @@
 .shop-search{display:flex;gap:8px;padding:4px 16px 0}
 .shop-search input{flex:1;min-width:0;border:1px solid #D5DBDA;border-radius:6px;padding:10px 12px;font-size:15px;background:#fff;color:#1D2D2B}
 .shop-search input:focus{outline:2px solid #E02020;outline-offset:-1px}
+.shop-search{flex-wrap:wrap}
 .shop-search button{border:0;border-radius:6px;background:#E02020;color:#fff;font-weight:700;padding:0 14px;font-size:14px}
+.shop-tools{flex-basis:100%;display:flex;gap:12px;align-items:center;font-size:13px;color:#1D2D2B}
+.shop-tools select{border:1px solid #D5DBDA;border-radius:6px;padding:7px 8px;font-size:13px;background:#fff;color:#1D2D2B}
+.shop-tools label{display:flex;gap:6px;align-items:center}
+.shop-cats{display:flex;gap:8px;overflow-x:auto;padding:10px 16px 2px;scrollbar-width:none}
+.shop-cats::-webkit-scrollbar{display:none}
+.shop-cats a{flex:none;border:1px solid #D5DBDA;border-radius:6px;padding:6px 10px;font-size:13px;color:#1D2D2B;text-decoration:none;background:#fff}
+.shop-cats a span{color:#7A8785;font-size:12px}
+.shop-cats a.on{background:#1D2D2B;border-color:#1D2D2B;color:#fff}
+.shop-cats a.on span{color:#cfd6d5}
 </style>
 <script>
 (function () {

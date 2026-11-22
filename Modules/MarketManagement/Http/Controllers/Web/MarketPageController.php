@@ -33,13 +33,33 @@ class MarketPageController extends Controller
         $this->shops->visit($shop, $request->ip() . '|' . $request->userAgent());
         $base = MarketItem::with('photos')->where('shop_id', $shop->id)->whereIn('status', MarketItem::PUBLIC)->where('zama_only', false);
         $total = (clone $base)->count();
+        // The shop's categories, with how many items each (only those it has).
+        $categories = (clone $base)->toBase()->whereNotNull('category')->selectRaw('category, COUNT(*) AS n')->groupBy('category')
+            ->orderByDesc('n')->pluck('n', 'category')->all();
+        $categories = array_intersect_key($categories, array_flip(MarketSettings::CATEGORIES));
         // Search in this shop: title, description and tags (the page also filters as you type).
         $q = trim(mb_substr((string)$request->query('q', ''), 0, 80));
         if ($q !== '') {
             $like = '%' . str_replace(['%', '_'], ['\%', '\_'], $q) . '%';
             $base->where(fn($w) => $w->where('title', 'like', $like)->orWhere('description', 'like', $like)->orWhere('tags_search', 'like', $like));
         }
-        $items = $base->latest()->limit(60)->get();
+        $cat = isset($categories[$request->query('cat')]) ? (string)$request->query('cat') : null;
+        if ($cat) {
+            $base->where('category', $cat);
+        }
+        $inStock = $request->boolean('stock');
+        if ($inStock) {
+            $base->where('status', MarketItem::LIVE);
+        }
+        // Newest, or by price (items without a price, "Ask the seller", go last).
+        $sort = in_array($request->query('sort'), ['low', 'high'], true) ? (string)$request->query('sort') : 'new';
+        if ($sort === 'new') {
+            $base->latest();
+        } else {
+            $base->orderByRaw('price IS NULL')->orderBy('price', $sort === 'low' ? 'asc' : 'desc')->latest();
+        }
+        $items = $base->limit(60)->get();
+        $filtered = $q !== '' || $cat || $inStock;
         $cover = MarketItem::with('photos')->where('shop_id', $shop->id)->whereIn('status', MarketItem::PUBLIC)->where('zama_only', false)->latest()->first()?->cover();
         $shop->loadMissing('venue');
         return response()->view('marketmanagement::web.shop', [
@@ -48,6 +68,11 @@ class MarketPageController extends Controller
             'items' => $items,
             'total' => $total,
             'q' => $q,
+            'categories' => $categories,
+            'cat' => $cat,
+            'sort' => $sort,
+            'inStock' => $inStock,
+            'filtered' => $filtered,
             'url' => MarketLinks::shop($shop),
             // The link picture: the shopfront, else the newest item, else the logo.
             'ogImage' => $shop->shopfrontUrl() ?? $cover?->ogUrl() ?? $shop->logoUrl(),
@@ -155,6 +180,15 @@ class MarketPageController extends Controller
             'no_match' => 'Nothing here matches “:q”.',
             'found' => ':n found',
             'show_all' => 'Show all items',
+            'all' => 'All',
+            'sort_new' => 'Newest',
+            'sort_low' => 'Lowest price',
+            'sort_high' => 'Highest price',
+            'in_stock' => 'Hide sold out',
+            'no_filter_match' => 'Nothing here matches these choices.',
+            'cat_fashion' => 'Fashion', 'cat_phones' => 'Phones', 'cat_electronics' => 'Electronics', 'cat_home' => 'Home', 'cat_food' => 'Food',
+            'cat_beauty' => 'Beauty', 'cat_kids' => 'Kids', 'cat_vehicle_parts' => 'Vehicle parts', 'cat_services' => 'Services',
+            'cat_digital' => 'Digital', 'cat_other' => 'Other',
             'negotiable' => 'Price can be discussed',
             'ask_price' => 'Ask the seller',
             'new' => 'New',
@@ -250,6 +284,15 @@ class MarketPageController extends Controller
             'no_match' => 'Rien ici ne correspond à « :q ».',
             'found' => ':n trouvé(s)',
             'show_all' => 'Voir tous les articles',
+            'all' => 'Tout',
+            'sort_new' => 'Les plus récents',
+            'sort_low' => 'Prix le plus bas',
+            'sort_high' => 'Prix le plus haut',
+            'in_stock' => 'Masquer les épuisés',
+            'no_filter_match' => 'Rien ici ne correspond à ces choix.',
+            'cat_fashion' => 'Mode', 'cat_phones' => 'Téléphones', 'cat_electronics' => 'Électronique', 'cat_home' => 'Maison', 'cat_food' => 'Alimentation',
+            'cat_beauty' => 'Beauté', 'cat_kids' => 'Enfants', 'cat_vehicle_parts' => 'Pièces auto et moto', 'cat_services' => 'Services',
+            'cat_digital' => 'Numérique', 'cat_other' => 'Autre',
             'negotiable' => 'Prix à débattre',
             'ask_price' => 'Demandez au vendeur',
             'new' => 'Neuf',
