@@ -14,7 +14,7 @@ class MarketConversation extends Model
     use HasUuid;
 
     protected $fillable = [
-        'item_id', 'shop_id', 'buyer_id', 'seller_id', 'last_message_at', 'last_message', 'buyer_unread', 'seller_unread', 'buyer_blocked',
+        'item_id', 'shop_id', 'buyer_id', 'seller_id', 'last_message_at', 'last_message', 'buyer_unread', 'seller_unread', 'buyer_blocked', 'zama',
     ];
 
     protected $casts = [
@@ -22,6 +22,7 @@ class MarketConversation extends Model
         'buyer_unread' => 'integer',
         'seller_unread' => 'integer',
         'buyer_blocked' => 'boolean',
+        'zama' => 'boolean',
     ];
 
     public function item(): BelongsTo

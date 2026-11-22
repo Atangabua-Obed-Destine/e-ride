@@ -43,8 +43,8 @@ class StorePageController extends Controller
             'ways' => $kitchen->ways(),
             'url' => StoreLinks::url($brand),
             'ogImage' => $cover,
-            'openApp' => StoreLinks::openInApp($brand),
-            'getApp' => route('store.get-app', ['slug' => $brand->slug]),
+            'openApp' => StoreLinks::openInApp($brand, StoreLinks::resellerCode($request->query('r'))),
+            'getApp' => route('store.get-app', ['slug' => $brand->slug] + (($r = StoreLinks::resellerCode($request->query('r'))) ? ['r' => $r] : [])),
         ]);
     }
 
@@ -60,8 +60,8 @@ class StorePageController extends Controller
             't' => $t,
             'store' => $brand,
             'url' => StoreLinks::url($brand),
-            'playUrl' => StoreLinks::playStore($brand),
-            'openApp' => \Modules\MarketManagement\Lib\MarketLinks::openInApp('/f/' . $brand->slug, StoreLinks::playStore($brand)),
+            'playUrl' => StoreLinks::playStore($brand, $r = StoreLinks::resellerCode($request->query('r'))),
+            'openApp' => \Modules\MarketManagement\Lib\MarketLinks::openInApp(StoreLinks::appPath($brand->slug, $r), StoreLinks::playStore($brand, $r)),
         ])->header('X-Robots-Tag', 'noindex');
     }
 

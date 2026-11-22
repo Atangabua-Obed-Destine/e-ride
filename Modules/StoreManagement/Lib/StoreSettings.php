@@ -25,6 +25,14 @@ class StoreSettings
             // "My riders": a store's deliveries ring the riders it chose first, or only them.
             'my_riders_status' => (string)$get('store_my_riders_status', '1') === '1',
             'my_riders_first_seconds' => max(20, (int)$get('store_my_riders_first_seconds', 60)),
+            // Resellers: people who share a store's link and earn a % of the items of the orders it brings.
+            'reseller_status' => (string)$get('store_reseller_status', '1') === '1',
+            'reseller_min_percent' => min(100, max(0, (float)$get('store_reseller_min_percent', 2))),
+            'reseller_max_percent' => min(100, max(1, (float)$get('store_reseller_max_percent', 30))),
+            // Days a tap on a reseller's link counts for that store (the last link tapped wins).
+            'reseller_window_days' => min(60, max(1, (int)$get('store_reseller_window_days', 7))),
+            // E-Ride pays a reseller once they are owed at least this much.
+            'reseller_min_payout' => max(0, (float)$get('store_reseller_min_payout', 1000)),
         ];
     }
 

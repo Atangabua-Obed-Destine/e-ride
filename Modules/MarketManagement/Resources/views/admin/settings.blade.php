@@ -51,6 +51,30 @@
                     </div>
                 </div></div>
 
+                <div class="card mb-3"><div class="card-body d-flex flex-column gap-3">
+                    <h5 class="mb-0">{{ translate('Zama (reselling)') }}</h5>
+                    <div class="form-check form-switch">
+                        <input type="hidden" name="zama_enabled" value="0">
+                        <input class="form-check-input" type="checkbox" role="switch" id="m-zama" name="zama_enabled" value="1" {{ $settings['zama_enabled'] ? 'checked' : '' }}>
+                        <label class="form-check-label" for="m-zama">{{ translate('Resellers can sell items that shops open to zama') }}</label>
+                        <div class="fs-12 text-muted">{{ translate('A reseller shows the item in their shop at their own price. Buyers never see the owner. The reseller collects and delivers it, or sends the buyer to the shop with a code; the owner then sends the reseller the difference by Mobile Money.') }}</div>
+                    </div>
+                    <div class="row g-3">
+                        <div class="col-sm-4">
+                            <label class="form-label" for="m-zama-answer">{{ translate('Hours the owner has to answer a reseller') }}</label>
+                            <input type="number" id="m-zama-answer" name="zama_answer_hours" class="form-control" min="1" max="48" required value="{{ $settings['zama_answer_hours'] }}">
+                        </div>
+                        <div class="col-sm-4">
+                            <label class="form-label" for="m-zama-keep">{{ translate('Hours an item is kept, by default') }}</label>
+                            <input type="number" id="m-zama-keep" name="zama_keep_hours" class="form-control" min="1" max="72" required value="{{ $settings['zama_keep_hours'] }}">
+                        </div>
+                        <div class="col-sm-4">
+                            <label class="form-label" for="m-zama-quote">{{ translate('Hours a price sent to a buyer stays open') }}</label>
+                            <input type="number" id="m-zama-quote" name="zama_quote_hours" class="form-control" min="1" max="168" required value="{{ $settings['zama_quote_hours'] }}">
+                        </div>
+                    </div>
+                </div></div>
+
                 <div class="card mb-3"><div class="card-body">
                     <label class="form-label" for="m-words">{{ translate('Banned words and phrases, one per line') }}</label>
                     <textarea id="m-words" name="banned_words" rows="10" class="form-control font-monospace fs-12">{{ $settings['banned_words'] }}</textarea>

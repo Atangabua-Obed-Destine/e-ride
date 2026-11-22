@@ -46,7 +46,7 @@ class VenueService
         $words = $this->terms($query);
         $matches = [];
         if ($words) {
-            $itemHits = MarketItem::whereIn('shop_id', (clone $base)->pluck('id'))->whereIn('status', MarketItem::PUBLIC)
+            $itemHits = MarketItem::whereIn('shop_id', (clone $base)->pluck('id'))->whereIn('status', MarketItem::PUBLIC)->listed()
                 ->where(function ($q) use ($words) {
                     foreach ($words as $w) {
                         $q->orWhere('title', 'like', '%' . $w . '%')->orWhere('tags_search', 'like', '%' . $w . '%');

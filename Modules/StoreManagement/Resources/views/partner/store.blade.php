@@ -68,6 +68,21 @@
                     </div>
                 </div>
                 @endif
+                @if($storeSettings['reseller_status'])
+                <div class="p-card p-3 mb-3">
+                    <h2 class="fs-6 fw-bold mb-1">{{ translate('Resellers') }}</h2>
+                    <p class="fs-12 text-muted">{{ translate('People who market for others share your store on WhatsApp with their own link. When a customer orders through it, they earn this part of the items, once the order is delivered. It comes out of your earning; E-Ride pays them.') }}</p>
+                    <div class="row g-3">
+                        <div class="col-sm-6">
+                            <label class="form-label fw-semibold">{{ translate('You pay resellers (% of the items)') }}</label>
+                            <input type="number" name="reseller_pct" class="form-control" min="0" max="{{ $storeSettings['reseller_max_percent'] }}" step="0.5" value="{{ old('reseller_pct', $store->reseller_pct !== null ? rtrim(rtrim(number_format((float)$store->reseller_pct, 2), '0'), '.') : '') }}">
+                            <div class="form-text">{{ translate(key: 'Empty or 0 = no resellers. Between {min}% and {max}%. Never on the delivery fee.', replace: [
+                                'min' => rtrim(rtrim(number_format($storeSettings['reseller_min_percent'], 1), '0'), '.'),
+                                'max' => rtrim(rtrim(number_format($storeSettings['reseller_max_percent'], 1), '0'), '.')]) }}</div>
+                        </div>
+                    </div>
+                </div>
+                @endif
                 @if($storeSettings['my_riders_status'])
                 <div class="p-card p-3 mb-3 d-flex align-items-center gap-3">
                     <div class="flex-grow-1">

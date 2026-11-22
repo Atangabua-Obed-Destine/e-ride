@@ -32,7 +32,7 @@ class Store extends Model
         'user_id', 'name', 'slug', 'type', 'phone', 'whatsapp', 'address', 'latitude', 'longitude', 'zone_id',
         'logo', 'cover', 'description', 'opening_hours', 'is_open', 'offers_delivery', 'default_prep_minutes', 'min_order_amount',
         'own_delivery', 'own_delivery_fee', 'own_delivery_km', 'riders_mode',
-        'is_active', 'sort', 'payout_method', 'payout_number', 'payout_name', 'parent_id', 'branch_name',
+        'is_active', 'sort', 'payout_method', 'payout_number', 'payout_name', 'parent_id', 'branch_name', 'reseller_pct',
     ];
 
     protected $casts = [

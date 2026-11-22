@@ -8,6 +8,7 @@ use Modules\MarketManagement\Http\Controllers\Api\MarketAuctionController;
 use Modules\MarketManagement\Http\Controllers\Api\MarketBookingController;
 use Modules\MarketManagement\Http\Controllers\Api\MarketSellerController;
 use Modules\MarketManagement\Http\Controllers\Api\MarketVenueController;
+use Modules\MarketManagement\Http\Controllers\Api\MarketZamaController;
 
 /*
 | E-Ride Market, customer app. Shops and items are found by their public slug / code.
@@ -32,6 +33,12 @@ Route::group(['prefix' => 'customer/market', 'middleware' => ['auth:api', 'maint
         Route::get('items/{code}/slots', [MarketBookingController::class, 'slots'])->where('code', '[a-z0-9]+');
         Route::get('bookings', [MarketBookingController::class, 'index']);
         Route::get('bookings/{id}', [MarketBookingController::class, 'show']);
+        // Zama (reselling)
+        Route::get('zama/catalogue', [MarketZamaController::class, 'catalogue']);
+        Route::get('zama/items/{code}', [MarketZamaController::class, 'item'])->where('code', '[a-z0-9]+');
+        Route::get('zama/deals', [MarketZamaController::class, 'deals']);
+        Route::get('zama/deals/{id}', [MarketZamaController::class, 'show']);
+        Route::get('zama/resellers', [MarketZamaController::class, 'resellers']);
     });
     // Services: book a time or ask for a quote; the provider answers; either side moves on.
     Route::middleware('throttle:60,1,market-bookings')->group(function () {
@@ -86,6 +93,19 @@ Route::group(['prefix' => 'customer/market', 'middleware' => ['auth:api', 'maint
         Route::post('referral', [MarketController::class, 'referral']);
     });
     Route::post('chats/{id}/messages', [MarketChatController::class, 'send'])->middleware('throttle:60,1,market-chat');
+    Route::middleware('throttle:60,1,market-zama')->group(function () {
+        Route::post('zama/items/{code}/take', [MarketZamaController::class, 'take'])->where('code', '[a-z0-9]+');
+        Route::post('zama/copies/{code}/price', [MarketZamaController::class, 'price'])->where('code', '[a-z0-9]+');
+        Route::post('chats/{id}/quote', [MarketZamaController::class, 'quote']);
+        Route::post('chats/{id}/offer', [MarketZamaController::class, 'offer']);
+        Route::post('zama/quotes/{messageId}/answer', [MarketZamaController::class, 'answer']);
+        Route::post('zama/quotes/{messageId}/deal', [MarketZamaController::class, 'startDeal']);
+        Route::post('zama/deals/{id}/{action}', [MarketZamaController::class, 'act'])
+            ->where('action', 'keep|decline|handed-over|cancel|bought|margin-paid|margin-received');
+        Route::post('zama/resellers/{userId}/remove', [MarketZamaController::class, 'removeReseller']);
+    });
+    // The buyer's code at the shop: few tries.
+    Route::post('zama/deals/{id}/sold', [MarketZamaController::class, 'act'])->defaults('action', 'sold')->middleware('throttle:8,1,market-code');
     Route::middleware('throttle:10,1,market-report')->group(function () {
         Route::post('items/{code}/report', [MarketController::class, 'reportItem']);
         Route::post('shops/{slug}/report', [MarketController::class, 'reportShop']);

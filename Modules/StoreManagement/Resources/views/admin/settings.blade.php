@@ -120,6 +120,42 @@
 
                 <div class="card mb-3">
                     <div class="card-body">
+                        <div class="d-flex flex-wrap align-items-center justify-content-between gap-3 mb-3">
+                            <div class="flex-grow-1" style="min-width: 240px">
+                                <h5 class="mb-1">{{ translate('Resellers') }}</h5>
+                                <p class="fs-12 text-muted mb-0">{{ translate('People who do not own a shop share a store\'s link with their code. When a customer who tapped it orders from that store, the reseller earns the store\'s rate on the items (never the delivery) once the order is delivered. It comes out of the store\'s earning, and E-Ride pays resellers by Mobile Money.') }}</p>
+                            </div>
+                            <label class="switcher">
+                                <input type="hidden" name="reseller_status" value="0">
+                                <input class="switcher_input" type="checkbox" name="reseller_status" value="1" {{ $settings['reseller_status'] ? 'checked' : '' }}>
+                                <span class="switcher_control"></span>
+                            </label>
+                        </div>
+                        <div class="row g-3">
+                            <div class="col-sm-3">
+                                <label class="form-label">{{ translate('Lowest_rate_(%)') }}</label>
+                                <input type="number" name="reseller_min_percent" class="form-control" required min="0" max="100" step="0.5" value="{{ $settings['reseller_min_percent'] }}">
+                            </div>
+                            <div class="col-sm-3">
+                                <label class="form-label">{{ translate('Highest_rate_(%)') }}</label>
+                                <input type="number" name="reseller_max_percent" class="form-control" required min="1" max="100" step="0.5" value="{{ $settings['reseller_max_percent'] }}">
+                            </div>
+                            <div class="col-sm-3">
+                                <label class="form-label">{{ translate('A_link_counts_for_(days)') }}</label>
+                                <input type="number" name="reseller_window_days" class="form-control" required min="1" max="60" value="{{ $settings['reseller_window_days'] }}">
+                            </div>
+                            <div class="col-sm-3">
+                                <label class="form-label">{{ translate('Pay_from_(FCFA)') }}</label>
+                                <input type="number" name="reseller_min_payout" class="form-control" required min="0" step="100" value="{{ (int)$settings['reseller_min_payout'] }}">
+                            </div>
+                        </div>
+                        <div class="fs-12 text-muted mt-2">{{ translate('The last link a customer tapped wins. No commission on a reseller\'s own orders. Stores choose their rate between the lowest and highest.') }}
+                            <a href="{{ route('admin.store-reseller.index') }}">{{ translate('Resellers_and_payouts') }}</a></div>
+                    </div>
+                </div>
+
+                <div class="card mb-3">
+                    <div class="card-body">
                         <h5 class="mb-1">{{ translate('Delivery_fee') }}</h5>
                         <p class="fs-12 text-muted mb-2">
                             {{ translate('The delivery fee uses the parcel fare of the category below, for the weight above, in the store zone. Set it in Parcel Delivery Fare Setup.') }}

@@ -242,14 +242,16 @@ class StoreOrderService extends BaseService implements StoreOrderServiceInterfac
     /** What the store earns on a finished order. Caller saves. */
     protected function settle(StoreOrder $order): void
     {
+        // A reseller brought this order: their share of the items comes out of the store's earning.
+        $order->reseller_commission = \Modules\StoreManagement\Lib\StoreResellers::commission($order);
         if ($order->byStore()) {
             $share = round((float)$order->delivery_fee * StoreSettings::all()['own_delivery_share_percent'] / 100, 2);
             $order->own_delivery_share = $share;
-            $order->partner_earning = round((float)$order->items_subtotal + (float)$order->delivery_fee - $share, 2);
+            $order->partner_earning = round((float)$order->items_subtotal + (float)$order->delivery_fee - $share - $order->reseller_commission, 2);
             return;
         }
         // A rider it asked for after choosing its own staff: the difference is the store's.
-        $order->partner_earning = round((float)$order->items_subtotal - (float)$order->store_covers, 2);
+        $order->partner_earning = round((float)$order->items_subtotal - (float)$order->store_covers - $order->reseller_commission, 2);
     }
 
     /** Delivery fee from this kitchen to a point, or null when it can't deliver there. */
@@ -380,6 +382,11 @@ class StoreOrderService extends BaseService implements StoreOrderServiceInterfac
                 'prep_minutes' => $store->default_prep_minutes,
             ]);
             $order->items()->createMany($quote['items']);
+            // Came through a reseller's link for this store: they earn on it once delivered.
+            \Modules\StoreManagement\Lib\StoreResellers::attach($order, $store);
+            if ($order->isDirty()) {
+                $order->save();
+            }
             DB::afterCommit(function () use ($order) {
                 $this->notifyCustomer($order, 'sent');
                 $this->alertPartner($order);

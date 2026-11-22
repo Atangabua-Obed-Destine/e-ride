@@ -12,6 +12,10 @@ Route::group(['prefix' => 'customer', 'middleware' => ['auth:api', 'maintenance_
     Route::get('stores/search', [StoreOrderController::class, 'search'])->middleware('throttle:60,1,store-search');
     // A new rider who installed from a store's public link.
     Route::post('stores/referral', [StoreOrderController::class, 'referral'])->middleware('throttle:10,1,store-referral');
+    // Resellers ("Sell for shops"): my links and earnings, joining, and a tap on a reseller's link.
+    Route::get('store-resellers/me', [\Modules\StoreManagement\Http\Controllers\Api\Customer\StoreResellerController::class, 'me']);
+    Route::post('store-resellers/join', [\Modules\StoreManagement\Http\Controllers\Api\Customer\StoreResellerController::class, 'join'])->middleware('throttle:10,1,store-reseller');
+    Route::post('store-resellers/tap', [\Modules\StoreManagement\Http\Controllers\Api\Customer\StoreResellerController::class, 'tap'])->middleware('throttle:30,1,store-reseller-tap');
     Route::get('stores/{store}', [StoreOrderController::class, 'store']);
     Route::get('stores/{store}/branches', [StoreOrderController::class, 'branches']);
     Route::post('store-orders/quote', [StoreOrderController::class, 'quote'])->middleware('throttle:30,1,store-quote');

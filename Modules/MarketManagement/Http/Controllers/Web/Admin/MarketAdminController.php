@@ -275,8 +275,12 @@ class MarketAdminController extends Controller
             'items_per_shop' => 'required|integer|min:1|max:500',
             'delivery_payer' => ['required', Rule::in(MarketSettings::DELIVERY_PAYERS)],
             'banned_words' => 'nullable|string|max:20000',
+            'zama_enabled' => 'nullable|boolean',
+            'zama_answer_hours' => 'required|integer|min:1|max:48',
+            'zama_keep_hours' => 'required|integer|min:1|max:72',
+            'zama_quote_hours' => 'required|integer|min:1|max:168',
         ]);
-        foreach (['enabled', 'digital_allowed', 'digital_warning'] as $switch) {
+        foreach (['enabled', 'digital_allowed', 'digital_warning', 'zama_enabled'] as $switch) {
             $data[$switch] = $request->boolean($switch) ? 1 : 0;
         }
         foreach ($data as $key => $value) {

@@ -22,6 +22,8 @@ class MarketOrdersTick extends Command
         }
         // E-Ride Jobs: jobs past their date close, unanswered applications close kindly.
         $counts += app(\Modules\MarketManagement\Service\JobService::class)->tick();
+        // Zama: requests the owner did not answer and items kept past their time go back on sale; owed zama is reminded.
+        $counts += app(\Modules\MarketManagement\Service\ZamaService::class)->tick();
         if (array_sum($counts) > 0) {
             $this->line(json_encode($counts + ['market_on' => MarketSettings::enabled()]));
         }

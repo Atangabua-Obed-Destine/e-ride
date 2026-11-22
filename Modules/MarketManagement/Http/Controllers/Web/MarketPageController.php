@@ -31,7 +31,7 @@ class MarketPageController extends Controller
             return $this->unavailable($t, $t['shop_gone'], null, 404);
         }
         $this->shops->visit($shop, $request->ip() . '|' . $request->userAgent());
-        $items = MarketItem::with('photos')->where('shop_id', $shop->id)->whereIn('status', MarketItem::PUBLIC)->latest()->limit(60)->get();
+        $items = MarketItem::with('photos')->where('shop_id', $shop->id)->whereIn('status', MarketItem::PUBLIC)->where('zama_only', false)->latest()->limit(60)->get();
         $cover = $items->first()?->cover();
         $shop->loadMissing('venue');
         return response()->view('marketmanagement::web.shop', [

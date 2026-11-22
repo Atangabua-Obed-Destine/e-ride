@@ -38,7 +38,7 @@ class MarketPresenter
             'live' => $shop->isLive(),
             'since' => $shop->created_at?->toDateString(),
             'link' => MarketLinks::shop($shop),
-            'items_count' => $shop->items_count ?? $shop->items()->whereIn('status', MarketItem::PUBLIC)->count(),
+            'items_count' => $shop->items_count ?? $shop->items()->whereIn('status', MarketItem::PUBLIC)->where('zama_only', false)->count(),
             'mine' => $mine,
             // shop | private (a person selling things they own)
             'kind' => $shop->kind ?? 'shop',
@@ -224,7 +224,130 @@ class MarketPresenter
             $data += ['visits' => $item->visits, 'chats' => $item->chats, 'status_note' => $item->status_note,
                 'blocked_word' => $item->blocked_word];
         }
+        $data['zama'] = self::itemZama($item, $mine);
         return $data;
+    }
+
+    /**
+     * Zama on an item. A copy: buyers only learn it is resold ("Reseller" tag); its reseller
+     * also sees the owner's price and shop. The owner's own item: open or not, the price for
+     * resellers, "resellers only", and how many resell it.
+     */
+    private static function itemZama(MarketItem $item, bool $mine): ?array
+    {
+        if ($item->isZamaCopy()) {
+            $data = ['copy' => true];
+            $source = $item->zamaSource;
+            if ($mine && $source) {
+                $data += [
+                    'owner_price' => $source->zama_price,
+                    'source_code' => $source->code,
+                    'available' => !$source->trashed() && $source->zamaAvailable(),
+                    'paused' => $item->status_note === MarketItem::ZAMA_PAUSED,
+                    'owner_shop' => $source->shop ? ['slug' => $source->shop->slug, 'name' => $source->shop->name,
+                        'area' => $source->shop->venueLabel() ?? $source->shop->area_label] : null,
+                ];
+            }
+            return $data;
+        }
+        if ($mine) {
+            return [
+                'copy' => false,
+                'open' => (bool)$item->zama_open,
+                'price' => $item->zama_price,
+                'only' => (bool)$item->zama_only,
+                'resellers' => $item->zama_open ? MarketItem::where('zama_of', $item->id)->count() : 0,
+            ];
+        }
+        return null;
+    }
+
+    /** An item open to zama, as a reseller sees it in the catalogue: the owner, their price, how they pay. */
+    public static function zamaSource(MarketItem $item, string $viewer, bool $full = false): array
+    {
+        $shop = $item->shop;
+        $zama = app(\Modules\MarketManagement\Service\ZamaService::class);
+        $mineCopy = MarketItem::where('zama_of', $item->id)->whereHas('shop', fn($s) => $s->where('user_id', $viewer))->value('code');
+        return self::item($item, $viewer, $full) + [
+            'zama_offer' => [
+                'owner_price' => $item->zama_price,
+                'public_price' => $item->zama_only ? null : $item->price,
+                'only' => (bool)$item->zama_only,
+                'my_copy' => $mineCopy,
+                'resellers' => MarketItem::where('zama_of', $item->id)->count(),
+                'record' => $shop ? $zama->ownerRecord($shop->id) : null,
+                'owner_shop' => $shop ? [
+                    'slug' => $shop->slug, 'name' => $shop->name, 'verified' => $shop->isVerified(), 'logo' => $shop->logoUrl(),
+                    'area' => $shop->venueLabel() ?? $shop->area_label, 'venue' => self::shopVenue($shop),
+                    'map' => $shop->onMap() ? ['lat' => $shop->pickup_lat, 'lng' => $shop->pickup_lng, 'address' => $shop->pickup_address, 'note' => $shop->address_note] : null,
+                ] : null,
+            ],
+        ];
+    }
+
+    /**
+     * A zama deal as one of its three people sees it. The owner never sees who the buyer is;
+     * the buyer sees the owner's shop only when they go there (send_buyer, once kept).
+     */
+    public static function zamaDeal(\Modules\MarketManagement\Entities\MarketZamaDeal $d, string $viewer): ?array
+    {
+        $role = $d->roleOf($viewer);
+        if (!$role) {
+            return null;
+        }
+        $source = $d->source;
+        $photos = $source ? ($source->relationLoaded('photos') ? $source->photos : $source->photos()->get()) : collect();
+        $cover = $photos->firstWhere('preview', false) ?? $photos->first();
+        $data = [
+            'id' => $d->id,
+            'role' => $role,
+            'way' => $d->way,
+            'status' => $d->status,
+            'close_reason' => $d->close_reason,
+            'quantity' => $d->quantity,
+            'colour' => $d->colour,
+            'size' => $d->size,
+            'title' => $source?->title,
+            'cover' => $cover?->url(),
+            'price' => $d->price,
+            'kept_until' => $d->kept_until?->toIso8601String(),
+            'done_at' => $d->done_at?->toIso8601String(),
+            'created_at' => $d->created_at?->toIso8601String(),
+            'buyer_bought' => $d->buyer_bought_at !== null,
+        ];
+        $shop = $d->ownerShop;
+        $place = $shop ? [
+            'slug' => $shop->slug, 'name' => $shop->name, 'verified' => $shop->isVerified(),
+            'area' => $shop->venueLabel() ?? $shop->area_label, 'venue' => self::shopVenue($shop),
+            'map' => $shop->onMap() ? ['lat' => $shop->pickup_lat, 'lng' => $shop->pickup_lng, 'address' => $shop->pickup_address, 'note' => $shop->address_note] : null,
+        ] : null;
+        if ($role === 'buyer') {
+            $goes = $d->way === \Modules\MarketManagement\Entities\MarketZamaDeal::SEND_BUYER && in_array($d->status, ['kept', 'done'], true);
+            return $data + ['code' => $goes ? $d->code : null, 'shop' => $goes ? $place : null];
+        }
+        $data += [
+            'owner_price' => $d->owner_price,
+            'margin' => $d->margin,
+            'margin_status' => $d->margin_status,
+            'margin_paid_at' => $d->margin_paid_at?->toIso8601String(),
+            'margin_received_at' => $d->margin_received_at?->toIso8601String(),
+            'owner_chat_id' => $d->owner_conversation_id,
+        ];
+        if ($role === 'reseller') {
+            return $data + [
+                'code' => $d->code,
+                'shop' => $place,
+                'buyer_name' => trim((string)$d->buyer?->first_name) ?: translate('Buyer'),
+                'buyer_chat_id' => $d->conversation_id,
+                'copy_code' => $d->copy?->code,
+            ];
+        }
+        // The owner: who the reseller is, to pay their zama and to talk.
+        return $data + [
+            'reseller' => ['id' => $d->reseller_id, 'name' => trim($d->reseller?->first_name . ' ' . $d->reseller?->last_name) ?: translate('Reseller'),
+                'phone' => $d->way === \Modules\MarketManagement\Entities\MarketZamaDeal::SEND_BUYER && $d->status === 'done' ? $d->reseller?->phone : null],
+            'source_code' => $source?->code,
+        ];
     }
 
     /** An auction as one person sees it: everyone sees the bid and the time; the bidder sees where they stand; the seller sees the result. */
@@ -299,7 +422,22 @@ class MarketPresenter
             'last_message_at' => $c->last_message_at?->toIso8601String(),
             'unread' => $role === 'buyer' ? $c->buyer_unread : $c->seller_unread,
             'buyer_blocked' => $c->buyer_blocked,
+            // A reseller's private chat with the owner (the buyer never sees it).
+            'zama' => (bool)$c->zama,
+            // A buyer's chat about a resold item: prices go as quotes.
+            'zama_copy' => (bool)$item?->isZamaCopy(),
         ];
+        if ($role === 'seller' && $item?->isZamaCopy() && ($source = $item->zamaSource)) {
+            // The reseller quoting: the owner's price and what is left, per colour and size.
+            $data['zama_quote'] = [
+                'owner_price' => $source->zama_price,
+                'quantity' => (int)$source->quantity,
+                'colours' => array_map(fn($x) => $x['name'], $source->colours()),
+                'sizes' => $source->sizes(),
+                'stock' => $source->hasOptions() ? (object)($source->stock ?? []) : null,
+                'available' => !$source->trashed() && $source->zamaAvailable(),
+            ];
+        }
         // The seller books the delivery: the buyer's details, only once the buyer asked for it.
         if ($role === 'seller' && $c->messages()->where('type', 'delivery_point')->exists()) {
             $data['receiver'] = ['name' => trim($c->buyer?->first_name . ' ' . $c->buyer?->last_name), 'phone' => $c->buyer?->phone];
@@ -476,6 +614,14 @@ class MarketPresenter
             'meta' => $m->meta,
             'created_at' => $m->created_at?->toIso8601String(),
         ];
+        if ($m->type === 'quote') {
+            $data['meta'] = ($m->meta ?? []) + [];
+            $data['meta']['state'] = \Modules\MarketManagement\Service\ZamaService::quoteState($m);
+        }
+        if (in_array($m->type, ['quote', 'zama'], true) && ($dealId = $m->meta['deal_id'] ?? null)
+            && ($deal = \Modules\MarketManagement\Entities\MarketZamaDeal::with(['source.photos', 'ownerShop', 'reseller', 'buyer', 'copy'])->find($dealId))) {
+            $data['deal'] = self::zamaDeal($deal, $viewer);
+        }
         if ($m->type === 'delivery_booked' && ($tripId = $m->meta['trip_id'] ?? null)) {
             $trip = TripRequest::find($tripId, ['id', 'ref_id', 'current_status']);
             $data['delivery'] = $trip ? ['trip_id' => $trip->id, 'ref_id' => $trip->ref_id, 'status' => $trip->current_status] : null;

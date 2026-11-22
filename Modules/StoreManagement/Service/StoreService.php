@@ -106,6 +106,12 @@ class StoreService extends BaseService implements StoreServiceInterface
         if (array_key_exists('own_delivery_fee', $data)) {
             $store->own_delivery_fee = (float)($data['own_delivery_fee'] ?? 0);
         }
+        if (array_key_exists('reseller_pct', $data)) {
+            // Off when empty or 0; otherwise within the admin's limits.
+            $pct = (float)($data['reseller_pct'] ?? 0);
+            $settings = \Modules\StoreManagement\Lib\StoreSettings::all();
+            $store->reseller_pct = $pct > 0 ? round(min($settings['reseller_max_percent'], max($settings['reseller_min_percent'], $pct)), 2) : null;
+        }
         if (array_key_exists('opening_hours', $data)) {
             $store->opening_hours = $this->normaliseHours($data['opening_hours']);
         }

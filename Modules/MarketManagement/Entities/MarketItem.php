@@ -32,7 +32,13 @@ class MarketItem extends Model
         'pickup', 'eride_delivery', 'seller_delivers', 'status', 'blocked_word', 'status_note', 'report_count', 'visits', 'chats',
         'options', 'stock', 'wholesale_price', 'wholesale_min', 'orders', 'sale_type', 'used_grade',
         'price_type', 'duration_minutes', 'service_where', 'extras', 'service_kind',
+        'zama_open', 'zama_price', 'zama_only', 'zama_of',
     ];
+
+    /** A copy follows its owner's item: these change on the copy when they change on the item. */
+    public const ZAMA_SYNCED = ['title', 'description', 'condition', 'category', 'used_grade', 'options', 'stock', 'quantity'];
+    /** status_note of a copy hidden because the owner's item is not on sale right now. */
+    public const ZAMA_PAUSED = 'zama_source';
 
     /** Services: how the price is given, where it happens, and the kinds clients filter by. */
     public const PRICE_TYPES = ['fixed', 'from', 'hour', 'quote'];
@@ -63,7 +69,60 @@ class MarketItem extends Model
         'duration_minutes' => 'integer',
         'service_where' => 'array',
         'extras' => 'array',
+        'zama_open' => 'boolean',
+        'zama_price' => 'float',
+        'zama_only' => 'boolean',
     ];
+
+    protected static function booted(): void
+    {
+        // The owner changed, sold out, hid or deleted an item: every reseller's copy follows.
+        static::saved(function (MarketItem $item) {
+            if ($item->zama_of === null && ($item->zama_open || $item->wasChanged('zama_open'))) {
+                app(\Modules\MarketManagement\Service\ZamaService::class)->syncCopies($item);
+            }
+        });
+        static::deleted(function (MarketItem $item) {
+            if ($item->zama_of === null) {
+                app(\Modules\MarketManagement\Service\ZamaService::class)->syncCopies($item, true);
+            }
+        });
+    }
+
+    /** Zama: the owner's item this copy resells. */
+    public function zamaSource(): BelongsTo
+    {
+        return $this->belongsTo(MarketItem::class, 'zama_of')->withTrashed();
+    }
+
+    public function zamaCopies(): HasMany
+    {
+        return $this->hasMany(MarketItem::class, 'zama_of');
+    }
+
+    public function isZamaCopy(): bool
+    {
+        return $this->zama_of !== null;
+    }
+
+    /** Can be resold: opened by its owner, a physical item for sale, not itself a copy. */
+    public function zamaAvailable(): bool
+    {
+        return $this->zama_open && $this->zama_of === null && in_array($this->condition, ['new', 'used'], true)
+            && ($this->sale_type ?? 'fixed') !== 'auction' && in_array($this->status, self::PUBLIC, true) && (bool)$this->shop?->isLive();
+    }
+
+    /** Shown in the Market feed, search, markets and the assistant: not copies, not "resellers only". */
+    public function scopeListed($query)
+    {
+        return $query->whereNull($query->qualifyColumn('zama_of'))->where($query->qualifyColumn('zama_only'), false);
+    }
+
+    /** A copy shows its owner's photos (photos() reads them through this key). */
+    public function getPhotoKeyAttribute(): ?string
+    {
+        return $this->zama_of ?: $this->getKey();
+    }
 
     public const MAX_COLOURS = 12;
     public const MAX_SIZES = 20;
@@ -86,7 +145,7 @@ class MarketItem extends Model
 
     public function photos(): HasMany
     {
-        return $this->hasMany(MarketItemPhoto::class, 'item_id')->orderBy('sort');
+        return $this->hasMany(MarketItemPhoto::class, 'item_id', 'photo_key')->orderBy('sort');
     }
 
     public function isDigital(): bool
@@ -120,7 +179,15 @@ class MarketItem extends Model
 
     public function isPublic(): bool
     {
-        return in_array($this->status, self::PUBLIC, true) && $this->shop?->isLive();
+        if (!in_array($this->status, self::PUBLIC, true) || !$this->shop?->isLive()) {
+            return false;
+        }
+        if ($this->zama_of !== null) {
+            $source = $this->zamaSource;
+            return $source && !$source->trashed() && $source->zamaAvailable();
+        }
+        // "Resellers only": not on the public Market, sold through resellers.
+        return !$this->zama_only;
     }
 
     /** @return array<int, array{name: string, photo_id: ?int}> */
@@ -157,7 +224,9 @@ class MarketItem extends Model
     /** A buyer can put it in a cart: live, priced, and not a digital product (those are bought in the chat). */
     public function orderable(): bool
     {
-        return $this->status === self::LIVE && $this->price !== null && $this->price > 0 && !$this->isDigital() && !$this->isAuction() && !$this->isService();
+        // Zama copies are agreed in the chat; "resellers only" items are not sold to the public.
+        return $this->status === self::LIVE && $this->price !== null && $this->price > 0 && !$this->isDigital() && !$this->isAuction() && !$this->isService()
+            && $this->zama_of === null && !$this->zama_only;
     }
 
     /** The price for one piece when the buyer takes $count pieces of this item in one order. */

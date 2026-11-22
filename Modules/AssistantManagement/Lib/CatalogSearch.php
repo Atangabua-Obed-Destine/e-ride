@@ -178,7 +178,7 @@ class CatalogSearch
             return [];
         }
         $out = [];
-        $items = self::like(\Modules\MarketManagement\Entities\MarketItem::with(['shop:id,name,slug,area_label', 'photos'])->where('status', 'live')
+        $items = self::like(\Modules\MarketManagement\Entities\MarketItem::with(['shop:id,name,slug,area_label', 'photos'])->where('status', 'live')->listed()
             ->whereHas('shop', fn($s) => $s->where('status', '!=', 'closed')), ['title', 'description', 'tags_search'], $terms)
             ->latest()->limit(20)->get();
         foreach ($items as $it) {

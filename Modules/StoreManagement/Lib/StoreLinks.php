@@ -21,15 +21,30 @@ class StoreLinks
         return MarketLinks::base() . '/f/' . $store->brand()->slug;
     }
 
-    public static function openInApp(Store $store): string
+    /** $reseller: the code of the reseller whose link this is ([domain]/f/SLUG?r=CODE), carried into the app. */
+    public static function openInApp(Store $store, ?string $reseller = null): string
     {
         $slug = $store->brand()->slug;
-        return MarketLinks::openInApp('/f/' . $slug, route('store.get-app', ['slug' => $slug]));
+        return MarketLinks::openInApp(self::appPath($slug, $reseller), route('store.get-app', ['slug' => $slug] + ($reseller ? ['r' => $reseller] : [])));
     }
 
-    public static function playStore(Store $store): string
+    public static function playStore(Store $store, ?string $reseller = null): string
     {
-        return MarketLinks::playStore('f:' . $store->brand()->slug);
+        $slug = $store->brand()->slug;
+        return MarketLinks::playStore($reseller ? 'fr:' . $reseller . '_' . $slug : 'f:' . $slug);
+    }
+
+    /** /f/SLUG, or /fr/CODE_SLUG through a reseller. */
+    public static function appPath(string $slug, ?string $reseller = null): string
+    {
+        return $reseller ? '/fr/' . $reseller . '_' . $slug : '/f/' . $slug;
+    }
+
+    /** A reseller code from a link, when it looks like one. */
+    public static function resellerCode(?string $raw): ?string
+    {
+        $raw = strtoupper(trim((string)$raw));
+        return preg_match('/^[A-Z0-9]{4,12}$/', $raw) ? $raw : null;
     }
 
     /** A visit to the page, once per visitor and day. */

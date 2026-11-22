@@ -42,6 +42,7 @@
                         <b>#{{ $order->ref_id }}</b>
                         <span class="text-muted fs-12">{{ $order->delivered_at?->format('d M, H:i') }}</span>
                         @if($showBranch && $order->store?->branch_name)<span class="badge bg-light text-dark">{{ $order->store->branch_name }}</span>@endif
+                        @if((float)$order->reseller_commission > 0)<span class="badge bg-light text-dark" title="{{ translate('Brought by a reseller: their share of the items') }}">{{ translate('Reseller') }} -{{ getCurrencyFormat($order->reseller_commission) }}</span>@endif
                         <span class="ms-auto fw-bold">{{ getCurrencyFormat($order->partner_earning) }}</span>
                     </div>
                 @empty

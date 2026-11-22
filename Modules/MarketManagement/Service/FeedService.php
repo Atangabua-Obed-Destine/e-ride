@@ -56,7 +56,11 @@ class FeedService
             $query->whereHas('shop', fn($s) => $s->whereNotNull('verified_at'));
         }
         if (!empty($filters['shop'])) {
-            $query->whereHas('shop', fn($s) => $s->where('slug', $filters['shop']));
+            // A shop's own page also shows what it resells (zama copies).
+            $query->whereHas('shop', fn($s) => $s->where('slug', $filters['shop']))->where('market_items.zama_only', false);
+        } else {
+            // Everywhere else: no zama copies (the same thing ten times at ten prices), no "resellers only".
+            $query->listed();
         }
         if (($q = trim((string)($filters['q'] ?? ''))) !== '') {
             $like = '%' . str_replace(['%', '_'], ['\%', '\_'], $q) . '%';

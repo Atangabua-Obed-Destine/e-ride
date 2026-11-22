@@ -25,6 +25,8 @@ class StoreProfileRequest extends FormRequest
             'offers_delivery' => 'nullable|boolean',
             // "The shop brings it": its own staff, its own fee, close by.
             'own_delivery' => 'nullable|boolean',
+            // Resellers: % of the items paid to people who bring orders (empty or 0 = off).
+            'reseller_pct' => 'nullable|numeric|min:0|max:100',
             'own_delivery_fee' => 'nullable|numeric|min:0|max:100000',
             'own_delivery_km' => 'nullable|numeric|min:0.1|max:50',
             'payout_method' => 'nullable|string|max:30',

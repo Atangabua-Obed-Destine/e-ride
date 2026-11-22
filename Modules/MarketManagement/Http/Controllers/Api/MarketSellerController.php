@@ -286,6 +286,10 @@ class MarketSellerController extends Controller
             // [{"name":"Long","price":2000}]
             'extras' => 'nullable',
             'service_kind' => ['nullable', Rule::in(MarketItem::SERVICE_KINDS)],
+            // Zama: resellers may sell it; the owner's price for them; not on the public Market.
+            'zama_open' => 'nullable|boolean',
+            'zama_price' => 'nullable|numeric|min:0|max:100000000',
+            'zama_only' => 'nullable|boolean',
         ];
     }
 

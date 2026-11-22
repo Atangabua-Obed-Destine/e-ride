@@ -66,6 +66,7 @@ class StoreOrder extends Model
         'delivery_quote', 'quote_expires_at', 'prep_minutes', 'ready_at', 'trip_request_id', 'rider_attempts',
         'partner_earning', 'placed_at', 'accepted_at', 'rider_requested_at', 'picked_up_at', 'delivered_at',
         'cancelled_at', 'cancelled_by', 'cancel_reason', 'confirmed_at', 'pay_by', 'proposal', 'proposed_at',
+        'reseller_id', 'reseller_pct', 'reseller_commission', 'reseller_payout_id',
     ];
 
     protected $casts = [
@@ -84,6 +85,8 @@ class StoreOrder extends Model
         'total' => 'float',
         'refunded_amount' => 'float',
         'partner_earning' => 'float',
+        'reseller_pct' => 'float',
+        'reseller_commission' => 'float',
         'drop_latitude' => 'float',
         'drop_longitude' => 'float',
         'delivery_quote' => 'array',

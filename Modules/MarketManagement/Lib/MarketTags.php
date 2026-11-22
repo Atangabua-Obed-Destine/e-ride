@@ -189,7 +189,7 @@ class MarketTags
         if ($words) {
             try {
                 $counts = [];
-                MarketItem::whereNotNull('tags')->where('status', MarketItem::LIVE)
+                MarketItem::whereNotNull('tags')->where('status', MarketItem::LIVE)->listed()
                     ->where(function ($q) use ($words) {
                         foreach (array_slice($words, 0, 4) as $w) {
                             $like = '%' . str_replace(['%', '_'], ['\%', '\_'], $w) . '%';

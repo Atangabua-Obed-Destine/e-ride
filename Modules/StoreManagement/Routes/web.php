@@ -48,6 +48,12 @@ Route::group(['prefix' => 'admin', 'as' => 'admin.', 'middleware' => 'admin'], f
         Route::post('{order}/review-visibility', [StoreOrderController::class, 'reviewVisibility'])->name('review-visibility')->middleware('can:store_edit');
     });
 
+    Route::group(['prefix' => 'store-resellers', 'as' => 'store-reseller.', 'middleware' => 'can:store_edit'], function () {
+        Route::get('/', [\Modules\StoreManagement\Http\Controllers\Web\Admin\StoreResellerAdminController::class, 'index'])->name('index');
+        Route::post('{id}/pay', [\Modules\StoreManagement\Http\Controllers\Web\Admin\StoreResellerAdminController::class, 'pay'])->name('pay');
+        Route::post('{id}/status', [\Modules\StoreManagement\Http\Controllers\Web\Admin\StoreResellerAdminController::class, 'status'])->name('status');
+    });
+
     Route::group(['prefix' => 'store-settings', 'as' => 'store-setting.', 'middleware' => 'can:store_edit'], function () {
         Route::get('/', [StoreSettingController::class, 'edit'])->name('edit');
         Route::put('/', [StoreSettingController::class, 'update'])->name('update');

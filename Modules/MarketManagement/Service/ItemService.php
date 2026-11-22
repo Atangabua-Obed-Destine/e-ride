@@ -53,6 +53,7 @@ class ItemService
 
         $item = DB::transaction(function () use ($shop, $data, $photos, $previews, $digital) {
             $item = new MarketItem($this->fields($data, $digital));
+            $this->checkZama($item);
             $item->shop_id = $shop->id;
             $item->code = $this->newCode();
             $item->quantity ??= 1;
@@ -92,6 +93,9 @@ class ItemService
         if (in_array($item->status, [MarketItem::REMOVED, MarketItem::HIDDEN], true) || !$item->shop?->isLive()) {
             $this->fail('item', translate('This item can no longer be changed.'));
         }
+        if ($item->isZamaCopy()) {
+            $this->fail('item', translate('This is a zama item: only your price can change, in Zama.'));
+        }
         $digital = ($data['condition'] ?? $item->condition) === 'digital';
         return DB::transaction(function () use ($item, $data, $photos, $removePhotoIds, $previews, $digital) {
             // A service edit keeps the service details it does not send (extras, where, length...).
@@ -124,9 +128,31 @@ class ItemService
                 $item->status = $item->quantity < 1 ? MarketItem::SOLD_OUT : MarketItem::LIVE;
             }
             $item->blocked_word = $word;
+            $this->checkZama($item);
             $item->save();
             return $item->fresh(['photos', 'shop']);
         });
+    }
+
+    /**
+     * Zama: only physical items sold at a price, with the owner's price for resellers
+     * (not above the public price). "Resellers only" needs zama open.
+     */
+    private function checkZama(MarketItem $item): void
+    {
+        if (!$item->zama_open) {
+            $item->zama_only = false;
+            return;
+        }
+        if (!in_array($item->condition, ['new', 'used'], true) || ($item->sale_type ?? 'fixed') === 'auction') {
+            $this->fail('zama_open', translate('Zama is for things you sell at a price: not services, digital products or auctions.'));
+        }
+        if (!$item->zama_price || $item->zama_price <= 0) {
+            $this->fail('zama_price', translate('Give the price you want from resellers.'));
+        }
+        if (!$item->zama_only && $item->price && $item->zama_price > $item->price) {
+            $this->fail('zama_price', translate('Your price for resellers cannot be above your price for buyers.'));
+        }
     }
 
     /** The seller marks it sold out, or available again. */
@@ -134,6 +160,9 @@ class ItemService
     {
         if (!in_array($item->status, [MarketItem::LIVE, MarketItem::SOLD_OUT], true)) {
             $this->fail('item', translate('This item can no longer be changed.'));
+        }
+        if ($item->isZamaCopy()) {
+            $this->fail('item', translate('The owner\'s stock decides this for a zama item.'));
         }
         $item->status = $soldOut ? MarketItem::SOLD_OUT : MarketItem::LIVE;
         if (!$soldOut && $item->quantity < 1) {
@@ -231,7 +260,7 @@ class ItemService
     {
         $fields = array_intersect_key($data, array_flip(['title', 'description', 'price', 'negotiable', 'condition', 'digital_kind', 'category',
             'quantity', 'pickup', 'eride_delivery', 'seller_delivers', 'wholesale_price', 'wholesale_min', 'sale_type', 'used_grade',
-            'price_type', 'duration_minutes', 'service_where', 'extras', 'service_kind']));
+            'price_type', 'duration_minutes', 'service_where', 'extras', 'service_kind', 'zama_open', 'zama_price', 'zama_only']));
         if (($data['condition'] ?? null) === 'service') {
             return $this->serviceFields($fields, $data);
         }

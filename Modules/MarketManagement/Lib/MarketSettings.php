@@ -64,6 +64,12 @@ class MarketSettings
             'service_noshow_days' => min(365, max(7, (int)$get('market_service_noshow_days', 90))),
             // The day-before reminder goes at this hour (0 to 23).
             'service_reminder_hour' => min(23, max(0, (int)$get('market_service_reminder_hour', 18))),
+            // Zama (reselling): on or off, hours the owner has to answer a reseller, hours an item is kept
+            // by default, and hours a price sent to a buyer stays open.
+            'zama_enabled' => (bool)(int)$get('market_zama_enabled', 1),
+            'zama_answer_hours' => min(48, max(1, (int)$get('market_zama_answer_hours', 6))),
+            'zama_keep_hours' => min(72, max(1, (int)$get('market_zama_keep_hours', 24))),
+            'zama_quote_hours' => min(168, max(1, (int)$get('market_zama_quote_hours', 24))),
         ];
     }
 

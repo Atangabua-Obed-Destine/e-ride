@@ -574,6 +574,12 @@
                         </a>
                     </li>
                     @can('store_edit')
+                        <li class="{{ Request::is('admin/store-resellers*') ? 'active open' : '' }}">
+                            <a href="{{ route('admin.store-reseller.index') }}">
+                                <i class="bi bi-people"></i>
+                                <span class="link-title">{{ translate('Resellers') }}</span>
+                            </a>
+                        </li>
                         <li class="{{ Request::is('admin/store-settings*') ? 'active open' : '' }}">
                             <a href="{{ route('admin.store-setting.edit') }}">
                                 <i class="bi bi-sliders"></i>
