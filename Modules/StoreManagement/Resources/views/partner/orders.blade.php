@@ -18,11 +18,12 @@
     .o.is-new { border: 2px solid var(--red); box-shadow: 0 10px 30px -14px rgba(224, 32, 32, .6); }
     .o.is-arrived { animation: pop .4s ease; }
     @keyframes pop { from { transform: scale(.97); opacity: .4 } to { transform: none; opacity: 1 } }
-    .o__head { display: flex; align-items: baseline; gap: 8px; }
+    /* Wraps on a phone: the customer line and the timer never squeeze into a column. */
+    .o__head { display: flex; align-items: baseline; gap: 6px 8px; flex-wrap: wrap; }
     .o__ref { font-weight: 900; font-size: 20px; letter-spacing: -.01em; }
         .o__branch { font-size: 12px; font-weight: 700; background: #111114; color: #fff; border-radius: 999px; padding: 2px 9px; white-space: nowrap; }
-    .o__who { color: var(--muted); font-size: 13px; }
-    .o__timer { margin-left: auto; font-weight: 800; font-size: 13px; font-variant-numeric: tabular-nums; padding: 3px 9px; border-radius: 999px; background: #f0f0f3; }
+    .o__who { color: var(--muted); font-size: 13px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 100%; }
+    .o__timer { margin-left: auto; font-weight: 800; font-size: 13px; font-variant-numeric: tabular-nums; padding: 3px 9px; border-radius: 999px; background: #f0f0f3; white-space: nowrap; }
     .o__timer.is-hot { background: var(--red); color: #fff; }
     .o__timer.is-ok { background: rgba(18, 161, 80, .12); color: var(--ok); }
     .o__items { list-style: none; margin: 0; padding: 0; border-top: 1px dashed var(--line); border-bottom: 1px dashed var(--line); }
@@ -59,7 +60,7 @@
     .o__contact a.wa { color: #128c4a; border-color: #b8e6cb; background: #f2fbf6; }
     .o__cancel { background: none; border: 0; color: var(--muted); font-size: 13px; text-decoration: underline; padding: 0; align-self: center; }
     .o__wait { background: #f4f4f6; border-radius: 12px; padding: 10px 12px; font-size: 14px; font-weight: 600; }
-    .o__paid { font-size: 12px; font-weight: 800; color: var(--ok); background: rgba(18, 161, 80, .12); border-radius: 999px; padding: 2px 9px; }
+    .o__paid { font-size: 12px; font-weight: 800; color: var(--ok); background: rgba(18, 161, 80, .12); border-radius: 999px; padding: 2px 9px; white-space: nowrap; }
     .chg li s { color: var(--muted); }
     .chg .tag-chg { font-size: 11px; font-weight: 800; border-radius: 999px; padding: 1px 7px; margin-left: auto; white-space: nowrap; }
     .tag-chg.removed { background: #fde8e8; color: var(--red); }
