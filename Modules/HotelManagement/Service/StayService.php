@@ -23,11 +23,16 @@ class StayService
 {
     // ------------------------------------------------------------- What is free
 
-    /** Rooms (of one type, or all) free every night from $from to the night before $to. */
+    /**
+     * Rooms (of one type, or all) free every night from $from to the night before $to.
+     * Ready rooms come first, so "any free one" keeps a clean room rather than one
+     * still waiting for cleaning (or out of order) when both are free.
+     */
     public function freeRooms(Hotel $hotel, ?string $typeId, Carbon $from, Carbon $to): Collection
     {
         $rooms = HotelRoom::where('hotel_id', $hotel->id)->where('active', true)
             ->when($typeId, fn($q) => $q->where('room_type_id', $typeId))
+            ->orderByRaw('CASE state WHEN ? THEN 0 WHEN ? THEN 1 ELSE 2 END', [HotelRoom::READY, HotelRoom::TO_CLEAN])
             ->orderByRaw('LENGTH(number)')->orderBy('number')->get();
         if ($rooms->isEmpty()) {
             return $rooms;
