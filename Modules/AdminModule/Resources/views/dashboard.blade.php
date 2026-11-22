@@ -24,7 +24,16 @@
                 </div>
             </div>
 
+            {{-- The whole business: now, what needs someone, every service today and this week. --}}
+            <div id="ed-pulse-box">
+                @include('adminmodule::partials._pulse', [
+                    'pulse' => \Modules\AdminModule\Lib\BusinessPulse::snapshot(),
+                    'attention' => \Modules\AdminModule\Lib\BusinessPulse::attention(),
+                ])
+            </div>
+
             @can('dashboard')
+                <h3 class="ed-classic-title">{{ translate('Rides and parcels in detail') }}</h3>
                 <div class="row gy-4">
                     <div class="col-md-6">
                         <div class="row g-3">
@@ -364,6 +373,20 @@
 @endsection
 
 @push('script')
+    <script>
+        // The overview counts again every minute (the server keeps each count a minute).
+        (function () {
+            var box = document.getElementById('ed-pulse-box');
+            if (!box) return;
+            setInterval(function () {
+                if (document.hidden) return;
+                fetch('{{ route('admin.business-pulse') }}', {headers: {'X-Requested-With': 'XMLHttpRequest'}, credentials: 'same-origin'})
+                    .then(function (r) { return r.ok ? r.text() : null; })
+                    .then(function (html) { if (html && html.indexOf('ed-pulse') !== -1) box.innerHTML = html; })
+                    .catch(function () {});
+            }, 60000);
+        })();
+    </script>
     <!-- Apex Chart -->
     <script src="{{dynamicAsset('public/assets/admin-module/plugins/apex/apexcharts.min.js')}}"></script>
     <script src="{{dynamicAsset('public/assets/admin-module/js/admin-module/dashboard.js')}}"></script>

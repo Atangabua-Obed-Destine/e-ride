@@ -1,26 +1,24 @@
+{{--
+    The admin sidebar, built from Modules\AdminModule\Lib\AdminNav: every page grouped by
+    business area, with the admin's permissions applied. Sections fold (the one you are in
+    stays open); the search finds pages inside sub-menus too. The desktop menu bar, "Go to…"
+    and the phone menu read the same map.
+--}}
+@php($navSections = \Modules\AdminModule\Lib\AdminNav::sections())
 <aside class="aside">
-    <!-- Aside Header -->
     <div class="aside-header">
-        <!-- Logo -->
-        <a href="{{route('admin.dashboard')}}" class="logo d-flex gap-2">
+        <a href="{{ route('admin.dashboard') }}" class="logo d-flex gap-2">
             <img width="115"
-                 src="{{$logo ? dynamicStorage("storage/app/public/business/".$logo) : dynamicAsset('public/assets/admin-module/img/logo.png')}}"
+                 src="{{ $logo ? dynamicStorage("storage/app/public/business/".$logo) : dynamicAsset('public/assets/admin-module/img/logo.png') }}"
                  alt="" class="main-logo">
         </a>
-        <!-- End Logo -->
-
-        <!-- Aside Toggle Menu Button -->
-        <button class="toggle-menu-button aside-toggle bg-white p-0 dark-color">
+        <button class="toggle-menu-button aside-toggle bg-white p-0 dark-color" aria-label="{{ translate('Fold the menu') }}">
             <i class="bi bi-chevron-left"></i>
         </button>
-        <!-- End Aside Toggle Menu Button -->
     </div>
-    <!-- End Aside Header -->
 
-    <!-- Aside Body -->
     <div class="position-relative flex-grow-1">
         <div class="aside-body" data-trigger="scrollbar">
-            <!-- User Profile -->
             <div class="user-profile media gap-3 align-items-center my-3">
                 <div class="avatar rounded-circle">
                     <img class="fit-object dark-support rounded-circle"
@@ -31,913 +29,147 @@
                         'employee/profile/',
                     ) }}" alt="">
                 </div>
-                <div class="media-body ">
-                    <div class="card-title word-break fw-bold">{{auth()->user()?->email}}</div>
-                    <span class="card-text">{{auth()->user()?->user_type}}</span>
+                <div class="media-body">
+                    <div class="card-title word-break fw-bold">{{ trim(auth()->user()?->first_name . ' ' . auth()->user()?->last_name) ?: auth()->user()?->email }}</div>
+                    <span class="card-text">{{ auth()->user()?->user_type === 'super-admin' ? translate('Super admin') : translate('Staff') }}</span>
                 </div>
             </div>
-            <!-- End User Profile -->
 
-            <div class="aside-search mb-3">
-                <form action="#" class="search-form">
-                    <div class="input-group search-form__input_group">
-                            <span class="search-form__icon">
-                                <i class="bi bi-search"></i>
-                            </span>
-                        <input type="search" id="search-bar-input" class="theme-input-style search-form__input"
-                               placeholder="{{ translate('Search_Here') }}"/>
-                    </div>
-                </form>
+            <div class="aside-search mb-2">
+                <div class="input-group search-form__input_group">
+                    <span class="search-form__icon"><i class="bi bi-search"></i></span>
+                    <input type="search" id="admin-nav-search" class="theme-input-style search-form__input" autocomplete="off"
+                           placeholder="{{ translate('Find a page') }}" aria-label="{{ translate('Find a page') }}"/>
+                </div>
+                <div class="ed-nav-hint">{{ translate('Tip: Ctrl + K finds any page from anywhere') }}</div>
             </div>
 
-            <!-- Nav -->
-            <ul class="main-nav nav">
-
-                <li class="nav-category" title="{{ translate('dashboard') }}">
-                    {{ translate('dashboard') }}
-                </li>
-                <li class="{{Request::is('admin') ?'active open':''}}">
-                    <a href="{{route('admin.dashboard')}}">
-                        <i class="bi bi-grid-fill"></i>
-                        <span class="link-title">{{ translate('dashboard') }}</span>
-                    </a>
-                </li>
-                @can('dashboard')
-                    <li class="{{Request::is('admin/heat-map*') ?'active open':''}}">
-                        <a href="{{route('admin.heat-map')}}">
-                            <i class="bi bi-pin-map"></i>
-                            <span class="link-title">{{ translate('Heat Map') }}</span>
-                        </a>
+            <ul class="main-nav nav" id="admin-nav">
+                @foreach($navSections as $section)
+                    @php($sectionOpen = $section['is_active'] || $section['key'] === 'overview')
+                    <li class="nav-category ed-cat {{ $sectionOpen ? 'ed-open' : '' }}" data-ed-section="{{ $section['key'] }}"
+                        title="{{ translate($section['title']) }}" role="button" tabindex="0" aria-expanded="{{ $sectionOpen ? 'true' : 'false' }}">
+                        <i class="bi {{ $section['icon'] }} ed-cat-icon"></i>
+                        <span>{{ translate($section['title']) }}</span>
+                        <i class="bi bi-chevron-down ed-cat-caret"></i>
                     </li>
-                    <li class="{{Request::is('admin/fleet-map/*') ?'active open':''}}">
-                        <a href="{{route('admin.fleet-map','all-driver')}}">
-                            <i class="bi bi-map-fill"></i>
-                            <span class="link-title">{{ translate('Fleet View') }}</span>
-                        </a>
-                    </li>
-                @endcan
-
-                @if(\Illuminate\Support\Facades\Gate::any(['zone_view', 'zone_add', 'zone_edit', 'zone_delete', 'zone_log', 'zone_export']))
-                    <!---------- Start Zone Management --------------->
-                    <li class="nav-category"
-                        title="{{ translate('zone_management') }}">{{ translate('zone_management') }}</li>
-                    <li class="{{Request::is('admin/zone')||Request::is('admin/zone/*')? 'active open' :''}}">
-                        <a href="{{route('admin.zone.index')}}">
-                            <i class="bi bi-map"></i>
-                            <span class="link-title text-capitalize">{{ translate('zone_setup') }}</span>
-                        </a>
-                    </li>
-                    <li class="{{ Request::is('admin/safety*') ? 'active open' : '' }}">
-                        <a href="{{ route('admin.safety.index') }}">
-                            <i class="bi bi-shield-exclamation"></i>
-                            <span class="link-title">{{ translate('Safety map') }}</span>
-                            @php($safetyDecide = \Modules\ZoneManagement\Entities\SafetyArea::where('confirmed', 0)->whereNull('lifted_at')->where('ends_at', '>', now())->count())
-                            @if($safetyDecide)<span class="badge bg-danger ms-1">{{ $safetyDecide }}</span>@endif
-                        </a>
-                    </li>
-                    <!---------- End Zone Management --------------->
-                @endif
-
-
-                @if(\Illuminate\Support\Facades\Gate::any(['trip_view', 'trip_edit', 'trip_delete', 'trip_log', 'trip_export']))
-                    <!----------------- Start Trip Management ------------------------>
-                    <li class="nav-category"
-                        title="{{ translate('trip_management')}}">{{ translate('trip_management')}}</li>
-                    <li class="{{ Request::is('admin/trip/log') || Request::is('admin/trip/list/*') || Request::is('admin/trip/details/*')?'active sub-menu-opened':'' }} text-capitalize">
-                        <a href="#">
-                            <i class="bi bi-car-front"></i>
-                            <span class="link-title">{{ translate('trips') }}</span>
-                        </a>
-                        <ul class="nav flex-column sub-menu text-capitalize">
-                            <li class="{{ Request::is('admin/trip/list/all') || (Request::is('admin/trip/details/*')  && Request::get('type') == 'all') ?'active open':'' }}">
-                                <a href="{{route('admin.trip.index', ['all'])}}">
-                                    <i class="bi bi-car-front-fill"></i>
-                                    <span class="link-title">{{ translate('all_trip')}}  </span> <span
-                                        class="badge badge-primary float-end">{{$tripCount['all']}}</span>
+                    @foreach($section['items'] as $item)
+                        @if(!empty($item['children']))
+                            <li class="{{ $item['is_active'] ? 'active sub-menu-opened' : '' }}" data-ed-in="{{ $section['key'] }}">
+                                <a href="#" data-ed-words="{{ strtolower(translate($item['title']) . ' ' . ($item['words'] ?? '')) }}">
+                                    <i class="bi {{ $item['icon'] ?? $section['icon'] }}"></i>
+                                    <span class="link-title">{{ translate($item['title']) }}</span>
+                                </a>
+                                <ul class="nav flex-column sub-menu">
+                                    @foreach($item['children'] as $child)
+                                        <li class="{{ $child['is_active'] ? 'active open' : '' }}">
+                                            <a href="{{ $child['url'] }}" data-ed-words="{{ strtolower(translate($child['title']) . ' ' . ($child['words'] ?? '')) }}">
+                                                <i class="bi bi-dot"></i>
+                                                <span class="link-title">{{ translate($child['title']) }}</span>
+                                                @if(($child['badge_count'] ?? 0) > 0)
+                                                    <span class="badge {{ str_starts_with($child['badge'] ?? '', 'trip:') ? 'badge-primary' : 'bg-danger' }} ms-auto">{{ $child['badge_count'] }}</span>
+                                                @endif
+                                            </a>
+                                        </li>
+                                    @endforeach
+                                </ul>
+                            </li>
+                        @else
+                            <li class="{{ $item['is_active'] ? 'active open' : '' }}" data-ed-in="{{ $section['key'] }}">
+                                <a href="{{ $item['url'] }}" data-ed-words="{{ strtolower(translate($item['title']) . ' ' . ($item['words'] ?? '')) }}">
+                                    <i class="bi {{ $item['icon'] ?? $section['icon'] }}"></i>
+                                    <span class="link-title">{{ translate($item['title']) }}</span>
+                                    @if(($item['badge_count'] ?? 0) > 0)
+                                        <span class="badge bg-danger ms-auto">{{ $item['badge_count'] }}</span>
+                                    @endif
                                 </a>
                             </li>
-                            <li class="{{ Request::is('admin/trip/list/pending') || (Request::is('admin/trip/details/*')  && Request::get('type') == PENDING) ?'active open':'' }}">
-                                <a href="{{route('admin.trip.index', [PENDING])}}">
-                                    <i class="bi bi-cloud-haze2-fill"></i>
-                                    <span class="link-title">{{ translate(PENDING)}}</span>
-                                    <span class="badge badge-primary float-end">{{$tripCount[PENDING]}}</span>
-                                </a>
-                            </li>
-                            <li class="{{ Request::is('admin/trip/list/scheduled') || (Request::is('admin/trip/details/*')  && Request::get('type') == SCHEDULED) ?'active open':'' }}">
-                                <a href="{{route('admin.trip.index', [SCHEDULED])}}">
-                                    <i class="bi bi-cloud-haze2-fill"></i>
-                                    <span class="link-title">{{ translate(SCHEDULED)}}</span>
-                                    <span class="badge badge-primary float-end">{{$tripCount[SCHEDULED]}}</span>
-                                </a>
-                            </li>
-                            <li class="{{ Request::is('admin/trip/list/accepted') || (Request::is('admin/trip/details/*')  && Request::get('type') == ACCEPTED) ?'active open':'' }}">
-                                <a href="{{route('admin.trip.index', [ACCEPTED])}}">
-                                    <i class="bi bi-cloud-check-fill"></i>
-                                    <span class="link-title">{{ translate(ACCEPTED)}}</span>
-                                    <span class="badge badge-primary float-end">{{$tripCount[ACCEPTED]}}</span>
-                                </a>
-                            </li>
-                            <li class="{{ Request::is('admin/trip/list/ongoing') || (Request::is('admin/trip/details/*')  && Request::get('type') == ONGOING) ?'active open':'' }}">
-                                <a href="{{route('admin.trip.index', [ONGOING])}}">
-                                    <i class="bi bi-clipboard-fill"></i>
-                                    <span class="link-title">{{ translate(ONGOING)}}</span>
-                                    <span class="badge badge-primary float-end">{{$tripCount[ONGOING]}}</span>
-                                </a>
-                            </li>
-                            <li class="{{ Request::is('admin/trip/list/completed') || (Request::is('admin/trip/details/*')  && Request::get('type') == COMPLETED) ?'active open':'' }}">
-                                <a href="{{route('admin.trip.index', [COMPLETED])}}">
-                                    <i class="bi bi-clipboard-check-fill"></i>
-                                    <span class="link-title">{{ translate(COMPLETED)}}</span>
-                                    <span class="badge badge-primary float-end">{{$tripCount[COMPLETED]}}</span>
-                                </a>
-                            </li>
-                            <li class="{{ Request::is('admin/trip/list/cancelled') || (Request::is('admin/trip/details/*')  && Request::get('type') == CANCELLED) ?'active open':'' }}">
-                                <a href="{{route('admin.trip.index', [CANCELLED])}}">
-                                    <i class="bi bi-cloud-minus-fill"></i>
-                                    <span class="link-title">{{ translate(CANCELLED)}}</span>
-                                    <span class="badge badge-primary float-end">{{$tripCount[CANCELLED]}}</span>
-                                </a>
-                            </li>
-                            <li class="{{ Request::is('admin/trip/list/returning') || (Request::is('admin/trip/details/*')  && Request::get('type') == RETURNING) ?'active open':'' }}">
-                                <a href="{{route('admin.trip.index', [RETURNING])}}">
-                                    <i class="bi bi-cloud-minus-fill"></i>
-                                    <span class="link-title">{{ translate(RETURNING)}}</span>
-                                    <span class="badge badge-primary float-end">{{$tripCount[RETURNING]}}</span>
-                                </a>
-                            </li>
-                            <li class="{{ Request::is('admin/trip/list/returned') || (Request::is('admin/trip/details/*')  && Request::get('type') == RETURNED) ?'active open':'' }}">
-                                <a href="{{route('admin.trip.index', [RETURNED])}}">
-                                    <i class="bi bi-cloud-minus-fill"></i>
-                                    <span class="link-title">{{ translate(RETURNED)}}</span>
-                                    <span class="badge badge-primary float-end">{{$tripCount[RETURNED]}}</span>
-                                </a>
-                            </li>
-                        </ul>
-
-                    </li>
-                    <li class="{{ Request::is('admin/trip/refund/log') || Request::is('admin/trip/refund/list/*') || Request::is('admin/trip/refund/details/*')?'active sub-menu-opened':'' }} text-capitalize">
-                        <a href="#">
-                            <i class="bi bi-car-front"></i>
-                            <span class="link-title">{{ translate('parcel_refund_request') }}</span>
-                        </a>
-                        <ul class="nav flex-column sub-menu text-capitalize">
-                            <li class="{{ Request::is('admin/trip/refund/list/pending') || (Request::is('admin/trip/refund/details/*')  && Request::get('type') == PENDING) ?'active open':'' }}">
-                                <a href="{{route('admin.trip.refund.index', [PENDING])}}">
-                                    <i class="bi bi-cloud-haze2-fill"></i>
-                                    <span class="link-title">{{ translate(PENDING)}}</span>
-                                    <span class="badge badge-primary float-end">{{$parcelRefundCount[PENDING]}}</span>
-                                </a>
-                            </li>
-                            <li class="{{ Request::is('admin/trip/refund/list/approved') || (Request::is('admin/trip/refund/details/*')  && Request::get('type') == APPROVED) ?'active open':'' }}">
-                                <a href="{{route('admin.trip.refund.index', [APPROVED])}}">
-                                    <i class="bi bi-cloud-check-fill"></i>
-                                    <span class="link-title">{{ translate(APPROVED)}}</span>
-                                    <span class="badge badge-primary float-end">{{$parcelRefundCount[APPROVED]}}</span>
-                                </a>
-                            </li>
-                            <li class="{{ Request::is('admin/trip/refund/list/denied') || (Request::is('admin/trip/refund/details/*')  && Request::get('type') == DENIED) ?'active open':'' }}">
-                                <a href="{{route('admin.trip.refund.index', [DENIED])}}">
-                                    <i class="bi bi-clipboard-fill"></i>
-                                    <span class="link-title">{{ translate(DENIED)}}</span>
-                                    <span class="badge badge-primary float-end">{{$parcelRefundCount[DENIED]}}</span>
-                                </a>
-                            </li>
-                            <li class="{{ Request::is('admin/trip/refund/list/refunded') || (Request::is('admin/trip/refund/details/*')  && Request::get('type') == REFUNDED) ?'active open':'' }}">
-                                <a href="{{route('admin.trip.refund.index', [REFUNDED])}}">
-                                    <i class="bi bi-clipboard-check-fill"></i>
-                                    <span class="link-title">{{ translate(REFUNDED)}}</span>
-                                    <span class="badge badge-primary float-end">{{$parcelRefundCount[REFUNDED]}}</span>
-                                </a>
-                            </li>
-                        </ul>
-
-                    </li>
-                    <li class="{{ Request::is('admin/safety-alert/*')?'active open':'' }}">
-                        <a href="{{route('admin.safety-alert.index', CUSTOMER)}}">
-                            <i class="bi bi-shield-fill-check"></i>
-                            <span class="link-title text-capitalize">{{ translate('Solved Alert List') }}</span>
-
-                        </a>
-                    </li>
-                    <li class="{{ Request::is('admin/booking-deposit*') ? 'active open' : '' }}">
-                        <a href="{{ route('admin.booking-deposit.index') }}">
-                            <i class="bi bi-wallet2"></i>
-                            <span class="link-title">{{ translate('Booking_Deposits') }}</span>
-                        </a>
-                    </li>
-                    <li class="{{ Request::is('admin/payment-ways*') ? 'active open' : '' }}">
-                        <a href="{{ route('admin.payment-ways.index') }}">
-                            <i class="bi bi-cash-coin"></i>
-                            <span class="link-title">{{ translate('Ways_to_pay') }}</span>
-                        </a>
-                    </li>
-                    <li class="{{ Request::is('admin/move*') ? 'active open' : '' }}">
-                        <a href="{{ route('admin.move.index') }}">
-                            <i class="bi bi-truck"></i>
-                            <span class="link-title">{{ translate('E-Ride_Move') }}</span>
-                        </a>
-                    </li>
-                    <li class="{{ Request::is('admin/driver-report*') ? 'active open' : '' }}">
-                        <a href="{{ route('admin.driver-report.index') }}">
-                            <i class="bi bi-flag"></i>
-                            <span class="link-title">{{ translate('Driver_Reports') }}</span>
-                            @php($openDriverReports = \Modules\TripManagement\Entities\TripReport::where('status', 'open')->count())
-                            @if($openDriverReports > 0)
-                                <span class="badge badge-danger float-end">{{ $openDriverReports }}</span>
-                            @endif
-                        </a>
-                    </li>
-                    <li class="{{ Request::is('admin/health-rides*') ? 'active open' : '' }}">
-                        <a href="{{ route('admin.health-ride.index') }}">
-                            <i class="bi bi-heart-pulse"></i>
-                            <span class="link-title">{{ translate('Emergency rides') }}</span>
-                        </a>
-                    </li>
-                    <li class="{{ Request::is('admin/lost-items*') ? 'active open' : '' }}">
-                        <a href="{{ route('admin.lost-item.index') }}">
-                            <i class="bi bi-bag-check"></i>
-                            <span class="link-title">{{ translate('Lost and found') }}</span>
-                            @php($lostItemsForSupport = \Modules\TripManagement\Entities\LostItem::whereIn('status', \Modules\TripManagement\Entities\LostItem::OPEN)->whereNotNull('escalated_at')->count())
-                            @if($lostItemsForSupport > 0)
-                                <span class="badge badge-danger float-end">{{ $lostItemsForSupport }}</span>
-                            @endif
-                        </a>
-                    </li>
-                    <!----------------- End Trip Management ------------------------>
-                @endif
-
-                @if(\Illuminate\Support\Facades\Gate::any(['promotion_view', 'promotion_add', 'promotion_edit', 'promotion_delete', 'promotion_log', 'promotion_export']))
-                    <!---------- Start Promotion Management --------------->
-                    <li class="nav-category"
-                        title="{{ translate('promotion_management') }}">{{ translate('promotion_management') }}</li>
-                    <li class="{{ Request::is('admin/promotion/banner-setup*')?'active open':'' }}">
-                        <a href="{{route('admin.promotion.banner-setup.index')}}">
-                            <i class="bi bi-flag-fill"></i>
-                            <span class="link-title text-capitalize">{{ translate('banner_setup') }}</span>
-
-                        </a>
-                    </li>
-                    <!-- Coupon Setup -->
-                    <li class="{{Request::is('admin/promotion/coupon-setup*')?'active sub-menu-opened':''}} text-capitalize">
-                        <a href="#">
-                            <i class="bi bi-ticket-fill"></i>
-                            <span class="link-title text-capitalize">{{ translate('coupon_setup') }}</span>
-                        </a>
-                        <!-- Sub Menu -->
-                        <ul class="nav flex-column sub-menu text-capitalize">
-                            <li class="{{Request::is('admin/promotion/coupon-setup') | Request::is('admin/promotion/coupon-setup/edit*')? 'active open' : ''}}">
-                                <a href="{{ route('admin.promotion.coupon-setup.index')  }}">
-                                    <i class="bi bi-dash-lg"></i>
-                                    {{ translate('coupon_list') }}
-                                </a>
-                            </li>
-                            <li class="{{Request::is('admin/promotion/coupon-setup/create') ? 'active open' : ''}}">
-                                <a href="{{route('admin.promotion.coupon-setup.create')}}">
-                                    <i class="bi bi-dash-lg"></i>
-                                    {{ translate('add_new_coupon') }}
-                                </a>
-                            </li>
-                        </ul>
-                        <!-- End Sub Menu -->
-                    </li>
-                    <!-- Coupon Setup End-->
-                    <!-- Discount Setup -->
-                    <li class="{{Request::is('admin/promotion/discount-setup*')?'active sub-menu-opened':''}} text-capitalize">
-                        <a href="#">
-                            <i class="bi bi-ticket-fill"></i>
-                            <span class="link-title text-capitalize">{{ translate('discount_setup') }}</span>
-                        </a>
-                        <!-- Sub Menu -->
-                        <ul class="nav flex-column sub-menu text-capitalize">
-                            <li class="{{Request::is('admin/promotion/discount-setup') | Request::is('admin/promotion/discount-setup/edit*')? 'active open' : ''}}">
-                                <a href="{{ route('admin.promotion.discount-setup.index')  }}">
-                                    <i class="bi bi-dash-lg"></i>
-                                    {{ translate('discount_list') }}
-                                </a>
-                            </li>
-                            <li class="{{Request::is('admin/promotion/discount-setup/create') ? 'active open' : ''}}">
-                                <a href="{{route('admin.promotion.discount-setup.create')}}">
-                                    <i class="bi bi-dash-lg"></i>
-                                    {{ translate('add_new_discount') }}
-                                </a>
-                            </li>
-                        </ul>
-                        <!-- End Sub Menu -->
-                    </li>
-                    <!-- Coupon Setup End-->
-                    <li class="{{ Request::is('admin/promotion/send-notification*')?'active open':'' }}">
-                        <a href="{{route('admin.promotion.send-notification.index')}}">
-                            <i class="bi bi-bell-fill"></i>
-                            <span class="link-title text-capitalize">{{ translate('send_notification') }}</span>
-                        </a>
-                    </li>
-                    <!---------- End Promotion Management --------------->
-                @endif
-
-                @if(\Illuminate\Support\Facades\Gate::any(['user_view', 'user_add', 'user_edit', 'user_delete', 'user_log', 'user_export']))
-                    <!---------- Start User Management --------------->
-                    <li class="nav-category"
-                        title="{{ translate('user_management')}}">{{ translate('user_management')}}</li>
-                    <li class="{{Request::is('admin/driver/level*')? 'active sub-menu-opened' : ''}}">
-                        <a href="">
-                            <i class="bi bi-people-fill"></i>
-                            <span class="link-title text-capitalize">{{ translate('driver_level_setup')}}</span>
-                        </a>
-                        <!-- Sub Menu -->
-                        <ul class="nav sub-menu">
-                            <li class="{{Request::is('admin/driver/level') || Request::is('admin/driver/level/edit/*') || Request::is('admin/driver/level/log*') ? 'active open' : ''}}">
-                                <a href="{{route('admin.driver.level.index')}}" class="text-capitalize">
-                                    <i class="bi bi-dash-lg"></i>
-                                    {{ translate('driver_levels')}}
-                                </a>
-                            </li>
-                            <li class="{{Request::is('admin/driver/level/create') ? 'active open' : ''}}">
-                                <a href="{{route('admin.driver.level.create')}}" class="text-capitalize">
-                                    <i class="bi bi-dash-lg"></i>
-                                    {{ translate('add_driver_level')}}
-                                </a>
-                            </li>
-                        </ul>
-                        <!-- End Sub Menu -->
-                    </li>
-                    <li class="has-sub-item {{Request::is('admin/driver') || Request::is('admin/driver/create') || Request::is('admin/driver/edit/*') || Request::is('admin/driver/show*') || Request::is('admin/driver/trash')
-                    || Request::is('admin/driver/edit/*') || Request::is('admin/driver/profile-update-request-list') || Request::is('admin/driver/log*') || Request::is('admin/driver/cash*') || Request::is('admin/driver/verification*')  ? 'active sub-menu-opened' : ''}}">
-                        <a href="#">
-                            <i class="bi bi-people-fill"></i>
-                            <span class="link-title text-capitalize">{{ translate('driver_setup')}}</span>
-                        </a>
-                        <!-- Sub Menu -->
-                        <ul class="nav sub-menu">
-                            <li class="{{Request::is('admin/driver') || Request::is('admin/driver/edit/*') || Request::is('admin/driver/log*') || Request::is('admin/driver/cash*') ? 'active open' : ''}}">
-                                <a class="text-capitalize" href="{{route('admin.driver.index')}}">
-                                    <i class="bi bi-dash-lg"></i>
-                                    {{translate('driver_list')}}
-                                </a>
-                            </li>
-                            <li class="{{Request::is('admin/driver/create') ? 'active open' : ''}}">
-                                <a class="text-capitalize" href="{{route('admin.driver.create')}}">
-                                    <i class="bi bi-dash-lg"></i>
-                                    {{translate('add_new_driver')}}
-                                </a>
-                            </li>
-                            <li class="{{Request::is('admin/driver/profile-update-request-list') ? 'active open' : ''}}">
-                                <a class="text-capitalize" href="{{route('admin.driver.profile-update-request-list')}}">
-                                    <i class="bi bi-dash-lg"></i>
-                                    {{translate('driver_identity_request_list')}}
-                                </a>
-                            </li>
-                            <li class="{{Request::is('admin/driver/verification/unverified-list') ? 'active open' : ''}}">
-                                <a class="text-capitalize" href="{{route('admin.driver.verification.unverified-list')}}">
-                                    <i class="bi bi-dash-lg"></i>
-                                    {{translate('unverified_list')}}
-                                </a>
-                            </li>
-                        </ul>
-                        <!-- End Sub Menu -->
-                    </li>
-                    <li class="has-sub-item{{Request::is('admin/driver/withdraw*') ? 'active sub-menu-opened' : ''}}">
-                        <a href="#">
-                            <i class="bi bi-cash-coin"></i>
-                            <span class="link-title text-capitalize">{{translate('withdraw')}}</span>
-                        </a>
-                        <!-- Sub Menu -->
-                        <ul class="nav sub-menu">
-                            <li class="{{Request::is('admin/driver/withdraw-method') || Request::is('admin/driver/withdraw-method/edit/*') ? 'active open' : ''}}">
-                                <a class="text-capitalize" href="{{route('admin.driver.withdraw-method.index')}}">
-                                    <i class="bi bi-dash-lg"></i>
-                                    {{translate('method_list')}}
-                                </a>
-                            </li>
-                            <li class="{{Request::is('admin/driver/withdraw-method/create') ? 'active open' : ''}}">
-                                <a class="text-capitalize" href="{{route('admin.driver.withdraw-method.create')}}">
-                                    <i class="bi bi-dash-lg"></i>
-                                    {{translate('add_method')}}
-                                </a>
-                            </li>
-                            <li class="{{Request::is('admin/driver/withdraw/request*') ? 'active open' : ''}}">
-                                <a class="text-capitalize" href="{{route('admin.driver.withdraw.requests')}}">
-                                    <i class="bi bi-dash-lg"></i>
-                                    {{translate('withdraw_requests')}}
-                                </a>
-                            </li>
-                        </ul>
-                        <!-- End Sub Menu -->
-                    </li>
-                    <li class="{{Request::is('admin/customer/level*')? 'active sub-menu-opened' : ''}}">
-                        <a href="">
-                            <i class="bi bi-person-fill-add"></i>
-                            <span class="link-title text-capitalize">{{translate('customer_level_setup')}}</span>
-                        </a>
-                        <!-- Sub Menu -->
-                        <ul class="nav sub-menu">
-                            <li class="{{Request::is('admin/customer/level') || Request::is('admin/customer/level/edit*') || Request::is('admin/customer/level/log*')? 'active open' : ''}}">
-                                <a href="{{route('admin.customer.level.index')}}" class="text-capitalize">
-                                    <i class="bi bi-dash-lg"></i>
-                                    {{translate('customer_levels')}}
-                                </a>
-                            </li>
-                            @can('add', \Modules\UserManagement\Entities\UserLevel::class)
-                                <li class="{{Request::is('admin/customer/level/create') ? 'active open' : ''}}">
-                                    <a href="{{route('admin.customer.level.create')}}" class="text-capitalize">
-                                        <i class="bi bi-dash-lg"></i>
-                                        {{translate('add_customer_level')}}
-                                    </a>
-                                </li>
-                            @endcan
-                        </ul>
-                        <!-- End Sub Menu -->
-                    </li>
-
-                    <li class="has-sub-item {{Request::is('admin/customer/show*') || Request::is('admin/customer') || Request::is('admin/customer/create') || Request::is('admin/customer/edit/*') || Request::is('admin/customer/log*')? 'active sub-menu-opened' : ''}}">
-                        <a href="#">
-                            <i class="bi bi-person-plus-fill"></i>
-                            <span class="link-title text-capitalize">{{translate('customer_setup')}}</span>
-                        </a>
-                        <!-- Sub Menu -->
-                        <ul class="nav sub-menu">
-                            <li class="{{Request::is('admin/customer') || Request::is('admin/customer/edit/*') || Request::is('admin/customer/show*') || Request::is('admin/customer/log*') ? 'active open' : ''}}">
-                                <a class="text-capitalize" href="{{route('admin.customer.index')}}">
-                                    <i class="bi bi-dash-lg"></i>
-                                    {{translate('customer_list')}}
-                                </a>
-                            </li>
-                            <li class="{{Request::is('admin/customer/create') ? 'active open' : ''}}">
-                                <a class="text-capitalize" href="{{route('admin.customer.create')}}">
-                                    <i class="bi bi-dash-lg"></i>
-                                    {{translate('add_new_customer')}}
-                                </a>
-                            </li>
-                        </ul>
-                        <!-- End Sub Menu -->
-                    </li>
-
-                    <li class="{{Request::is('admin/customer/wallet*')? 'active open' : ''}}">
-                        <a href="{{route('admin.customer.wallet.index')}}">
-                            <i class="bi bi-wallet-fill"></i>
-                            <span class="link-title text-capitalize">{{translate('customer_wallet')}}</span>
-                        </a>
-                    </li>
-
-                    <li class="{{Request::is('admin/wallet-bonus*')? 'active open' : ''}}">
-                        <a href="{{route('admin.wallet-bonus.index')}}">
-                            <i class="bi bi-wallet-fill"></i>
-                            <span class="link-title text-capitalize">{{translate('wallet_bonus')}}</span>
-                        </a>
-                    </li>
-
-                    <li class="has-sub-item {{Request::is('admin/employee*')? 'active sub-menu-opened' : ''}}">
-                        <a href="#">
-                            <i class="bi bi-person-square"></i>
-                            <span class="link-title text-capitalize">{{translate('employee_setup')}}</span>
-                        </a>
-                        <!-- Sub Menu -->
-                        <ul class="nav sub-menu">
-                            <li class="{{Request::is('admin/employee/role*') ? 'active open' : ''}}">
-                                <a class="text-capitalize" href="{{route('admin.employee.role.index')}}">
-                                    <i class="bi bi-dash-lg"></i>
-                                    {{translate('attribute_setup')}}
-                                </a>
-                            </li>
-                            <li class="{{Request::is('admin/employee') || Request::is('admin/employee/edit*') || Request::is('admin/employee/log*') ? 'active open' : ''}}">
-                                <a class="text-capitalize" href="{{route('admin.employee.index')}}">
-                                    <i class="bi bi-dash-lg"></i>
-                                    {{translate('employee_list')}}
-                                </a>
-                            </li>
-                            <li class="{{Request::is('admin/employee/create') ? 'active open' : ''}}">
-                                <a class="text-capitalize" href="{{route('admin.employee.create')}}">
-                                    <i class="bi bi-dash-lg"></i>
-                                    {{translate('add_new_employee')}}
-                                </a>
-                            </li>
-                        </ul>
-                        <!-- End Sub Menu -->
-                    </li>
-
-                    <li class="{{Request::is('admin/newsletter*')? 'active open' : ''}}">
-                        <a href="{{route('admin.newsletter.index')}}">
-                            <i class="bi bi-wallet-fill"></i>
-                            <span class="link-title text-capitalize">{{translate('Newsletter')}}</span>
-                        </a>
-                    </li>
-                    <!---------- End user Management --------------->
-                @endif
-
-                @if(\Illuminate\Support\Facades\Gate::any(['parcel_view', 'parcel_add', 'parcel_edit', 'parcel_delete', 'parcel_log', 'parcel_export']))
-                    <!---------- Start Parcel Management --------------->
-
-                    <li class="nav-category"
-                        title="{{translate('parcel_management')}}">{{translate('parcel_management')}}</li>
-                    <!-- Parcel Attribute Setup -->
-
-                    <!-- Sub Menu -->
-                    <li class="has-sub-item {{Request::is('admin/parcel*')? 'active sub-menu-opened' : ''}}">
-                        <a href="#">
-                            <i class="bi bi-patch-plus"></i>
-                            <span class="link-title">{{ translate('parcel_Attributes') }}</span>
-                        </a>
-                        <!-- Sub Menu -->
-                        <ul class="nav flex-column sub-menu">
-                            <li class="{{ Request::is('admin/parcel/attribute/category') || Request::is('admin/parcel/attribute/category/edit*')?'active open':'' }}">
-                                <a href="{{ route('admin.parcel.attribute.category.index') }}">
-                                    <i class="bi bi-dash-lg"></i>
-                                    {{ translate('parcel_Categories') }}
-                                </a>
-                            </li>
-                            <li class="{{ Request::is('admin/parcel/attribute/weight') || Request::is('admin/parcel/attribute/weight/edit*')?'active open':'' }}">
-                                <a href={{ route('admin.parcel.attribute.weight.index') }}>
-                                    <i class="bi bi-dash-lg"></i>
-                                    {{ translate('parcel_Weights') }}
-                                </a>
-                            </li>
-                        </ul>
-                        <!-- End Sub Menu -->
-                    </li>
-                    <!-- DParcel Attribute Setup-->
-
-                    <!---------- End Parcel Management --------------->
-                @endif
-
-                @if(\Illuminate\Support\Facades\Gate::any(['store_view', 'store_add', 'store_edit', 'store_delete']))
-                    <!---------- Start Food & Shops --------------->
-                    <li class="nav-category" title="{{ translate('Food_&_Shops') }}">{{ translate('Food_&_Shops') }}</li>
-                    <li class="{{ Request::is('admin/store-orders*') ? 'active open' : '' }}">
-                        <a href="{{ route('admin.store-order.index') }}">
-                            <i class="bi bi-bag-check"></i>
-                            <span class="link-title">{{ translate('Orders') }}</span>
-                        </a>
-                    </li>
-                    <li class="{{ Request::is('admin/stores*') ? 'active open' : '' }}">
-                        <a href="{{ route('admin.store.index') }}">
-                            <i class="bi bi-shop"></i>
-                            <span class="link-title">{{ translate('Partner_Stores') }}</span>
-                        </a>
-                    </li>
-                    @can('store_edit')
-                        <li class="{{ Request::is('admin/store-resellers*') ? 'active open' : '' }}">
-                            <a href="{{ route('admin.store-reseller.index') }}">
-                                <i class="bi bi-people"></i>
-                                <span class="link-title">{{ translate('Resellers') }}</span>
-                            </a>
-                        </li>
-                        <li class="{{ Request::is('admin/store-settings*') ? 'active open' : '' }}">
-                            <a href="{{ route('admin.store-setting.edit') }}">
-                                <i class="bi bi-sliders"></i>
-                                <span class="link-title">{{ translate('Settings') }}</span>
-                            </a>
-                        </li>
-                    @endcan
-                    <!---------- End Food & Shops --------------->
-                @endif
-
-                @if(\Illuminate\Support\Facades\Gate::any(['place_view', 'place_add', 'place_edit', 'place_delete']))
-                    <!---------- Start Explore Bamenda --------------->
-                    <li class="nav-category" title="{{ translate('Explore_Bamenda') }}">{{ translate('Explore_Bamenda') }}</li>
-                    <li class="{{ Request::is('admin/places') || Request::is('admin/places/create') || Request::is('admin/places/*/edit') ? 'active open' : '' }}">
-                        <a href="{{ route('admin.place.index') }}">
-                            <i class="bi bi-geo-alt"></i>
-                            <span class="link-title">{{ translate('Verified_listings') }}</span>
-                        </a>
-                    </li>
-                    <li class="{{ Request::is('admin/homes*') ? 'active open' : '' }}">
-                        <a href="{{ route('admin.listing.index') }}">
-                            <i class="bi bi-house-door"></i>
-                            <span class="link-title">{{ translate('Homes_&_spaces') }}</span>
-                        </a>
-                    </li>
-                    <li class="{{ Request::is('admin/market*') ? 'active open' : '' }}">
-                        <a href="{{ route('admin.market.moderation') }}">
-                            <i class="bi bi-shop"></i>
-                            <span class="link-title">{{ translate('E-Ride Market') }}</span>
-                        </a>
-                    </li>
-                    <li class="{{ Request::is('admin/jobs*') ? 'active open' : '' }}">
-                        <a href="{{ route('admin.jobs.index') }}">
-                            <i class="bi bi-briefcase"></i>
-                            <span class="link-title">{{ translate('E-Ride Jobs') }}</span>
-                        </a>
-                    </li>
-                    <li class="{{ Request::is('admin/bus*') ? 'active open' : '' }}">
-                        <a href="{{ route('admin.bus.index') }}">
-                            <i class="bi bi-bus-front"></i>
-                            <span class="link-title">{{ translate('Bus agencies') }}</span>
-                        </a>
-                    </li>
-                    <li class="{{ Request::is('admin/hotel-partners*') ? 'active open' : '' }}">
-                        <a href="{{ route('admin.hotel.index') }}">
-                            <i class="bi bi-building"></i>
-                            <span class="link-title">{{ translate('Hotel partners') }}</span>
-                        </a>
-                    </li>
-                    <li class="{{ Request::is('admin/assistant*') ? 'active open' : '' }}">
-                        <a href="{{ route('admin.assistant.index') }}">
-                            <i class="bi bi-stars"></i>
-                            <span class="link-title">{{ translate('Ask E-Ride') }}</span>
-                        </a>
-                    </li>
-                    <li class="{{ Request::is('admin/id-verification*') ? 'active open' : '' }}">
-                        <a href="{{ route('admin.id-verification.index') }}">
-                            <i class="bi bi-person-vcard"></i>
-                            <span class="link-title">{{ translate('ID verification') }}</span>
-                            @php($idPending = \Modules\UserManagement\Entities\IdVerification::where('status', 'pending')->count())
-                            @if($idPending)<span class="badge bg-danger ms-auto">{{ $idPending }}</span>@endif
-                        </a>
-                    </li>
-                    <li class="{{ Request::is('admin/places/on-duty*') ? 'active open' : '' }}">
-                        <a href="{{ route('admin.place.on-duty') }}">
-                            <i class="bi bi-capsule"></i>
-                            <span class="link-title">{{ translate('On-duty_pharmacies') }}</span>
-                        </a>
-                    </li>
-                    <li class="{{ Request::is('admin/places/categories*') ? 'active open' : '' }}">
-                        <a href="{{ route('admin.place.categories') }}">
-                            <i class="bi bi-grid"></i>
-                            <span class="link-title">{{ translate('Categories') }}</span>
-                        </a>
-                    </li>
-                    <li class="{{ Request::is('admin/places/google*') ? 'active open' : '' }}">
-                        <a href="{{ route('admin.place.google') }}">
-                            <i class="bi bi-google"></i>
-                            <span class="link-title">{{ translate('Google_results') }}</span>
-                        </a>
-                    </li>
-                    <li class="{{ Request::is('admin/landmarks*') ? 'active open' : '' }}">
-                        <a href="{{ route('admin.landmark.index') }}">
-                            <i class="bi bi-signpost-2"></i>
-                            <span class="link-title">{{ translate('Landmarks') }}</span>
-                        </a>
-                    </li>
-                    @can('place_edit')
-                        <li class="{{ Request::is('admin/place-settings*') ? 'active open' : '' }}">
-                            <a href="{{ route('admin.place-setting.edit') }}">
-                                <i class="bi bi-sliders"></i>
-                                <span class="link-title">{{ translate('Settings') }}</span>
-                            </a>
-                        </li>
-                    @endcan
-                    <!---------- End Explore Bamenda --------------->
-                @endif
-
-                @if(\Illuminate\Support\Facades\Gate::any(['vehicle_view', 'vehicle_add', 'vehicle_edit', 'vehicle_delete', 'vehicle_log', 'vehicle_export']))
-                    <!---------- Start Vehicle Management --------------->
-
-                    <li class="nav-category" title="{{ translate('vehicles_management') }}">
-                        {{ translate('vehicles_management') }}
-                    </li>
-                    <li class="{{Request::is('admin/vehicle/attribute-setup/*')?'active open':''}}">
-                        <a href="{{ route('admin.vehicle.attribute-setup.brand.index') }}">
-                            <i class="bi bi-ev-front-fill"></i>
-                            <span class="link-title text-capitalize">{{ translate('vehicle_attribute_setup') }}</span>
-                        </a>
-                    </li>
-                    <li class="{{Request::is('admin/vehicle/log') || Request::is('admin/vehicle') || Request::is('admin/vehicle/show*') || Request::is('admin/vehicle/edit*')?'active open':''}}">
-                        <a href="{{ route('admin.vehicle.index') }}">
-                            <i class="bi bi-car-front-fill"></i>
-                            <span class="link-title text-capitalize">{{ translate('vehicle_list') }}</span>
-                        </a>
-                    </li>
-                    <li class="{{Request::is('admin/vehicle/request/*') ?'active open':''}}">
-                        <a href="{{ route('admin.vehicle.request.list') }}">
-                            <i class="bi bi-car-front-fill"></i>
-                            <span
-                                class="link-title text-capitalize">{{ translate('new_vehicle_request_list') }}</span>
-                        </a>
-                    </li>
-                    @if(businessConfig('update_vehicle_status', DRIVER_SETTINGS)?->value == 1)
-                        <li class="{{Request::is('admin/vehicle/update/*') ?'active open':''}}">
-                            <a href="{{ route('admin.vehicle.update.list') }}">
-                                <i class="bi bi-car-front-fill"></i>
-                                <span
-                                    class="link-title text-capitalize">{{ translate('update_vehicle_request_list') }}</span>
-                            </a>
-                        </li>
-                    @endif
-                    <li class="{{Request::is('admin/vehicle/create') ?'active open':''}}">
-                        <a href="{{ route('admin.vehicle.create') }}">
-                            <i class="bi bi-truck-front-fill"></i>
-                            <span class="link-title text-capitalize">{{ translate('add_new_vehicle') }}</span>
-                        </a>
-                    </li>
-                    <!---------- End Vehicle Management --------------->
-                @endif
-
-                @if(\Illuminate\Support\Facades\Gate::any(['fare_view', 'fare_add']))
-                    <!---------- Start Fare Management --------------->
-                    <li class="nav-category" title="{{translate('fare_management')}}">{{translate('fare_management')}}</li>
-                    <li class="{{Request::is('admin/fare/trip*')? 'active open' : ''}}">
-                        <a href="{{route('admin.fare.trip.index')}}">
-                            <i class="bi bi-sign-intersection-y-fill"></i>
-                            <span class="link-title text-capitalize">{{translate('trip_fare_setup')}}</span>
-                        </a>
-                    </li>
-                    <li class="{{Request::is('admin/fare/parcel*')? 'active open' : ''}}">
-                        <a href="{{route('admin.fare.parcel.index')}}">
-                            <i class="bi bi-box"></i>
-                            <span class="link-title text-capitalize">{{translate('parcel_delivery_fare_setup')}}</span>
-                        </a>
-                    </li>
-                    <li class="{{Request::is('admin/fare/surge-pricing*')? 'active open' : ''}}">
-                        <a href="{{ route('admin.fare.surge-pricing.index') }}">
-                            <i class="bi bi-cash-stack"></i>
-                            <span class="link-title text-capitalize">{{translate('surge_price')}}</span>
-                        </a>
-                    </li>
-                    <li class="{{Request::is('admin/drop-fares*')? 'active open' : ''}}">
-                        <a href="{{ route('admin.drop-fare.index') }}">
-                            <i class="bi bi-pin-map"></i>
-                            <span class="link-title">{{ translate('Drop fares') }}</span>
-                        </a>
-                    </li>
-                    <!---------- End Fare Management --------------->
-                @endif
-
-                @if(\Illuminate\Support\Facades\Gate::any(['transaction_view', 'transaction_export']))
-                    <!---------- Start Transaction Management --------------->
-                    <li class="nav-category"
-                        title="{{translate('transactions_&_reports')}}">{{translate('transactions_&_reports')}}</li>
-                    <li class="{{Request::is('admin/transaction*')? 'active open' : ''}}">
-                        <a href="{{route('admin.transaction.index')}}">
-                            <i class="bi bi-cash-stack"></i>
-                            <span class="link-title text-capitalize">{{translate('transactions')}}</span>
-                        </a>
-                    </li>
-                    <li class="{{Request::is('admin/report*')? 'active open' : ''}}">
-                        <a href="{{route('admin.report.earning')}}">
-                            <i class="bi bi-cash-stack"></i>
-                            <span class="link-title text-capitalize">{{translate('reports')}}</span>
-                        </a>
-                    </li>
-                    <!---------- End Transaction Management --------------->
-                @endif
-
-                @if(\Illuminate\Support\Facades\Gate::any(['chatting_view']))
-                    <!---------- Start Help and Support Management --------------->
-                    <li class="nav-category"
-                        title="{{ translate('help_&_support') }}">{{ translate('help_&_support') }}</li>
-                    <li class="{{Request::is('admin/chatting*') ?'active open':''}}">
-                        <a href="{{route('admin.chatting')}}">
-                            <i class="bi bi-chat-left-dots"></i>
-                            <span class="link-title">{{ translate('chatting') }}</span>
-                        </a>
-                    </li>
-                    <!---------- End Help and Support Management --------------->
-                @endif
-
-                @if(\Illuminate\Support\Facades\Gate::any(['blog_view']))
-                    <!---------- Start Help and Support Management --------------->
-                    <li class="nav-category"
-                        title="{{ translate('blog_management') }}">{{ translate('blog_management') }}</li>
-                    <li class="{{ request()->routeIs('admin.blog.*') ? 'active open' : '' }}">
-                        <a href="{{ route('admin.blog.index') }}">
-                            <i class="bi bi-layout-text-window"></i>
-                            <span class="link-title">{{ translate('blog_Setup') }}</span>
-                        </a>
-                    </li>
-                    <!---------- End Help and Support Management --------------->
-                @endif
-
-                @if(\Illuminate\Support\Facades\Gate::any(['business_view', 'business_edit', 'business_delete']))
-                    <!---------- Start Business Management --------------->
-                    <li class="nav-category" title="Business Management">{{translate('business_management')}}</li>
-                    <li class="
-                {{Request::is('admin/business/setup*')? 'active sub-menu-opened' : ''}}">
-                        <a href="{{route('admin.business.setup.info.index')}}">
-                            <i class="bi bi-briefcase-fill"></i>
-                            <span class="link-title text-capitalize">{{translate('business_setup')}}</span>
-                        </a>
-
-                    </li>
-                    <li class="has-sub-item {{Request::is('admin/business/pages-media/*')? 'active sub-menu-opened' : ''}}">
-                        <a href="#">
-                            <i class="bi bi-file-earmark-break-fill"></i>
-                            <span class="link-title text-capitalize">{{translate('pages_&_media')}}</span>
-                        </a>
-                        <!-- Sub Menu -->
-                        <ul class="nav sub-menu">
-                            <li class="{{Request::is('admin/business/pages-media/business-page') ? 'active open' : ''}}">
-                                <a class="text-capitalize"
-                                   href="{{route('admin.business.pages-media.business-page.index')}}">
-                                    <i class="bi bi-dash-lg"></i>
-                                    {{translate('business_pages')}}
-                                </a>
-                            </li>
-                            <li class="{{Request::is('admin/business/pages-media/landing-page/*') ? 'active open' : ''}}">
-                                <a class="text-capitalize"
-                                   href="{{route('admin.business.pages-media.landing-page.look.index')}}">
-                                    <i class="bi bi-dash-lg"></i>
-                                    {{translate('landing_Page_Setup')}}
-                                </a>
-                            </li>
-                            <li class="{{Request::is('admin/business/pages-media/social-media') ? 'active open' : ''}}">
-                                <a class="text-capitalize" href="{{route('admin.business.pages-media.social-media')}}">
-                                    <i class="bi bi-dash-lg"></i>
-                                    {{translate('social_media_links')}}
-                                </a>
-                            </li>
-                            <li class="{{Request::is('admin/business/pages-media/additional-data-setup*') ? 'active open' : ''}}">
-                                <a class="text-capitalize" href="{{ route('admin.business.pages-media.additional-data-setup.index', 'customer') }}">
-                                    <i class="bi bi-dash-lg"></i>
-                                    {{translate('Additional Data Setup')}}
-                                </a>
-                            </li>
-                        </ul>
-                        <!-- End Sub Menu -->
-                    </li>
-                    <li class="has-sub-item  {{Request::is('admin/business/configuration*')? 'active sub-menu-opened' : ''}}">
-                        <a href="#">
-                            <i class="bi bi-gear-wide-connected"></i>
-                            <span class="link-title">{{translate('configurations')}}</span>
-                        </a>
-                        <!-- Sub Menu -->
-                        <ul class="nav sub-menu">
-                            <li class="{{Request::is('admin/business/configuration/notification*') ? 'active open' : ''}}">
-                                <a href="{{route('admin.business.configuration.notification.index', ['type' => 'schedule-trip'])}}">
-                                    <i class="bi bi-dash-lg"></i>
-                                    {{translate('Notification')}}
-                                </a>
-                            </li>
-                            <li class="{{Request::is('admin/business/configuration/third-party/*') ? 'active open' : ''}}">
-                                <a href="{{route('admin.business.configuration.third-party.social-login.index')}}"
-                                   class="text-capitalize">
-                                    <i class="bi bi-dash-lg"></i>
-                                    {{translate('3rd_party')}}
-                                </a>
-                            </li>
-                            <li class="{{Request::is('admin/business/configuration/face-verification-api*') ? 'active open' : ''}}">
-                                <a href="{{route('admin.business.configuration.face-verification-api.index')}}"
-                                   class="text-capitalize">
-                                    <i class="bi bi-dash-lg"></i>
-                                    {{translate('Face_Verification_API')}}
-                                </a>
-                            </li>
-                            <li class="{{Request::is('admin/business/configuration/ai-setup*') ? 'active open' : ''}}">
-                                <a href="{{route('admin.business.configuration.ai-setup.index')}}"
-                                   class="text-capitalize">
-                                    <i class="bi bi-dash-lg"></i>
-                                    {{translate('AI_Setup')}}
-                                </a>
-                            </li>
-                            <li class="{{Request::is('admin/business/configuration/login-settings*') ? 'active open' : ''}}">
-                                <a href="{{ route('admin.business.configuration.login-settings.index', ['tab' => 'customer']) }}"
-                                   class="text-capitalize">
-                                    <i class="bi bi-dash-lg"></i>
-                                    {{translate('Login_Settings')}}
-                                </a>
-                            </li>
-                        </ul>
-                        <!-- End Sub Menu -->
-                    </li>
-                    <li class="has-sub-item
-                {{Request::is('admin/business/environment-setup*') ||Request::is('admin/business/app-version-setup*') ||
-                    Request::is('admin/business/clean-database*') || Request::is('admin/business/languages*') || Request::is('admin/business/deep-linking-setup*')? 'active sub-menu-opened' : ''}}">
-                        <a href="#">
-                            <i class="bi bi-sliders2-vertical"></i>
-                            <span class="link-title text-capitalize">{{translate('system_settings')}}</span>
-                        </a>
-                        <!-- Sub Menu -->
-                        <ul class="nav sub-menu">
-                            <li class="{{Request::is('admin/business/environment-setup*') ? 'active open' : ''}}">
-                                <a href="{{route('admin.business.environment-setup.index')}}" class="text-capitalize">
-                                    <i class="bi bi-dash-lg"></i>
-                                    {{translate('environment_setup')}}
-                                </a>
-                            </li>
-                            <li class="{{Request::is('admin/business/app-version-setup*') ? 'active open' : ''}}">
-                                <a href="{{route('admin.business.app-version-setup.index')}}" class="text-capitalize">
-                                    <i class="bi bi-dash-lg"></i>
-                                    {{translate('app_version_setup')}}
-                                </a>
-                            </li>
-                            <li class="{{Request::is('admin/business/clean-database*') ? 'active open' : ''}}">
-                                <a href="{{route('admin.business.clean-database.index')}}" class="text-capitalize">
-                                    <i class="bi bi-dash-lg"></i>
-                                    {{translate('clean_database')}}
-                                </a>
-                            </li>
-                            <li class="{{Request::is('admin/business/languages*') ? 'active open' : ''}}">
-                                <a href="{{route('admin.business.languages.index')}}">
-                                    <i class="bi bi-dash-lg"></i>
-                                    {{translate('languages')}}
-                                </a>
-                            </li>
-                            <li class="{{Request::is('admin/business/deep-linking-setup*') ? 'active open' : ''}}">
-                                <a href="{{route('admin.business.deep-linking.index')}}">
-                                    <i class="bi bi-dash-lg"></i>
-                                    {{translate('Deep Linking Setup')}}
-                                </a>
-                            </li>
-                        </ul>
-                        <!-- End Sub Menu -->
-                    </li>
-                    <!---------- End Business Management --------------->
-                @endif
+                        @endif
+                    @endforeach
+                @endforeach
+                <li class="ed-nav-empty d-none"><span>{{ translate('No page matches. Try other words, or Ctrl + K.') }}</span></li>
             </ul>
-            <!-- End Nav -->
         </div>
     </div>
-    <!-- End Aside Body -->
 </aside>
 
 @push('script')
-    <script src="{{dynamicAsset('public/assets/admin-module/js/admin-module/sidebar.js')}}"></script>
+<script>
+    // Sidebar sections fold (remembered); the one you are in stays open; the search opens what it finds.
+    (function () {
+        var nav = document.getElementById('admin-nav');
+        if (!nav) return;
+        var KEY = 'ed.nav.open', saved = {};
+        try { saved = JSON.parse(localStorage.getItem(KEY) || '{}'); } catch (e) {}
+        var cats = Array.prototype.slice.call(nav.querySelectorAll('.ed-cat'));
+        function items(key) { return Array.prototype.slice.call(nav.querySelectorAll('[data-ed-in="' + key + '"]')); }
+        function hasActive(key) { return items(key).some(function (li) { return li.classList.contains('active'); }); }
+        function show(cat, open) {
+            cat.classList.toggle('ed-open', open);
+            cat.setAttribute('aria-expanded', open ? 'true' : 'false');
+            items(cat.dataset.edSection).forEach(function (li) { li.classList.toggle('ed-hidden', !open); });
+        }
+        function wanted(cat) {
+            var key = cat.dataset.edSection;
+            if (hasActive(key)) return true;
+            if (saved[key] === true || saved[key] === false) return saved[key];
+            return key === 'overview';
+        }
+        cats.forEach(function (cat) {
+            var key = cat.dataset.edSection;
+            show(cat, wanted(cat));
+            var toggle = function () {
+                var now = !cat.classList.contains('ed-open');
+                show(cat, now);
+                saved[key] = now;
+                try { localStorage.setItem(KEY, JSON.stringify(saved)); } catch (e) {}
+            };
+            cat.addEventListener('click', toggle);
+            cat.addEventListener('keydown', function (e) { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); toggle(); } });
+        });
+
+        var input = document.getElementById('admin-nav-search'), empty = nav.querySelector('.ed-nav-empty');
+        if (!input) return;
+        function textOf(a) { return a ? ((a.dataset.edWords || '') + ' ' + a.textContent.toLowerCase()) : ''; }
+        input.addEventListener('input', function () {
+            var words = input.value.toLowerCase().trim().split(/\s+/).filter(Boolean), any = false;
+            var hit = function (a) { var t = textOf(a); return words.every(function (w) { return t.indexOf(w) !== -1; }); };
+            cats.forEach(function (cat) {
+                var key = cat.dataset.edSection;
+                if (!words.length) {
+                    cat.classList.remove('ed-hidden');
+                    items(key).forEach(function (li) { li.querySelectorAll('.sub-menu > li').forEach(function (s) { s.classList.remove('ed-hidden'); }); });
+                    show(cat, wanted(cat));
+                    return;
+                }
+                var secHit = false;
+                items(key).forEach(function (li) {
+                    var subs = li.querySelectorAll('.sub-menu > li'), liHit;
+                    if (subs.length) {
+                        var parentHit = hit(li.querySelector(':scope > a')), n = 0;
+                        subs.forEach(function (s) { var h = parentHit || hit(s.querySelector('a')); s.classList.toggle('ed-hidden', !h); if (h) n++; });
+                        liHit = n > 0;
+                        var ul = li.querySelector('.sub-menu');
+                        if (liHit && ul) { ul.style.display = 'block'; ul.classList.add('open'); li.classList.add('sub-menu-opened'); }
+                    } else {
+                        liHit = hit(li.querySelector('a'));
+                    }
+                    li.classList.toggle('ed-hidden', !liHit);
+                    if (liHit) secHit = true;
+                });
+                cat.classList.toggle('ed-hidden', !secHit);
+                cat.classList.toggle('ed-open', secHit);
+                if (secHit) any = true;
+            });
+            empty.classList.toggle('d-none', !words.length || any);
+        });
+        input.addEventListener('keydown', function (e) {
+            if (e.key === 'Enter') {
+                var first = nav.querySelector('li:not(.ed-hidden):not(.nav-category) li:not(.ed-hidden) > a[href]:not([href="#"]), li:not(.ed-hidden):not(.nav-category) > a[href]:not([href="#"])');
+                if (first) { e.preventDefault(); first.click(); }
+            }
+            if (e.key === 'Escape') { input.value = ''; input.dispatchEvent(new Event('input')); }
+        });
+    })();
+</script>
 @endpush

@@ -36,6 +36,11 @@ Route::group(['prefix' => 'admin', 'as' => 'admin.', 'middleware' => 'admin'], f
         Route::get('fleet-map-zone-message', 'fleetMapZoneMessage')->name('fleet-map-zone-message');
     });
 
+    // Every configuration in one place, in plain words, with what is set up and what is not.
+    Route::get('settings-center', [\Modules\AdminModule\Http\Controllers\Web\Admin\SettingsCenterController::class, 'index'])->name('settings-center');
+    // The business today and this week, and what needs someone (refreshed on the overview).
+    Route::get('business-pulse', [\Modules\AdminModule\Http\Controllers\Web\Admin\SettingsCenterController::class, 'pulse'])->name('business-pulse');
+
     Route::controller(DashboardController::class)->group(function () {
         Route::get('/', 'index')->name('dashboard');
         Route::get('heat-map', 'heatMap')->name('heat-map');

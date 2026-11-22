@@ -57,6 +57,8 @@
     <link rel="stylesheet" href="{{ dynamicAsset('public/assets/admin-module/css/custom.css') }}"/>
     <link rel="stylesheet" href="{{ dynamicAsset('public/assets/admin-module/css/version-three.css') }}"/>
     @include('adminmodule::layouts.css')
+    {{-- The workspace: tabs, menus, "Go to…", status bar (desktop); the bottom bar (phones). --}}
+    @include('adminmodule::partials._desk', ['part' => 'head'])
     <!-- ======= END MAIN STYLES ======= -->
 
     <!-- ======= FOR CUSTOM STYLE ======= -->
@@ -70,6 +72,7 @@
     localStorage.dir && document.querySelector('html').setAttribute("dir", localStorage.dir);
 </script>
 
+@include('adminmodule::partials._desk', ['part' => 'top'])
 <!-- Offcanval Overlay -->
 <div class="offcanvas-overlay"></div>
 <!-- Offcanval Overlay -->
@@ -1237,11 +1240,14 @@
         })
     }
 
-    getNotifications();
-    setInterval(getNotifications, 15000);
+    // Inside a workspace tab the main window already polls: once is enough.
+    if (!window.__edFramed) {
+        getNotifications();
+        setInterval(getNotifications, 15000);
 
-    getSafetyAlerts();
-    setInterval(getSafetyAlerts, 15000);
+        getSafetyAlerts();
+        setInterval(getSafetyAlerts, 15000);
+    }
 
     document.addEventListener("DOMContentLoaded", function () {
         let checkboxes = document.querySelectorAll(".dynamic-checkbox-toggle");
@@ -2036,7 +2042,7 @@
 
 @stack('script')
 @stack('script2')
-
+@include('adminmodule::partials._desk', ['part' => 'bottom'])
 </body>
 
 </html>

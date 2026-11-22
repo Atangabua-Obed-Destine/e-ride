@@ -30,15 +30,7 @@ class GlobalDataServiceProvider extends ServiceProvider
     {
 
 
-        View::composer(
-            'adminmodule::partials._sidebar',
-            function ($view) {
-                $tripCount = [];
-                $parcelRefundCount = [];
-                $view->with('tripCount', $this->getTripCounts());
-                $view->with('parcelRefundCount', $this->getParcelRefundCounts());
-            }
-        );
+        // The sidebar's counts now come from Modules\AdminModule\Lib\AdminNav (cached a minute).
     }
 
 

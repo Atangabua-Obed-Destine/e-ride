@@ -4,17 +4,19 @@
             <div class="col-2">
                 <!-- Header Menu -->
                 <div class="header-toogle-menu d-xl-none">
-                    <button class="toggle-menu-button aside-toggle border-0 bg-transparent p-0 dark-color">
+                    <button class="toggle-menu-button aside-toggle border-0 bg-transparent p-0 dark-color" aria-label="{{ translate('Menu') }}">
                         <i class="bi bi-list fs-3"></i>
                     </button>
                 </div>
                 <!-- End Header Menu -->
+                @include('adminmodule::partials._desk', ['part' => 'toolbar-left'])
             </div>
             <div class="col-10">
                 <!-- Header Right -->
                 <div class="header-right">
                     <ul class="nav justify-content-end align-items-center gap-30">
-                        <li class="d-none d-md-block">
+                        <li>
+                            @include('adminmodule::partials._desk', ['part' => 'search'])
                         </li>
                         @if(externalConfig('activation_mode')?->value ?? 0)
                             <li>
