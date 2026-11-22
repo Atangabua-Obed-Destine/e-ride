@@ -14,6 +14,15 @@ class MarketPush
         if (!$user) {
             return;
         }
+        self::deliver($user, $action, $title, $body, $replace, $data);
+        // The shop's business: its on-duty staff who handle it get it too, with the shop to work as.
+        foreach (ShopTeam::alsoNotify($user, $data) as $staff) {
+            self::deliver($staff->user, $action, $title, $body, $replace, $data + ['as_shop' => (string)$staff->shop_id]);
+        }
+    }
+
+    private static function deliver(User $user, string $action, string $title, string $body, array $replace, array $data): void
+    {
         try {
             $locale = $user->current_language_key;
             sendDeviceNotification(

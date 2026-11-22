@@ -24,7 +24,7 @@
                         </div>
                         <div class="col-sm-6">
                             <label class="form-label fw-semibold">{{ translate('Minimum_order_(FCFA)') }}</label>
-                            <input type="number" name="min_order_amount" class="form-control" min="0" step="1" value="{{ old('min_order_amount', (int)$store->min_order_amount) }}">
+                            <input type="number" name="min_order_amount" class="form-control" min="0" step="1" value="{{ old('min_order_amount', (int)$store->min_order_amount) }}" @if($partnerStaff) disabled @endif>
                         </div>
                         <div class="col-12">
                             <input type="hidden" name="offers_delivery" value="0">
@@ -51,7 +51,7 @@
                     <div class="row g-3">
                         <div class="col-sm-6">
                             <label class="form-label fw-semibold">{{ translate('Your fee for it (FCFA)') }}</label>
-                            <input type="number" name="own_delivery_fee" class="form-control" min="0" step="1" value="{{ old('own_delivery_fee', (int)$store->own_delivery_fee) }}">
+                            <input type="number" name="own_delivery_fee" class="form-control" min="0" step="1" value="{{ old('own_delivery_fee', (int)$store->own_delivery_fee) }}" @if($partnerStaff) disabled @endif>
                             <div class="form-text">{{ translate('0 = free. The customer never pays more than a rider would cost.') }}
                                 @if($storeSettings['own_delivery_share_percent'] > 0)
                                     {{ translate(key: 'E-Ride keeps {percent}% of this fee.', replace: ['percent' => rtrim(rtrim(number_format($storeSettings['own_delivery_share_percent'], 1), '0'), '.')]) }}
@@ -68,7 +68,7 @@
                     </div>
                 </div>
                 @endif
-                @if($storeSettings['reseller_status'])
+                @if($storeSettings['reseller_status'] && !$partnerStaff)
                 <div class="p-card p-3 mb-3">
                     <h2 class="fs-6 fw-bold mb-1">{{ translate('Resellers') }}</h2>
                     <p class="fs-12 text-muted">{{ translate('People who market for others share your store on WhatsApp with their own link. When a customer orders through it, they earn this part of the items, once the order is delivered. It comes out of your earning; E-Ride pays them.') }}</p>
@@ -127,6 +127,7 @@
                         </div>
                     </div>
                 </div>
+                @if(!$partnerStaff)
                 <div class="p-card p-3 mb-3">
                     <h2 class="fs-6 fw-bold mb-1">{{ translate('Payouts') }}</h2>
                     <p class="fs-12 text-muted">{{ translate('Where E-Ride sends your money.') }}</p>
@@ -142,6 +143,7 @@
                     </div>
                     <input type="text" name="payout_name" class="form-control" maxlength="120" placeholder="{{ translate('Account_name') }}" value="{{ old('payout_name', $store->payout_name) }}">
                 </div>
+                @endif
                 <p class="fs-12 text-muted">{{ translate('To change your store name, address or map location, contact E-Ride.') }}</p>
                 <button type="submit" class="btn btn-primary w-100" style="min-height: 50px">{{ translate('Save') }}</button>
             </div>

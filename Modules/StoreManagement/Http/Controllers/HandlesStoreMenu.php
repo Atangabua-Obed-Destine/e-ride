@@ -48,7 +48,9 @@ trait HandlesStoreMenu
             'store' => $brand,
             'kitchens' => $kitchens,
             'kitchen' => $kitchen,
-            'canEditMenu' => !$own->isBranch(),
+            // Staff: the menu only with "menu"; prices and new dishes stay with the owner.
+            'canEditMenu' => !$own->isBranch() && (!($staff = $request->attributes->get('partnerStaff')) || $staff->can('menu')),
+            'canSetPrices' => !$request->attributes->get('partnerStaff'),
             'hasBranches' => $brand->branches->isNotEmpty(),
         ];
     }

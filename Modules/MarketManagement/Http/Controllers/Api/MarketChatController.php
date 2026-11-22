@@ -25,9 +25,17 @@ class MarketChatController extends Controller
     public function inbox(Request $request): JsonResponse
     {
         $viewer = $request->user()->id;
+        $chats = $this->chats->inbox($request->user());
+        $unread = $this->chats->unread($request->user());
+        // Working for a shop: its chats with buyers (and its zama chats), never the owner's own.
+        if ($staff = \Modules\MarketManagement\Lib\ShopTeam::acting($request)) {
+            $chats = $chats->filter(fn(MarketConversation $c) => ($c->seller_id === $viewer && $c->shop_id === $staff->shop_id && $staff->can('chats'))
+                || ($c->zama && $c->buyer_id === $viewer && $staff->can('zama')))->values();
+            $unread = (int)$chats->sum(fn(MarketConversation $c) => $c->roleOf($viewer) === 'buyer' ? $c->buyer_unread : $c->seller_unread);
+        }
         return response()->json(responseFormatter(DEFAULT_200, [
-            'unread' => $this->chats->unread($request->user()),
-            'chats' => $this->chats->inbox($request->user())->map(fn(MarketConversation $c) => MarketPresenter::conversation($c, $viewer))->all(),
+            'unread' => $unread,
+            'chats' => $chats->map(fn(MarketConversation $c) => MarketPresenter::conversation($c, $viewer))->all(),
         ]));
     }
 

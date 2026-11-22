@@ -31,10 +31,19 @@ class MarketSellerController extends Controller
         }
         $items = MarketItem::with('photos')->where('shop_id', $shop->id)->where('status', '!=', MarketItem::REMOVED)->latest()->get();
         $shop->setRelation('items', $items);
+        $data = MarketPresenter::shop($shop, $user->id, true);
+        $staff = \Modules\MarketManagement\Lib\ShopTeam::acting($request);
+        if ($staff && !$staff->can('stats')) {
+            unset($data['stats'], $data['today']);
+        }
         return response()->json(responseFormatter(DEFAULT_200, [
-            'shop' => MarketPresenter::shop($shop, $user->id, true),
+            'shop' => $data,
             'items' => $items->map(fn(MarketItem $i) => MarketPresenter::item($i->setRelation('shop', $shop), $user->id))->all(),
             'cannot_open_reason' => $this->shops->cannotOpenReason($user),
+            // Working for the shop: what this person may do (the app hides the rest).
+            'acting' => $staff ? ['role' => $staff->role, 'permissions' => array_values((array)$staff->permissions)] : null,
+            'team_count' => $staff ? null : \Modules\MarketManagement\Entities\MarketShopStaff::where('shop_id', $shop->id)
+                ->where('status', \Modules\MarketManagement\Entities\MarketShopStaff::ACTIVE)->count(),
         ]));
     }
 

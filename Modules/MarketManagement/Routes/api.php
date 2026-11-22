@@ -9,11 +9,24 @@ use Modules\MarketManagement\Http\Controllers\Api\MarketBookingController;
 use Modules\MarketManagement\Http\Controllers\Api\MarketSellerController;
 use Modules\MarketManagement\Http\Controllers\Api\MarketVenueController;
 use Modules\MarketManagement\Http\Controllers\Api\MarketZamaController;
+use Modules\MarketManagement\Http\Controllers\Api\MarketTeamController;
 
 /*
 | E-Ride Market, customer app. Shops and items are found by their public slug / code.
 */
-Route::group(['prefix' => 'customer/market', 'middleware' => ['auth:api', 'maintenance_mode']], function () {
+// MarketShopAs: a staff member working for a shop (X-Shop-As) acts as its owner, on the shop's side only.
+Route::group(['prefix' => 'customer/market', 'middleware' => ['auth:api', 'maintenance_mode', \Modules\MarketManagement\Http\Middleware\MarketShopAs::class]], function () {
+    // The shop team: the owner's side, and the shops someone works for.
+    Route::get('team', [MarketTeamController::class, 'index']);
+    Route::get('team/mine', [MarketTeamController::class, 'mine']);
+    Route::middleware('throttle:30,1,market-team')->group(function () {
+        Route::post('team/invite', [MarketTeamController::class, 'invite']);
+        Route::post('team/mine/{id}/answer', [MarketTeamController::class, 'answer']);
+        Route::post('team/mine/{id}/duty', [MarketTeamController::class, 'duty']);
+        Route::post('team/mine/{id}/leave', [MarketTeamController::class, 'leave']);
+        Route::post('team/{id}', [MarketTeamController::class, 'update']);
+        Route::post('team/{id}/remove', [MarketTeamController::class, 'remove']);
+    });
     Route::middleware('throttle:120,1,market-read')->group(function () {
         Route::get('meta', [MarketController::class, 'meta']);
         Route::get('feed', [MarketController::class, 'feed']);

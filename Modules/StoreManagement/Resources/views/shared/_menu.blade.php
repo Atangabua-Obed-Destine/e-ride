@@ -17,6 +17,7 @@
     $kitchens = $kitchens ?? collect([$store]);
     $kitchen = $kitchen ?? $store;
     $canEditMenu = $canEditMenu ?? true;
+    $canSetPrices = $canSetPrices ?? true;
     $hasBranches = $hasBranches ?? false;
     $kitchenStates = $kitchen->stateMap();
     $view = !$canEditMenu ? 'today'
@@ -100,7 +101,7 @@
             @endif
         </ul>
         @if($view === 'full')
-            <button type="button" class="btn btn-primary" data-menu-item-new><i class="bi bi-plus-lg"></i> {{ translate('Add_item') }}</button>
+            @if($canSetPrices)<button type="button" class="btn btn-primary" data-menu-item-new><i class="bi bi-plus-lg"></i> {{ translate('Add_item') }}</button>@endif
         @endif
     </div>
 
@@ -282,7 +283,7 @@
                 <div class="row g-3 mb-3">
                     <div class="col-6">
                         <label class="form-label">{{ translate('Price_(FCFA)') }} *</label>
-                        <input type="number" name="price" class="form-control" required min="1" step="1">
+                        <input type="number" name="price" class="form-control" required min="1" step="1" @unless($canSetPrices) readonly title="{{ translate('Only the owner changes prices.') }}" @endunless>
                     </div>
                     <div class="col-6">
                         <label class="form-label">{{ translate('Section') }}</label>
@@ -378,7 +379,9 @@
             }
             modal.show();
         };
-        document.querySelector('[data-menu-item-new]').addEventListener('click', function () { open(form.dataset.newAction, null); });
+        // Staff do not add dishes (they come with a price): no button then.
+        var addItem = document.querySelector('[data-menu-item-new]');
+        if (addItem) addItem.addEventListener('click', function () { open(form.dataset.newAction, null); });
         document.querySelectorAll('[data-menu-item-edit]').forEach(function (b) {
             b.addEventListener('click', function () { open(b.dataset.action, JSON.parse(b.dataset.item)); });
         });

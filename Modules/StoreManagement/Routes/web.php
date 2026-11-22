@@ -95,6 +95,12 @@ Route::group(['prefix' => 'partner', 'as' => 'partner.'], function () {
         Route::delete('riders/{driver}', [PartnerRiderController::class, 'remove'])->name('riders.remove');
         Route::get('earnings', [PortalController::class, 'earnings'])->name('earnings');
         Route::get('share', [PortalController::class, 'share'])->name('share');
+        // The team (the owner's only: staff logins are refused by PartnerMiddleware).
+        Route::get('team', [\Modules\StoreManagement\Http\Controllers\Web\Partner\PartnerTeamController::class, 'index'])->name('team');
+        Route::post('team', [\Modules\StoreManagement\Http\Controllers\Web\Partner\PartnerTeamController::class, 'add'])->name('team.add');
+        Route::post('team/{staff}', [\Modules\StoreManagement\Http\Controllers\Web\Partner\PartnerTeamController::class, 'update'])->name('team.update');
+        Route::post('team/{staff}/password', [\Modules\StoreManagement\Http\Controllers\Web\Partner\PartnerTeamController::class, 'password'])->name('team.password');
+        Route::post('team/{staff}/remove', [\Modules\StoreManagement\Http\Controllers\Web\Partner\PartnerTeamController::class, 'remove'])->name('team.remove');
     });
 });
 
