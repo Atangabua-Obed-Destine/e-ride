@@ -45,9 +45,25 @@ if (!function_exists('translate')) {
             $translatedValue = str_replace(['{', '}'], [':', ''], $defaultValue);
 
             if (!array_key_exists($normalizedKey, $translations)) {
-                $translations[$normalizedKey] = $locale === 'en'
-                    ? $translatedValue
-                    : autoTranslator(q: $defaultValue, sl: 'en', tl: $locale);
+                if ($locale === 'en') {
+                    $translations[$normalizedKey] = $translatedValue;
+                } else {
+                    // A key missing from this language is machine translated once and
+                    // kept in the cache. On the server the web user cannot write the
+                    // language file, so without the cache every page view called
+                    // Google again for every missing key (a French admin page took
+                    // over a minute). When Google refuses, the English text is shown
+                    // and Google is left alone for ten minutes.
+                    $cacheKey = 'lang_auto_' . $locale . '_' . md5($normalizedKey);
+                    $machine = Cache::get($cacheKey);
+                    if (!is_string($machine) || $machine === '') {
+                        $machine = Cache::has('lang_auto_down') ? '' : autoTranslator(q: $defaultValue, sl: 'en', tl: $locale);
+                        if ($machine !== '') {
+                            Cache::forever($cacheKey, $machine);
+                        }
+                    }
+                    $translations[$normalizedKey] = $machine !== '' ? $machine : $translatedValue;
+                }
 
                 // Caching the new key is best effort. When the web server cannot
                 // write the language file, the failed write used to throw, and
@@ -438,9 +454,19 @@ if (!function_exists('autoTranslator')){
         }, $q);
 
         $url = "https://translate.googleapis.com/translate_a/single?client=gtx&sl=$sl&tl=$tl&dt=t&q=" . urlencode($q);
-        $res = file_get_contents($url);
+        // Short timeout: a page must never wait on this. A refusal (429) or a
+        // timeout pauses machine translation for ten minutes.
+        $context = stream_context_create(['http' => ['timeout' => 3, 'ignore_errors' => false]]);
+        $res = @file_get_contents($url, false, $context);
+        if ($res === false) {
+            Cache::put('lang_auto_down', 1, 600);
+            return '';
+        }
         $res = json_decode($res, true);
-        $translated = $res[0][0][0] ?? '';
+        $translated = '';
+        foreach ((array)($res[0] ?? []) as $part) {
+            $translated .= is_array($part) ? (string)($part[0] ?? '') : '';
+        }
 
         foreach ($placeholders as $token => $original) {
             $translated = str_ireplace($token, $original, $translated);
