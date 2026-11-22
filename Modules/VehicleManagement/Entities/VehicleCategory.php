@@ -24,6 +24,10 @@ class VehicleCategory extends Model
         'description',
         'image',
         'type',
+        'seats',
+        'bags',
+        'features',
+        'gallery',
         'is_active',
         'deleted_at',
         'created_at',
@@ -37,6 +41,10 @@ class VehicleCategory extends Model
      */
     protected $casts = [
         'is_active' => 'boolean',
+        'seats' => 'integer',
+        'bags' => 'integer',
+        'features' => 'array',
+        'gallery' => 'array',
     ];
 
     public function vehicles()

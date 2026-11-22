@@ -22,6 +22,7 @@ class VehicleCategoryResource extends JsonResource
             'type' => $this->type,
             // For E-Ride Move: what the vehicle fits ("A 2-bedroom flat").
             'description' => $this->description,
+            'seats' => $this->seats,
             'fare' => TripFareResource::collection($this->whenLoaded('tripFares'))
         ];
     }

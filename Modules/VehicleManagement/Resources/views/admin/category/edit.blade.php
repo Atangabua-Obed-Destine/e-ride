@@ -3,6 +3,11 @@
 @extends('adminmodule::layouts.master')
 
 @push('css_or_js')
+    <style>
+        .ed-cat-photo { display: flex; flex-direction: column; gap: 6px; width: 150px; cursor: pointer; }
+        .ed-cat-photo img { width: 150px; height: 100px; object-fit: cover; border-radius: 6px; border: 1px solid rgba(0,0,0,.1); }
+        .ed-cat-photo:has(input:checked) img { opacity: .35; outline: 2px solid var(--bs-danger, #dc3545); }
+    </style>
 @endpush
 
 @section('content')
@@ -96,6 +101,54 @@
                                     </div>
                                 </div>
 
+                                @php
+                                    $galleryBase = dynamicStorage('storage/app/public/vehicle/category/gallery');
+                                    $gallery = array_values(array_filter((array)($category->gallery ?? [])));
+                                    $maxPhotos = \Modules\VehicleManagement\Lib\CategoryDetails::MAX_PHOTOS;
+                                @endphp
+                                <div class="border-top pt-4 mt-2 mb-4" id="customer-details">
+                                    <h5 class="text-primary mb-1">{{ translate('What customers see before booking') }}</h5>
+                                    <p class="opacity-75 mb-4">{{ translate('Customers open these details from Trip Setup, next to the fare for their trip. They also see the vehicle models your drivers have in this category.') }}</p>
+                                    <div class="row g-4">
+                                        <div class="col-sm-6 col-lg-3">
+                                            <label for="seats" class="mb-2">{{ translate('Passenger seats') }}</label>
+                                            <input type="number" id="seats" name="seats" min="1" max="60" class="form-control"
+                                                   value="{{ old('seats', $category->seats) }}" placeholder="{{ translate('Ex : 4') }}">
+                                        </div>
+                                        <div class="col-sm-6 col-lg-3">
+                                            <label for="bags" class="mb-2">{{ translate('Bags that fit') }}</label>
+                                            <input type="number" id="bags" name="bags" min="0" max="60" class="form-control"
+                                                   value="{{ old('bags', $category->bags) }}" placeholder="{{ translate('Ex : 2') }}">
+                                        </div>
+                                        <div class="col-lg-6">
+                                            <label for="features" class="mb-2">{{ translate('Features') }}</label>
+                                            <textarea id="features" name="features" rows="4" maxlength="700" class="form-control"
+                                                      placeholder="{{ translate('One per line, up to 8. Ex: Air conditioning') }}">{{ old('features', implode("\n", (array)($category->features ?? []))) }}</textarea>
+                                            <small class="opacity-75">{{ translate('One per line, up to 8. Ex: Air conditioning') }}</small>
+                                        </div>
+                                        <div class="col-12">
+                                            <label class="mb-2 d-block">{{ translate('Example photos') }}</label>
+                                            <p class="opacity-75 mb-3">{{ translate(key: 'Up to {count} photos of the kind of vehicle (jpg, png or webp). Customers swipe through them.', replace: ['count' => $maxPhotos]) }}</p>
+                                            @if(count($gallery))
+                                                <div class="d-flex flex-wrap gap-3 mb-3">
+                                                    @foreach($gallery as $photo)
+                                                        <label class="ed-cat-photo">
+                                                            <img src="{{ $galleryBase . '/' . $photo }}" alt="" loading="lazy">
+                                                            <span class="d-flex align-items-center gap-2">
+                                                                <input type="checkbox" name="gallery_remove[]" value="{{ $photo }}">
+                                                                {{ translate('Remove') }}
+                                                            </span>
+                                                        </label>
+                                                    @endforeach
+                                                </div>
+                                            @endif
+                                            <input type="file" name="gallery[]" multiple accept=".jpg,.jpeg,.png,.webp" class="form-control" style="max-width: 420px"
+                                                   id="gallery_input" data-room="{{ max(0, $maxPhotos - count($gallery)) }}">
+                                            <small class="opacity-75 d-block mt-1" id="gallery_room">{{ translate(key: 'You can add {count} more.', replace: ['count' => max(0, $maxPhotos - count($gallery))]) }}</small>
+                                        </div>
+                                    </div>
+                                </div>
+
                                 <div class="d-flex justify-content-end gap-3">
                                     <button type="reset" id="reset_btn"
                                         class="btn btn-secondary cmn_reset">{{ translate('reset') }}</button>
@@ -120,6 +173,16 @@
         let defaultImageSrc = '{{ dynamicAsset('public/assets/admin-module/img/media/upload-file.png') }}';
         let imageElement = $('#image_id');
         let fileInput = $('.upload-file__input');
+
+        // Removing photos makes room for new ones; more than fits is refused before sending.
+        $('#gallery_input').closest('form').on('submit', function (e) {
+            let input = document.getElementById('gallery_input');
+            let room = parseInt(input.dataset.room || '0', 10) + $('input[name="gallery_remove[]"]:checked').length;
+            if (input.files.length > room) {
+                e.preventDefault();
+                toastr.error('{{ translate('Too many photos') }}: ' + input.files.length + ' / ' + room);
+            }
+        });
 
         resetButton.on('click', function() {
             imageElement.attr('src', defaultImageSrc);

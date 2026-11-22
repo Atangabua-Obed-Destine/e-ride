@@ -24,6 +24,14 @@ class VehicleCategoryStoreUpdateRequest extends FormRequest
                 'image',
                 'mimes:png',
                 'max:' . convertBytesToKiloBytes(maxUploadSize('image'))],
+            // What customers see before booking (Trip Setup, category details).
+            'seats' => 'nullable|integer|min:1|max:60',
+            'bags' => 'nullable|integer|min:0|max:60',
+            'features' => 'nullable|string|max:700',
+            'gallery' => 'nullable|array|max:' . \Modules\VehicleManagement\Lib\CategoryDetails::MAX_PHOTOS,
+            'gallery.*' => 'image|mimes:jpg,jpeg,png,webp|max:' . convertBytesToKiloBytes(maxUploadSize('image')),
+            'gallery_remove' => 'nullable|array',
+            'gallery_remove.*' => 'string|max:120',
         ];
     }
     public function messages()

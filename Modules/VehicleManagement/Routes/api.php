@@ -15,6 +15,7 @@ Route::group(['prefix' => 'customer'], function () {
         Route::group(['prefix' => 'category'], function () {
             Route::controller(CustomerVehicleCategoryController::class)->group(function () {
                 Route::get('/', 'categoryFareList');
+                Route::get('details/{id}', 'details');
             });
         });
     });

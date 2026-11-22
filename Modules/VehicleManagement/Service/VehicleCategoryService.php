@@ -25,6 +25,10 @@ class VehicleCategoryService extends BaseService implements VehicleCategoryServi
             'description' => $data['short_desc'],
             'type' => $data['type'],
             'image' => fileUploader('vehicle/category/', APPLICATION_IMAGE_FORMAT, $data['category_image']),
+            'seats' => $data['seats'] ?? null,
+            'bags' => $data['bags'] ?? null,
+            'features' => \Modules\VehicleManagement\Lib\CategoryDetails::parseFeatures($data['features'] ?? null),
+            'gallery' => \Modules\VehicleManagement\Lib\CategoryDetails::gallery([], [], $data['gallery'] ?? []),
         ];
         return $this->vehicleCategoryRepository->create($storeData);
     }
@@ -37,6 +41,14 @@ class VehicleCategoryService extends BaseService implements VehicleCategoryServi
             'description' => $data['short_desc'],
             'type' => $data['type'],
         ];
+        // The details customers see; only when the form sent them (the edit page does).
+        if (array_key_exists('seats', $data) || array_key_exists('features', $data) || array_key_exists('gallery', $data) || array_key_exists('gallery_remove', $data)) {
+            $updateData['seats'] = $data['seats'] ?? null;
+            $updateData['bags'] = $data['bags'] ?? null;
+            $updateData['features'] = \Modules\VehicleManagement\Lib\CategoryDetails::parseFeatures($data['features'] ?? null);
+            $updateData['gallery'] = \Modules\VehicleManagement\Lib\CategoryDetails::gallery((array)($model?->gallery ?? []), $data['gallery_remove'] ?? [], $data['gallery'] ?? []);
+        }
+        \Modules\VehicleManagement\Lib\CategoryDetails::forget($id);
         if (array_key_exists('category_image', $data)) {
             $updateData = array_merge($updateData, [
                 'image' => fileUploader('vehicle/category/', APPLICATION_IMAGE_FORMAT, $data['category_image'], $model?->image)

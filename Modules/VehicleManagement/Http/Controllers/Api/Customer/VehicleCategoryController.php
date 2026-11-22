@@ -44,4 +44,14 @@ class VehicleCategoryController extends Controller
 
         return response()->json(responseFormatter(constant: DEFAULT_200, content: $data, limit: $request['limit'], offset: $request['offset']), 200);
     }
+
+    /** A category's details for the customer: seats, features, example photos, real vehicle models. */
+    public function details(string $id): JsonResponse
+    {
+        $category = \Modules\VehicleManagement\Entities\VehicleCategory::query()->where('is_active', 1)->find($id);
+        if (!$category) {
+            return response()->json(responseFormatter(DEFAULT_404), 404);
+        }
+        return response()->json(responseFormatter(constant: DEFAULT_200, content: \Modules\VehicleManagement\Lib\CategoryDetails::payload($category)));
+    }
 }
