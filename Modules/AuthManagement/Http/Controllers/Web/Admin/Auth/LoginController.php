@@ -22,7 +22,10 @@ class LoginController extends BaseController
         $this->employeeService = $employeeService;
         $this->externalConfigurationService = $externalConfigurationService;
         $this->middleware(function ($request, $next) {
-            if (auth()->check()) {
+            // Only an admin goes straight to the dashboard. Partner portals (stores,
+            // hotels, bus agencies) share this login session: sending a signed-in
+            // partner to the dashboard bounced them back here, in an endless loop.
+            if (auth()->check() && in_array(auth()->user()->user_type, ['super-admin', 'admin-employee'], true)) {
                 return redirect(route('admin.dashboard'));
             }
             return $next($request);
