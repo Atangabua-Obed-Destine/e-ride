@@ -368,12 +368,30 @@ class PosChannelService
     public function suggestions(StorePosLink $link): Collection
     {
         $menu = $link->store->brand()->items()->get();
-        $byName = $menu->keyBy(fn($i) => Str::lower(Str::squish($i->name)));
+        $byName = $menu->keyBy(fn($i) => self::nameKey($i->name));
         return $link->items()->whereNull('removed_at')->whereNull('store_item_id')->get()
             ->mapWithKeys(function (StorePosItem $p) use ($byName) {
-                $hit = $byName->get(Str::lower(Str::squish($p->fullName()))) ?? $byName->get(Str::lower(Str::squish($p->name)));
+                $hit = $byName->get(self::nameKey($p->fullName())) ?? $byName->get(self::nameKey($p->name));
                 return [$p->id => $hit?->id];
             });
+    }
+
+    /** "Rice, 5 kg" and "Rice 5 kg" are the same name: case, punctuation and spacing ignored. */
+    public static function nameKey(string $name): string
+    {
+        return Str::squish(preg_replace('/[^\p{L}\p{N}.]+/u', ' ', Str::lower($name)));
+    }
+
+    /** The menu name of a POS product: its unit too when it is sold by more than a piece ("Water 1.5 L (Pack of 6)"). */
+    public static function menuName(StorePosItem $item): string
+    {
+        $name = $item->fullName();
+        $unit = trim((string)$item->unit);
+        if ($unit !== '' && !in_array(Str::lower($unit), ['piece', 'pieces', 'pc', 'pcs', 'unit', 'units', 'each', 'item'], true)
+            && !Str::contains(Str::lower($name), Str::lower($unit))) {
+            $name .= ' (' . $unit . ')';
+        }
+        return $name;
     }
 
     /** Links a POS item to a menu item (or unlinks with null) and applies its stock at once. */
@@ -408,7 +426,7 @@ class PosChannelService
         $menu = StoreItem::create([
             'store_id' => $brand->id,
             'store_menu_category_id' => $categoryId && $brand->categories()->whereKey($categoryId)->exists() ? $categoryId : null,
-            'name' => Str::limit($item->fullName(), 120, ''),
+            'name' => Str::limit(self::menuName($item), 120, ''),
             'description' => $item->description ? Str::limit($item->description, 500, '') : null,
             'price' => max(1, $item->price),
             'is_available' => true,
