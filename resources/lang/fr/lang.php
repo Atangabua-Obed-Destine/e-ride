@@ -6353,4 +6353,6 @@
   'Not yet rung up in POS' => 'Pas encore encaissé au POS',
   'POS sale is less than the order' => 'Vente POS inférieure à la commande',
   'Set up' => 'Configurer',
+  'Its stock comes from POS Innova: change it there.' => 'Son stock vient de POS Innova : modifiez-le là-bas.',
+  'POS stock' => 'Stock POS',
 );

@@ -57,6 +57,7 @@
     .tm__row img, .tm__row .tm__noimg { width: 40px; height: 40px; border-radius: 6px; object-fit: cover; flex: none; background: #f4f4f6; }
     .tm__name { font-weight: 700; font-size: 14px; line-height: 1.2; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
     .tm__sub { font-size: 12px; color: var(--muted); }
+    .tm__pos { margin-left: auto; white-space: nowrap; font-size: 12px; font-weight: 700; color: var(--muted); }
     .tm__row .btn { margin-left: auto; white-space: nowrap; font-size: 12px; font-weight: 700; border-radius: 6px; }
     .prep { display: grid; grid-template-columns: repeat(auto-fit, minmax(42px, 1fr)); gap: 6px; }
     .prep button { min-height: 44px; border-radius: 12px; border: 1px solid var(--line); background: #fff; font-weight: 800; }
@@ -159,7 +160,9 @@
                                                 <div class="tm__name">{{ $it['name'] }}</div>
                                                 <div class="tm__sub">{{ $it['price'] }}@if($g === 'later' && $it['from']) · {{ translate(key: 'from {time}', replace: ['time' => $it['from']]) }}@elseif($g === 'now' && $it['until']) · {{ translate(key: 'until {time}', replace: ['time' => $it['until']]) }}@endif</div>
                                             </div>
-                                            @if($canToggle)
+                                            @if($it['pos'])
+                                                <span class="tm__pos" title="{{ translate('Its stock comes from POS Innova: change it there.') }}"><i class="bi bi-pc-display"></i> {{ translate('POS stock') }}</span>
+                                            @elseif($canToggle)
                                                 @if($g === 'sold_out')
                                                     <button type="button" class="btn btn-sm btn-outline-success" data-tm-set="available" data-item="{{ $it['id'] }}" data-kitchen="{{ $k['id'] }}">{{ translate('Back on sale') }}</button>
                                                 @else

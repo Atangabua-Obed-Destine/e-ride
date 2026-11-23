@@ -67,6 +67,10 @@ class PartnerOrderController extends Controller
         $out = [];
         foreach ($kitchens as $kitchen) {
             $states = $kitchen->stateMap();
+            // Items whose stock comes from this kitchen's POS Innova: POS decides, not a button here.
+            $fromPos = \Modules\StoreManagement\Entities\StorePosItem::whereNull('removed_at')->whereNotNull('store_item_id')
+                ->whereIn('link_id', \Modules\StoreManagement\Entities\StorePosLink::where('store_id', $kitchen->id)->whereNull('revoked_at')->select('id'))
+                ->pluck('store_item_id')->flip();
             $groups = ['now' => [], 'later' => [], 'sold_out' => []];
             $notToday = 0;
             foreach ($items as $i) {
@@ -78,6 +82,7 @@ class PartnerOrderController extends Controller
                     'image' => $i->imageUrl(),
                     'from' => $i->effectiveWindow()[0] ?? null,
                     'until' => $i->effectiveWindow()[1] ?? null,
+                    'pos' => $fromPos->has($i->id),
                 ];
                 match ($state) {
                     \Modules\StoreManagement\Entities\StoreItem::AVAILABLE => $groups['now'][] = $row,
