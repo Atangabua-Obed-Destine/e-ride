@@ -94,6 +94,9 @@ Route::group(['prefix' => 'customer/market', 'middleware' => ['auth:api', 'maint
     Route::post('orders/{id}/complete', [MarketOrderController::class, 'complete'])->middleware('throttle:8,1,market-code');
     Route::middleware('throttle:30,1,market-write')->group(function () {
         Route::post('shop', [MarketSellerController::class, 'saveShop']);
+        Route::post('shop/look', [MarketSellerController::class, 'saveLook']);
+        Route::post('shop/look/design', [MarketSellerController::class, 'saveLookDesign']);
+        Route::post('shop/look/design/remove', [MarketSellerController::class, 'removeLookDesign']);
         Route::post('shop/verification', [MarketSellerController::class, 'requestVerification']);
         Route::post('items', [MarketSellerController::class, 'storeItem']);
         Route::post('items/{code}/update', [MarketSellerController::class, 'updateItem']);

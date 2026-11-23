@@ -54,6 +54,7 @@ Route::group(['prefix' => 'partner/bus-agency', 'as' => 'bus-partner.'], functio
         Route::get('sell', [SellController::class, 'index'])->name('sell');
         Route::get('sell/{departure}/seats', [SellController::class, 'seats'])->name('sell.seats')->whereUuid('departure');
         Route::post('sell/{departure}', [SellController::class, 'sell'])->name('sell.submit')->whereUuid('departure')->middleware('throttle:60,1,bus-sell');
+        Route::get('share', [\Modules\BusManagement\Http\Controllers\Web\Partner\ShareController::class, 'index'])->name('share');
         Route::get('collect', [CollectController::class, 'index'])->name('collect');
         Route::get('collect/lookup', [CollectController::class, 'lookup'])->name('collect.lookup')->middleware('throttle:120,1,bus-collect');
 
@@ -91,6 +92,9 @@ Route::group(['prefix' => 'partner/bus-agency', 'as' => 'bus-partner.'], functio
         Route::get('payments/statements/{statement}/csv', [PaymentController::class, 'csv'])->name('payments.statement.csv')->whereUuid('statement');
         Route::post('payments/statements/{statement}/pay', [PaymentController::class, 'pay'])->name('payments.statement.pay')->whereUuid('statement')->middleware('throttle:10,1,bus-statement-pay');
 
+        Route::post('share/look', [\Modules\BusManagement\Http\Controllers\Web\Partner\ShareController::class, 'saveLook'])->name('share.look');
+        Route::post('share/design', [\Modules\BusManagement\Http\Controllers\Web\Partner\ShareController::class, 'saveDesign'])->name('share.design')->middleware('throttle:10,1,bus-share-design');
+        Route::post('share/design/remove', [\Modules\BusManagement\Http\Controllers\Web\Partner\ShareController::class, 'removeDesign'])->name('share.design.remove');
         Route::get('staff', [StaffController::class, 'index'])->name('staff');
         Route::post('staff', [StaffController::class, 'store'])->name('staff.store');
         Route::post('staff/{staff}/toggle', [StaffController::class, 'toggle'])->name('staff.toggle')->whereNumber('staff');

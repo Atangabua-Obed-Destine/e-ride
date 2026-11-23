@@ -8,11 +8,19 @@
 @endif
 
 @section('body')
+@php($ownLook = \App\Lib\ShareLooks::page('market', $shop->id))
+@if($ownLook)
+<style>
+.own-band{background:{{ $ownLook['color'] }};color:{{ $ownLook['ink'] }}}
+.own-band .muted,.own-band .open,.own-band .shut,.own-band .verified,.own-band .badge,.own-band a:not(.chip){color:inherit!important;opacity:.92}
+.own-band .tag{background:#fff;color:#1D2D2B}
+</style>
+@endif
 <div class="bar">
     <a class="brand" href="{{ $url }}">E-RIDE <span>MARKET</span></a>
     <a class="pill" href="{{ $openApp }}">{{ $t['open_app'] }}</a>
 </div>
-<div style="padding:16px;display:flex;gap:14px;align-items:center">
+<div class="{{ $ownLook ? 'own-band' : '' }}" style="padding:16px;display:flex;gap:14px;align-items:center">
     @if($shop->logoUrl())
         <img src="{{ $shop->logoUrl() }}" alt="" style="width:72px;height:72px;border-radius:20px;object-fit:cover;background:#EEF0F0">
     @else

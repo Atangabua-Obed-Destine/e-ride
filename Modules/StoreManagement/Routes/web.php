@@ -95,6 +95,9 @@ Route::group(['prefix' => 'partner', 'as' => 'partner.'], function () {
         Route::delete('riders/{driver}', [PartnerRiderController::class, 'remove'])->name('riders.remove');
         Route::get('earnings', [PortalController::class, 'earnings'])->name('earnings');
         Route::get('share', [PortalController::class, 'share'])->name('share');
+        Route::post('share/look', [PortalController::class, 'saveLook'])->name('share.look');
+        Route::post('share/design', [PortalController::class, 'saveDesign'])->name('share.design')->middleware('throttle:10,1,store-share-design');
+        Route::post('share/design/remove', [PortalController::class, 'removeDesign'])->name('share.design.remove');
         // The team (the owner's only: staff logins are refused by PartnerMiddleware).
         Route::get('team', [\Modules\StoreManagement\Http\Controllers\Web\Partner\PartnerTeamController::class, 'index'])->name('team');
         Route::post('team', [\Modules\StoreManagement\Http\Controllers\Web\Partner\PartnerTeamController::class, 'add'])->name('team.add');

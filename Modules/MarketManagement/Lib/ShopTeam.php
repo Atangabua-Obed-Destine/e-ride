@@ -69,6 +69,9 @@ class ShopTeam
         'zama/quotes/{messageId}/deal' => 'zama',
         'shop/order-settings' => 'settings',
         'shop/service-settings' => 'settings',
+        'shop/look' => 'settings',
+        'shop/look/design' => 'settings',
+        'shop/look/design/remove' => 'settings',
     ];
 
     /** Item fields staff never send: the owner sets prices (and what zama resellers pay). */

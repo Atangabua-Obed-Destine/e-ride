@@ -46,6 +46,7 @@ class StoreTeam
         'partner.riders' => 'riders', 'partner.riders.add' => 'riders', 'partner.riders.mode' => 'riders', 'partner.riders.remove' => 'riders',
         'partner.earnings' => 'earnings',
         'partner.share' => null,
+        'partner.share.look' => 'settings', 'partner.share.design' => 'settings', 'partner.share.design.remove' => 'settings',
     ];
 
     /** Store settings staff never send. */

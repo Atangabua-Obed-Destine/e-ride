@@ -13,6 +13,7 @@
         $role === BusStaff::MANAGER ? ['bus-partner.fleet', 'bi-bus-front', translate('Fleet')] : null,
         $role === BusStaff::MANAGER ? ['bus-partner.payments', 'bi-wallet2', translate('Payments')] : null,
         $role === BusStaff::MANAGER ? ['bus-partner.staff', 'bi-people', translate('Staff')] : null,
+        $role !== BusStaff::BOARDING ? ['bus-partner.share', 'bi-share', translate('Share')] : null,
     ]));
     $statusLabel = match ($busAgency->status) {
         BusAgency::LIVE => [translate('Taking bookings'), 'is-live'],

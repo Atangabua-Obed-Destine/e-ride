@@ -157,6 +157,8 @@ class MarketController extends Controller
             'following' => $this->shops->follows($viewer, $shop->id),
             'follow_notify' => $this->shops->followNotify($viewer, $shop->id),
             'blocked' => $this->shops->blocked($viewer, $shop->id),
+            // The shop's own colour for the top of its page (null: E-Ride's look).
+            'brand' => \App\Lib\ShareLooks::page('market', $shop->id),
         ]));
     }
 

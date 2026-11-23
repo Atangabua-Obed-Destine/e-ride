@@ -159,6 +159,7 @@ class AdminNav
                 ['title' => 'Coupons', 'route' => 'admin.promotion.coupon-setup.index', 'icon' => 'bi-ticket-perforated', 'gate' => 'promotion', 'active' => ['admin/promotion/coupon-setup*'], 'words' => 'promo codes'],
                 ['title' => 'Discounts', 'route' => 'admin.promotion.discount-setup.index', 'icon' => 'bi-percent', 'gate' => 'promotion', 'active' => ['admin/promotion/discount-setup*']],
                 ['title' => 'Send a notification', 'route' => 'admin.promotion.send-notification.index', 'icon' => 'bi-bell', 'gate' => 'promotion', 'active' => ['admin/promotion/send-notification*'], 'words' => 'push message broadcast'],
+                ['title' => 'Share pictures', 'route' => 'admin.share-looks.index', 'icon' => 'bi-palette', 'gate' => 'place', 'active' => ['admin/share-looks*'], 'words' => 'whatsapp status poster colour color design flyer partners branding'],
                 ['title' => 'Blog', 'route' => 'admin.blog.index', 'icon' => 'bi-layout-text-window', 'gate' => 'blog_view', 'active' => ['admin/blog*'], 'words' => 'articles posts'],
             ]],
             ['key' => 'support', 'title' => 'Support', 'icon' => 'bi-headset', 'items' => [

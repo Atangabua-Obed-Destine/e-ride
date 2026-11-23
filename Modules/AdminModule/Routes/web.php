@@ -61,6 +61,10 @@ Route::group(['prefix' => 'admin', 'as' => 'admin.', 'middleware' => 'admin'], f
     Route::controller(ActivityLogController::class)->group(function () {
         Route::get('log', 'log')->name('log');
     });
+    // Share pictures: what partners may change on the pictures they share, and taking pictures down.
+    Route::get('share-looks', [\Modules\AdminModule\Http\Controllers\Web\Admin\ShareLookController::class, 'index'])->name('share-looks.index')->middleware('can:place_view');
+    Route::post('share-looks', [\Modules\AdminModule\Http\Controllers\Web\Admin\ShareLookController::class, 'save'])->name('share-looks.save')->middleware('can:place_edit');
+    Route::post('share-looks/{look}/take-down', [\Modules\AdminModule\Http\Controllers\Web\Admin\ShareLookController::class, 'takeDown'])->name('share-looks.take-down')->whereUuid('look')->middleware('can:place_edit');
     Route::controller(SettingController::class)->group(function () {
         Route::get('settings', 'index')->name('settings');
         Route::post('update-profile/{id}', 'update')->name('update-profile');

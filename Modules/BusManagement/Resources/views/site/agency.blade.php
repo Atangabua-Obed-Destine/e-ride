@@ -12,7 +12,15 @@
 @endpush
 
 @section('body')
-<div class="sec" style="background:#fff;border-bottom:1px solid #E8ECEB">
+@php($ownLook = \App\Lib\ShareLooks::page('bus', $agency->id))
+@if($ownLook)
+<style>
+.own-band{background:{{ $ownLook['color'] }};color:{{ $ownLook['ink'] }}}
+.own-band .muted,.own-band .open,.own-band .shut,.own-band .verified,.own-band .badge,.own-band a:not(.chip){color:inherit!important;opacity:.92}
+.own-band .tag{background:#fff;color:#1D2D2B}
+</style>
+@endif
+<div class="sec {{ $ownLook ? 'own-band' : '' }}" style="{{ $ownLook ? '' : 'background:#fff;' }}border-bottom:1px solid #E8ECEB">
     <div class="row" style="gap:14px;align-items:flex-start">
         @if($info['logo'])<img src="{{ $info['logo'] }}" alt="" width="56" height="56" style="border-radius:14px;object-fit:cover;flex-shrink:0">@endif
         <div class="col" style="gap:4px;min-width:0">

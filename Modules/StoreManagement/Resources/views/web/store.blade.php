@@ -8,6 +8,14 @@
 @endif
 
 @section('body')
+@php($ownLook = \App\Lib\ShareLooks::page('store', $store->id))
+@if($ownLook)
+<style>
+.own-band{background:{{ $ownLook['color'] }};color:{{ $ownLook['ink'] }}}
+.own-band .muted,.own-band .open,.own-band .shut,.own-band .verified,.own-band .badge,.own-band a:not(.chip){color:inherit!important;opacity:.92}
+.own-band .tag{background:#fff;color:#1D2D2B}
+</style>
+@endif
 <style>
 .cover{width:100%;aspect-ratio:16/7;object-fit:cover;display:block;background:#F4F6F6}
 .ways{display:flex;flex-wrap:wrap;gap:6px;margin-top:8px}
@@ -31,7 +39,7 @@
 @if($store->coverUrl())
     <img class="cover" src="{{ $store->coverUrl() }}" alt="">
 @endif
-<div style="padding:14px 16px;display:flex;gap:12px;align-items:center">
+<div class="{{ $ownLook ? 'own-band' : '' }}" style="padding:14px 16px;display:flex;gap:12px;align-items:center">
     @if($store->logoUrl())
         <img src="{{ $store->logoUrl() }}" alt="" style="width:64px;height:64px;border-radius:8px;object-fit:cover;background:#F4F6F6">
     @endif
@@ -46,7 +54,7 @@
     </div>
 </div>
 @if($store->description)
-    <p style="margin:0 16px 6px;font-size:14px">{{ $store->description }}</p>
+    <p style="margin:{{ $ownLook ? '12px' : '0' }} 16px 6px;font-size:14px">{{ $store->description }}</p>
 @endif
 <div style="padding:0 16px">
     <div class="muted">{{ $kitchen->address }}</div>

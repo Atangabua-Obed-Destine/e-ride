@@ -56,8 +56,13 @@ class PortalController extends Controller
         $brand = $this->menuStore($request)->brand();
         $kitchen = $this->menuStore($request);
         $url = \Modules\StoreManagement\Lib\StoreLinks::url($brand);
-        $items = $brand->items()->where('is_available', true)->get()
-            ->sortByDesc(fn($i) => $i->image ? 1 : 0)->take(4)->values();
+        $available = $brand->items()->where('is_available', true)->get();
+        $look = \App\Lib\ShareLooks::present('store', $brand->id, true);
+        // The item shown big: the one chosen, else the first with a photo.
+        $auto = $available->sortByDesc(fn($i) => $i->image ? 1 : 0)->first();
+        $big = $available->firstWhere('id', $look['item']) ?? $auto;
+        $items = $available->sortByDesc(fn($i) => $i->image ? 1 : 0)->take(6)->values();
+        $bigOf = fn($i) => ['name' => $i->name, 'price' => getCurrencyFormat((float)$i->price), 'image' => $i->imageUrl(), 'about' => mb_substr((string)$i->description, 0, 160)];
         $hours = $kitchen->hoursFor(now());
         $ways = array_map(fn($w) => translate(match ($w) { 'delivery' => 'Delivery', 'dine_in' => 'Eat there', default => 'Collect' }), $kitchen->ways());
         $shareText = translate(key: 'Order from {store} on E-Ride: {link}', replace: ['store' => $brand->name, 'link' => $url]);
@@ -83,8 +88,52 @@ class PortalController extends Controller
             'no_app' => translate('No app needed: the menu opens in the browser.'),
             'ways' => array_values($ways),
             'type' => $brand->type === 'shop' ? translate('Shop') : translate('Restaurant'),
+            'big' => $big ? $bigOf($big) : null,
+            'big_default' => $auto ? $bigOf($auto) : null,
+            'items_by_id' => $available->take(300)->mapWithKeys(fn($i) => [$i->id => $bigOf($i)])->all(),
+            'rows' => ['list' => $available->take(8)->map(fn($i) => ['l' => $i->name, 'r' => getCurrencyFormat((float)$i->price)])->values()->all()],
+            'poster_line' => ($brand->type === 'shop' ? translate('Shop') : translate('Restaurant')) . '  ·  ' . implode(', ', $ways),
+            'poster_hint' => translate('Print it and put it on your counter or your door: customers scan it to see your menu and order.'),
+            'about' => (string)$brand->description,
+            'look' => \Illuminate\Support\Arr::except($look, ['options', 'removed']),
         ];
-        return view('storemanagement::partner.share', compact('brand', 'url', 'card', 'shareText'));
+        $staff = $request->attributes->get('partnerStaff');
+        $canEdit = !$staff || \Modules\StoreManagement\Lib\StoreTeam::allows($staff, 'partner.share.look');
+        $pickItems = $available->take(300)->map(fn($i) => ['id' => $i->id, 'name' => $i->name])->sortBy('name')->values();
+        return view('storemanagement::partner.share', compact('brand', 'url', 'card', 'shareText', 'look', 'canEdit', 'pickItems'));
+    }
+
+    /** The look of the share pictures: colour, layout, the item shown big, the E-Ride strip. */
+    public function saveLook(Request $request): JsonResponse
+    {
+        $data = $request->validate([
+            'color' => 'nullable|string|max:7',
+            'layout' => 'nullable|string|max:20',
+            'item' => 'nullable|string|max:64',
+            'strip' => 'nullable|boolean',
+        ]);
+        $brand = $this->menuStore($request)->brand();
+        if (!empty($data['item']) && !$brand->items()->whereKey($data['item'])->exists()) {
+            $data['item'] = null;
+        }
+        \App\Lib\ShareLooks::save('store', $brand->id, $data);
+        return response()->json(['ok' => true, 'look' => \App\Lib\ShareLooks::present('store', $brand->id, true)]);
+    }
+
+    /** A picture the partner designed, shared instead of the one E-Ride draws. */
+    public function saveDesign(Request $request): JsonResponse
+    {
+        $request->validate(['design' => 'required|file']);
+        $brand = $this->menuStore($request)->brand();
+        \App\Lib\ShareLooks::saveDesign('store', $brand->id, $request->file('design'));
+        return response()->json(['ok' => true, 'look' => \App\Lib\ShareLooks::present('store', $brand->id, true)]);
+    }
+
+    public function removeDesign(Request $request): JsonResponse
+    {
+        $brand = $this->menuStore($request)->brand();
+        \App\Lib\ShareLooks::removeDesign('store', $brand->id);
+        return response()->json(['ok' => true, 'look' => \App\Lib\ShareLooks::present('store', $brand->id, true)]);
     }
 
     /** A QR code of $text as rows of "0"/"1". */

@@ -40,6 +40,8 @@ class MarketSellerController extends Controller
             'shop' => $data,
             'items' => $items->map(fn(MarketItem $i) => MarketPresenter::item($i->setRelation('shop', $shop), $user->id))->all(),
             'cannot_open_reason' => $this->shops->cannotOpenReason($user),
+            // How the shop's share pictures look, and what the seller may change.
+            'look' => \App\Lib\ShareLooks::present('market', $shop->id, true),
             // Working for the shop: what this person may do (the app hides the rest).
             'acting' => $staff ? ['role' => $staff->role, 'permissions' => array_values((array)$staff->permissions)] : null,
             'team_count' => $staff ? null : \Modules\MarketManagement\Entities\MarketShopStaff::where('shop_id', $shop->id)
@@ -300,6 +302,62 @@ class MarketSellerController extends Controller
             'zama_price' => 'nullable|numeric|min:0|max:100000000',
             'zama_only' => 'nullable|boolean',
         ];
+    }
+
+    /** The look of the shop's share pictures: colour, layout, item shown big, E-Ride strip. */
+    public function saveLook(Request $request): JsonResponse
+    {
+        $shop = $this->shops->mine($request->user());
+        if (!$shop) {
+            return $this->fail('shop', translate('Open your shop first.'));
+        }
+        $validator = Validator::make($request->all(), [
+            'color' => 'nullable|string|max:7',
+            'layout' => 'nullable|string|max:20',
+            'item' => 'nullable|string|max:64',
+            'strip' => 'nullable|boolean',
+        ]);
+        if ($validator->fails()) {
+            return response()->json(responseFormatter(DEFAULT_400, errors: errorProcessor($validator)), 403);
+        }
+        $data = $validator->validated();
+        if (!empty($data['item']) && !MarketItem::where('shop_id', $shop->id)->where('code', $data['item'])->exists()) {
+            $data['item'] = null;
+        }
+        return $this->lookResult(fn() => \App\Lib\ShareLooks::save('market', $shop->id, $data), $shop->id);
+    }
+
+    /** A picture the seller designed, shared instead of the one the app draws. */
+    public function saveLookDesign(Request $request): JsonResponse
+    {
+        $shop = $this->shops->mine($request->user());
+        if (!$shop) {
+            return $this->fail('shop', translate('Open your shop first.'));
+        }
+        if (!$request->hasFile('design')) {
+            return $this->fail('design', translate('Choose a picture.'));
+        }
+        return $this->lookResult(fn() => \App\Lib\ShareLooks::saveDesign('market', $shop->id, $request->file('design')), $shop->id);
+    }
+
+    public function removeLookDesign(Request $request): JsonResponse
+    {
+        $shop = $this->shops->mine($request->user());
+        if (!$shop) {
+            return $this->fail('shop', translate('Open your shop first.'));
+        }
+        return $this->lookResult(fn() => \App\Lib\ShareLooks::removeDesign('market', $shop->id), $shop->id);
+    }
+
+    private function lookResult(callable $change, string $shopId): JsonResponse
+    {
+        try {
+            $change();
+        } catch (\Illuminate\Validation\ValidationException $e) {
+            $errors = $e->errors();
+            return $this->fail((string)array_key_first($errors), (string)(reset($errors)[0] ?? translate('Could not save. Try again.')));
+        }
+        return response()->json(responseFormatter(DEFAULT_200, ['look' => \App\Lib\ShareLooks::present('market', $shopId, true)]));
     }
 
     private function fail(string $code, string $message): JsonResponse

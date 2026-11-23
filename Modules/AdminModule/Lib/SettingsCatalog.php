@@ -125,6 +125,8 @@ class SettingsCatalog
                     'about' => 'The home page of the website: look, sections, services.', 'when' => 'For campaigns or new services.'],
                 ['title' => 'Business pages', 'route' => 'admin.business.pages-media.business-page.index', 'icon' => 'bi-file-text', 'gate' => 'business',
                     'about' => 'Terms, privacy, about us.', 'when' => 'When the law or your rules change.'],
+                ['title' => 'Share pictures', 'route' => 'admin.share-looks.index', 'icon' => 'bi-palette', 'gate' => 'place',
+                    'about' => 'What partners, Market shops and bus agencies may change on the pictures they share: colour, layout, their own designed picture.', 'when' => 'When partners ask for their brand look, or a picture must be taken down.'],
                 ['title' => 'Social media links', 'route' => 'admin.business.pages-media.social-media', 'icon' => 'bi-share', 'gate' => 'business',
                     'about' => 'Links shown on the website and apps.', 'when' => 'Rarely.'],
                 ['title' => 'Deep links', 'route' => 'admin.business.deep-linking.index', 'icon' => 'bi-link-45deg', 'gate' => 'business',
