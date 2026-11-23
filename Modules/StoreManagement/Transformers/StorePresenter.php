@@ -137,6 +137,9 @@ class StorePresenter
             'delivery_fee' => $order->delivery_fee,
             'total' => $order->total,
             'refunded_amount' => $order->refunded_amount,
+            // eride | shop: who holds the money. A shop-paid order is sent back by the shop to the customer's Mobile Money.
+            'paid_to' => $order->paid_to ?? 'eride',
+            'shop_refund_sent' => $order->shop_refund_sent_at !== null,
             'drop_address' => $order->drop_address,
             'receiver_name' => $order->receiver_name,
             'receiver_phone' => $order->receiver_phone,
