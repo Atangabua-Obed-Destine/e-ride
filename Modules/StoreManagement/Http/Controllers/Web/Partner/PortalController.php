@@ -61,6 +61,7 @@ class PortalController extends Controller
         // The item shown big: the one chosen, else the first with a photo.
         $auto = $available->sortByDesc(fn($i) => $i->image ? 1 : 0)->first();
         $big = $available->firstWhere('id', $look['item']) ?? $auto;
+        $chosen = collect($look['items'])->map(fn($id) => $available->firstWhere('id', $id))->filter()->values();
         $items = $available->sortByDesc(fn($i) => $i->image ? 1 : 0)->take(6)->values();
         $bigOf = fn($i) => ['name' => $i->name, 'price' => getCurrencyFormat((float)$i->price), 'image' => $i->imageUrl(), 'about' => mb_substr((string)$i->description, 0, 160)];
         $hours = $kitchen->hoursFor(now());
@@ -76,6 +77,8 @@ class PortalController extends Controller
             'cover' => $brand->coverUrl(),
             'logo' => $brand->logoUrl(),
             'items' => $items->map(fn($i) => ['name' => $i->name, 'price' => getCurrencyFormat((float)$i->price), 'image' => $i->imageUrl()])->all(),
+            'items_default' => $items->map(fn($i) => ['name' => $i->name, 'price' => getCurrencyFormat((float)$i->price), 'image' => $i->imageUrl()])->all(),
+            'chosen' => $chosen->pluck('id')->map(fn($id) => (string)$id)->all(),
             'cta' => translate('Order in the E-Ride app'),
             'link' => preg_replace('#^https?://#', '', $url),
             'page' => $url,
@@ -92,6 +95,7 @@ class PortalController extends Controller
             'big_default' => $auto ? $bigOf($auto) : null,
             'items_by_id' => $available->take(300)->mapWithKeys(fn($i) => [$i->id => $bigOf($i)])->all(),
             'rows' => ['list' => $available->take(8)->map(fn($i) => ['l' => $i->name, 'r' => getCurrencyFormat((float)$i->price)])->values()->all()],
+            'rows_default' => ['list' => $available->take(8)->map(fn($i) => ['l' => $i->name, 'r' => getCurrencyFormat((float)$i->price)])->values()->all()],
             'poster_line' => ($brand->type === 'shop' ? translate('Shop') : translate('Restaurant')) . '  ·  ' . implode(', ', $ways),
             'poster_hint' => translate('Print it and put it on your counter or your door: customers scan it to see your menu and order.'),
             'about' => (string)$brand->description,
@@ -110,11 +114,18 @@ class PortalController extends Controller
             'color' => 'nullable|string|max:7',
             'layout' => 'nullable|string|max:20',
             'item' => 'nullable|string|max:64',
+            'items' => 'nullable|array|max:8',
+            'items.*' => 'string|max:64',
             'strip' => 'nullable|boolean',
         ]);
         $brand = $this->menuStore($request)->brand();
         if (!empty($data['item']) && !$brand->items()->whereKey($data['item'])->exists()) {
             $data['item'] = null;
+        }
+        if ($request->has('items')) {
+            // Only the brand's own items, in the order chosen.
+            $own = $brand->items()->whereIn('id', (array)($data['items'] ?? []))->pluck('id')->map(fn($id) => (string)$id)->all();
+            $data['items'] = array_values(array_filter((array)($data['items'] ?? []), fn($id) => in_array((string)$id, $own, true)));
         }
         \App\Lib\ShareLooks::save('store', $brand->id, $data);
         return response()->json(['ok' => true, 'look' => \App\Lib\ShareLooks::present('store', $brand->id, true)]);

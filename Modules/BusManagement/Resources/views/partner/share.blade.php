@@ -4,7 +4,7 @@
 
 @section('content')
     <h1 class="b-h mb-1">{{ translate('Share your agency') }}</h1>
-    <p class="text-muted mb-3" style="font-size:14px">{{ translate('Post your departures on your WhatsApp Status and in your groups. Travellers see your destinations and fares, and book their seat in the E-Ride app.') }}</p>
+    <p class="text-muted mb-3" style="font-size:14px">{{ translate('Post your departures on WhatsApp, Instagram, TikTok and Facebook. Travellers see your destinations and fares, and book their seat in the E-Ride app.') }}</p>
     @if($canEdit)
         <div class="sl-logo b-card p-3 mb-3 d-flex flex-wrap gap-3 align-items-center" style="border-radius:6px">
             @if($agency->logo)

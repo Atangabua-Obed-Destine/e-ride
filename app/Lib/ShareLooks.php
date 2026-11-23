@@ -29,6 +29,8 @@ class ShareLooks
         'market' => ['photos', 'list', 'one', 'brand'],
         'bus' => ['routes', 'times', 'brand'],
     ];
+    /** How many chosen items each layout shows. */
+    public const MAX_ITEMS = ['photos' => 4, 'list' => 8, 'one' => 1];
     private const DARK = '#1D2D2B';
 
     /** What the admin allows. */
@@ -92,7 +94,9 @@ class ShareLooks
             'ink' => self::ink($color),
             'own_color' => $color !== self::RED,
             'layout' => $layout,
-            'item' => $row?->item,
+            // The items they chose, in their order (empty: the picture chooses).
+            'items' => self::chosen($row),
+            'item' => self::chosen($row)[0] ?? null,
             'design' => $design,
             'design_w' => $design ? $row->design_w : null,
             'design_h' => $design ? $row->design_h : null,
@@ -112,9 +116,19 @@ class ShareLooks
                 'designs' => $s['designs'],
                 'strip_required' => $s['strip'] === 'required',
                 'max_mb' => $s['max_mb'],
+                'max_items' => self::MAX_ITEMS,
             ];
         }
         return $look;
+    }
+
+    /** The items chosen for the picture, in order. */
+    private static function chosen(?ShareLook $row): array
+    {
+        if (!$row) {
+            return [];
+        }
+        return array_values($row->items ?: ($row->item ? [$row->item] : []));
     }
 
     /** Their colour for their pages (header), or null: E-Ride's own look. */
@@ -155,8 +169,19 @@ class ShareLooks
             }
             $row->layout = $input['layout'];
         }
-        if (array_key_exists('item', $input)) {
+        if (array_key_exists('items', $input)) {
+            $items = [];
+            foreach ((array)($input['items'] ?? []) as $id) {
+                $id = mb_substr(trim((string)$id), 0, 64);
+                if ($id !== '' && !in_array($id, $items, true)) {
+                    $items[] = $id;
+                }
+            }
+            $row->items = array_slice($items, 0, max(self::MAX_ITEMS)) ?: null;
+            $row->item = $items[0] ?? null;
+        } elseif (array_key_exists('item', $input)) {
             $row->item = $input['item'] ? mb_substr((string)$input['item'], 0, 64) : null;
+            $row->items = $row->item ? [$row->item] : null;
         }
         if (array_key_exists('strip', $input) && $input['strip'] !== null) {
             $row->strip = $s['strip'] === 'required' || filter_var($input['strip'], FILTER_VALIDATE_BOOLEAN);

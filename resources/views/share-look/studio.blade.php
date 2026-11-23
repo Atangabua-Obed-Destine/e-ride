@@ -42,7 +42,7 @@
         </div>
         <div class="sl-card p-2 mb-3" style="max-width:380px;margin:0 auto">
             <canvas id="statusCard" width="1080" height="1920" style="width:100%;height:auto;display:block;border-radius:6px"
-                    aria-label="{{ translate('Your WhatsApp Status picture') }}"></canvas>
+                    aria-label="{{ translate('Your picture to share') }}"></canvas>
             <canvas id="posterCard" width="1240" height="1754" style="width:100%;height:auto;display:none;border-radius:6px;background:#fff;border:1px solid #E8ECEB"
                     aria-label="{{ translate('Your poster to print') }}"></canvas>
             <p class="text-muted text-center mt-2 mb-0" style="font-size:12px" id="posterHint" hidden>{{ $card['poster_hint'] ?? translate('Print it and put it on your counter or your door: customers scan it.') }}</p>
@@ -51,16 +51,28 @@
     <div class="col-md-6">
         <div class="sl-card p-3 mb-3">
             <ol class="ps-3 mb-3" style="font-size:14px">
-                <li>{{ translate('Tap "Share the picture" and choose WhatsApp, then My status.') }}</li>
-                <li>{{ translate('Your link is copied: paste it in the caption so people can tap it.') }}</li>
+                <li>{{ translate('Tap "Share the picture" and choose where: your WhatsApp Status, Instagram, TikTok or Facebook.') }}</li>
+                <li>{{ translate('Your link is copied: paste it in the caption, or add it as a link sticker in Instagram and Facebook Stories.') }}</li>
             </ol>
             <button type="button" class="btn btn-primary w-100 mb-2" style="min-height:50px;border-radius:6px" id="sharePicture">
                 <i class="bi bi-image"></i> <span>{{ translate('Share the picture') }}</span>
             </button>
-            <a class="btn btn-outline-success w-100 mb-2" style="min-height:46px;display:flex;align-items:center;justify-content:center;gap:6px;border-radius:6px"
-               href="https://wa.me/?text={{ rawurlencode($shareText) }}" target="_blank" rel="noopener">
-                <i class="bi bi-whatsapp"></i> {{ translate('Send the link on WhatsApp') }}
-            </a>
+            <div class="d-flex flex-wrap justify-content-center gap-2 mb-1" aria-label="{{ translate('Where you can share') }}">
+                @foreach([['bi-whatsapp', 'WhatsApp'], ['bi-instagram', 'Instagram'], ['bi-tiktok', 'TikTok'], ['bi-facebook', 'Facebook']] as [$icon, $name])
+                    <span class="d-inline-flex align-items-center gap-1 px-2 py-1" style="background:#F1F3F3;border-radius:6px;font-size:12px;font-weight:600"><i class="bi {{ $icon }}"></i> {{ $name }}</span>
+                @endforeach
+            </div>
+            <p class="text-muted text-center mb-2" style="font-size:12px">{{ translate('The picture has the size of a Status or a Story. On a computer it is saved: post it from your phone or upload it.') }}</p>
+            <div class="d-flex gap-2 mb-2">
+                <a class="btn btn-outline-success flex-fill" style="min-height:46px;display:flex;align-items:center;justify-content:center;gap:6px;border-radius:6px"
+                   href="https://wa.me/?text={{ rawurlencode($shareText) }}" target="_blank" rel="noopener">
+                    <i class="bi bi-whatsapp"></i> {{ translate('Link on WhatsApp') }}
+                </a>
+                <a class="btn btn-outline-primary flex-fill" style="min-height:46px;display:flex;align-items:center;justify-content:center;gap:6px;border-radius:6px"
+                   href="https://www.facebook.com/sharer/sharer.php?u={{ rawurlencode($url) }}" target="_blank" rel="noopener">
+                    <i class="bi bi-facebook"></i> {{ translate('Link on Facebook') }}
+                </a>
+            </div>
             <div class="input-group mb-2">
                 <input type="text" class="form-control" value="{{ $url }}" readonly id="storeLink" aria-label="{{ translate('Your link') }}">
                 <button class="btn btn-outline-secondary" type="button" id="copyLink">{{ translate('Copy') }}</button>
@@ -99,11 +111,14 @@
                         @endforeach
                     </div>
                 @endif
-                @if(in_array('one', $look['options']['layouts'], true) && count($pickItems))
-                    <div id="bigPick" class="mb-2" hidden>
-                        <label class="form-label mb-1" for="bigItem" style="font-size:13px">{{ translate('The item shown big') }}</label>
-                        <select id="bigItem" class="form-select form-select-sm">
-                            <option value="">{{ translate('Choose for me') }}</option>
+                @if(count($pickItems))
+                    {{-- The items on the picture, in the owner's order; none chosen: the picture chooses. --}}
+                    <div id="itemPick" class="mb-2" hidden>
+                        <div class="sl-label mt-2 mb-1">{{ translate('Items on the picture') }}</div>
+                        <div class="text-muted mb-2" style="font-size:12px" id="itemHint"></div>
+                        <ol class="ps-0 mb-2" id="chosenList" style="list-style:none;display:flex;flex-direction:column;gap:6px"></ol>
+                        <select id="addItem" class="form-select form-select-sm" aria-label="{{ translate('Add an item') }}">
+                            <option value="">{{ translate('Add an item…') }}</option>
                             @foreach($pickItems as $p)<option value="{{ $p['id'] }}">{{ $p['name'] }}</option>@endforeach
                         </select>
                     </div>
@@ -142,6 +157,8 @@
     const data = @json($card);
     let look = data.look;
     const urls = @json($urls ?? null);
+    const maxItems = @json($look['options']['max_items'] ?? ['photos' => 4, 'list' => 8, 'one' => 1]);
+    look.items = look.items || [];
     const words = {
         saved: @json(translate('Saved')),
         saving: @json(translate('Saving…')),
@@ -150,8 +167,13 @@
         replace: @json(translate('Replace my picture')),
         upload: @json(translate('Upload a picture')),
         removeAsk: @json(translate('Remove your picture? Your Status picture goes back to the one E-Ride draws.')),
+        itemsHint: @json(translate(key: 'Choose up to {n}, in the order you want. None chosen: E-Ride picks for you.', replace: ['n' => '__N__'])),
+        itemsHintOne: @json(translate('Choose the item shown big. None chosen: E-Ride picks for you.')),
+        full: @json(translate(key: 'This layout shows {n}. Remove one first.', replace: ['n' => '__N__'])),
+        up: @json(translate('Move up')),
+        remove: @json(translate('Remove')),
         linkCopied: @json(translate('Link copied')),
-        savedPicture: @json(translate('Picture saved. Post it on your WhatsApp Status from your gallery.')),
+        savedPicture: @json(translate('Picture saved. Post it from your gallery on WhatsApp, Instagram, TikTok or Facebook.')),
         sharePicture: @json(translate('Share the picture')),
         savePoster: @json(translate('Save or share the poster')),
     };
@@ -442,8 +464,28 @@
         const own = document.getElementById('ownColor');
         if (own) { own.value = look.color.toLowerCase(); own.parentElement.style.borderStyle = matched ? 'dashed' : 'solid'; own.parentElement.style.borderColor = matched ? '#B9C2C1' : DARK; }
         editor.querySelectorAll('[data-layout]').forEach(b => b.setAttribute('aria-pressed', b.dataset.layout === look.layout ? 'true' : 'false'));
-        const bigPick = document.getElementById('bigPick');
-        if (bigPick) { bigPick.hidden = look.layout !== 'one'; document.getElementById('bigItem').value = look.item || ''; }
+        const itemPick = document.getElementById('itemPick');
+        if (itemPick) {
+            const max = maxItems[look.layout] || 0;
+            itemPick.hidden = !max;
+            document.getElementById('itemHint').textContent = max === 1 ? words.itemsHintOne : words.itemsHint.replace('__N__', max);
+            const list = document.getElementById('chosenList');
+            list.innerHTML = '';
+            look.items.forEach((id, k) => {
+                const it = data.items_by_id && data.items_by_id[id];
+                if (!it) return;
+                const li = document.createElement('li');
+                li.style.cssText = 'display:flex;align-items:center;gap:8px;border:1px solid #E8ECEB;border-radius:6px;padding:6px 8px;font-size:13px' + (k >= max ? ';opacity:.45' : '');
+                li.innerHTML = '<span style="font-weight:700;width:18px">' + (k + 1) + '</span>'
+                    + (it.image ? '<img src="' + it.image + '" alt="" style="width:32px;height:32px;border-radius:4px;object-fit:cover">' : '')
+                    + '<span style="flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap"></span>'
+                    + (k ? '<button type="button" class="btn btn-sm btn-link p-0" data-up="' + k + '" aria-label="' + words.up + '"><i class="bi bi-arrow-up"></i></button>' : '')
+                    + '<button type="button" class="btn btn-sm btn-link text-danger p-0" data-rm="' + k + '" aria-label="' + words.remove + '"><i class="bi bi-x-lg"></i></button>';
+                li.querySelector('span:nth-of-type(2)').textContent = it.name + '  ·  ' + it.price;
+                list.appendChild(li);
+            });
+            document.getElementById('addItem').value = '';
+        }
         const thumb = document.getElementById('designThumb');
         if (thumb) {
             thumb.hidden = !look.design; if (look.design) thumb.src = look.design;
@@ -453,12 +495,27 @@
         const stripRow = document.getElementById('stripRow');
         if (stripRow) { stripRow.hidden = !look.design; document.getElementById('stripOn').checked = !!look.strip; }
     }
+    /** The picture's items: the ones chosen, else E-Ride's pick. */
+    function applyChosen() {
+        if (!data.items_by_id) return;
+        const picked = (look.items || []).map(id => data.items_by_id[id]).filter(Boolean);
+        if (picked.length) {
+            data.items = picked.map(i => ({name: i.name, price: i.price, image: i.image}));
+            data.rows = Object.assign({}, data.rows, {list: picked.map(i => ({l: i.name, r: i.price}))});
+            data.big = picked[0];
+        } else {
+            data.items = data.items_default || data.items;
+            data.rows = Object.assign({}, data.rows, {list: (data.rows_default || data.rows).list});
+            data.big = data.big_default;
+        }
+    }
     function adopt(json) {
         const next = Object.assign({}, json.look || {});
         delete next.options; delete next.removed;
         look = Object.assign({}, look, next);
         data.look = look;
-        if (data.items_by_id) data.big = data.items_by_id[look.item] || data.big_default;
+        look.items = look.items || [];
+        applyChosen();
     }
     async function send(url, body, isForm) {
         const headers = {'X-CSRF-TOKEN': document.querySelector('meta[name=csrf-token]').content, 'Accept': 'application/json'};
@@ -475,13 +532,13 @@
     function saveLook(change) {
         Object.assign(look, change);
         if (change.color) look.ink = inkFor(change.color);
-        if (change.item !== undefined && data.items_by_id) data.big = data.items_by_id[change.item] || data.big_default;
+        if (change.items !== undefined) applyChosen();
         markEditor(); redraw();
         clearTimeout(saveTimer);
         say(words.saving);
         saveTimer = setTimeout(async () => {
             try {
-                const json = await send(urls.look, {color: look.color, layout: look.layout, item: look.item || null, strip: !!look.strip});
+                const json = await send(urls.look, {color: look.color, layout: look.layout, items: look.items || [], strip: !!look.strip});
                 adopt(json); markEditor(); redraw(); say(words.saved);
             } catch (e) { say(e.message, true); }
         }, 500);
@@ -500,8 +557,23 @@
         const own = document.getElementById('ownColor');
         if (own) own.addEventListener('input', () => saveLook({color: own.value.toUpperCase()}));
         editor.querySelectorAll('[data-layout]').forEach(b => b.addEventListener('click', () => { if (mode === 'design') { mode = 'status'; showPick(); } saveLook({layout: b.dataset.layout}); }));
-        const bigItem = document.getElementById('bigItem');
-        if (bigItem) bigItem.addEventListener('change', () => saveLook({item: bigItem.value || null}));
+        const addItem = document.getElementById('addItem');
+        if (addItem) addItem.addEventListener('change', () => {
+            const id = addItem.value;
+            if (!id || look.items.includes(id)) { markEditor(); return; }
+            const max = maxItems[look.layout] || 0;
+            // One item, big: the new one replaces it.
+            if (max === 1) { saveLook({items: [id]}); return; }
+            if (look.items.length >= max) { say(words.full.replace('__N__', max), true); addItem.value = ''; return; }
+            saveLook({items: [...look.items, id]});
+        });
+        const chosenList = document.getElementById('chosenList');
+        if (chosenList) chosenList.addEventListener('click', e => {
+            const up = e.target.closest('[data-up]'), rm = e.target.closest('[data-rm]');
+            const items = [...look.items];
+            if (up) { const k = +up.dataset.up; [items[k - 1], items[k]] = [items[k], items[k - 1]]; saveLook({items}); }
+            if (rm) { items.splice(+rm.dataset.rm, 1); saveLook({items}); }
+        });
         const stripOn = document.getElementById('stripOn');
         if (stripOn) stripOn.addEventListener('change', () => saveLook({strip: stripOn.checked}));
         const file = document.getElementById('designFile');
@@ -554,6 +626,7 @@
         }, 'image/png');
     });
 
+    applyChosen();
     markEditor();
     showPick();
     redraw();

@@ -12,10 +12,10 @@ class ShareLook extends Model
 
     public const DESIGN_DIR = 'share-design/';
 
-    protected $fillable = ['kind', 'owner_id', 'color', 'layout', 'item', 'design', 'design_w', 'design_h', 'strip',
+    protected $fillable = ['kind', 'owner_id', 'color', 'layout', 'item', 'items', 'design', 'design_w', 'design_h', 'strip',
         'design_at', 'removed_reason', 'removed_at', 'removed_by'];
 
-    protected $casts = ['strip' => 'boolean', 'design_at' => 'datetime', 'removed_at' => 'datetime',
+    protected $casts = ['items' => 'array', 'strip' => 'boolean', 'design_at' => 'datetime', 'removed_at' => 'datetime',
         'design_w' => 'integer', 'design_h' => 'integer'];
 
     public function designUrl(): ?string

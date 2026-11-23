@@ -4,7 +4,7 @@
 
 @section('content')
     <h1 class="fs-4 fw-bold mb-1">{{ translate('Share your store') }}</h1>
-    <p class="text-muted mb-3" style="font-size:14px">{{ translate('Post your store on your WhatsApp Status and in your groups. People see your menu and prices, and order in the E-Ride app.') }}</p>
+    <p class="text-muted mb-3" style="font-size:14px">{{ translate('Post your store on WhatsApp, Instagram, TikTok and Facebook. People see your menu and prices, and order in the E-Ride app.') }}</p>
 
     <div class="p-card p-3 mb-3">
         <div class="d-flex gap-3 text-center">

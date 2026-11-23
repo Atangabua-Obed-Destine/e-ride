@@ -315,6 +315,8 @@ class MarketSellerController extends Controller
             'color' => 'nullable|string|max:7',
             'layout' => 'nullable|string|max:20',
             'item' => 'nullable|string|max:64',
+            'items' => 'nullable|array|max:8',
+            'items.*' => 'string|max:64',
             'strip' => 'nullable|boolean',
         ]);
         if ($validator->fails()) {
@@ -323,6 +325,11 @@ class MarketSellerController extends Controller
         $data = $validator->validated();
         if (!empty($data['item']) && !MarketItem::where('shop_id', $shop->id)->where('code', $data['item'])->exists()) {
             $data['item'] = null;
+        }
+        if ($request->has('items')) {
+            // Only the shop's own items, in the order chosen. An empty list: the picture chooses.
+            $own = MarketItem::where('shop_id', $shop->id)->whereIn('code', (array)($data['items'] ?? []))->pluck('code')->all();
+            $data['items'] = array_values(array_filter((array)($data['items'] ?? []), fn($c) => in_array($c, $own, true)));
         }
         return $this->lookResult(fn() => \App\Lib\ShareLooks::save('market', $shop->id, $data), $shop->id);
     }
