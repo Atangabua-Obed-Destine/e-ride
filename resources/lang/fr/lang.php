@@ -6358,4 +6358,5 @@
   'Copy it now: E-Ride shows it only once. In POS Innova, open E-Ride, then E-Ride link, and paste the address and the key in the box of this branch.' => 'Copiez-la maintenant : E-Ride ne l\'affiche qu\'une fois. Dans POS Innova, ouvrez E-Ride, puis E-Ride link, et collez l\'adresse et la clé dans le cadre de cette succursale.',
   'In POS Innova, open E-Ride, then E-Ride link, and paste them in the box of this branch.' => 'Dans POS Innova, ouvrez E-Ride, puis E-Ride link, et collez-les dans le cadre de cette succursale.',
   'In POS Innova, tick the products to sell on E-Ride (Products on E-Ride). They appear here: link each one to an item on your menu, or add it.' => 'Dans POS Innova, cochez les produits à vendre sur E-Ride (Products on E-Ride). Ils apparaissent ici : reliez chacun à un article de votre menu, ou ajoutez-le.',
+  'Store' => 'Boutique',
 );
