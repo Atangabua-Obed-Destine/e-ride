@@ -72,6 +72,9 @@
             <div class="sl-card p-3 mb-3" id="lookEditor">
                 <h2 class="fs-6 fw-bold mb-1">{{ translate('Your look') }}</h2>
                 <p class="text-muted mb-3" style="font-size:13px">{{ translate('Your colour and layout are used on your pictures and poster. Text turns white or dark by itself so people can read it.') }}</p>
+                @if(!empty($logoLink))
+                    <p class="mb-3" style="font-size:13px"><i class="bi bi-image"></i> {{ translate('Your logo and cover photo are on your pictures too.') }} <a href="{{ $logoLink }}">{{ translate('Change them') }}</a></p>
+                @endif
                 @if($look['removed'])
                     <div class="alert alert-warning py-2" style="font-size:13px;border-radius:6px" id="removedNote">
                         {{ translate('E-Ride took your picture down:') }} <strong>{{ $look['removed']['reason'] }}</strong>. {{ translate('You can share another one.') }}

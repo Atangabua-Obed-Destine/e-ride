@@ -92,6 +92,7 @@ Route::group(['prefix' => 'partner/bus-agency', 'as' => 'bus-partner.'], functio
         Route::get('payments/statements/{statement}/csv', [PaymentController::class, 'csv'])->name('payments.statement.csv')->whereUuid('statement');
         Route::post('payments/statements/{statement}/pay', [PaymentController::class, 'pay'])->name('payments.statement.pay')->whereUuid('statement')->middleware('throttle:10,1,bus-statement-pay');
 
+        Route::post('share/logo', [\Modules\BusManagement\Http\Controllers\Web\Partner\ShareController::class, 'saveLogo'])->name('share.logo')->middleware('throttle:10,1,bus-share-logo');
         Route::post('share/look', [\Modules\BusManagement\Http\Controllers\Web\Partner\ShareController::class, 'saveLook'])->name('share.look');
         Route::post('share/design', [\Modules\BusManagement\Http\Controllers\Web\Partner\ShareController::class, 'saveDesign'])->name('share.design')->middleware('throttle:10,1,bus-share-design');
         Route::post('share/design/remove', [\Modules\BusManagement\Http\Controllers\Web\Partner\ShareController::class, 'removeDesign'])->name('share.design.remove');

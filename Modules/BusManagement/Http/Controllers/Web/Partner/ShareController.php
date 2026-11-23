@@ -72,6 +72,25 @@ class ShareController extends Controller
         return view('busmanagement::partner.share', compact('agency', 'url', 'card', 'shareText', 'look', 'canEdit', 'pickItems'));
     }
 
+    /** The manager sets or removes the agency's logo. */
+    public function saveLogo(Request $request, \Modules\BusManagement\Service\AgencyService $agencies): \Illuminate\Http\RedirectResponse
+    {
+        $agency = $request->attributes->get('busAgency');
+        if ($request->boolean('remove')) {
+            $agencies->removeLogo($agency);
+            return back()->with('logo_saved', translate('Logo removed'));
+        }
+        if (!$request->hasFile('logo')) {
+            return back()->withErrors(['logo' => translate('Choose a picture.')]);
+        }
+        try {
+            $agencies->saveLogo($agency, $request->file('logo'));
+        } catch (\Illuminate\Validation\ValidationException $e) {
+            return back()->withErrors($e->errors());
+        }
+        return back()->with('logo_saved', translate('Logo saved'));
+    }
+
     public function saveLook(Request $request): JsonResponse
     {
         $data = $request->validate([

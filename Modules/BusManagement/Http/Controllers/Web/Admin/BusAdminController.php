@@ -75,7 +75,7 @@ class BusAdminController extends Controller
     public function details(Request $request, BusAgency $agency): RedirectResponse
     {
         try {
-            $this->agencies->saveDetails($agency, $request->all());
+            $this->agencies->saveDetails($agency, $request->all() + ['logo' => $request->file('logo')]);
         } catch (ValidationException $e) {
             return back()->withInput()->withErrors($e->errors());
         }

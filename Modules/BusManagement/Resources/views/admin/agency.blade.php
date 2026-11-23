@@ -56,7 +56,7 @@
                 </div>
                 @endif
 
-                <form method="POST" action="{{ route('admin.bus.details', $agency->id) }}" class="card mb-3">
+                <form method="POST" action="{{ route('admin.bus.details', $agency->id) }}" class="card mb-3" enctype="multipart/form-data">
                     @csrf
                     <div class="card-header"><h5 class="mb-0">{{ $checking ? translate('2. Departure city and commission') : translate('Agency and commission') }}</h5></div>
                     <div class="card-body">
@@ -67,6 +67,10 @@
                             <div class="col-md-4"><label class="form-label" for="a_phone">{{ translate('Phone') }}</label><input id="a_phone" name="phone" class="form-control" maxlength="30" value="{{ old('phone', $agency->phone) }}"></div>
                             <div class="col-md-6"><label class="form-label" for="a_app">{{ translate('Commission on app tickets (% of the fare)') }}</label><input id="a_app" type="number" step="0.01" min="0" max="50" name="commission_app_pct" class="form-control" required value="{{ old('commission_app_pct', $agency->commission_app_pct) }}"></div>
                             <div class="col-md-6"><label class="form-label" for="a_ctr">{{ translate('Commission on counter tickets (% of the fare)') }}</label><input id="a_ctr" type="number" step="0.01" min="0" max="50" name="commission_counter_pct" class="form-control" required value="{{ old('commission_counter_pct', $agency->commission_counter_pct) }}"></div>
+                            <div class="col-12 d-flex gap-3 align-items-center">
+                                @if($agency->logo)<img src="{{ dynamicStorage('storage/app/public/bus/logo/' . $agency->logo) }}" alt="" width="56" height="56" style="border-radius:6px;object-fit:cover">@endif
+                                <div class="flex-grow-1"><label class="form-label" for="a_logo">{{ translate('Logo (square works best)') }}</label><input id="a_logo" type="file" name="logo" class="form-control" accept="image/jpeg,image/png,image/webp"></div>
+                            </div>
                             <div class="col-12"><label class="form-label" for="a_about">{{ translate('About (shown to passengers)') }}</label><textarea id="a_about" name="about" class="form-control" rows="2" maxlength="600">{{ old('about', $agency->about) }}</textarea></div>
                         </div>
                         <p class="fs-12 text-muted mt-2 mb-0">{{ translate(key: 'Defaults for new agencies: {app}% app, {counter}% counter (Bus settings).', replace: ['app' => $settings['commission_app_pct'], 'counter' => $settings['commission_counter_pct']]) }}</p>

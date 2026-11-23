@@ -14,6 +14,7 @@
     </div>
 
     @include('share-look.studio', [
+        'logoLink' => (!$partnerStaff || \Modules\StoreManagement\Lib\StoreTeam::allows($partnerStaff, 'partner.store')) ? route('partner.store') : null,
         'urls' => ['look' => route('partner.share.look'), 'design' => route('partner.share.design'), 'remove' => route('partner.share.design.remove')],
     ])
 @endsection

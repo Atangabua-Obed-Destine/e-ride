@@ -75,11 +75,39 @@ class AgencyService
             'commission_app_pct' => translate('commission on app tickets'),
             'commission_counter_pct' => translate('commission on counter tickets'),
         ])->validate();
+        if (($input['logo'] ?? null) instanceof \Illuminate\Http\UploadedFile) {
+            $this->saveLogo($agency, $input['logo']);
+        }
         $agency->fill($data);
         if ($agency->isDirty('name')) {
             $agency->slug = $this->uniqueSlug($data['name'], $agency->id);
         }
         $agency->save();
+        return $agency;
+    }
+
+    /** The agency's logo (square works best), shown in the app, on its page and on its share pictures. */
+    public function saveLogo(BusAgency $agency, \Illuminate\Http\UploadedFile $file): BusAgency
+    {
+        Validator::make(['logo' => $file], [
+            'logo' => 'required|file|mimes:jpg,jpeg,png,webp|max:4096|dimensions:min_width=120,min_height=120',
+        ], [], ['logo' => translate('logo')])->validate();
+        $old = $agency->logo;
+        $agency->logo = fileUploader('bus/logo/', APPLICATION_IMAGE_FORMAT, $file);
+        $agency->save();
+        if ($old) {
+            fileRemover('bus/logo/', $old);
+        }
+        return $agency;
+    }
+
+    public function removeLogo(BusAgency $agency): BusAgency
+    {
+        if ($agency->logo) {
+            fileRemover('bus/logo/', $agency->logo);
+            $agency->logo = null;
+            $agency->save();
+        }
         return $agency;
     }
 
