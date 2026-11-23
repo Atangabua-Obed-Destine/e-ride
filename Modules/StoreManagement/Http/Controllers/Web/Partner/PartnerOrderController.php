@@ -267,6 +267,15 @@ class PartnerOrderController extends Controller
         return strlen($digits) === 9 ? '237' . $digits : $digits;
     }
 
+    protected ?array $posKitchens = null;
+
+    /** Kitchens with a POS Innova linked (and heard from), once per request. */
+    protected function posKitchens(): array
+    {
+        return $this->posKitchens ??= \Modules\StoreManagement\Entities\StorePosLink::whereNull('revoked_at')->whereNotNull('linked_at')
+            ->pluck('store_id')->unique()->values()->all();
+    }
+
     protected function present(StoreOrder $o, int $responseMinutes): array
     {
         $trip = $o->trip;
@@ -328,6 +337,12 @@ class PartnerOrderController extends Controller
             // keeps calling riders until the store gives up on it).
             'can_cancel' => in_array($o->status, [StoreOrder::CHANGES_PROPOSED], true) || $o->isConfirmedUnpaid() || $noRider,
             'no_rider' => $noRider,
+            // POS Innova at this kitchen: did the salesperson ring it up there yet?
+            'pos' => $o->payment_status === StoreOrder::PAID && in_array($o->store_id, $this->posKitchens(), true) ? [
+                'rung' => $o->pos_rung_up_at !== null,
+                'invoice' => $o->pos_invoice_no,
+                'matches' => $o->pos_matches,
+            ] : null,
             'rider_attempts' => (int)$o->rider_attempts,
             'refunds' => StoreSettings::refunds(),
             'prep_minutes' => $o->prep_minutes,

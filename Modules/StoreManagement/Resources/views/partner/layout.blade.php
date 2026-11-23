@@ -75,7 +75,7 @@
     @php($may = fn(string $route) => !$partnerStaff || \Modules\StoreManagement\Lib\StoreTeam::allows($partnerStaff, $route))
     @if($may('partner.orders'))<a href="{{ route('partner.orders') }}" class="{{ request()->routeIs('partner.orders') ? 'active' : '' }}"><i class="bi bi-receipt"></i>{{ translate('Orders') }}<span class="p-badge" data-new-badge></span></a>@endif
     @if($may('partner.menu'))<a href="{{ route('partner.menu') }}" class="{{ request()->routeIs('partner.menu') ? 'active' : '' }}"><i class="bi bi-card-list"></i>{{ translate('Menu') }}</a>@endif
-    @if($may('partner.store'))<a href="{{ route('partner.store') }}" class="{{ request()->routeIs('partner.store') || request()->routeIs('partner.riders') ? 'active' : '' }}"><i class="bi bi-shop"></i>{{ translate('Store') }}</a>@endif
+    @if($may('partner.store'))<a href="{{ route('partner.store') }}" class="{{ request()->routeIs('partner.store') || request()->routeIs('partner.riders') || request()->routeIs('partner.pos*') ? 'active' : '' }}"><i class="bi bi-shop"></i>{{ translate('Store') }}</a>@endif
     @if($may('partner.earnings'))<a href="{{ route('partner.earnings') }}" class="{{ request()->routeIs('partner.earnings') || request()->routeIs('partner.orders.history') || request()->routeIs('partner.payments') ? 'active' : '' }}"><i class="bi bi-wallet2"></i>{{ translate('Earnings') }}</a>@endif
     <a href="{{ route('partner.share') }}" class="{{ request()->routeIs('partner.share') ? 'active' : '' }}"><i class="bi bi-share"></i>{{ translate('Share') }}</a>
     @if(!$partnerStaff)<a href="{{ route('partner.team') }}" class="{{ request()->routeIs('partner.team*') ? 'active' : '' }}"><i class="bi bi-people"></i>{{ translate('Team') }}</a>@endif

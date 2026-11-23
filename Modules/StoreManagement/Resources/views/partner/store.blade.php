@@ -99,6 +99,15 @@
                     <a href="{{ route('partner.riders') }}" class="btn btn-outline-dark" style="white-space:nowrap">{{ translate('Manage') }}</a>
                 </div>
                 @endif
+                @if(!$partnerStaff)
+                <div class="p-card p-3 mb-3 d-flex align-items-center gap-3">
+                    <div class="flex-grow-1">
+                        <h2 class="fs-6 fw-bold mb-1">{{ translate('POS Innova') }}</h2>
+                        <div class="fs-12 text-muted">{{ translate('Using POS Innova in your shop: link it so your stock decides what customers can order, and E-Ride orders show on the POS screen.') }}</div>
+                    </div>
+                    <a href="{{ route('partner.pos') }}" class="btn btn-outline-dark" style="white-space:nowrap">{{ translate('Set up') }}</a>
+                </div>
+                @endif
             </div>
             <div class="col-lg-5">
                 <div class="p-card p-3 mb-3">

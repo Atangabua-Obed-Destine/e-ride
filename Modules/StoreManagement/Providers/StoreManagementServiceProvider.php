@@ -29,6 +29,12 @@ class StoreManagementServiceProvider extends ServiceProvider
         $this->registerViews();
         $this->loadMigrationsFrom(module_path($this->moduleName, 'Database/Migrations'));
 
+        // POS Innova channel: rate buckets per branch key (docs/posinnova-channel-contract.md).
+        $byKey = fn(\Illuminate\Http\Request $r) => hash('sha256', (string)$r->bearerToken()) ?: $r->ip();
+        \Illuminate\Support\Facades\RateLimiter::for('pos-catalog', fn($r) => \Illuminate\Cache\RateLimiting\Limit::perMinute(120)->by('pc' . $byKey($r)));
+        \Illuminate\Support\Facades\RateLimiter::for('pos-images', fn($r) => \Illuminate\Cache\RateLimiting\Limit::perMinute(60)->by('pi' . $byKey($r)));
+        \Illuminate\Support\Facades\RateLimiter::for('pos-orders', fn($r) => \Illuminate\Cache\RateLimiting\Limit::perMinute(60)->by('po' . $byKey($r)));
+
         if ($this->app->runningInConsole()) {
             $this->commands([\Modules\StoreManagement\Console\StoreOrdersTick::class, \Modules\StoreManagement\Console\StorePaymentsTick::class]);
         }

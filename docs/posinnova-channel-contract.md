@@ -325,8 +325,8 @@ POS confirms it showed a cancelled order. The salesperson then does a normal sel
 **Linking products**
 - E-Ride keeps the link from a menu item to (branch, POS `variation_id`).
 - A setup screen per branch:
-  - links exact SKU matches by itself;
-  - suggests same-name matches;
+  - suggests same-name matches, and one button links them all (E-Ride menu items carry no SKU);
+  - "Add to menu" makes a menu item from a POS product (name, description, price, image), already linked;
   - leaves the rest for linking by hand.
 - New POS items show as "Not on the menu yet".
 

@@ -111,6 +111,13 @@ Route::group(['prefix' => 'partner', 'as' => 'partner.'], function () {
         Route::post('share/look', [PortalController::class, 'saveLook'])->name('share.look');
         Route::post('share/design', [PortalController::class, 'saveDesign'])->name('share.design')->middleware('throttle:10,1,store-share-design');
         Route::post('share/design/remove', [PortalController::class, 'removeDesign'])->name('share.design.remove');
+        // POS Innova: a key per branch and linking its products to the menu (owner only: not in StoreTeam::ROUTES).
+        Route::get('pos', [\Modules\StoreManagement\Http\Controllers\Web\Partner\PartnerPosController::class, 'index'])->name('pos');
+        Route::post('pos/link', [\Modules\StoreManagement\Http\Controllers\Web\Partner\PartnerPosController::class, 'createLink'])->name('pos.link')->middleware('throttle:10,1,store-pos-link');
+        Route::post('pos/{link}/revoke', [\Modules\StoreManagement\Http\Controllers\Web\Partner\PartnerPosController::class, 'revoke'])->name('pos.revoke')->whereUuid('link');
+        Route::post('pos/{link}/link-suggested', [\Modules\StoreManagement\Http\Controllers\Web\Partner\PartnerPosController::class, 'linkSuggested'])->name('pos.link-suggested')->whereUuid('link');
+        Route::post('pos/item/{item}/link', [\Modules\StoreManagement\Http\Controllers\Web\Partner\PartnerPosController::class, 'linkItem'])->name('pos.item.link')->whereUuid('item');
+        Route::post('pos/item/{item}/create', [\Modules\StoreManagement\Http\Controllers\Web\Partner\PartnerPosController::class, 'createItem'])->name('pos.item.create')->whereUuid('item');
         // The team (the owner's only: staff logins are refused by PartnerMiddleware).
         Route::get('team', [\Modules\StoreManagement\Http\Controllers\Web\Partner\PartnerTeamController::class, 'index'])->name('team');
         Route::post('team', [\Modules\StoreManagement\Http\Controllers\Web\Partner\PartnerTeamController::class, 'add'])->name('team.add');

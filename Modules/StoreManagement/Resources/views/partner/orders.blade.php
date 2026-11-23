@@ -81,6 +81,10 @@
     .o__contact a.wa { color: #128c4a; border-color: #b8e6cb; background: #f2fbf6; }
     .o__cancel { background: none; border: 0; color: var(--muted); font-size: 13px; text-decoration: underline; padding: 0; align-self: center; }
     .o__wait { background: #f4f4f6; border-radius: 12px; padding: 10px 12px; font-size: 14px; font-weight: 600; }
+    .o__pos { font-size: 12px; font-weight: 800; border-radius: 999px; padding: 2px 9px; white-space: nowrap; }
+    .o__pos.is-rung { color: var(--ok); background: rgba(18, 161, 80, .12); }
+    .o__pos.is-todo { color: #8a5a00; background: rgba(255, 176, 0, .18); }
+    .o__pos.is-off { color: #b42318; background: rgba(180, 35, 24, .1); }
     .o__paid { font-size: 12px; font-weight: 800; color: var(--ok); background: rgba(18, 161, 80, .12); border-radius: 999px; padding: 2px 9px; white-space: nowrap; }
     .chg li s { color: var(--muted); }
     .chg .tag-chg { font-size: 11px; font-weight: 800; border-radius: 999px; padding: 1px 7px; margin-left: auto; white-space: nowrap; }
@@ -323,6 +327,9 @@
         waitAnswer: @json(translate('Changes sent. Waiting for the customer to accept them.')),
         paidStart: @json(translate('is paid: start cooking')),
         paid: @json(translate('Paid')),
+        posRung: @json(translate('Rung up in POS')),
+        posTodo: @json(translate('Not yet rung up in POS')),
+        posDiffers: @json(translate('POS sale is less than the order')),
         call: @json(translate('Call')),
         whatsapp: @json(translate('WhatsApp')),
         cancelOrder: @json(translate('Cancel this order')),
@@ -544,7 +551,14 @@
         } else if (o.status === 'rider_requested' || o.status === 'picked_up') {
             actions = riderHtml(o);
         }
-        if (o.paid && !isNew) head = head.replace('</div>', '') + '<span class="o__paid">' + T.paid + '</span></div>';
+        if (o.paid && !isNew) head = head.replace('</div>', '<span class="o__paid">' + T.paid + '</span></div>');
+        // POS Innova: the salesperson rings every E-Ride order up in the POS, as usual.
+        if (o.pos && !isNew) {
+            var pos = o.pos.rung
+                ? '<span class="o__pos is-rung"><i class="bi bi-check2"></i> ' + T.posRung + (o.pos.invoice ? ' · ' + esc(o.pos.invoice) : '') + '</span>' + (o.pos.matches === false ? '<span class="o__pos is-off">' + T.posDiffers + '</span>' : '')
+                : '<span class="o__pos is-todo"><i class="bi bi-pc-display"></i> ' + T.posTodo + '</span>';
+            head = head.replace('</div>', pos + '</div>');
+        }
         var extra = contactHtml(o) + (o.can_cancel && !isNew ? '<button type="button" class="o__cancel" data-cancel="' + o.id + '">' + T.cancelOrder + '</button>' : '');
         var arrived = !rendered[o.id + o.status];
         var cls = isNew ? 'is-new' : (o.status === 'changes_proposed' || o.status === 'awaiting_payment' ? 'is-waiting' : '');

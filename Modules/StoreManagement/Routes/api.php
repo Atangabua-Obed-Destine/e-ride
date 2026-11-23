@@ -46,3 +46,23 @@ Route::group(['prefix' => 'driver', 'middleware' => ['auth:api', 'maintenance_mo
     Route::get('store-teams', [StoreTeamController::class, 'index']);
     Route::post('store-teams/{id}/leave', [StoreTeamController::class, 'leave'])->middleware('throttle:20,1,store-team');
 });
+
+/*
+| POS Innova channel v1 (docs/posinnova-channel-contract.md). POS calls E-Ride with a branch key
+| (Authorization: Bearer erk_...); three rate buckets per key so a big first sync never starves orders.
+*/
+Route::group(['prefix' => 'channel/posinnova/v1'], function () {
+    $c = \Modules\StoreManagement\Http\Controllers\Api\Channel\PosInnovaController::class;
+    Route::post('catalog/full', [$c, 'catalogFull'])->middleware('throttle:pos-catalog');
+    Route::post('catalog/changes', [$c, 'catalogChanges'])->middleware('throttle:pos-catalog');
+    Route::post('catalog/images', [$c, 'image'])->middleware('throttle:pos-images');
+    Route::middleware('throttle:pos-orders')->group(function () use ($c) {
+        Route::get('hello', [$c, 'hello']);
+        Route::post('heartbeat', [$c, 'heartbeat']);
+        Route::get('orders/pending', [$c, 'pending']);
+        Route::get('orders/{id}', [$c, 'order'])->whereUuid('id');
+        Route::post('orders/{id}/rung-up', [$c, 'rungUp'])->whereUuid('id');
+        Route::post('orders/{id}/unrung', [$c, 'unrung'])->whereUuid('id');
+        Route::post('orders/{id}/cancel-seen', [$c, 'cancelSeen'])->whereUuid('id');
+    });
+});
