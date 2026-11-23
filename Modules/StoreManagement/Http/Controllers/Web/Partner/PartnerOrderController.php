@@ -43,10 +43,58 @@ class PartnerOrderController extends Controller
 
     public function board(Request $request): View
     {
+        $staff = $request->attributes->get('partnerStaff');
         return view('storemanagement::partner.orders', [
             'store' => $this->store($request),
             'responseMinutes' => StoreSettings::all()['partner_response_minutes'],
+            'todayMenu' => $this->todayMenu($request),
+            'canToggle' => !$staff || \Modules\StoreManagement\Lib\StoreTeam::allows($staff, 'partner.menu.item.availability'),
+            'canEditMenu' => !$staff || \Modules\StoreManagement\Lib\StoreTeam::allows($staff, 'partner.menu'),
         ]);
+    }
+
+    /**
+     * What customers can order today, per kitchen on this board: on sale now, later today
+     * (with the time it starts), sold out today, and how many dishes are not served today.
+     */
+    protected function todayMenu(Request $request): array
+    {
+        $store = $this->store($request);
+        $brand = $store->brand();
+        $items = $brand->items()->with('category')->orderBy('sort')->orderBy('name')->get();
+        $kitchens = $store->isBranch() ? collect([$store]) : $store->kitchens();
+        $now = now();
+        $out = [];
+        foreach ($kitchens as $kitchen) {
+            $states = $kitchen->stateMap();
+            $groups = ['now' => [], 'later' => [], 'sold_out' => []];
+            $notToday = 0;
+            foreach ($items as $i) {
+                $state = $i->menuState($now, $states->get($i->id));
+                $row = [
+                    'id' => $i->id,
+                    'name' => $i->name,
+                    'price' => getCurrencyFormat((float)$i->price),
+                    'image' => $i->imageUrl(),
+                    'from' => $i->effectiveWindow()[0] ?? null,
+                    'until' => $i->effectiveWindow()[1] ?? null,
+                ];
+                match ($state) {
+                    \Modules\StoreManagement\Entities\StoreItem::AVAILABLE => $groups['now'][] = $row,
+                    \Modules\StoreManagement\Entities\StoreItem::LATER => $groups['later'][] = $row,
+                    \Modules\StoreManagement\Entities\StoreItem::SOLD_OUT => $groups['sold_out'][] = $row,
+                    \Modules\StoreManagement\Entities\StoreItem::NOT_TODAY => $notToday++,
+                    default => null,
+                };
+            }
+            $out[] = [
+                'id' => $kitchen->id,
+                'name' => $kitchen->branch_name ?: $kitchen->name,
+                'groups' => $groups,
+                'not_today' => $notToday,
+            ];
+        }
+        return $out;
     }
 
     public function feed(Request $request): JsonResponse

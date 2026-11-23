@@ -37,6 +37,27 @@
     .o__code { margin-left: auto; text-align: center; }
     .o__code b { display: block; font-size: 22px; letter-spacing: .15em; font-variant-numeric: tabular-nums; }
     .o__code small { font-size: 11px; color: var(--muted); }
+    .tm { background: #fff; border: 1px solid var(--line); border-radius: 16px; margin-bottom: 16px; }
+    .tm > summary { list-style: none; cursor: pointer; padding: 12px 14px; display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+    .tm > summary::-webkit-details-marker { display: none; }
+    .tm__title { font-weight: 800; font-size: 15px; }
+    .tm__counts { display: flex; gap: 6px; flex-wrap: wrap; }
+    .tm__pill { font-size: 12px; font-weight: 700; border-radius: 999px; padding: 2px 9px; background: #f0f0f3; white-space: nowrap; }
+    .tm__pill.is-now { background: rgba(18, 161, 80, .12); color: var(--ok); }
+    .tm__pill.is-out { background: var(--red-soft); color: var(--red); }
+    .tm__chev { margin-left: auto; color: var(--muted); transition: transform .2s; }
+    .tm[open] .tm__chev { transform: rotate(180deg); }
+    .tm__body { padding: 0 14px 12px; border-top: 1px solid var(--line); }
+    .tm__branches { display: flex; gap: 6px; flex-wrap: wrap; padding-top: 10px; }
+    .tm__group h3 { font-size: 12px; font-weight: 800; letter-spacing: .06em; text-transform: uppercase; color: var(--muted); margin: 12px 0 6px; }
+    .tm__rows { display: grid; grid-template-columns: 1fr; gap: 6px; }
+    @media (min-width: 700px) { .tm__rows { grid-template-columns: 1fr 1fr; } }
+    @media (min-width: 1050px) { .tm__rows { grid-template-columns: 1fr 1fr 1fr; } }
+    .tm__row { display: flex; align-items: center; gap: 10px; border: 1px solid #f0f0f3; border-radius: 10px; padding: 6px 8px; }
+    .tm__row img, .tm__row .tm__noimg { width: 40px; height: 40px; border-radius: 6px; object-fit: cover; flex: none; background: #f4f4f6; }
+    .tm__name { font-weight: 700; font-size: 14px; line-height: 1.2; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .tm__sub { font-size: 12px; color: var(--muted); }
+    .tm__row .btn { margin-left: auto; white-space: nowrap; font-size: 12px; font-weight: 700; border-radius: 6px; }
     .prep { display: grid; grid-template-columns: repeat(auto-fit, minmax(42px, 1fr)); gap: 6px; }
     .prep button { min-height: 44px; border-radius: 12px; border: 1px solid var(--line); background: #fff; font-weight: 800; }
     .prep button.is-on { border-color: var(--red); background: var(--red-soft); color: var(--red); }
@@ -96,6 +117,69 @@
         <button type="button" class="btn btn-sm btn-dark" data-sound-on>{{ translate('Turn_on') }}</button>
     </div>
 
+    @php
+        $tmTotals = ['now' => 0, 'later' => 0, 'sold_out' => 0];
+        foreach ($todayMenu as $k) { foreach ($tmTotals as $g => $n) { $tmTotals[$g] += count($k['groups'][$g]); } }
+        $tmGroups = ['now' => translate('Customers can order now'), 'later' => translate('Later today'), 'sold_out' => translate('Sold out today')];
+    @endphp
+    {{-- What customers can order today, with a one-tap Sold out / Back on sale. --}}
+    <details class="tm" data-today-menu {{ $tmTotals['now'] + $tmTotals['later'] + $tmTotals['sold_out'] ? 'open' : '' }}>
+        <summary>
+            <span class="tm__title"><i class="bi bi-journal-text"></i> {{ translate('On the menu today') }}</span>
+            <span class="tm__counts">
+                <span class="tm__pill is-now">{{ translate(key: '{n} on sale now', replace: ['n' => $tmTotals['now']]) }}</span>
+                @if($tmTotals['later'])<span class="tm__pill">{{ translate(key: '{n} later today', replace: ['n' => $tmTotals['later']]) }}</span>@endif
+                @if($tmTotals['sold_out'])<span class="tm__pill is-out">{{ translate(key: '{n} sold out', replace: ['n' => $tmTotals['sold_out']]) }}</span>@endif
+            </span>
+            <i class="bi bi-chevron-down tm__chev" aria-hidden="true"></i>
+        </summary>
+        <div class="tm__body">
+            @if(count($todayMenu) > 1)
+                <div class="tm__branches" role="tablist">
+                    @foreach($todayMenu as $n => $k)
+                        <button type="button" class="btn btn-sm {{ $n ? 'btn-outline-dark' : 'btn-dark' }}" data-tm-tab="{{ $k['id'] }}" role="tab" aria-selected="{{ $n ? 'false' : 'true' }}">{{ $k['name'] }}</button>
+                    @endforeach
+                </div>
+            @endif
+            @foreach($todayMenu as $n => $k)
+                <div data-tm-kitchen="{{ $k['id'] }}" @if($n) hidden @endif>
+                    @foreach($tmGroups as $g => $label)
+                        @if(count($k['groups'][$g]))
+                            <div class="tm__group">
+                                <h3>{{ $label }} · {{ count($k['groups'][$g]) }}</h3>
+                                <div class="tm__rows">
+                                    @foreach($k['groups'][$g] as $it)
+                                        <div class="tm__row">
+                                            @if($it['image'])<img src="{{ $it['image'] }}" alt="" loading="lazy">@else<span class="tm__noimg"></span>@endif
+                                            <div style="min-width:0">
+                                                <div class="tm__name">{{ $it['name'] }}</div>
+                                                <div class="tm__sub">{{ $it['price'] }}@if($g === 'later' && $it['from']) · {{ translate(key: 'from {time}', replace: ['time' => $it['from']]) }}@elseif($g === 'now' && $it['until']) · {{ translate(key: 'until {time}', replace: ['time' => $it['until']]) }}@endif</div>
+                                            </div>
+                                            @if($canToggle)
+                                                @if($g === 'sold_out')
+                                                    <button type="button" class="btn btn-sm btn-outline-success" data-tm-set="available" data-item="{{ $it['id'] }}" data-kitchen="{{ $k['id'] }}">{{ translate('Back on sale') }}</button>
+                                                @else
+                                                    <button type="button" class="btn btn-sm btn-outline-danger" data-tm-set="sold_out" data-item="{{ $it['id'] }}" data-kitchen="{{ $k['id'] }}">{{ translate('Sold out') }}</button>
+                                                @endif
+                                            @endif
+                                        </div>
+                                    @endforeach
+                                </div>
+                            </div>
+                        @endif
+                    @endforeach
+                    @if(!count($k['groups']['now']) && !count($k['groups']['later']) && !count($k['groups']['sold_out']))
+                        <p class="text-muted mt-3 mb-1" style="font-size:14px">{{ translate('Nothing on the menu today. Customers cannot order until you add dishes for today.') }}</p>
+                    @endif
+                    <p class="text-muted mt-2 mb-0" style="font-size:12px">
+                        @if($k['not_today']){{ translate(key: '{n} other dishes are not served today.', replace: ['n' => $k['not_today']]) }} @endif
+                        @if($canEditMenu)<a href="{{ route('partner.menu') }}">{{ translate('Edit the menu') }}</a>@endif
+                    </p>
+                </div>
+            @endforeach
+        </div>
+    </details>
+
     <div data-board>
         <div class="empty"><div class="spinner-border text-secondary" role="status"></div></div>
     </div>
@@ -147,6 +231,44 @@
 @endsection
 
 @push('script')
+<script>
+(function () {
+    const box = document.querySelector('[data-today-menu]');
+    if (!box) return;
+    // Branch tabs (the owner's board covers every branch).
+    box.addEventListener('click', async function (e) {
+        const tab = e.target.closest('[data-tm-tab]');
+        if (tab) {
+            box.querySelectorAll('[data-tm-tab]').forEach(t => { const on = t === tab; t.className = 'btn btn-sm ' + (on ? 'btn-dark' : 'btn-outline-dark'); t.setAttribute('aria-selected', on); });
+            box.querySelectorAll('[data-tm-kitchen]').forEach(k => k.hidden = k.dataset.tmKitchen !== tab.dataset.tmTab);
+            return;
+        }
+        const btn = e.target.closest('[data-tm-set]');
+        if (!btn) return;
+        btn.disabled = true;
+        try {
+            const res = await fetch(@json(url('partner/menu/item')) + '/' + btn.dataset.item + '/availability', {
+                method: 'POST',
+                headers: {'X-CSRF-TOKEN': document.querySelector('meta[name=csrf-token]').content, 'Accept': 'application/json', 'Content-Type': 'application/json'},
+                body: JSON.stringify({state: btn.dataset.tmSet, kitchen: btn.dataset.kitchen}),
+            });
+            if (!res.ok) throw new Error();
+            // Redraw the panel from the page itself, keeping the open branch.
+            const open = box.querySelector('[data-tm-kitchen]:not([hidden])')?.dataset.tmKitchen;
+            const html = await (await fetch(location.href, {headers: {'Accept': 'text/html'}})).text();
+            const fresh = new DOMParser().parseFromString(html, 'text/html').querySelector('[data-today-menu]');
+            if (fresh) {
+                box.innerHTML = fresh.innerHTML;
+                box.open = true;
+                if (open) box.querySelector('[data-tm-tab="' + open + '"]')?.click();
+            }
+        } catch (err) {
+            btn.disabled = false;
+            if (window.toastr) toastr.error(@json(translate('Could not save. Try again.')));
+        }
+    });
+})();
+</script>
 <script>
 (function () {
     var T = {
