@@ -53,6 +53,9 @@ interface StoreOrderServiceInterface extends BaseServiceInterface
     /** Payment hook (storeOrderPaymentUpdate). */
     public function onGatewayPaid(PaymentRequest $paymentRequest): void;
 
+    /** A payment into the business's own Fapshi succeeded (StorePaymentService, inside its transaction). */
+    public function onShopPaid(\Modules\StoreManagement\Entities\StorePayment $payment): void;
+
     /** Why the order can no longer be paid ($starting: a new payment page), or null while it can. */
     public function paymentClosedReason(string $orderId, bool $starting): ?string;
 

@@ -22,3 +22,11 @@ if (!function_exists('storeOrderDeliveryPaid')) {
         app(StoreOrderServiceInterface::class)->onDeliveryFeePaid($data);
     }
 }
+
+if (!function_exists('storeStatementPaid')) {
+    /** E-Ride's Fapshi confirmed a business's weekly statement payment. */
+    function storeStatementPaid($data): void
+    {
+        app(\Modules\StoreManagement\Service\StoreStatementService::class)->onGatewayPaid($data);
+    }
+}

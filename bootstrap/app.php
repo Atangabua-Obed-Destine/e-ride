@@ -136,6 +136,8 @@ $app = Application::configure(basePath: dirname(__DIR__))
         $job('app:process-late-return-penalty-notifications')->everyMinute();
         $job('fapshi:reconcile')->everyTwoMinutes();
         $job('store-orders:tick')->everyMinute();
+        // Food & Shops businesses paid into their own Fapshi: missed webhooks, weekly statements, late pauses.
+        $job('store-payments:tick')->everyTwoMinutes();
         $job('market-orders:tick')->everyMinute();
         // E-Ride Bus Travel: payments, expiring requests, the timetable opening the coming days.
         $job('bus:tick')->everyMinute();

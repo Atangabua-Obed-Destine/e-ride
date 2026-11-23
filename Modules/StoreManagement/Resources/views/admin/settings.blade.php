@@ -156,6 +156,32 @@
 
                 <div class="card mb-3">
                     <div class="card-body">
+                        <div class="d-flex flex-wrap align-items-center justify-content-between gap-3 mb-3">
+                            <div class="flex-grow-1" style="min-width: 240px">
+                                <h5 class="mb-1">{{ translate('Businesses with their own Fapshi') }}</h5>
+                                <p class="fs-12 text-muted mb-0">{{ translate('A business can connect its own Fapshi account in its portal (Earnings, Mobile Money). Its customers then pay it directly, items and delivery, and E-Ride holds none of that money. Every Monday E-Ride makes a statement of what the business owes it for the past week (delivery fees of its riders, resellers, shares). Businesses without their own account keep the usual way: E-Ride collects and pays them out.') }}</p>
+                            </div>
+                            <label class="switcher">
+                                <input type="hidden" name="own_payments_status" value="0">
+                                <input class="switcher_input" type="checkbox" name="own_payments_status" value="1" {{ $settings['own_payments_status'] ? 'checked' : '' }}>
+                                <span class="switcher_control"></span>
+                            </label>
+                        </div>
+                        <div class="row g-3">
+                            <div class="col-sm-4">
+                                <label class="form-label">{{ translate('Days_to_pay_a_statement') }}</label>
+                                <input type="number" name="statement_due_days" class="form-control" required min="1" max="14" value="{{ $settings['statement_due_days'] }}">
+                            </div>
+                            <div class="col-sm-4">
+                                <label class="form-label">{{ translate('Days_late_before_app_orders_pause') }}</label>
+                                <input type="number" name="statement_pause_days" class="form-control" required min="1" max="30" value="{{ $settings['statement_pause_days'] }}">
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="card mb-3">
+                    <div class="card-body">
                         <h5 class="mb-1">{{ translate('Delivery_fee') }}</h5>
                         <p class="fs-12 text-muted mb-2">
                             {{ translate('The delivery fee uses the parcel fare of the category below, for the weight above, in the store zone. Set it in Parcel Delivery Fare Setup.') }}

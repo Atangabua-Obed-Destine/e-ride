@@ -35,6 +35,8 @@ class StoreSettingController extends Controller
             'reseller_max_percent' => 'required|numeric|min:1|max:100|gte:reseller_min_percent',
             'reseller_window_days' => 'required|integer|min:1|max:60',
             'reseller_min_payout' => 'required|numeric|min:0|max:1000000',
+            'statement_due_days' => 'required|integer|min:1|max:14',
+            'statement_pause_days' => 'required|integer|min:1|max:30',
         ]);
         updateBusinessSetting(keyName: 'store_ordering_status', settingType: STORE_SETTINGS, value: $request->boolean('status') ? '1' : '0');
         updateBusinessSetting(keyName: 'store_refund_status', settingType: STORE_SETTINGS, value: $request->boolean('refund_status') ? '1' : '0');
@@ -51,6 +53,9 @@ class StoreSettingController extends Controller
         foreach (['reseller_min_percent', 'reseller_max_percent', 'reseller_window_days', 'reseller_min_payout'] as $key) {
             updateBusinessSetting(keyName: 'store_' . $key, settingType: STORE_SETTINGS, value: (string)$data[$key]);
         }
+        updateBusinessSetting(keyName: 'store_own_payments_status', settingType: STORE_SETTINGS, value: $request->boolean('own_payments_status') ? '1' : '0');
+        updateBusinessSetting(keyName: 'store_statement_due_days', settingType: STORE_SETTINGS, value: (string)$data['statement_due_days']);
+        updateBusinessSetting(keyName: 'store_statement_pause_days', settingType: STORE_SETTINGS, value: (string)$data['statement_pause_days']);
         Cache::forget(CACHE_BUSINESS_SETTINGS);
         Toastr::success(translate('Food & Shops settings saved'));
         return back();

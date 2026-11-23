@@ -129,6 +129,14 @@ class FapshiController extends Controller
             if ($busPayment) {
                 return response()->json(['ok' => true, 'status' => app(\Modules\BusManagement\Service\BusPaymentService::class)->sync($busPayment)]);
             }
+            // A Food & Shops order paid to a demo business on E-Ride's sandbox (same Fapshi account).
+            $storePayment = class_exists(\Modules\StoreManagement\Entities\StorePayment::class) && ($transId !== '' || $externalId !== '')
+                ? \Modules\StoreManagement\Entities\StorePayment::query()
+                    ->when($transId !== '', fn($q) => $q->where('trans_id', $transId), fn($q) => $q->where('external_id', $externalId))->first()
+                : null;
+            if ($storePayment) {
+                return response()->json(['ok' => true, 'status' => app(\Modules\StoreManagement\Service\StorePaymentService::class)->sync($storePayment)]);
+            }
             Log::info('Fapshi webhook for an unknown transaction', ['trans_id' => $transId, 'external_id' => $externalId]);
             return response()->json(['ok' => true, 'known' => false]);
         }

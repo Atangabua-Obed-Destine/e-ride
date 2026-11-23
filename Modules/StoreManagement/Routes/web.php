@@ -1,6 +1,8 @@
 <?php
 
 use Illuminate\Support\Facades\Route;
+use App\Http\Middleware\VerifyCsrfToken;
+use Modules\StoreManagement\Http\Controllers\Web\StorePayController;
 use Modules\StoreManagement\Http\Controllers\Web\Admin\StoreController;
 use Modules\StoreManagement\Http\Controllers\Web\Admin\StoreOrderController;
 use Modules\StoreManagement\Http\Controllers\Web\Admin\StoreSettingController;
@@ -36,6 +38,10 @@ Route::group(['prefix' => 'admin', 'as' => 'admin.', 'middleware' => 'admin'], f
             Route::delete('{store}/menu/item/{item}', [StoreController::class, 'deleteItem'])->name('menu.item.delete');
             Route::post('{store}/menu/item/{item}/availability', [StoreController::class, 'itemAvailability'])->name('menu.item.availability');
             Route::post('{store}/payouts', [StoreController::class, 'recordPayout'])->name('payouts.record');
+            // A business paid into its own Fapshi: the demo sandbox, switching it off, and statements paid by transfer.
+            Route::post('{store}/own-payments/sandbox', [StoreController::class, 'ownPaymentsSandbox'])->name('own-payments.sandbox');
+            Route::post('{store}/own-payments/off', [StoreController::class, 'ownPaymentsOff'])->name('own-payments.off');
+            Route::post('{store}/statements/{statement}/paid', [StoreController::class, 'statementPaid'])->name('statements.paid')->whereUuid('statement');
         });
         Route::delete('{store}', [StoreController::class, 'destroy'])->name('destroy')->middleware('can:store_delete');
     });
@@ -95,6 +101,13 @@ Route::group(['prefix' => 'partner', 'as' => 'partner.'], function () {
         Route::delete('riders/{driver}', [PartnerRiderController::class, 'remove'])->name('riders.remove');
         Route::get('earnings', [PortalController::class, 'earnings'])->name('earnings');
         Route::get('share', [PortalController::class, 'share'])->name('share');
+        // Mobile Money: the business's own Fapshi, weekly statements, money to send back (owner only).
+        Route::get('payments', [\Modules\StoreManagement\Http\Controllers\Web\Partner\PartnerPaymentsController::class, 'index'])->name('payments');
+        Route::post('payments/keys', [\Modules\StoreManagement\Http\Controllers\Web\Partner\PartnerPaymentsController::class, 'saveKeys'])->name('payments.keys')->middleware('throttle:20,1,store-fapshi');
+        Route::post('payments/test', [\Modules\StoreManagement\Http\Controllers\Web\Partner\PartnerPaymentsController::class, 'test'])->name('payments.test')->middleware('throttle:20,1,store-fapshi');
+        Route::post('payments/toggle', [\Modules\StoreManagement\Http\Controllers\Web\Partner\PartnerPaymentsController::class, 'toggle'])->name('payments.toggle');
+        Route::post('payments/statements/{statement}/pay', [\Modules\StoreManagement\Http\Controllers\Web\Partner\PartnerPaymentsController::class, 'payStatement'])->name('payments.statement.pay')->whereUuid('statement')->middleware('throttle:10,1,store-statement-pay');
+        Route::post('payments/orders/{order}/sent-back', [\Modules\StoreManagement\Http\Controllers\Web\Partner\PartnerPaymentsController::class, 'sentBack'])->name('payments.sent-back')->whereUuid('order');
         Route::post('share/look', [PortalController::class, 'saveLook'])->name('share.look');
         Route::post('share/design', [PortalController::class, 'saveDesign'])->name('share.design')->middleware('throttle:10,1,store-share-design');
         Route::post('share/design/remove', [PortalController::class, 'removeDesign'])->name('share.design.remove');
@@ -113,4 +126,16 @@ Route::group(['prefix' => 'partner', 'as' => 'partner.'], function () {
 Route::middleware('throttle:120,1,store-page')->group(function () {
     Route::get('f/{slug}', [\Modules\StoreManagement\Http\Controllers\Web\StorePageController::class, 'page'])->where('slug', '[a-z0-9-]+')->name('store.page');
     Route::get('f/{slug}/app', [\Modules\StoreManagement\Http\Controllers\Web\StorePageController::class, 'getApp'])->where('slug', '[a-z0-9-]+')->name('store.get-app');
+});
+
+/*
+| Mobile money into a business's own Fapshi account (StorePayController). None of these URLs contain
+| "success" or "fail": the app's payment screen closes on the first one that does.
+*/
+Route::group(['prefix' => 'store', 'as' => 'store.'], function () {
+    Route::post('fapshi/{code}', [StorePayController::class, 'webhook'])->name('fapshi.webhook')->where('code', '[a-z0-9]{8,24}')
+        ->withoutMiddleware([VerifyCsrfToken::class])->middleware('throttle:120,1,store-webhook');
+    Route::get('pay/{reference}/return', [StorePayController::class, 'return'])->name('pay.return')->where('reference', 'store-[A-Za-z0-9-]{3,60}');
+    Route::get('pay/{reference}/check', [StorePayController::class, 'check'])->name('pay.check')->where('reference', 'store-[A-Za-z0-9-]{3,60}')
+        ->middleware('throttle:60,1,store-pay-check');
 });

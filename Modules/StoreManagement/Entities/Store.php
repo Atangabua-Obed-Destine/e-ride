@@ -33,7 +33,10 @@ class Store extends Model
         'logo', 'cover', 'description', 'opening_hours', 'is_open', 'offers_delivery', 'default_prep_minutes', 'min_order_amount',
         'own_delivery', 'own_delivery_fee', 'own_delivery_km', 'riders_mode',
         'is_active', 'sort', 'payout_method', 'payout_number', 'payout_name', 'parent_id', 'branch_name', 'reseller_pct',
+        'fapshi', 'fapshi_ok_at', 'fapshi_code', 'own_payments', 'statement_paused_at',
     ];
+
+    protected $hidden = ['fapshi'];
 
     protected $casts = [
         'latitude' => 'float',
@@ -48,6 +51,10 @@ class Store extends Model
         'default_prep_minutes' => 'integer',
         'min_order_amount' => 'float',
         'sort' => 'integer',
+        'fapshi' => 'encrypted:array',
+        'fapshi_ok_at' => 'datetime',
+        'own_payments' => 'boolean',
+        'statement_paused_at' => 'datetime',
     ];
 
     public function parent(): BelongsTo
@@ -246,11 +253,34 @@ class Store extends Model
         return $this;
     }
 
-    /** The brand's unpaid balance: delivered food earnings at every kitchen minus payouts (paid to the owner). */
+    /** The brand's Fapshi keys, or null when not saved. */
+    public function fapshiValues(): ?array
+    {
+        $f = $this->brand()->fapshi;
+        return is_array($f) && filled($f['api_user'] ?? null) && filled($f['api_key'] ?? null) ? $f : null;
+    }
+
+    /** Customers pay this business's own Fapshi account (items and delivery). Set on the brand, for every branch. */
+    public function takesOwnPayments(): bool
+    {
+        $brand = $this->brand();
+        return $brand->own_payments && $brand->fapshi_ok_at !== null && $brand->fapshiValues() !== null;
+    }
+
+    public function statements(): HasMany
+    {
+        return $this->hasMany(StoreStatement::class, 'store_id');
+    }
+
+    /**
+     * The brand's unpaid balance: delivered food earnings at every kitchen minus payouts (paid to the owner).
+     * Orders paid into the business's own Fapshi are left out: that money is already theirs.
+     */
     public function balance(): float
     {
         $brand = $this->brand();
-        $earned = (float)StoreOrder::whereIn('store_id', $brand->kitchens()->pluck('id'))->where('status', StoreOrder::DELIVERED)->sum('partner_earning');
+        $earned = (float)StoreOrder::whereIn('store_id', $brand->kitchens()->pluck('id'))->where('status', StoreOrder::DELIVERED)
+            ->where('paid_to', StoreOrder::PAID_TO_ERIDE)->sum('partner_earning');
         $paid = (float)$brand->payouts()->sum('amount');
         return round($earned - $paid, 2);
     }

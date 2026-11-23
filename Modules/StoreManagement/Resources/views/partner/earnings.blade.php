@@ -3,7 +3,13 @@
 @section('title', translate('Earnings'))
 
 @section('content')
-    <h1 class="fs-4 fw-bold mb-3">{{ translate('Earnings') }}</h1>
+    <div class="d-flex flex-wrap align-items-center justify-content-between gap-2 mb-3">
+        <h1 class="fs-4 fw-bold m-0">{{ translate('Earnings') }}</h1>
+        @if(!$partnerStaff)
+            <a href="{{ route('partner.payments') }}" class="btn btn-outline-dark btn-sm" style="border-radius:6px"><i class="bi bi-phone"></i>
+                {{ $store->takesOwnPayments() ? translate('Mobile Money: paid into your Fapshi') : translate('Mobile Money and your own Fapshi') }}</a>
+        @endif
+    </div>
     <div class="row g-3 mb-3">
         <div class="col-12 col-md-4">
             <div class="p-card p-3 h-100" style="background:#111114;color:#fff;border-color:#111114">
@@ -15,7 +21,7 @@
                 @else
                     <div class="fs-12" style="color:#a3a3ad">{{ translate('E-Ride owes you') }}</div>
                     <div class="fs-2 fw-bold">{{ getCurrencyFormat($balance) }}</div>
-                    <div class="fs-12" style="color:#a3a3ad">{{ $showBranch ? translate('All branches: the full food price of delivered orders and your own delivery fees, minus payouts received.') : translate('The full food price of delivered orders and your own delivery fees, minus payouts received.') }}</div>
+                    <div class="fs-12" style="color:#a3a3ad">{{ $showBranch ? translate('All branches: the full food price of delivered orders and your own delivery fees, minus payouts received.') : translate('The full food price of delivered orders and your own delivery fees, minus payouts received.') }}@if($store->takesOwnPayments()) {{ translate('Orders paid into your own Fapshi are not in this amount: that money is already yours.') }}@endif</div>
                 @endif
             </div>
         </div>

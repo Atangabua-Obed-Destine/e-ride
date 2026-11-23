@@ -114,7 +114,36 @@ class StoreController extends Controller
         $payouts = $store->payouts()->with('author')->latest()->paginate(20);
         $balance = $store->balance();
         $deliveredCount = $store->orders()->where('status', \Modules\StoreManagement\Entities\StoreOrder::DELIVERED)->count();
-        return view('storemanagement::admin.stores.payouts', compact('store', 'payouts', 'balance', 'deliveredCount'));
+        $statements = $store->statements()->latest('period_from')->limit(20)->get();
+        return view('storemanagement::admin.stores.payouts', compact('store', 'payouts', 'balance', 'deliveredCount', 'statements'));
+    }
+
+    /** Testing only: a demo business takes pretend payments on E-Ride's Fapshi sandbox. */
+    public function ownPaymentsSandbox(Store $store): RedirectResponse
+    {
+        [$ok, $message] = app(\Modules\StoreManagement\Service\StorePaymentService::class)->useEridesSandbox($store->brand());
+        if ($ok) {
+            $store->brand()->forceFill(['own_payments' => true])->save();
+        }
+        $ok ? Toastr::success($message) : Toastr::error($message);
+        return back();
+    }
+
+    public function ownPaymentsOff(Store $store): RedirectResponse
+    {
+        $store->brand()->forceFill(['own_payments' => false])->save();
+        Toastr::success(translate('Customers of this business pay E-Ride again.'));
+        return back();
+    }
+
+    /** A statement paid outside the app (transfer, cash at the office). */
+    public function statementPaid(Request $request, Store $store, string $statement): RedirectResponse
+    {
+        $data = $request->validate(['reference' => 'required|string|max:110']);
+        $row = \Modules\StoreManagement\Entities\StoreStatement::where('store_id', $store->brand()->id)->findOrFail($statement);
+        app(\Modules\StoreManagement\Service\StoreStatementService::class)->markPaid($row, $data['reference'], auth()->id());
+        Toastr::success(translate('Statement marked as paid.'));
+        return back();
     }
 
     public function recordPayout(Request $request, Store $store): RedirectResponse

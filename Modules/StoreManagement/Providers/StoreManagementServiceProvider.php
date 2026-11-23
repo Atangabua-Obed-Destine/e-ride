@@ -30,7 +30,7 @@ class StoreManagementServiceProvider extends ServiceProvider
         $this->loadMigrationsFrom(module_path($this->moduleName, 'Database/Migrations'));
 
         if ($this->app->runningInConsole()) {
-            $this->commands([\Modules\StoreManagement\Console\StoreOrdersTick::class]);
+            $this->commands([\Modules\StoreManagement\Console\StoreOrdersTick::class, \Modules\StoreManagement\Console\StorePaymentsTick::class]);
         }
 
         // A food order follows its delivery trip. Synced after the trip's own

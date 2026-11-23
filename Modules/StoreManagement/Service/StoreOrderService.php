@@ -23,6 +23,7 @@ use Modules\ReviewModule\Entities\Review;
 use Modules\StoreManagement\Entities\Store;
 use Modules\StoreManagement\Entities\StoreItem;
 use Modules\StoreManagement\Entities\StoreOrder;
+use Modules\StoreManagement\Entities\StorePayment;
 use Modules\StoreManagement\Entities\StoreReview;
 use Modules\StoreManagement\Lib\StoreRiders;
 use Modules\StoreManagement\Lib\StoreSettings;
@@ -254,6 +255,17 @@ class StoreOrderService extends BaseService implements StoreOrderServiceInterfac
         $order->partner_earning = round((float)$order->items_subtotal - (float)$order->store_covers - $order->reseller_commission, 2);
     }
 
+    /**
+     * Earnings, then for an order paid into the business's own Fapshi what goes on its weekly statement:
+     * everything the customer paid minus what is the business's (E-Ride's riders' delivery fees, resellers, shares).
+     */
+    protected function settleAll(StoreOrder $order): void
+    {
+        $this->settle($order);
+        $order->owed_to_eride = $order->paid_to === StoreOrder::PAID_TO_SHOP
+            ? max(0, round((float)$order->total - (float)$order->partner_earning, 2)) : 0;
+    }
+
     /** Delivery fee from this kitchen to a point, or null when it can't deliver there. */
     public function deliveryFee(Store $store, float $lat, float $lng): ?float
     {
@@ -341,6 +353,10 @@ class StoreOrderService extends BaseService implements StoreOrderServiceInterfac
 
     public function place(User $customer, Store $store, array $input): StoreOrder
     {
+        // A business late paying its E-Ride statement takes no app orders until it pays.
+        if ($store->brand()->statement_paused_at) {
+            throw ValidationException::withMessages(['store' => translate('This store is not taking orders in the app right now. Try again later.')]);
+        }
         $way = in_array($input['fulfilment'] ?? null, StoreOrder::WAYS, true) ? $input['fulfilment'] : StoreOrder::DELIVERY;
         $arriveAt = $way !== StoreOrder::DELIVERY && filled($input['arrive_at'] ?? null) ? Carbon::parse($input['arrive_at']) : null;
         $drop = ['latitude' => $input['drop_latitude'] ?? null, 'longitude' => $input['drop_longitude'] ?? null];
@@ -574,6 +590,16 @@ class StoreOrderService extends BaseService implements StoreOrderServiceInterfac
 
     public function paymentLink(StoreOrder $order, string $gateway): string
     {
+        if ($order->store->takesOwnPayments()) {
+            $started = app(StorePaymentService::class)->start($order);
+            if (!empty($started['paid'])) {
+                return route('payment-success');
+            }
+            if (empty($started['link'])) {
+                throw ValidationException::withMessages(['payment_method' => $started['error'] ?? translate('This payment method is not available.')]);
+            }
+            return $started['link'];
+        }
         $customer = $order->customer;
         $paymentInfo = new PaymentInfo(
             hook: 'storeOrderPaymentUpdate',
@@ -623,6 +649,38 @@ class StoreOrderService extends BaseService implements StoreOrderServiceInterfac
             // expired when the time to pay ends (closePayments), so this is rare.
             $this->onLatePayment($order->id, (float)$paymentRequest->payment_amount, (string)$paymentRequest->id);
         });
+    }
+
+    /**
+     * A payment into the business's own Fapshi succeeded (inside its transaction). The order is paid
+     * (paid_to = shop), its delivery fee is paid, or it came too late and the business sends it back.
+     */
+    public function onShopPaid(StorePayment $payment): void
+    {
+        $order = StoreOrder::whereKey($payment->store_order_id)->lockForUpdate()->first();
+        if (!$order) {
+            return;
+        }
+        if ($payment->purpose === StorePayment::DELIVERY_FEE) {
+            if ($order->switch && !$order->isDelivery() && $order->status === StoreOrder::ACCEPTED) {
+                $this->applySwitch($order, $order->switch, true);
+                $order->save();
+                DB::afterCommit(fn() => $this->notifyCustomer($order, 'now_delivery'));
+                if ($order->ready_at && $order->ready_at->lte(now()->addMinutes(StoreSettings::all()['rider_lead_minutes']))) {
+                    $this->requestRiderLocked($order);
+                }
+                return;
+            }
+        } elseif ($order->status === StoreOrder::AWAITING_PAYMENT && $order->payment_status === StoreOrder::UNPAID) {
+            $order->paid_to = StoreOrder::PAID_TO_SHOP;
+            $this->markPaid($order, 'mobile_money');
+            return;
+        }
+        // Paid after the order closed, or twice: the money is in the business's account, so the business sends it back.
+        $order->shop_refund_due = round((float)$order->shop_refund_due + $payment->amount, 2);
+        $order->save();
+        Log::warning('Food & Shops: payment into the business account came too late', ['order' => $order->id, 'amount' => $payment->amount]);
+        DB::afterCommit(fn() => $this->notifyCustomer($order, 'paid_late_shop', (float)$payment->amount));
     }
 
     /**
@@ -676,12 +734,15 @@ class StoreOrderService extends BaseService implements StoreOrderServiceInterfac
      */
     protected function closePayments(StoreOrder $order): bool
     {
+        $graceOver = !$order->pay_by || $order->pay_by->lt(now()->subMinutes(self::PAYING_GRACE_MINUTES));
+        if (!app(StorePaymentService::class)->close($order, $graceOver)) {
+            return false;
+        }
         $requests = PaymentRequest::where('attribute', 'store_order')->where('attribute_id', $order->id)->where('is_paid', 0)->get();
         if ($requests->isEmpty()) {
             return true;
         }
         $fapshi = app(\Modules\Gateways\Services\FapshiPayments::class);
-        $graceOver = !$order->pay_by || $order->pay_by->lt(now()->subMinutes(self::PAYING_GRACE_MINUTES));
         foreach ($requests as $request) {
             foreach ($fapshi->openAttempts($request) as $attempt) {
                 $status = $fapshi->sync($attempt);
@@ -995,7 +1056,7 @@ class StoreOrderService extends BaseService implements StoreOrderServiceInterfac
         if ($order->isDelivery()) {
             $order->picked_up_at = $order->picked_up_at ?? now();
         }
-        $this->settle($order);
+        $this->settleAll($order);
         $order->switch = null;
         $order->save();
     }
@@ -1179,6 +1240,14 @@ class StoreOrderService extends BaseService implements StoreOrderServiceInterfac
         $change = $order->switch;
         if (!$change || $order->isDelivery() || $order->status !== StoreOrder::ACCEPTED || Carbon::parse($change['pay_by'])->isPast()) {
             throw ValidationException::withMessages(['order' => translate('There is no delivery fee to pay for this order.')]);
+        }
+        // An order paid into the business's own Fapshi pays its delivery fee there too.
+        if ($order->paid_to === StoreOrder::PAID_TO_SHOP && $order->store->takesOwnPayments()) {
+            $started = app(StorePaymentService::class)->start($order, StorePayment::DELIVERY_FEE);
+            if (empty($started['link'])) {
+                throw ValidationException::withMessages(['payment_method' => $started['error'] ?? translate('This payment method is not available.')]);
+            }
+            return $started['link'];
         }
         $customer = $order->customer;
         $paymentInfo = new PaymentInfo(
@@ -1599,6 +1668,15 @@ class StoreOrderService extends BaseService implements StoreOrderServiceInterfac
     protected function refundOrder(StoreOrder $order, float $amount): bool
     {
         $amount = round(min($amount, $order->total - $order->refunded_amount), 2);
+        if ($amount > 0 && $order->paid_to === StoreOrder::PAID_TO_SHOP) {
+            // The money is in the business's own Fapshi: the business sends it back, and its portal says so.
+            $order->shop_refund_due = round((float)$order->shop_refund_due + $amount, 2);
+            $order->refunded_amount = round($order->refunded_amount + $amount, 2);
+            if ($order->refunded_amount + 0.00001 >= $order->total) {
+                $order->payment_status = StoreOrder::REFUNDED;
+            }
+            return true;
+        }
         if ($amount <= 0 || !StoreSettings::refunds()) {
             return false;
         }
@@ -1645,6 +1723,10 @@ class StoreOrderService extends BaseService implements StoreOrderServiceInterfac
             // Cancelled after payment with refunds off: no refund is promised.
             $paidNoRefund = $order->payment_status === StoreOrder::PAID && (float)$order->refunded_amount <= 0;
             $rider = trim((string)$order->trip?->driver?->first_name) ?: translate(key: 'Your rider', locale: $locale);
+            // Paid into the business's own Fapshi: the business sends money back, not E-Ride's wallet.
+            $refundLine = $order->paid_to === StoreOrder::PAID_TO_SHOP
+                ? translate(key: '{store} sends {amount} back to your Mobile Money number.', replace: ['store' => $store, 'amount' => $amount], locale: $locale)
+                : translate(key: '{amount} has been refunded to your E-Ride wallet.', replace: ['amount' => $amount], locale: $locale);
             [$title, $body] = match ($event) {
                 'placed' => [
                     translate(key: 'Order sent to {store}', replace: ['store' => $store], locale: $locale),
@@ -1709,7 +1791,7 @@ class StoreOrderService extends BaseService implements StoreOrderServiceInterfac
                 'rejected', 'timeout' => [
                     translate(key: '{store} could not take your order', replace: ['store' => $store], locale: $locale),
                     match (true) {
-                        $order->refunded_amount > 0 => translate(key: '{amount} has been refunded to your E-Ride wallet.', replace: ['amount' => $amount], locale: $locale),
+                        $order->refunded_amount > 0 => $refundLine,
                         $paidNoRefund => translate(key: 'E-Ride will contact you about your payment.', locale: $locale),
                         default => ($order->cancel_reason && $event === 'rejected'
                             ? translate(key: 'Reason: {reason}. Nothing was charged.', replace: ['reason' => $order->cancel_reason], locale: $locale)
@@ -1719,7 +1801,7 @@ class StoreOrderService extends BaseService implements StoreOrderServiceInterfac
                 'cancelled' => [
                     translate(key: 'Your order was cancelled', locale: $locale),
                     $order->refunded_amount > 0
-                        ? translate(key: '{amount} has been refunded to your E-Ride wallet.', replace: ['amount' => $amount], locale: $locale)
+                        ? $refundLine
                         : ($paidNoRefund
                             ? trim(($order->cancel_reason ? translate(key: 'Reason: {reason}.', replace: ['reason' => $order->cancel_reason], locale: $locale) . ' ' : '')
                                 . translate(key: 'E-Ride will contact you about your payment.', locale: $locale))
@@ -1750,6 +1832,10 @@ class StoreOrderService extends BaseService implements StoreOrderServiceInterfac
                 'paid_late' => [
                     translate(key: 'Payment not used for your order', locale: $locale),
                     translate(key: 'Your order was no longer waiting for this payment. E-Ride will send {amount} back to your Mobile Money number.', replace: ['amount' => $amount], locale: $locale),
+                ],
+                'paid_late_shop' => [
+                    translate(key: 'Payment not used for your order', locale: $locale),
+                    translate(key: 'Your order was no longer waiting for this payment. {store} sends {amount} back to your Mobile Money number.', replace: ['store' => $store, 'amount' => $amount], locale: $locale),
                 ],
                 default => [null, null],
             };

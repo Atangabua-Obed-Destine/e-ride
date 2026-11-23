@@ -33,6 +33,11 @@ class StoreSettings
             'reseller_window_days' => min(60, max(1, (int)$get('store_reseller_window_days', 7))),
             // E-Ride pays a reseller once they are owed at least this much.
             'reseller_min_payout' => max(0, (float)$get('store_reseller_min_payout', 1000)),
+            // Businesses with their own Fapshi: may they connect it, days to pay the weekly statement,
+            // and days late before app orders pause.
+            'own_payments_status' => (string)$get('store_own_payments_status', '1') === '1',
+            'statement_due_days' => min(14, max(1, (int)$get('store_statement_due_days', 3))),
+            'statement_pause_days' => min(30, max(1, (int)$get('store_statement_pause_days', 7))),
         ];
     }
 

@@ -39,6 +39,57 @@
                 </div>
             </div>
 
+            {{-- Paid into the business's own Fapshi: status, weekly statements. --}}
+            <div class="card mb-3"><div class="card-body">
+                <div class="d-flex flex-wrap align-items-center justify-content-between gap-2 mb-2">
+                    <h5 class="mb-0">{{ translate('Own Mobile Money (Fapshi)') }}</h5>
+                    @if($store->takesOwnPayments())
+                        <span class="badge bg-success">{{ translate('Customers pay the business directly') }}{{ ($store->fapshiValues()['mode'] ?? '') === 'test' ? ' · ' . translate('test mode') : '' }}</span>
+                    @elseif($store->fapshi_ok_at)
+                        <span class="badge bg-secondary">{{ translate('Connected, switched off') }}</span>
+                    @else
+                        <span class="badge bg-light text-dark">{{ translate('Not connected: E-Ride collects and pays out') }}</span>
+                    @endif
+                </div>
+                @if($store->statement_paused_at)
+                    <div class="alert alert-warning py-2 mb-2">{{ translate('App orders are paused: a statement is late.') }}</div>
+                @endif
+                @can('store_edit')
+                    <div class="d-flex flex-wrap gap-2 mb-3">
+                        <form method="POST" action="{{ route('admin.store.own-payments.sandbox', $store) }}" onsubmit='return confirm(@json(translate("For demo stores only: customers will pay with pretend Mobile Money on E-Ride sandbox. Continue?")))'>@csrf
+                            <button class="btn btn-sm btn-outline-secondary">{{ translate('Use the E-Ride Fapshi sandbox (demo)') }}</button>
+                        </form>
+                        @if($store->takesOwnPayments())
+                            <form method="POST" action="{{ route('admin.store.own-payments.off', $store) }}">@csrf
+                                <button class="btn btn-sm btn-outline-danger">{{ translate('Switch off') }}</button>
+                            </form>
+                        @endif
+                    </div>
+                @endcan
+                <h6 class="fs-14 fw-semibold">{{ translate('Weekly statements') }}</h6>
+                @forelse($statements as $st)
+                    <div class="d-flex flex-wrap align-items-center gap-2 py-2 border-top fs-14">
+                        <div class="flex-grow-1">
+                            <div class="fw-semibold">{{ $st->period_from->format('d M') }} – {{ $st->period_to->format('d M Y') }} · {{ getCurrencyFormat($st->amount) }}</div>
+                            <div class="fs-12 text-muted">{{ $st->orders_count }} {{ translate('orders') }} · {{ translate('Delivery fees') }} {{ getCurrencyFormat($st->delivery_fees) }} · {{ translate('Other') }} {{ getCurrencyFormat($st->other) }}</div>
+                        </div>
+                        @if($st->status === \Modules\StoreManagement\Entities\StoreStatement::PAID)
+                            <span class="badge bg-success">{{ translate('Paid') }}{{ $st->reference ? ' · ' . $st->reference : '' }}</span>
+                        @else
+                            <span class="badge {{ $st->isLate() ? 'bg-danger' : 'bg-warning text-dark' }}">{{ translate('Due') }} {{ $st->due_at->format('d M') }}</span>
+                            @can('store_edit')
+                                <form method="POST" action="{{ route('admin.store.statements.paid', [$store, $st->id]) }}" class="d-flex gap-1">@csrf
+                                    <input name="reference" class="form-control form-control-sm" style="max-width:150px" required maxlength="110" placeholder="{{ translate('Reference') }}" aria-label="{{ translate('Reference') }}">
+                                    <button class="btn btn-sm btn-outline-success">{{ translate('Mark paid') }}</button>
+                                </form>
+                            @endcan
+                        @endif
+                    </div>
+                @empty
+                    <p class="text-muted fs-14 mb-0">{{ translate('No statement yet. Statements are made every Monday for orders paid into the own Fapshi account of the business.') }}</p>
+                @endforelse
+            </div></div>
+
             @can('store_edit')
                 <div class="card mb-3">
                     <div class="card-body">

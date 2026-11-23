@@ -241,6 +241,8 @@ class BusinessPulse
             $c(fn() => \Modules\PlaceManagement\Entities\ListingPayout::where('status', 'pending')->count()));
         $add('bus_statements', 'Bus statements unpaid', 'Agencies that have not paid E-Ride their monthly commission yet.', 'admin.bus.index', 'place', 'bi-receipt', 3,
             $c(fn() => \Modules\BusManagement\Entities\BusStatement::where('status', 'due')->count()));
+        $add('store_statements', 'Store statements late', 'Food & Shops businesses paid into their own Fapshi that have not paid their weekly E-Ride statement on time.', 'admin.store.index', 'store', 'bi-receipt', 3,
+            $c(fn() => \Modules\StoreManagement\Entities\StoreStatement::where('status', 'due')->where('due_at', '<', now())->count()));
 
         // Reports.
         $add('driver_reports', 'Driver reports to read', 'Customers reported something about a driver or a trip.', 'admin.driver-report.index', 'trip', 'bi-flag', 2,

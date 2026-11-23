@@ -67,7 +67,12 @@ class StoreOrder extends Model
         'partner_earning', 'placed_at', 'accepted_at', 'rider_requested_at', 'picked_up_at', 'delivered_at',
         'cancelled_at', 'cancelled_by', 'cancel_reason', 'confirmed_at', 'pay_by', 'proposal', 'proposed_at',
         'reseller_id', 'reseller_pct', 'reseller_commission', 'reseller_payout_id',
+        'paid_to', 'owed_to_eride', 'statement_id', 'shop_refund_due', 'shop_refund_sent_at', 'shop_refund_ref',
     ];
+
+    /** Where the customer's money went: to E-Ride (paid out later) or the business's own Fapshi. */
+    public const PAID_TO_ERIDE = 'eride';
+    public const PAID_TO_SHOP = 'shop';
 
     protected $casts = [
         'ref_id' => 'integer',
@@ -85,6 +90,9 @@ class StoreOrder extends Model
         'total' => 'float',
         'refunded_amount' => 'float',
         'partner_earning' => 'float',
+        'owed_to_eride' => 'float',
+        'shop_refund_due' => 'float',
+        'shop_refund_sent_at' => 'datetime',
         'reseller_pct' => 'float',
         'reseller_commission' => 'float',
         'drop_latitude' => 'float',
