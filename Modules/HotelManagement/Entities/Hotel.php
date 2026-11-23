@@ -20,13 +20,14 @@ class Hotel extends Model
 
     protected $fillable = [
         'place_id', 'name', 'status', 'pause_note', 'reception_phone', 'check_in_from', 'check_out_by',
-        'answer_always', 'answer_from', 'answer_until', 'keep_max_hours', 'board_touched_at', 'verified_by', 'verified_at',
+        'answer_always', 'answer_from', 'answer_until', 'keep_max_hours', 'board_touched_at', 'verified_by', 'verified_at', 'restaurant_store_id', 'pos_room_bill',
     ];
 
     protected $casts = [
         'answer_always' => 'boolean',
         'keep_max_hours' => 'integer',
         'board_touched_at' => 'datetime',
+        'pos_room_bill' => 'boolean',
         'verified_at' => 'datetime',
     ];
 

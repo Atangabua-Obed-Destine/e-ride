@@ -29,7 +29,7 @@ class HotelStay extends Model
     protected $fillable = [
         'hotel_id', 'room_type_id', 'room_id', 'inquiry_id', 'source', 'status', 'check_in', 'check_out', 'guests', 'guest_name',
         'kept_until', 'arrived_at', 'left_at', 'ended_at', 'created_by',
-        'pos_ref', 'pos_release_due_at', 'pos_release_reason', 'pos_release_seen_at',
+        'pos_ref', 'pos_release_due_at', 'pos_release_reason', 'pos_release_seen_at', 'room_label',
     ];
 
     protected $casts = [

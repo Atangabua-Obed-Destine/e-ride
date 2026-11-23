@@ -330,6 +330,9 @@
         waitAnswer: @json(translate('Changes sent. Waiting for the customer to accept them.')),
         paidStart: @json(translate('is paid: start cooking')),
         paid: @json(translate('Paid')),
+        roomTo: @json(translate('ROOM SERVICE · ROOM')),
+        roomBill: @json(translate('On the room bill')),
+        roomBillFailed: @json(translate('Not on the room bill: paid another way')),
         posRung: @json(translate('Rung up in POS')),
         posTodo: @json(translate('Not yet rung up in POS')),
         posDiffers: @json(translate('POS sale is less than the order')),
@@ -492,8 +495,12 @@
         }
         head += '</div>';
         // Not a delivery: say so loudly, with the time they come.
-        var here = o.fulfilment === 'dine_in' || o.fulfilment === 'pickup';
-        if (here) {
+        var here = o.fulfilment === 'dine_in' || o.fulfilment === 'pickup' || o.fulfilment === 'room';
+        if (o.fulfilment === 'room' && o.room) {
+            // Room service: the staff carry it up and ask the guest for the code at the door.
+            head += '<div style="margin:6px 0;padding:6px 10px;border-radius:6px;background:#E0E7FF;color:#3730A3;font-weight:700;font-size:13px">' +
+                '<i class="bi bi-door-closed"></i> ' + T.roomTo + ' ' + esc(o.room.number) + '</div>';
+        } else if (here) {
             head += '<div style="margin:6px 0;padding:6px 10px;border-radius:6px;background:#FEF3C7;color:#92400E;font-weight:700;font-size:13px">' +
                 '<i class="bi ' + (o.fulfilment === 'dine_in' ? 'bi-cup-hot' : 'bi-bag-check') + '"></i> ' +
                 (o.fulfilment === 'dine_in' ? T.eatHere : T.collect) + (o.arrive_at ? ' · ' + clock(o.arrive_at) : '') +
@@ -554,7 +561,8 @@
         } else if (o.status === 'rider_requested' || o.status === 'picked_up') {
             actions = riderHtml(o);
         }
-        if (o.paid && !isNew) head = head.replace('</div>', '<span class="o__paid">' + T.paid + '</span></div>');
+        if (o.paid && !isNew) head = head.replace('</div>', '<span class="o__paid">' + (o.room_bill ? T.roomBill : T.paid) + '</span></div>');
+        if (o.room_bill_failed) head = head.replace('</div>', '<span class="o__pos is-off">' + T.roomBillFailed + '</span></div>');
         // POS Innova: the salesperson rings every E-Ride order up in the POS, as usual.
         if (o.pos && !isNew) {
             var pos = o.pos.rung

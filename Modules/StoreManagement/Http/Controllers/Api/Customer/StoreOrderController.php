@@ -194,8 +194,20 @@ class StoreOrderController extends Controller
         if (!$store || !$store->brand()->is_active) {
             return $this->problem(translate('This store is not available.'));
         }
+        $room = null;
+        if (($data['fulfilment'] ?? null) === StoreOrder::ROOM) {
+            try {
+                $room = app(\Modules\HotelManagement\Service\RoomService::class)->forOrder(auth('api')->user(), $store, $data);
+            } catch (ValidationException $e) {
+                return $this->problem(collect($e->errors())->flatten()->first());
+            }
+        }
         $quote = $this->orders->quote($store, $data['items'], ['latitude' => $data['drop_latitude'] ?? null, 'longitude' => $data['drop_longitude'] ?? null],
-            $data['fulfilment'] ?? StoreOrder::DELIVERY, filled($data['arrive_at'] ?? null) ? \Illuminate\Support\Carbon::parse($data['arrive_at']) : null);
+            $data['fulfilment'] ?? StoreOrder::DELIVERY, filled($data['arrive_at'] ?? null) ? \Illuminate\Support\Carbon::parse($data['arrive_at']) : null, $room !== null);
+        if ($room) {
+            // What the guest can pay with for this room: Mobile Money always, the room bill when the hotel allows it.
+            $quote['room'] = ['number' => $room['room'], 'hotel' => $room['hotel']->name, 'room_bill' => $room['room_bill']];
+        }
         unset($quote['delivery']);
         return response()->json(responseFormatter(DEFAULT_200, $quote));
     }
@@ -204,11 +216,11 @@ class StoreOrderController extends Controller
     {
         $gateways = collect(app(\Modules\BusinessManagement\Http\Controllers\Api\Customer\ConfigController::class)->getPaymentMethods())->pluck('gateway')->all();
         $data = $this->validateCart($request, [
-            'drop_address' => [Rule::requiredIf(fn() => !in_array($request->input('fulfilment'), [StoreOrder::DINE_IN, StoreOrder::PICKUP], true)), 'nullable', 'string', 'max:255'],
+            'drop_address' => [Rule::requiredIf(fn() => !in_array($request->input('fulfilment'), StoreOrder::NO_ADDRESS, true)), 'nullable', 'string', 'max:255'],
             'receiver_name' => 'nullable|string|max:120',
             'receiver_phone' => 'nullable|string|max:25',
             'note' => 'nullable|string|max:300',
-            'payment_method' => ['required', 'string', Rule::in(array_merge(['wallet'], $gateways))],
+            'payment_method' => ['required', 'string', Rule::in(array_merge(['wallet', StoreOrder::ROOM_BILL], $gateways))],
         ]);
         $store = Store::where('is_active', 1)->find($data['store_id']);
         if (!$store || !$store->brand()->is_active) {
@@ -221,7 +233,7 @@ class StoreOrderController extends Controller
         }
         return response()->json(responseFormatter(DEFAULT_200, [
             'order' => StorePresenter::order($order),
-            'pay_url' => $order->status === StoreOrder::AWAITING_PAYMENT
+            'pay_url' => $order->status === StoreOrder::AWAITING_PAYMENT && $data['payment_method'] !== StoreOrder::ROOM_BILL
                 ? route('store-order.pay', ['order' => $order->id, 'payment_method' => $data['payment_method']])
                 : null,
         ]));
@@ -412,8 +424,11 @@ class StoreOrderController extends Controller
             'fulfilment' => ['nullable', Rule::in(StoreOrder::WAYS)],
             'arrive_at' => 'nullable|date',
             'guests' => 'nullable|integer|min:1|max:30',
-            'drop_latitude' => [Rule::requiredIf(fn() => !in_array($request->input('fulfilment'), [StoreOrder::DINE_IN, StoreOrder::PICKUP], true)), 'nullable', 'numeric', 'between:-90,90'],
-            'drop_longitude' => [Rule::requiredIf(fn() => !in_array($request->input('fulfilment'), [StoreOrder::DINE_IN, StoreOrder::PICKUP], true)), 'nullable', 'numeric', 'between:-180,180'],
+            // Room service (fulfilment "room"): the guest's hotel, or the room's QR token.
+            'hotel_id' => 'nullable|uuid',
+            'room_token' => 'nullable|string|max:12',
+            'drop_latitude' => [Rule::requiredIf(fn() => !in_array($request->input('fulfilment'), StoreOrder::NO_ADDRESS, true)), 'nullable', 'numeric', 'between:-90,90'],
+            'drop_longitude' => [Rule::requiredIf(fn() => !in_array($request->input('fulfilment'), StoreOrder::NO_ADDRESS, true)), 'nullable', 'numeric', 'between:-180,180'],
         ], $extra))->validate();
     }
 

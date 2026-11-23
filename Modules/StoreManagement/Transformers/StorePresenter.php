@@ -165,6 +165,8 @@ class StorePresenter
             ] : null,
             // delivery | dine_in (eat there) | pickup (collect), the time they come and for how many.
             'fulfilment' => $order->fulfilment ?? StoreOrder::DELIVERY,
+            // Room service: the room it is carried to (only the guest and the hotel's restaurant see it).
+            'room' => $order->isRoom() ? (string)$order->room_label : null,
             'arrive_at' => $order->arrive_at?->toIso8601String(),
             'guests' => $order->guests,
             // Shown at the restaurant once paid, until the order is handed over. "The shop

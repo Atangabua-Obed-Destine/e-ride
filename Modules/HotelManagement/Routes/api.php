@@ -11,6 +11,7 @@ Route::group(['prefix' => 'customer/hotel', 'middleware' => ['auth:api', 'mainte
         Route::get('hotels/{id}', [HotelController::class, 'show'])->whereUuid('id');
         Route::get('inquiries', [HotelController::class, 'inquiries']);
         Route::get('inquiries/{id}', [HotelController::class, 'inquiry'])->whereUuid('id');
+        Route::get('room/{token}', [HotelController::class, 'roomCard'])->where('token', '[A-Za-z0-9]{4,12}');
     });
     Route::middleware('throttle:40,1,hotel-write')->group(function () {
         Route::post('hotels/{id}/ask', [HotelController::class, 'ask'])->whereUuid('id');

@@ -11,7 +11,7 @@ use Modules\UserManagement\Entities\User;
 interface StoreOrderServiceInterface extends BaseServiceInterface
 {
     /** Prices, delivery fee and problems for a cart. Never trusts client amounts. */
-    public function quote(Store $store, array $lines, array $drop, string $way = StoreOrder::DELIVERY, ?\Illuminate\Support\Carbon $arriveAt = null): array;
+    public function quote(Store $store, array $lines, array $drop, string $way = StoreOrder::DELIVERY, ?\Illuminate\Support\Carbon $arriveAt = null, bool $roomOk = false): array;
 
     /** Eat there or collect: the staff type the customer's code and the order is done. */
     public function handOver(StoreOrder $order, string $code): StoreOrder;

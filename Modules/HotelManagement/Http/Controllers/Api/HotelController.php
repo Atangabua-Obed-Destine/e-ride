@@ -87,6 +87,16 @@ class HotelController extends Controller
         ]));
     }
 
+    /** A room's QR card (/r/TOKEN): the hotel, its restaurant and the room; whether this guest may use the room bill. */
+    public function roomCard(Request $request, string $token): JsonResponse
+    {
+        $card = app(\Modules\HotelManagement\Service\RoomService::class)->forToken($token, $request->user());
+        if (!$card) {
+            return response()->json(responseFormatter(DEFAULT_404, null, null, null, [['error_code' => 'room', 'message' => translate('This room card is no longer valid. Ask the reception.')]]), 404);
+        }
+        return response()->json(responseFormatter(DEFAULT_200, $card));
+    }
+
     public function ask(Request $request, string $id): JsonResponse
     {
         $hotel = Hotel::with('place')->findOrFail($id);

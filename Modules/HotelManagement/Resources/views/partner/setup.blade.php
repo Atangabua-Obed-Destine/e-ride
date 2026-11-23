@@ -38,6 +38,14 @@
     <a href="{{ route('hotel-partner.pos') }}" class="btn btn-soft">{{ translate('Set up') }}</a>
 </div>
 <div class="h-card p-3 mb-3 d-flex flex-wrap align-items-center gap-3">
+    <i class="bi bi-bell fs-4" aria-hidden="true"></i>
+    <div class="flex-grow-1">
+        <div class="h-h">{{ translate('Room service') }}</div>
+        <div class="h-hint">{{ translate('Guests checked in order from your restaurant to their room in the app. Print a QR card for each room.') }}</div>
+    </div>
+    <a href="{{ route('hotel-partner.room-service') }}" class="btn btn-soft">{{ translate('Set up') }}</a>
+</div>
+<div class="h-card p-3 mb-3 d-flex flex-wrap align-items-center gap-3">
     <div class="flex-grow-1">
         <div class="h-h">{{ in_array(false, $checklist, true) ? translate('Almost ready for guests') : translate('Ready: guests can ask you') }}</div>
         <div class="h-hint">{{ translate('Guests see your hotel in the app once every step is done. The hotel photos, address and map pin come from your E-Ride listing.') }}</div>

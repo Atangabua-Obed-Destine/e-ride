@@ -47,13 +47,15 @@ class HotelAdminController extends Controller
             'fresh' => $h->isFresh(),
             'checklist' => PartnerService::checklist($h),
         ]);
+        // Food & Shops stores that can be a hotel's restaurant (room service).
+        $stores = \Modules\StoreManagement\Entities\Store::whereNull('parent_id')->where('is_active', 1)->orderBy('name')->get(['id', 'name']);
         $candidates = Place::where('explore_category', 'stay')->where('is_active', 1)->whereNotIn('id', Hotel::pluck('place_id'))->orderBy('name')->get(['id', 'name', 'address']);
         $totals = [
             'live' => $hotels->where('status', Hotel::LIVE)->count(),
             'asked' => array_sum($asked->all()),
             'arrived' => array_sum($arrived->all()),
         ];
-        return view('hotelmanagement::admin.index', compact('settings', 'rows', 'candidates', 'totals'));
+        return view('hotelmanagement::admin.index', compact('settings', 'rows', 'candidates', 'totals', 'stores'));
     }
 
     public function store(Request $request): RedirectResponse
@@ -73,6 +75,19 @@ class HotelAdminController extends Controller
         return back()->with('hotel_login', [
             'hotel' => $hotel->name, 'login' => $login, 'url' => route('hotel-partner.login'),
         ]);
+    }
+
+    /** Room service: the hotel's own restaurant (a Food & Shops store), or none. */
+    public function restaurant(Request $request, string $hotel): RedirectResponse
+    {
+        $model = Hotel::findOrFail($hotel);
+        $storeId = $request->input('store_id') ?: null;
+        if ($storeId) {
+            \Modules\StoreManagement\Entities\Store::whereNull('parent_id')->findOrFail($storeId);
+        }
+        $model->forceFill(['restaurant_store_id' => $storeId])->save();
+        Toastr::success($storeId ? translate('Restaurant linked: guests checked in can order room service.') : translate('Room service is off for this hotel.'));
+        return back();
     }
 
     public function pause(Request $request, string $hotel): RedirectResponse

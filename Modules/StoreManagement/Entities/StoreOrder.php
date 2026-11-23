@@ -47,7 +47,11 @@ class StoreOrder extends Model
     public const DELIVERY = 'delivery';
     public const DINE_IN = 'dine_in';
     public const PICKUP = 'pickup';
-    public const WAYS = [self::DELIVERY, self::DINE_IN, self::PICKUP];
+    /** Room service: the hotel's restaurant staff carry it to the guest's room (no rider, no fee). */
+    public const ROOM = 'room';
+    public const WAYS = [self::DELIVERY, self::DINE_IN, self::PICKUP, self::ROOM];
+    /** Ways had at the store, no address: eat there, collect, or (room service) at the hotel. */
+    public const NO_ADDRESS = [self::DINE_IN, self::PICKUP, self::ROOM];
 
     /** Who brings a delivery: an E-Ride rider, or the store's own staff (close by). */
     public const BY_RIDER = 'rider';
@@ -68,11 +72,15 @@ class StoreOrder extends Model
         'cancelled_at', 'cancelled_by', 'cancel_reason', 'confirmed_at', 'pay_by', 'proposal', 'proposed_at',
         'reseller_id', 'reseller_pct', 'reseller_commission', 'reseller_payout_id',
         'paid_to', 'owed_to_eride', 'statement_id', 'shop_refund_due', 'shop_refund_sent_at', 'shop_refund_ref',
+        'hotel_id', 'hotel_stay_id', 'room_label', 'pos_charged_to_room',
     ];
 
     /** Where the customer's money went: to E-Ride (paid out later) or the business's own Fapshi. */
     public const PAID_TO_ERIDE = 'eride';
     public const PAID_TO_SHOP = 'shop';
+    /** Room service put on the guest's room bill in POS Innova: E-Ride holds and is owed nothing. */
+    public const PAID_TO_ROOM_BILL = 'room_bill';
+    public const ROOM_BILL = 'room_bill';
 
     protected $casts = [
         'ref_id' => 'integer',
@@ -99,6 +107,7 @@ class StoreOrder extends Model
         'pos_matches' => 'boolean',
         'pos_sale_id' => 'integer',
         'pos_sale_total' => 'integer',
+        'pos_charged_to_room' => 'boolean',
         'reseller_pct' => 'float',
         'reseller_commission' => 'float',
         'drop_latitude' => 'float',
@@ -128,6 +137,16 @@ class StoreOrder extends Model
         static::creating(function (StoreOrder $order) {
             $order->ref_id = (static::max('ref_id') ?? 1000) + 1;
         });
+    }
+
+    public function isRoom(): bool
+    {
+        return $this->fulfilment === self::ROOM;
+    }
+
+    public function onRoomBill(): bool
+    {
+        return $this->paid_to === self::PAID_TO_ROOM_BILL;
     }
 
     /** Delivered by a rider (the default), not eaten there or collected. */

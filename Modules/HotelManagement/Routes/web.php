@@ -47,6 +47,11 @@ Route::group(['prefix' => 'partner/hotel', 'as' => 'hotel-partner.'], function (
     Route::middleware(HotelPartner::class . ':manager')->group(function () {
         Route::get('setup', [SetupController::class, 'index'])->name('setup');
         // POS Innova: the key, and its room types mapped to E-Ride ones (docs/posinnova-hotel-contract.md).
+        // Room service: the hotel's restaurant and the rooms' QR cards.
+        Route::get('room-service', [\Modules\HotelManagement\Http\Controllers\Web\Partner\RoomServiceController::class, 'index'])->name('room-service');
+        Route::post('room-service/cards', [\Modules\HotelManagement\Http\Controllers\Web\Partner\RoomServiceController::class, 'make'])->name('room-service.make');
+        Route::post('room-service/cards/{code}/reissue', [\Modules\HotelManagement\Http\Controllers\Web\Partner\RoomServiceController::class, 'reissue'])->name('room-service.reissue')->whereUuid('code');
+        Route::get('room-service/print', [\Modules\HotelManagement\Http\Controllers\Web\Partner\RoomServiceController::class, 'print'])->name('room-service.print');
         Route::get('pos', [\Modules\HotelManagement\Http\Controllers\Web\Partner\PosController::class, 'index'])->name('pos');
         Route::post('pos/link', [\Modules\HotelManagement\Http\Controllers\Web\Partner\PosController::class, 'createLink'])->name('pos.link')->middleware('throttle:10,1,hotel-pos-link');
         Route::post('pos/revoke', [\Modules\HotelManagement\Http\Controllers\Web\Partner\PosController::class, 'revoke'])->name('pos.revoke');
@@ -72,4 +77,9 @@ Route::group(['prefix' => 'admin/hotel-partners', 'as' => 'admin.hotel.', 'middl
     Route::post('/', [HotelAdminController::class, 'store'])->name('store');
     Route::post('settings', [HotelAdminController::class, 'settings'])->name('settings');
     Route::post('{hotel}/pause', [HotelAdminController::class, 'pause'])->name('pause')->whereUuid('hotel');
+    Route::post('{hotel}/restaurant', [HotelAdminController::class, 'restaurant'])->name('restaurant')->whereUuid('hotel');
 });
+
+// A room's QR card for room service (public): opens the app on the hotel restaurant's menu.
+Route::get('r/{token}', [\Modules\HotelManagement\Http\Controllers\Web\RoomCardController::class, 'show'])
+    ->where('token', '[A-Za-z0-9]{4,12}')->middleware('throttle:60,1,hotel-room-card')->name('hotel.room-card');

@@ -133,6 +133,8 @@ class HotelPresenter
             'kept_rooms' => $kept->count(),
             // Booked firmly by a hotel on POS Innova (no "until").
             'booked_rooms' => $booked,
+            // Checked in, and the hotel's restaurant is on E-Ride: "Order to your room".
+            'room_service' => $q->status === HotelInquiry::ARRIVED ? app(\Modules\HotelManagement\Service\RoomService::class)->forInquiry($q) : null,
             'on_the_way' => in_array($q->status, [HotelInquiry::KEPT, HotelInquiry::BOOKED], true) ? app(InquiryService::class)->onTheWay($q) : false,
             'unread' => $q->unread_guest,
             'last_message_at' => $q->last_message_at?->toIso8601String(),

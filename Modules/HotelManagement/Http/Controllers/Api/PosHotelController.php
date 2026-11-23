@@ -72,7 +72,7 @@ class PosHotelController extends Controller
 
     public function heartbeat(Request $r): JsonResponse
     {
-        return $this->with($r, fn(HotelPosLink $l) => $this->pos->heartbeat($l));
+        return $this->with($r, fn(HotelPosLink $l) => $this->pos->heartbeat($l, $r->all()));
     }
 
     public function availabilityFull(Request $r): JsonResponse

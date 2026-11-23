@@ -178,3 +178,15 @@ An event for a stay that already reached that state is a no-op. Unknown `pos_ref
   types (link, or add as a new E-Ride type with photos and amenities to fill in). A mapped type takes
   its "from" price and max guests from POS.
 - Stays held in POS are kept on E-Ride without a room number (POS gives the room).
+
+## v1.1: room service (agreed 2026-11-23)
+
+- `/heartbeat` gains `"room_bill": true|false`: the POS hotel setting "E-Ride room service can go on the room
+  bill" (default off) AND the hotel link is live. E-Ride offers "Add to my room bill" only while it is true.
+- The `arrived` event gains `"room": "104"` (the number only, up to 20 characters): the room the guest
+  checked into. Only the guest and the hotel's own restaurant see it, never riders.
+- New event `{"event":"room_moved","pos_ref":"RES-0007","room":"201"}` when reception moves the guest.
+- The room bill is offered only while the guest's E-Ride stay is in the house; after `left`, `no_show` or
+  `cancelled` it stops. POS refuses it anyway if the stay is not checked in.
+- QR room cards are E-Ride's: `https://eride.innovakickstarter.com/r/{token}` (a 6-character token per
+  room, never the plain number, re-issuable). Guests who did not come through E-Ride pay by Mobile Money.

@@ -83,10 +83,13 @@ class StoreOrderService extends BaseService implements StoreOrderServiceInterfac
 
     /* ------------------------------------------------------------ quote */
 
-    public function quote(Store $store, array $lines, array $drop, string $way = StoreOrder::DELIVERY, ?Carbon $arriveAt = null): array
+    public function quote(Store $store, array $lines, array $drop, string $way = StoreOrder::DELIVERY, ?Carbon $arriveAt = null, bool $roomOk = false): array
     {
         $problems = [];
-        if (!in_array($way, $store->ways(), true)) {
+        // Room service is offered only for the hotel's own restaurant, with a room (checked by RoomService).
+        if ($way === StoreOrder::ROOM && !$roomOk) {
+            $problems[] = translate('Room service is only for guests of the hotel of this restaurant.');
+        } elseif ($way !== StoreOrder::ROOM && !in_array($way, $store->ways(), true)) {
             $problems[] = $way === StoreOrder::DELIVERY
                 ? translate(key: '{store} does not deliver. Eat there or collect your order.', replace: ['store' => $store->displayName()])
                 : translate(key: '{store} does not offer this. Choose another way to get your order.', replace: ['store' => $store->displayName()]);
@@ -160,7 +163,7 @@ class StoreOrderService extends BaseService implements StoreOrderServiceInterfac
             } catch (ValidationException $e) {
                 $deliveryProblem = collect($e->errors())->flatten()->first();
             }
-        } else {
+        } elseif ($way !== StoreOrder::ROOM) {
             // Eat there or collect: no rider, no fee. The time must be reachable and inside opening hours.
             $earliest = now()->addMinutes(max(5, (int)$store->default_prep_minutes) - 1);
             if (!$arriveAt) {
@@ -358,20 +361,30 @@ class StoreOrderService extends BaseService implements StoreOrderServiceInterfac
             throw ValidationException::withMessages(['store' => translate('This store is not taking orders in the app right now. Try again later.')]);
         }
         $way = in_array($input['fulfilment'] ?? null, StoreOrder::WAYS, true) ? $input['fulfilment'] : StoreOrder::DELIVERY;
-        $arriveAt = $way !== StoreOrder::DELIVERY && filled($input['arrive_at'] ?? null) ? Carbon::parse($input['arrive_at']) : null;
+        $arriveAt = !in_array($way, [StoreOrder::DELIVERY, StoreOrder::ROOM], true) && filled($input['arrive_at'] ?? null) ? Carbon::parse($input['arrive_at']) : null;
         $drop = ['latitude' => $input['drop_latitude'] ?? null, 'longitude' => $input['drop_longitude'] ?? null];
-        $quote = $this->quote($store, $input['items'] ?? [], $drop, $way, $arriveAt);
+        // Room service: the guest's hotel and room (from their stay or the room's QR card), and whether the room bill is allowed.
+        $room = $way === StoreOrder::ROOM ? app(\Modules\HotelManagement\Service\RoomService::class)->forOrder($customer, $store, $input) : null;
+        if (($input['payment_method'] ?? null) === StoreOrder::ROOM_BILL && !($room['room_bill'] ?? false)) {
+            throw ValidationException::withMessages(['payment_method' => translate('The room bill is not available for this order. Pay by Mobile Money.')]);
+        }
+        $quote = $this->quote($store, $input['items'] ?? [], $drop, $way, $arriveAt, $room !== null);
         if (!$quote['ok']) {
             throw ValidationException::withMessages(['order' => $quote['problems']]);
         }
-        if ($way !== StoreOrder::DELIVERY) {
+        if ($way === StoreOrder::ROOM) {
+            // Carried to the room by the restaurant's staff.
+            $input['drop_address'] = translate(key: 'Room {room}, {hotel}', replace: ['room' => $room['room'], 'hotel' => $room['hotel']->name]);
+            $input['drop_latitude'] = $store->latitude;
+            $input['drop_longitude'] = $store->longitude;
+        } elseif ($way !== StoreOrder::DELIVERY) {
             // No address to deliver to: the order is had at the store.
             $input['drop_address'] = $store->address;
             $input['drop_latitude'] = $store->latitude;
             $input['drop_longitude'] = $store->longitude;
         }
 
-        $order = DB::transaction(function () use ($customer, $store, $input, $quote, $way, $arriveAt) {
+        $order = DB::transaction(function () use ($customer, $store, $input, $quote, $way, $arriveAt, $room) {
             $order = StoreOrder::create([
                 'customer_id' => $customer->id,
                 'store_id' => $store->id,
@@ -396,6 +409,9 @@ class StoreOrderService extends BaseService implements StoreOrderServiceInterfac
                 'delivery_quote' => $quote['delivery'],
                 'quote_expires_at' => now()->addMinutes(self::QUOTE_MINUTES),
                 'prep_minutes' => $store->default_prep_minutes,
+                'hotel_id' => $room ? $room['hotel']->id : null,
+                'hotel_stay_id' => $room['stay']?->id ?? null,
+                'room_label' => $room['room'] ?? null,
             ]);
             $order->items()->createMany($quote['items']);
             // Came through a reseller's link for this store: they earn on it once delivered.
@@ -818,6 +834,17 @@ class StoreOrderService extends BaseService implements StoreOrderServiceInterfac
                 }
                 $order->prep_minutes = $prepMinutes;
                 $this->markConfirmed($order);
+                if ($order->payment_method === StoreOrder::ROOM_BILL) {
+                    if (app(\Modules\HotelManagement\Service\RoomService::class)->roomBillStillOk($order)) {
+                        // On the room bill in POS Innova: nothing to pay in E-Ride, the kitchen starts.
+                        $order->paid_to = StoreOrder::PAID_TO_ROOM_BILL;
+                        return $this->markPaid($order, StoreOrder::ROOM_BILL);
+                    }
+                    // The guest left meanwhile (or the hotel turned it off): Mobile Money as any order.
+                    $order->save();
+                    DB::afterCommit(fn() => $this->notifyCustomer($order, 'confirmed_no_room_bill'));
+                    return $order;
+                }
                 $order->save();
                 DB::afterCommit(fn() => $this->notifyCustomer($order, 'confirmed'));
                 return $order;
@@ -1667,6 +1694,11 @@ class StoreOrderService extends BaseService implements StoreOrderServiceInterfac
     /** Refunds to the wallet when Food & Shops refunds are on. False when nothing was credited. */
     protected function refundOrder(StoreOrder $order, float $amount): bool
     {
+        if ($order->onRoomBill()) {
+            // On the room bill: E-Ride holds nothing. POS is told (pending "cancelled") and takes it off the bill.
+            $order->payment_status = StoreOrder::REFUNDED;
+            return true;
+        }
         $amount = round(min($amount, $order->total - $order->refunded_amount), 2);
         if ($amount > 0 && $order->paid_to === StoreOrder::PAID_TO_SHOP) {
             // The money is in the business's own Fapshi: the business sends it back, and its portal says so.
@@ -1736,13 +1768,19 @@ class StoreOrderService extends BaseService implements StoreOrderServiceInterfac
                     translate(key: '{store} is preparing your order', replace: ['store' => $store], locale: $locale),
                     translate(key: 'Ready in about {minutes} min. A rider will bring it to you.', replace: ['minutes' => $order->prep_minutes], locale: $locale),
                 ],
-                'accepted_here' => [
+                'accepted_here' => $order->isRoom() ? [
+                    translate(key: '{store} is preparing your order', replace: ['store' => $store], locale: $locale),
+                    translate(key: 'They bring it to room {room}. Give your code {code} at the door.', replace: ['room' => (string)$order->room_label, 'code' => $order->collect_code], locale: $locale),
+                ] : [
                     translate(key: '{store} is preparing your order', replace: ['store' => $store], locale: $locale),
                     $order->arrive_at
                         ? translate(key: 'It will be ready for {time}. Show your code {code} when you arrive.', replace: ['time' => $order->arrive_at->format('H:i'), 'code' => $order->collect_code], locale: $locale)
                         : translate(key: 'Show your code {code} when you arrive.', replace: ['code' => $order->collect_code], locale: $locale),
                 ],
-                'ready_here' => [
+                'ready_here' => $order->isRoom() ? [
+                    translate(key: 'Your order is on its way to room {room}', replace: ['room' => (string)$order->room_label], locale: $locale),
+                    translate(key: 'Give your code {code} at the door.', replace: ['code' => $order->collect_code], locale: $locale),
+                ] : [
                     translate(key: 'Your order is ready at {store}', replace: ['store' => $store], locale: $locale),
                     translate(key: 'Show your code {code} when you arrive.', replace: ['code' => $order->collect_code], locale: $locale),
                 ],
@@ -1757,6 +1795,10 @@ class StoreOrderService extends BaseService implements StoreOrderServiceInterfac
                 'sent' => [
                     translate(key: 'Order sent to {store}', replace: ['store' => $store], locale: $locale),
                     translate(key: 'They will confirm it in a few minutes. You pay after they confirm.', locale: $locale),
+                ],
+                'confirmed_no_room_bill' => [
+                    translate(key: '{store} confirmed your order', replace: ['store' => $store], locale: $locale),
+                    translate(key: 'The room bill is no longer available for it. Pay by Mobile Money within {minutes} minutes and they start.', replace: ['minutes' => self::PAY_MINUTES], locale: $locale),
                 ],
                 'confirmed' => [
                     translate(key: '{store} confirmed your order', replace: ['store' => $store], locale: $locale),

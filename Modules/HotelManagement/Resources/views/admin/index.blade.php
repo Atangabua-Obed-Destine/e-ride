@@ -54,7 +54,17 @@
                             @forelse($rows as $r)
                                 @php $h = $r['hotel']; @endphp
                                 <tr>
-                                    <td><div class="fw-semibold">{{ $h->name }}</div><div class="fs-12 text-muted">{{ $h->place?->address }}</div></td>
+                                    <td><div class="fw-semibold">{{ $h->name }}</div><div class="fs-12 text-muted">{{ $h->place?->address }}</div>
+                                        {{-- Room service: the hotel's own restaurant on Food & Shops. --}}
+                                        <form method="POST" action="{{ route('admin.hotel.restaurant', $h->id) }}" class="d-flex gap-1 mt-1">@csrf
+                                            <label class="visually-hidden" for="rs{{ $h->id }}">{{ translate('Restaurant (room service)') }}</label>
+                                            <select id="rs{{ $h->id }}" name="store_id" class="form-select form-select-sm" style="max-width:200px">
+                                                <option value="">{{ translate('No restaurant (room service off)') }}</option>
+                                                @foreach($stores as $st)<option value="{{ $st->id }}" @selected($h->restaurant_store_id === $st->id)>{{ $st->name }}</option>@endforeach
+                                            </select>
+                                            <button class="btn btn-sm btn-outline-secondary">{{ translate('Save') }}</button>
+                                        </form>
+                                    </td>
                                     <td>
                                         <span class="badge {{ $statusTag[$h->status][0] }}">{{ $statusTag[$h->status][1] }}</span>
                                         @if($r['slow'])<span class="badge bg-warning-subtle text-warning-emphasis">{{ translate(key: '{n} waiting too long', replace: ['n' => $r['slow']]) }}</span>@endif

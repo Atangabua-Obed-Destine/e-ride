@@ -350,3 +350,24 @@ POS confirms it showed a cancelled order. The salesperson then does a normal sel
 - Extra product images.
 - E-Ride writing anything into POS.
 - More than one POS per E-Ride branch.
+
+## v1.1: hotel room service (agreed 2026-11-23)
+
+The hotel's own restaurant (an E-Ride Food & Shops store) brings orders to the rooms.
+
+- `way` gains `"room"`: the restaurant's staff carry it to a room. No rider; `delivery_fee` 0.
+- New field `room`, null unless the way is room:
+  `{"hotel": "Hilltop View Hotel (demo)", "number": "104", "hotel_pos_ref": "RES-0007" | null}`.
+  `hotel_pos_ref` is set only when the guest's stay came through E-Ride on a POS hotel.
+- `payment.paid_to` gains `"room_bill"` (`payment.method` `"room_bill"`, no provider): the order shows in
+  `/orders/pending` once the restaurant confirmed it, without any Mobile Money payment. POS rings it up as a
+  credit sale plus a folio line on `hotel_pos_ref`. E-Ride holds and is owed nothing on it.
+  `matches` compares `sale_total` with the items total (discount and delivery fee are 0).
+- `rung-up` gains an optional `"charged_to_room": true|false`. False: POS could not put it on the bill
+  (the guest left, or the restaurant is another business) and the salesperson took another payment;
+  E-Ride flags it on the order.
+- A room-bill order cancelled after ring-up is listed in `cancelled` as any order; POS takes it off the
+  bill (folio void).
+- On the POS sale: delivered_to = guest name, shipping_address = "Room 104 · {hotel}",
+  shipping_details = "E-Ride #n · room service", shipping charges 0.
+- Line notes are not in this round.

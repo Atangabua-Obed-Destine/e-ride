@@ -292,6 +292,8 @@ class PosChannelService
         $status = in_array($o->status, [StoreOrder::CANCELLED, StoreOrder::REJECTED, StoreOrder::EXPIRED], true) ? 'cancelled'
             : ($o->pos_rung_up_at ? 'rung_up' : 'paid');
         $shop = $o->paid_to === StoreOrder::PAID_TO_SHOP;
+        $roomBill = $o->onRoomBill();
+        $stay = $o->hotel_stay_id ? \Modules\HotelManagement\Entities\HotelStay::find($o->hotel_stay_id) : null;
         return [
             'order_id' => $o->id,
             'number' => (string)$o->ref_id,
@@ -303,14 +305,22 @@ class PosChannelService
                 'phone' => $o->receiver_phone ?: $o->customer?->phone,
                 'address' => $o->isDelivery() ? $o->drop_address : null,
             ],
-            'way' => match ($o->fulfilment) { StoreOrder::DELIVERY => 'delivery', 'dine_in' => 'dine_in', default => 'pickup' },
+            'way' => match ($o->fulfilment) { StoreOrder::DELIVERY => 'delivery', 'dine_in' => 'dine_in', StoreOrder::ROOM => 'room', default => 'pickup' },
+            // Room service: the staff carry it to this room; hotel_pos_ref is the guest's reservation (room bill).
+            'room' => $o->isRoom() ? [
+                'hotel' => $o->hotel_id ? \Modules\HotelManagement\Entities\Hotel::whereKey($o->hotel_id)->value('name') : null,
+                'number' => (string)$o->room_label,
+                'hotel_pos_ref' => $stay?->pos_ref,
+            ] : null,
             'lines' => $lines,
             'items_total' => (int)round((float)$o->items_subtotal),
             'discount' => 0,
             'delivery_fee' => (int)round((float)$o->delivery_fee),
             'delivery_fee_collected_by_shop' => $shop && (float)$o->delivery_fee > 0,
             'total' => (int)round((float)$o->total),
-            'payment' => ['method' => 'mobile_money', 'provider' => 'fapshi', 'reference' => (string)($o->payment_request_id ?? ''), 'paid_to' => $shop ? 'shop' : 'eride'],
+            'payment' => $roomBill
+                ? ['method' => 'room_bill', 'provider' => null, 'reference' => '', 'paid_to' => 'room_bill']
+                : ['method' => 'mobile_money', 'provider' => 'fapshi', 'reference' => (string)($o->payment_request_id ?? ''), 'paid_to' => $shop ? 'shop' : 'eride'],
             'note' => (string)$o->note,
             'eride_url' => route('partner.orders'),
         ];
@@ -348,6 +358,8 @@ class PosChannelService
             'pos_sale_total' => $saleTotal,
             'pos_lines' => $lines,
             'pos_matches' => $matches,
+            // Room service on the room bill: false when POS could not charge the room (another payment was taken).
+            'pos_charged_to_room' => $order->onRoomBill() && array_key_exists('charged_to_room', $input) ? (bool)$input['charged_to_room'] : $order->pos_charged_to_room,
         ])->save();
         return ['ok' => true, 'matches' => $matches];
     }

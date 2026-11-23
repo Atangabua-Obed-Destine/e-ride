@@ -343,6 +343,10 @@ class PartnerOrderController extends Controller
             'can_cancel' => in_array($o->status, [StoreOrder::CHANGES_PROPOSED], true) || $o->isConfirmedUnpaid() || $noRider,
             'no_rider' => $noRider,
             // POS Innova at this kitchen: did the salesperson ring it up there yet?
+            // Room service: the room to carry it to, and whether it goes on the room bill (nothing paid in E-Ride).
+            'room' => $o->isRoom() ? ['number' => $o->room_label, 'hotel' => $o->drop_address] : null,
+            'room_bill' => $o->onRoomBill(),
+            'room_bill_failed' => $o->onRoomBill() && $o->pos_charged_to_room === false,
             'pos' => $o->payment_status === StoreOrder::PAID && in_array($o->store_id, $this->posKitchens(), true) ? [
                 'rung' => $o->pos_rung_up_at !== null,
                 'invoice' => $o->pos_invoice_no,

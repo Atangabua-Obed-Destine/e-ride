@@ -69,9 +69,13 @@ class HotelPosService
         ];
     }
 
-    public function heartbeat(HotelPosLink $link): array
+    public function heartbeat(HotelPosLink $link, array $input = []): array
     {
         $link->forceFill(['last_heartbeat_at' => now()])->save();
+        if (array_key_exists('room_bill', $input)) {
+            // The POS hotel setting "E-Ride room service can go on the room bill".
+            $link->hotel->forceFill(['pos_room_bill' => (bool)$input['room_bill']])->saveQuietly();
+        }
         return ['ok' => true, 'server_time' => now()->toIso8601String()];
     }
 
@@ -396,12 +400,21 @@ class HotelPosService
     public function event(HotelPosLink $link, HotelInquiry $q, array $input): array
     {
         $event = (string)($input['event'] ?? '');
+        if ($event === 'room_moved') {
+            // Reception moved the guest: room service goes to the new room.
+            $stay = $q->stays()->where('pos_ref', trim((string)($input['pos_ref'] ?? '')))->first();
+            if (!$stay) {
+                return ['conflict' => 'not_this_reservation'];
+            }
+            $stay->forceFill(['room_label' => Str::limit(trim((string)($input['room'] ?? '')), 20, '') ?: $stay->room_label])->save();
+            return ['ok' => true, 'status' => $q->status];
+        }
         $map = [
             'confirmed' => HotelStay::BOOKED, 'arrived' => HotelStay::IN_HOUSE, 'left' => HotelStay::LEFT,
             'no_show' => HotelStay::NO_SHOW, 'released' => HotelStay::RELEASED, 'cancelled' => HotelStay::RELEASED,
         ];
         if (!isset($map[$event])) {
-            throw ValidationException::withMessages(['event' => 'event must be one of ' . implode(', ', array_keys($map))]);
+            throw ValidationException::withMessages(['event' => 'event must be one of ' . implode(', ', array_keys($map)) . ', room_moved']);
         }
         $ref = trim((string)($input['pos_ref'] ?? ''));
         $stay = $ref !== '' ? $q->stays()->where('pos_ref', $ref)->first() : null;
@@ -410,7 +423,7 @@ class HotelPosService
         }
         $to = $map[$event];
         $at = filled($input['at'] ?? null) ? rescue(fn() => Carbon::parse($input['at']), now(), false) : now();
-        $changed = DB::transaction(function () use ($stay, $to, $at, $event) {
+        $changed = DB::transaction(function () use ($stay, $to, $at, $event, $input) {
             $s = HotelStay::whereKey($stay->id)->lockForUpdate()->first();
             if ($s->status === $to) {
                 return false; // already there: a retry
@@ -424,6 +437,10 @@ class HotelPosService
             } elseif ($to === HotelStay::IN_HOUSE) {
                 $fill['arrived_at'] = $at;
                 $fill['kept_until'] = null;
+                if (filled($input['room'] ?? null)) {
+                    // The room the guest checked into: only the guest and the hotel's restaurant see it.
+                    $fill['room_label'] = Str::limit(trim((string)$input['room']), 20, '');
+                }
             } else {
                 $fill['ended_at'] = $at;
                 if ($to === HotelStay::LEFT) {
