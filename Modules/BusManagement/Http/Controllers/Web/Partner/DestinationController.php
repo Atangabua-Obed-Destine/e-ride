@@ -70,6 +70,7 @@ class DestinationController extends Controller
             'require_id' => true,
             'id_check' => $data['id_check'] ?? BusSettings::rules($agency->rules)['id_check'],
             'tickets' => $data['tickets'] ?? BusSettings::rules($agency->rules)['tickets'],
+            'paper_copy' => $request->boolean('paper_copy'),
             'cancel_tiers' => [[$data['tier_full_hours'], 100], [$data['tier_half_hours'], $data['tier_half_pct']], [0, 0]],
         ]]);
         return redirect()->route('bus-partner.destinations')->with('toast', translate('Booking rules saved. Passengers see them before they book.'));

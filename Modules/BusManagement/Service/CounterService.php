@@ -43,10 +43,12 @@ class CounterService
         if ((string)$departure->agency_id !== (string)$agency->id) {
             abort(404);
         }
-        if (!$departure->isOpen()) {
+        // A sale made on paper during a cut, typed in after the bus left: the passengers travelled.
+        $late = self::lateEntryOk($departure) && !empty($input['paper_sale']);
+        if (!$departure->isOpen() && !$late) {
             throw ValidationException::withMessages(['departure' => translate('This departure has left or was cancelled.')]);
         }
-        if ($departure->closure_id) {
+        if ($departure->closure_id && !$late) {
             throw ValidationException::withMessages(['departure' => translate('A lockdown stops or puts this departure at risk: no sales until it is decided.')]);
         }
         if (!$departure->vehicle_id || empty($departure->seat_plan['seats'])) {
@@ -81,12 +83,13 @@ class CounterService
         }
         $passengers = array_values($data['passengers']);
 
-        return DB::transaction(function () use ($agency, $staff, $departure, $data, $seats, $passengers, $fare, $rules) {
+        $paperSale = $late || !empty($input['paper_sale']);
+        return DB::transaction(function () use ($agency, $staff, $departure, $data, $seats, $passengers, $fare, $rules, $late, $paperSale) {
             $locked = BusDeparture::whereKey($departure->id)->lockForUpdate()->first();
-            if (!$locked->isOpen() || (string)$locked->vehicle_id !== (string)$departure->vehicle_id) {
+            if ((!$locked->isOpen() && !($late && self::lateEntryOk($locked))) || (string)$locked->vehicle_id !== (string)$departure->vehicle_id) {
                 throw ValidationException::withMessages(['departure' => translate('This departure just changed. Look at it again.')]);
             }
-            if ($locked->closure_id) {
+            if ($locked->closure_id && !$late) {
                 throw ValidationException::withMessages(['departure' => translate('A lockdown stops or puts this departure at risk: no sales until it is decided.')]);
             }
             $lines = [];
@@ -114,6 +117,7 @@ class CounterService
                 'phone' => $lines[0]['phone'],
                 'booker_id_type' => filled($data['booker_id_number'] ?? null) ? 'id_card' : null,
                 'booker_id_number' => filled($data['booker_id_number'] ?? null) ? Str::upper(preg_replace('/\s+/', '', $data['booker_id_number'])) : null,
+                'paper_sale' => $paperSale,
             ]);
             foreach ($lines as $line) {
                 $ticket = BusTicket::create([
@@ -126,15 +130,25 @@ class CounterService
                     'id_number' => $line['id_number'],
                     'bags' => $line['bags'],
                     'fare' => $line['fare'],
-                    'status' => BusTicket::VALID,
+                    'status' => $late ? BusTicket::BOARDED : BusTicket::VALID,
+                    'boarded_at' => $late ? ($locked->departed_at ?? $locked->leavesAt()) : null,
                 ]);
                 try {
                     BusSeatClaim::create(['departure_id' => $departure->id, 'seat' => $line['seat'], 'ticket_id' => $ticket->id]);
                 } catch (UniqueConstraintViolationException) {
-                    throw ValidationException::withMessages(['seats' => translate(key: 'Seat {seat} was just taken. Choose another one.', replace: ['seat' => $line['seat']])]);
+                    throw ValidationException::withMessages(['seats' => $paperSale
+                        ? translate(key: 'Seat {seat} is already sold in E-Ride. Check the sheet: the passenger needs another seat.', replace: ['seat' => $line['seat']])
+                        : translate(key: 'Seat {seat} was just taken. Choose another one.', replace: ['seat' => $line['seat']])]);
                 }
             }
             return $booking->fresh(['tickets', 'dropPoint']);
         });
+    }
+
+    /** A departure that left in the last days still takes the paper sales made for it during a cut. */
+    public static function lateEntryOk(BusDeparture $departure): bool
+    {
+        return $departure->status === BusDeparture::DEPARTED && $departure->vehicle_id !== null
+            && $departure->leavesAt()->gt(now()->subDays(PaperService::LATE_ENTRY_DAYS));
     }
 }

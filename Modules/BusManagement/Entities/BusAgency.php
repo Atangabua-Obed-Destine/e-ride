@@ -24,6 +24,7 @@ class BusAgency extends Model
         'name', 'slug', 'google_place_id', 'origin_city', 'address', 'lat', 'lng', 'phone', 'logo', 'about', 'status', 'pause_reason',
         'pause_note', 'checks', 'licence_file', 'verified_by', 'verified_at', 'commission_app_pct', 'commission_counter_pct', 'fapshi',
         'fapshi_ok_at', 'webhook_code', 'rules', 'rating', 'rating_count', 'answer_seconds_avg',
+        'online_paused_at', 'online_paused_by', 'online_pause_auto', 'unanswered_streak',
     ];
 
     protected $casts = [
@@ -37,6 +38,9 @@ class BusAgency extends Model
         'rating' => 'float',
         'verified_at' => 'datetime',
         'fapshi_ok_at' => 'datetime',
+        'online_paused_at' => 'datetime',
+        'online_pause_auto' => 'boolean',
+        'unanswered_streak' => 'integer',
     ];
 
     protected $hidden = ['fapshi'];

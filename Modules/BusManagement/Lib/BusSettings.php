@@ -92,6 +92,9 @@ class BusSettings
             'id_check' => in_array($rules['id_check'] ?? null, self::ID_CHECKS, true) ? $rules['id_check'] : 'eride',
             // app (tickets in the app) | collect (printed at the counter, with the booking code).
             'tickets' => in_array($rules['tickets'] ?? null, ['app', 'collect'], true) ? $rules['tickets'] : 'app',
+            // A pencil seat sheet per departure, kept in step with E-Ride, to sell on paper during a cut
+            // (Service/PaperService). Requests are then always answered by an agent.
+            'paper_copy' => (bool)($rules['paper_copy'] ?? true),
         ];
     }
 

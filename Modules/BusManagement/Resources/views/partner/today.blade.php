@@ -24,6 +24,9 @@
     .idbox { border-radius: 12px; padding: 10px; margin: 4px 0 8px; background: #f4f6f6; }
     .idbox.is-check { background: #fff4e5; }
     .idbox img { height: 110px; max-width: 100%; border-radius: 8px; border: 1px solid var(--line); object-fit: cover; cursor: zoom-in; }
+    .paperbox { border: 2px solid #f59e0b; background: #fffaf0; border-radius: 12px; padding: 10px 12px; }
+    .paperbox .form-check-input { width: 1.4em; height: 1.4em; margin-top: .1em; }
+    .paperbox .form-check-label { font-weight: 700; padding-left: 4px; }
     .empty i { font-size: 34px; display: block; margin-bottom: 6px; color: #c3cbca; }
 </style>
 @endpush
@@ -34,6 +37,7 @@
         <h1 class="fs-5 fw-bold mb-0">{{ translate('Today') }}</h1>
         <div class="b-hint" id="clock" aria-live="off"></div>
     </div>
+    @include('busmanagement::partner._pause_button')
     <button type="button" class="btn btn-soft btn-sm" id="soundBtn" aria-pressed="false"><i class="bi bi-volume-mute"></i> <span>{{ translate('Turn the ring on') }}</span></button>
     <a href="{{ route('bus-partner.sell') }}" class="btn btn-primary btn-sm"><i class="bi bi-ticket-perforated"></i> {{ translate('Quick sell') }}</a>
 </div>
@@ -96,6 +100,8 @@
         newReq: @json(translate('New seat request')), confirmCancel: @json(translate('This cancels the booking and frees its seats.')),
         status: {scheduled: @json(translate('Scheduled')), boarding: @json(translate('Boarding')), departed: @json(translate('Departed'))},
         delayed: @json(translate('Delayed')),
+        pencilOn: @json(translate(key: 'Pencil seat {seats} on the sheet of the {departure} bus.', replace: ['seats' => '{seats}', 'departure' => '{departure}'])),
+        pencilDone: @json(translate('Done, the seats are pencilled on the sheet')), back: @json(translate('Back')),
     };
     var REASONS = [@json(translate('The bus is full')), @json(translate('This departure changed')), @json(translate('We could not reach you'))];
     var urls = {
@@ -165,6 +171,11 @@
                 '<div class="d-flex flex-wrap gap-2 align-items-baseline"><b class="fs-6">' + esc(b.name) + '</b>' + (b.phone ? '<a class="small" href="tel:' + esc(b.phone) + '">' + esc(b.phone) + '</a>' : '') + '<span class="ms-auto fw-bold">' + esc(b.amount) + '</span></div>' +
                 '<div class="small mb-2">' + esc(b.departure) + ' · ' + T.to + ' ' + esc(b.drop_point) + '</div>' + seatChips(b) + idBox(b) +
                 '<div class="d-flex flex-wrap gap-2 mt-1" data-actions><button class="btn btn-primary" data-accept>' + (b.booker && b.booker.check ? T.acceptChecked : T.accept) + '</button><button class="btn btn-soft" data-decline>' + T.decline + '</button></div>' +
+                // Keeping a paper copy: the seats are pencilled before the accept goes through.
+                '<div class="paperbox mt-2" data-paperbox hidden><div class="fw-bold"><i class="bi bi-pencil-fill"></i> ' +
+                esc(T.pencilOn.replace('{seats}', b.seats.map(function (s) { return s.seat; }).join(', ')).replace('{departure}', b.departure)) + '</div>' +
+                '<div class="form-check mt-2"><input class="form-check-input" type="checkbox" id="pp_' + b.id + '" data-paper-ok><label class="form-check-label" for="pp_' + b.id + '">' + T.pencilDone + '</label></div>' +
+                '<div class="d-flex gap-2 mt-2"><button class="btn btn-primary" data-accept-go disabled>' + (b.booker && b.booker.check ? T.acceptChecked : T.accept) + '</button><button class="btn btn-soft" data-paper-back>' + T.back + '</button></div></div>' +
                 '<div class="reasons mt-2" data-reasons hidden><div class="small fw-semibold mb-1">' + T.why + '</div>' +
                 REASONS.map(function (r) { return '<button class="btn btn-soft btn-sm" data-reason="' + esc(r) + '">' + esc(r) + '</button>'; }).join('') +
                 '<div class="d-flex gap-2"><input class="form-control form-control-sm" maxlength="200" placeholder="' + T.other + '" aria-label="' + T.other + '" data-other><button class="btn btn-dark btn-sm" data-reason-other>' + T.decline + '</button></div></div>' +
@@ -240,7 +251,20 @@
         var card = e.target.closest('.req');
         if (card) {
             var id = card.dataset.id;
-            if (e.target.closest('[data-accept]')) act(urls.accept, id, {}, card);
+            if (e.target.closest('[data-accept]')) {
+                if (data && data.paper) {
+                    busy[id] = true;
+                    card.querySelector('[data-actions]').hidden = true;
+                    card.querySelector('[data-paperbox]').hidden = false;
+                    card.querySelector('[data-paper-ok]').focus();
+                } else act(urls.accept, id, {}, card);
+            }
+            if (e.target.closest('[data-accept-go]')) act(urls.accept, id, {paper: true}, card);
+            if (e.target.closest('[data-paper-back]')) {
+                delete busy[id];
+                card.querySelector('[data-actions]').hidden = false;
+                card.querySelector('[data-paperbox]').hidden = true;
+            }
             if (e.target.closest('[data-decline]')) { busy[id] = true; card.querySelector('[data-reasons]').hidden = false; card.querySelector('[data-actions]').hidden = true; card.querySelector('[data-reason]').focus(); }
             var r = e.target.closest('[data-reason]');
             if (r) act(urls.decline, id, {reason: r.dataset.reason}, card);
@@ -248,6 +272,10 @@
         }
         var c = e.target.closest('[data-cancel]');
         if (c && confirm(T.confirmCancel)) act(urls.cancel, c.dataset.cancel, {reason: ''}, c.parentNode);
+    });
+    document.addEventListener('change', function (e) {
+        if (!e.target.matches('[data-paper-ok]')) return;
+        e.target.closest('[data-paperbox]').querySelector('[data-accept-go]').disabled = !e.target.checked;
     });
     document.addEventListener('submit', function (e) {
         var f = e.target.closest('[data-refund]');

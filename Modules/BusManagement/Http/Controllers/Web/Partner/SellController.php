@@ -13,6 +13,7 @@ use Modules\BusManagement\Entities\BusDeparture;
 use Modules\BusManagement\Entities\BusTicket;
 use Modules\BusManagement\Service\BookingService;
 use Modules\BusManagement\Service\CounterService;
+use Modules\BusManagement\Service\PaperService;
 use SimpleSoftwareIO\QrCode\Facades\QrCode;
 
 /** Quick sell at the counter, on the live seat map shared with the app; printable tickets. */
@@ -26,8 +27,10 @@ class SellController extends Controller
     {
         $agency = $request->attributes->get('busAgency');
         $departures = $this->openDepartures($agency);
-        $current = $departures->firstWhere('id', $request->query('departure')) ?? $departures->first();
-        return view('busmanagement::partner.sell', compact('departures', 'current'));
+        $left = $this->leftDepartures($agency);
+        $current = $departures->firstWhere('id', $request->query('departure')) ?? $left->firstWhere('id', $request->query('departure')) ?? $departures->first();
+        $paper = PaperService::on($agency);
+        return view('busmanagement::partner.sell', compact('departures', 'left', 'current', 'paper'));
     }
 
     /** The live seat map: taken seats with who has them, polled every few seconds. */
@@ -39,7 +42,9 @@ class SellController extends Controller
             'plan' => $d->seat_plan,
             'taken' => BookingService::seatStates($d),
             'counter_kept' => BookingService::counterSeats($d, $agency->rules),
-            'open' => $d->isOpen() && $d->vehicle_id !== null,
+            'open' => ($d->isOpen() && $d->vehicle_id !== null) || CounterService::lateEntryOk($d),
+            // The bus left: only sales made on paper during a cut are typed in.
+            'late' => !$d->isOpen() && CounterService::lateEntryOk($d),
             'online_closed' => now()->gte(BookingService::onlineClosesAt($d, $agency->rules)),
             'drop_points' => $d->destination?->dropPoints->where('active', true)->map(fn($p) => ['id' => $p->id, 'name' => $p->name, 'fare' => $p->fareFor($d->class)])
                 ->filter(fn($p) => $p['fare'] !== null)->values(),
@@ -50,10 +55,18 @@ class SellController extends Controller
     {
         $agency = $request->attributes->get('busAgency');
         $d = BusDeparture::where('agency_id', $agency->id)->findOrFail($departure);
+        // Keeping a paper copy: the seats sold go on the sheet too (the agent ticks it).
+        $paper = PaperService::on($agency);
+        if ($paper && !$request->boolean('paper')) {
+            return response()->json(['ok' => false, 'message' => translate('Pencil the seats on the paper sheet and tick it first.')], 422);
+        }
         try {
-            $booking = $this->counter->sell($agency, $request->attributes->get('busStaff'), $d, $request->only(['seats', 'drop_point_id', 'passengers', 'method', 'booker_id_number']));
+            $booking = $this->counter->sell($agency, $request->attributes->get('busStaff'), $d, $request->only(['seats', 'drop_point_id', 'passengers', 'method', 'booker_id_number', 'paper_sale']));
         } catch (ValidationException $e) {
             return response()->json(['ok' => false, 'message' => collect($e->errors())->flatten()->first()], 422);
+        }
+        if ($paper && $d->fresh()->isOpen()) {
+            app(PaperService::class)->pencil($d, $booking->tickets->pluck('seat')->all(), auth()->id());
         }
         return response()->json([
             'ok' => true,
@@ -93,5 +106,13 @@ class SellController extends Controller
         return BusDeparture::with(['destination', 'vehicle'])->where('agency_id', $agency->id)->whereIn('status', BusDeparture::OPEN)
             ->whereNotNull('vehicle_id')->whereBetween('date', [today()->toDateString(), today()->addDays(7)->toDateString()])
             ->orderBy('date')->orderBy('time')->get();
+    }
+
+    /** Buses that left in the last days, for typing in the paper sales made during a cut. */
+    protected function leftDepartures($agency)
+    {
+        return BusDeparture::with(['destination', 'vehicle'])->where('agency_id', $agency->id)->where('status', BusDeparture::DEPARTED)
+            ->whereNotNull('vehicle_id')->whereBetween('date', [today()->subDays(PaperService::LATE_ENTRY_DAYS)->toDateString(), today()->toDateString()])
+            ->orderByDesc('date')->orderByDesc('time')->get()->filter(fn($d) => CounterService::lateEntryOk($d))->values();
     }
 }

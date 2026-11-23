@@ -35,7 +35,13 @@
                 @foreach($list as $d)<option value="{{ $d->id }}" @selected($current && $current->id === $d->id)>{{ $label($d) }}</option>@endforeach
             </optgroup>
         @endforeach
+        @if($left->isNotEmpty())
+            <optgroup label="{{ translate('Left already: type in paper sales') }}">
+                @foreach($left as $d)<option value="{{ $d->id }}" @selected($current && $current->id === $d->id)>{{ $label($d) }}</option>@endforeach
+            </optgroup>
+        @endif
     </select>
+    <span class="b-tag bad" id="lateTag" hidden>{{ translate('This bus has left: you are typing in sales made on paper') }}</span>
     <span class="b-tag warn" id="onlineClosed" hidden>{{ translate('Closed in the app: counter only now') }}</span>
 </div>
 
@@ -66,6 +72,16 @@
                     @php($counterCash = \Modules\TripManagement\Lib\PaymentWays::cash())
                     <div class="seg">@if($counterCash)<input type="radio" name="method" id="m_cash" value="cash" checked><label for="m_cash">{{ translate('Cash') }}</label>@endif<input type="radio" name="method" id="m_momo" value="momo" {{ $counterCash ? '' : 'checked' }}><label for="m_momo">MoMo</label><input type="radio" name="method" id="m_orange" value="orange"><label for="m_orange">Orange</label></div></div>
             </div>
+            <div class="form-check form-switch mt-3">
+                <input class="form-check-input" type="checkbox" role="switch" id="paperSale">
+                <label class="form-check-label small fw-semibold" for="paperSale">{{ translate('Typing in a sale made on paper') }}</label>
+            </div>
+            @if($paper)
+                <label class="d-flex gap-2 align-items-center mt-2 p-2 rounded small fw-bold" for="paperOk" style="background:#fffaf0;border:2px solid #f59e0b;cursor:pointer">
+                    <input class="form-check-input m-0 flex-none" type="checkbox" id="paperOk" style="width:1.4em;height:1.4em">
+                    <span><i class="bi bi-pencil-fill"></i> {{ translate('The seats are pencilled on the paper sheet') }}</span>
+                </label>
+            @endif
             <div class="d-flex align-items-center gap-3 mt-3">
                 <div class="flex-grow-1"><div class="b-hint">{{ translate('Total') }}</div><div class="total" id="total">0</div></div>
                 <button class="btn btn-primary btn-lg" id="sellBtn" disabled>{{ translate('Sell') }}</button>
@@ -140,7 +156,8 @@
     }
     function refresh() {
         document.getElementById('total').textContent = money(total());
-        var ready = picked.length && picked.every(function (s) { return pax[s] && (pax[s].name || '').trim().length >= 2; }) && fare() > 0;
+        var paperOk = document.getElementById('paperOk');
+        var ready = picked.length && picked.every(function (s) { return pax[s] && (pax[s].name || '').trim().length >= 2; }) && fare() > 0 && (!paperOk || paperOk.checked);
         document.getElementById('sellBtn').disabled = !ready;
     }
     function toggle(n) {
@@ -152,7 +169,10 @@
     function load(first) {
         return fetch(seatsUrl.replace('__', dep), {headers: {'Accept': 'application/json'}}).then(function (r) { return r.json(); }).then(function (d) {
             state = d;
-            document.getElementById('onlineClosed').hidden = !d.online_closed || !d.open;
+            document.getElementById('onlineClosed').hidden = !d.online_closed || !d.open || d.late;
+            document.getElementById('lateTag').hidden = !d.late;
+            var ps = document.getElementById('paperSale');
+            if (d.late) { ps.checked = true; ps.disabled = true; } else if (ps.disabled) { ps.disabled = false; ps.checked = false; }
             document.getElementById('mapNote').textContent = d.open ? '' : T.closedDep;
             if (first) {
                 document.getElementById('drop').innerHTML = d.drop_points.map(function (p) { return '<option value="' + p.id + '">' + esc(p.name) + ' · ' + money(p.fare) + '</option>'; }).join('');
@@ -175,6 +195,7 @@
         refresh();
     });
     document.getElementById('drop').addEventListener('change', refresh);
+    if (document.getElementById('paperOk')) document.getElementById('paperOk').addEventListener('change', refresh);
     document.getElementById('depPick').addEventListener('change', function () {
         dep = this.value; picked = []; pax = {}; drawPax();
         history.replaceState(null, '', '?departure=' + dep);
@@ -186,6 +207,8 @@
             seats: picked, drop_point_id: document.getElementById('drop').value,
             method: document.querySelector('input[name=method]:checked').value,
             booker_id_number: document.getElementById('bookerId').value.trim() || null,
+            paper: !!(document.getElementById('paperOk') && document.getElementById('paperOk').checked),
+            paper_sale: document.getElementById('paperSale').checked,
             passengers: picked.map(function (s) { return {name: pax[s].name, phone: pax[s].phone || null, bags: pax[s].bags != null && pax[s].bags !== '' ? +pax[s].bags : null}; }),
         }).then(function (d) {
             if (!d.ok) { busToast(d.message); load(false); btn.disabled = false; return; }
@@ -195,6 +218,8 @@
             document.getElementById('doneCode').textContent = d.code;
             document.getElementById('printBtn').href = d.print;
             picked = []; pax = {}; drawPax(); load(false); document.getElementById('bookerId').value = '';
+            if (document.getElementById('paperOk')) document.getElementById('paperOk').checked = false;
+            if (!document.getElementById('paperSale').disabled) document.getElementById('paperSale').checked = false;
             document.getElementById('printBtn').focus();
         }).catch(function () { btn.disabled = false; });
     });

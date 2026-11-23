@@ -46,6 +46,11 @@
                     <label class="form-check-label small" for="idc_{{ $value }}"><b>{{ $label }}</b><br><span class="b-hint">{{ $hint }}</span></label></div>
             @endforeach
         </fieldset>
+        <div class="form-check form-switch mb-1">
+            <input class="form-check-input" type="checkbox" role="switch" id="paper_copy" name="paper_copy" value="1" @checked(old('paper_copy', $rules['paper_copy']))>
+            <label class="form-check-label small fw-semibold" for="paper_copy">{{ translate('Keep a paper copy') }}</label>
+        </div>
+        <div class="b-hint mb-3">{{ translate('A pencil seat sheet for each bus, kept in step with E-Ride, so you can sell on paper during a power or internet cut. Agents tick each seat they pencil, and auto-accept is off.') }}</div>
         <fieldset class="mb-3">
             <legend class="fw-semibold small mb-1">{{ translate('Tickets') }}</legend>
             @foreach([

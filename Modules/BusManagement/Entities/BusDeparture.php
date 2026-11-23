@@ -24,6 +24,7 @@ class BusDeparture extends Model
     protected $fillable = [
         'agency_id', 'schedule_id', 'destination_id', 'class', 'kind', 'date', 'time', 'vehicle_id', 'seat_plan', 'capacity', 'auto_accept',
         'status', 'delayed_to', 'boarding_at', 'departed_at', 'cancelled_at', 'cancel_reason', 'closure_id',
+        'paper_checked_at', 'paper_checked_by',
     ];
 
     protected $casts = [
@@ -34,6 +35,7 @@ class BusDeparture extends Model
         'boarding_at' => 'datetime',
         'departed_at' => 'datetime',
         'cancelled_at' => 'datetime',
+        'paper_checked_at' => 'datetime',
     ];
 
     public function agency(): BelongsTo

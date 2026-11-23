@@ -82,6 +82,9 @@ class BookingService
         if (!$agency || !$agency->isBookable()) {
             return translate('This agency is not taking bookings in the app right now.');
         }
+        if ($agency->online_paused_at) {
+            return translate('The agency paused bookings in the app for a short while. Try again a bit later, or call them.');
+        }
         if (!$departure->isOpen() || !$departure->vehicle_id || empty($departure->seat_plan['seats'])) {
             return translate('This departure is not open for booking.');
         }
@@ -173,7 +176,8 @@ class BookingService
         }
 
         $now = now();
-        $auto = (bool)$departure->auto_accept;
+        // An agency keeping a paper copy answers every request itself: each accepted seat is pencilled on its sheet.
+        $auto = (bool)$departure->auto_accept && !PaperService::on($agency);
         $booking = DB::transaction(function () use ($user, $departure, $agency, $drop, $lines, $data, $now, $auto, $settings, $booker, $via, $notify) {
             // The departure may have been cancelled or changed bus since it was read: check again under its lock.
             $locked = BusDeparture::whereKey($departure->id)->lockForUpdate()->first();
@@ -183,6 +187,10 @@ class BookingService
             // A lockdown declared a moment ago (it sets this under the same lock).
             if ($locked->closure_id) {
                 throw ValidationException::withMessages(['departure' => translate('Sales are stopped: a lockdown may affect this departure. The agency decides soon.')]);
+            }
+            // Paused a moment ago (PaperService::pause sets it under the agency's lock, then declines what is waiting).
+            if (BusAgency::whereKey($agency->id)->sharedLock()->value('online_paused_at')) {
+                throw ValidationException::withMessages(['departure' => translate('The agency paused bookings in the app for a short while. Try again a bit later, or call them.')]);
             }
             $booking = BusBooking::create([
                 'code' => $this->newCode(BusBooking::class),
@@ -333,6 +341,7 @@ class BookingService
     /** Average time the agency takes to answer, shown to passengers ("usually answers in 3 min"). */
     protected function recordAnswer(BusAgency $agency, BusBooking $booking): void
     {
+        PaperService::answered($agency);
         $seconds = max(1, (int)$booking->created_at->diffInSeconds(now(), true));
         $avg = $agency->answer_seconds_avg;
         $agency->forceFill(['answer_seconds_avg' => $avg ? (int)round($avg * 0.8 + $seconds * 0.2) : $seconds])->save();
@@ -645,6 +654,7 @@ class BookingService
             ->each(function (BusBooking $booking) use (&$done) {
                 if ($this->expireOne($booking, BusBooking::REQUESTED)) {
                     $done['requests']++;
+                    app(PaperService::class)->unanswered($booking->agency);
                     BusPush::send($booking->customer, 'bus_request_expired', '{agency} did not answer in time',
                         'Your seats are free again. Try another departure or another agency.',
                         ['agency' => $booking->agency?->name], ['bus_booking_id' => $booking->id]);

@@ -2,11 +2,13 @@
     use Modules\BusManagement\Entities\BusAgency;
     use Modules\BusManagement\Entities\BusStaff;
     $role = $busStaff->role;
+    $paperOn = $role !== BusStaff::BOARDING && Route::has('bus-partner.paper') && \Modules\BusManagement\Service\PaperService::on($busAgency);
     $nav = array_values(array_filter([
         Route::has('bus-partner.today') && $role !== BusStaff::BOARDING ? ['bus-partner.today', 'bi-bell', translate('Today')] : null,
         Route::has('bus-partner.sell') && $role !== BusStaff::BOARDING ? ['bus-partner.sell', 'bi-ticket-perforated', translate('Quick sell')] : null,
         Route::has('bus-partner.collect') && $role !== BusStaff::BOARDING && \Modules\BusManagement\Lib\BusSettings::rules($busAgency->rules)['tickets'] === 'collect'
             ? ['bus-partner.collect', 'bi-printer', translate('Collect')] : null,
+        $paperOn ? ['bus-partner.paper', 'bi-journal-check', translate('Paper sheets')] : null,
         Route::has('bus-partner.boarding') ? ['bus-partner.boarding', 'bi-qr-code-scan', translate('Boarding')] : null,
         ['bus-partner.departures', 'bi-calendar-week', translate('Departures')],
         $role === BusStaff::MANAGER ? ['bus-partner.destinations', 'bi-signpost-split', translate('Destinations')] : null,
@@ -15,10 +17,13 @@
         $role === BusStaff::MANAGER ? ['bus-partner.staff', 'bi-people', translate('Staff')] : null,
         $role !== BusStaff::BOARDING ? ['bus-partner.share', 'bi-share', translate('Share')] : null,
     ]));
-    $statusLabel = match ($busAgency->status) {
+    $statusLabel = match (true) {
+        $busAgency->status === BusAgency::LIVE && $busAgency->online_paused_at !== null => [translate('App sales paused'), 'is-paused'],
+        default => match ($busAgency->status) {
         BusAgency::LIVE => [translate('Taking bookings'), 'is-live'],
         BusAgency::PAUSED => [translate('Online booking paused'), 'is-paused'],
         default => [translate('Setting up'), 'is-setup'],
+        },
     };
 @endphp
 <!DOCTYPE html>
@@ -36,6 +41,7 @@
     <style>
         :root { --red: #e02020; --ink: #1d2d2b; --muted: #5f6b6a; --line: #e5e9e8; --bg: #f4f6f6; --ok: #15803d; --warn: #9a4a06; }
         * { -webkit-tap-highlight-color: transparent; }
+        [hidden] { display: none !important; }
         html, body { background: var(--bg); color: var(--ink); }
         body { font: 15px/1.45 -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; }
         .b-top { background: #111114; color: #fff; position: sticky; top: 0; z-index: 30; }
@@ -119,7 +125,7 @@
         </div>
         <nav class="b-nav" aria-label="{{ translate('Partner_menu') }}">
             @foreach($nav as [$routeName, $icon, $label])
-                <a href="{{ route($routeName) }}" class="{{ request()->routeIs($routeName . '*') ? 'active' : '' }}"><i class="bi {{ $icon }}" aria-hidden="true"></i>{{ $label }}@if($routeName === 'bus-partner.today')<span class="b-badge" data-requests-badge></span>@endif</a>
+                <a href="{{ route($routeName) }}" class="{{ request()->routeIs($routeName . '*') ? 'active' : '' }}"><i class="bi {{ $icon }}" aria-hidden="true"></i>{{ $label }}@if($routeName === 'bus-partner.today')<span class="b-badge" data-requests-badge></span>@elseif($routeName === 'bus-partner.paper')<span class="b-badge" data-paper-badge></span>@endif</a>
             @endforeach
         </nav>
     </div>
@@ -135,6 +141,9 @@
     @if(session('success'))<div class="alert alert-success">{{ session('success') }}</div>@endif
     @if ($errors->any())
         <div class="alert alert-danger"><ul class="mb-0 ps-3">@foreach ($errors->all() as $error)<li>{{ $error }}</li>@endforeach</ul></div>
+    @endif
+    @if($role !== BusStaff::BOARDING && Route::has('bus-partner.paper'))
+        @include('busmanagement::partner._paper_alarm')
     @endif
     @yield('content')
 </main>

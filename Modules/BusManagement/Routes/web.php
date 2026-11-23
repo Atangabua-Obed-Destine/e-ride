@@ -8,6 +8,7 @@ use Modules\BusManagement\Http\Controllers\Web\Partner\AuthController;
 use Modules\BusManagement\Http\Controllers\Web\Partner\BoardingController;
 use Modules\BusManagement\Http\Controllers\Web\Partner\ClosureController;
 use Modules\BusManagement\Http\Controllers\Web\Partner\CollectController;
+use Modules\BusManagement\Http\Controllers\Web\Partner\PaperController;
 use Modules\BusManagement\Http\Controllers\Web\Partner\SellController;
 use Modules\BusManagement\Http\Controllers\Web\Partner\TodayController;
 use Modules\BusManagement\Http\Controllers\Web\Partner\DepartureController;
@@ -54,6 +55,16 @@ Route::group(['prefix' => 'partner/bus-agency', 'as' => 'bus-partner.'], functio
         Route::get('sell', [SellController::class, 'index'])->name('sell');
         Route::get('sell/{departure}/seats', [SellController::class, 'seats'])->name('sell.seats')->whereUuid('departure');
         Route::post('sell/{departure}', [SellController::class, 'sell'])->name('sell.submit')->whereUuid('departure')->middleware('throttle:60,1,bus-sell');
+        // Paper sheets (pencil seat sheet per departure) and pausing sales in the app.
+        Route::get('paper', [PaperController::class, 'index'])->name('paper');
+        Route::get('paper/feed', [PaperController::class, 'feed'])->name('paper.feed');
+        Route::post('paper/pause', [PaperController::class, 'pause'])->name('paper.pause');
+        Route::post('paper/resume', [PaperController::class, 'resume'])->name('paper.resume');
+        Route::get('paper/{departure}', [PaperController::class, 'show'])->name('paper.show')->whereUuid('departure');
+        Route::get('paper/{departure}/seats', [PaperController::class, 'seats'])->name('paper.seats')->whereUuid('departure');
+        Route::get('paper/{departure}/print', [PaperController::class, 'print'])->name('paper.print')->whereUuid('departure');
+        Route::post('paper/{departure}/tick', [PaperController::class, 'tick'])->name('paper.tick')->whereUuid('departure')->middleware('throttle:240,1,bus-paper');
+        Route::post('paper/{departure}/matches', [PaperController::class, 'matches'])->name('paper.matches')->whereUuid('departure');
         Route::get('share', [\Modules\BusManagement\Http\Controllers\Web\Partner\ShareController::class, 'index'])->name('share');
         Route::get('collect', [CollectController::class, 'index'])->name('collect');
         Route::get('collect/lookup', [CollectController::class, 'lookup'])->name('collect.lookup')->middleware('throttle:120,1,bus-collect');

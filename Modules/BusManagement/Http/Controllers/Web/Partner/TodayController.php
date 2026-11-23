@@ -13,6 +13,7 @@ use Modules\BusManagement\Entities\BusTicket;
 use Illuminate\Support\Facades\Storage;
 use Modules\BusManagement\Lib\BusSettings;
 use Modules\BusManagement\Service\BookingService;
+use Modules\BusManagement\Service\PaperService;
 use Modules\UserManagement\Entities\IdVerification;
 use Modules\UserManagement\Service\IdVerificationService;
 use Modules\BusManagement\Service\ScheduleService;
@@ -74,6 +75,7 @@ class TodayController extends Controller
 
         return response()->json([
             'now' => now()->toIso8601String(),
+            'paper' => PaperService::on($agency),
             'count' => $requests->count(),
             'requests' => $requests->map($card)->values(),
             'awaiting' => $awaiting->map($card)->values(),
@@ -107,7 +109,19 @@ class TodayController extends Controller
 
     public function accept(Request $request, string $booking): JsonResponse
     {
-        return $this->act($request, $booking, fn($agency, $b) => $this->bookings->accept($agency, $b, auth()->id()), translate('Accepted. The passenger has been asked to pay.'));
+        $agency = $request->attributes->get('busAgency');
+        // Keeping a paper copy: the seats go on the sheet as they are accepted (the agent ticks it).
+        $paper = PaperService::on($agency);
+        if ($paper && !$request->boolean('paper')) {
+            return response()->json(['ok' => false, 'message' => translate('Pencil the seats on the paper sheet and tick it first.')], 422);
+        }
+        return $this->act($request, $booking, function ($agency, $b) use ($paper) {
+            $b = $this->bookings->accept($agency, $b, auth()->id());
+            if ($paper) {
+                $b->loadMissing(['tickets', 'departure']);
+                app(PaperService::class)->pencil($b->departure, $b->tickets->where('status', BusTicket::HELD)->pluck('seat')->all(), auth()->id());
+            }
+        }, translate('Accepted. The passenger has been asked to pay.'));
     }
 
     public function decline(Request $request, string $booking): JsonResponse
