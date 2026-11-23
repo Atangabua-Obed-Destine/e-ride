@@ -207,7 +207,11 @@
                         @endif
                         <div class="flex-grow-1" style="min-width: 0">
                             <div class="fw-semibold text-truncate">{{ $item->name }}</div>
-                            @if($view === 'full' && $item->description)<div class="fs-12 text-muted text-truncate">{{ $item->description }}</div>@endif
+                            @if($item->description)
+                                <div class="fs-12 text-muted text-truncate">{{ $item->description }}</div>
+                            @elseif($view === 'full')
+                                <button type="button" class="btn btn-link p-0 fs-12 text-decoration-none" data-menu-add-desc="{{ $item->id }}">+ {{ translate('Add a description') }}</button>
+                            @endif
                             <div class="d-flex flex-wrap align-items-center gap-2 mt-1">
                                 <span class="fw-bold">{{ getCurrencyFormat($item->price) }}</span>
                                 {{-- Today: only hours that differ from the section's, already shown above. --}}
@@ -223,10 +227,13 @@
                                     <option value="{{ $value }}" {{ $state === $value ? 'selected' : '' }}>{{ $text }}</option>
                                 @endforeach
                             </select>
+                            @if($view === 'today' && $canEditMenu)
+                                <a class="btn btn-sm btn-light" href="{{ $pageUrl(['view' => 'full', 'edit' => $item->id]) }}" title="{{ translate('edit') }}" aria-label="{{ translate('edit') }} {{ $item->name }}"><i class="bi bi-pencil"></i></a>
+                            @endif
                             @if($view === 'full')
                                 <div class="d-flex gap-1">
                                     <button type="button" class="btn btn-sm btn-light" title="{{ translate('edit') }}" aria-label="{{ translate('edit') }} {{ $item->name }}"
-                                            data-menu-item-edit
+                                            data-menu-item-edit="{{ $item->id }}"
                                             data-action="{{ $r('menu.item.save', ['item' => $item->id]) }}"
                                             data-item="{{ json_encode(['name' => $item->name, 'description' => $item->description, 'price' => $item->price, 'store_menu_category_id' => $item->store_menu_category_id, 'days' => $item->servedDayList(), 'from' => $item->served_from, 'until' => $item->served_until]) }}">
                                         <i class="bi bi-pencil"></i>
@@ -382,6 +389,18 @@
         // Staff do not add dishes (they come with a price): no button then.
         var addItem = document.querySelector('[data-menu-item-new]');
         if (addItem) addItem.addEventListener('click', function () { open(form.dataset.newAction, null); });
+        // "+ Add a description" and ?edit=<dish> open that dish's form.
+        document.querySelectorAll('[data-menu-add-desc]').forEach(function (b) {
+            b.addEventListener('click', function () {
+                const edit = document.querySelector('[data-menu-item-edit="' + b.dataset.menuAddDesc + '"]');
+                if (edit) { edit.click(); setTimeout(function () { const d = document.querySelector('#menu-item-modal [name=description]'); if (d) d.focus(); }, 400); }
+            });
+        });
+        setTimeout(function () {
+            const want = new URLSearchParams(location.search).get('edit');
+            const edit = want && document.querySelector('[data-menu-item-edit="' + want + '"]');
+            if (edit) edit.click();
+        }, 0);
         document.querySelectorAll('[data-menu-item-edit]').forEach(function (b) {
             b.addEventListener('click', function () { open(b.dataset.action, JSON.parse(b.dataset.item)); });
         });

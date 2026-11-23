@@ -6220,4 +6220,5 @@
   'Nothing on the menu today. Customers cannot order until you add dishes for today.' => 'Rien au menu aujourd\'hui. Les clients ne peuvent pas commander tant que vous n\'ajoutez pas de plats pour aujourd\'hui.',
   '{n} other dishes are not served today.' => ':n autres plats ne sont pas servis aujourd\'hui.',
   'Edit the menu' => 'Modifier le menu',
+  'Add a description' => 'Ajouter une description',
 );
