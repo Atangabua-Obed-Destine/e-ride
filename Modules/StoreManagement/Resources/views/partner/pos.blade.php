@@ -114,7 +114,7 @@
                     <div class="flex-grow-1" style="min-width:160px">
                         <div class="fw-semibold" style="font-size:14px">{{ $p->fullName() }}</div>
                         <div class="text-muted fs-12">
-                            {{ number_format($p->price) }} FCFA
+                            {{ number_format($p->price) }} FCFA@if($p->unit && !in_array(strtolower($p->unit), ['piece', 'pieces', 'pc', 'pcs', 'unit', 'units', 'each', 'item'], true)) / {{ $p->unit }}@endif
                             @if($p->sku) · {{ $p->sku }}@endif
                             ·
                             @if(!$p->track_stock)

@@ -61,7 +61,7 @@ class PartnerPosController extends Controller
             ] : null,
             'images' => $items ? \Illuminate\Support\Facades\DB::table('store_pos_images')
                 ->whereIn('sha1', $items->pluck('image_sha1')->filter()->unique())->pluck('file', 'sha1')
-                ->map(fn($f) => dynamicStorage('storage/app/public/' . PosChannelService::IMAGE_DIR) . $f) : collect(),
+                ->map(fn($f) => PosChannelService::imageBase() . $f) : collect(),
             'apiUrl' => url('api/channel/posinnova/v1'),
             'newKey' => session('pos_key'),
         ]);

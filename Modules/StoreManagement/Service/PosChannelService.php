@@ -237,7 +237,13 @@ class PosChannelService
             return null;
         }
         $file = DB::table('store_pos_images')->where('sha1', $sha1)->value('file');
-        return $file ? dynamicStorage('storage/app/public/' . self::IMAGE_DIR) . $file : null;
+        return $file ? self::imageBase() . $file : null;
+    }
+
+    /** Public URL folder of POS images, ending in "/" (dynamicStorage drops a trailing slash). */
+    public static function imageBase(): string
+    {
+        return rtrim(dynamicStorage('storage/app/public/' . rtrim(self::IMAGE_DIR, '/')), '/') . '/';
     }
 
     // ------------------------------------------------------------ orders
