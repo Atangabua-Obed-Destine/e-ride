@@ -19,7 +19,7 @@
     @if($newKey)
         <div class="p-card p-3 mb-3" style="border:2px solid #198754">
             <h2 class="fs-6 fw-bold mb-1">{{ translate('Your key for this branch') }}</h2>
-            <p class="text-muted mb-2" style="font-size:13px">{{ translate('Copy it now: E-Ride shows it only once. In POS Innova, open Settings, E-Ride, and paste the address and the key.') }}</p>
+            <p class="text-muted mb-2" style="font-size:13px">{{ translate('Copy it now: E-Ride shows it only once. In POS Innova, open E-Ride, then E-Ride link, and paste the address and the key in the box of this branch.') }}</p>
             <div class="fs-12 fw-semibold">{{ translate('Address') }}</div>
             <div class="input-group input-group-sm mb-2">
                 <input class="form-control" value="{{ $apiUrl }}" readonly id="pos-url" aria-label="{{ translate('Address') }}">
@@ -70,8 +70,8 @@
         @else
             <ol class="ps-3 text-muted" style="font-size:13px">
                 <li>{{ translate('Press Link a POS: E-Ride gives you an address and a key for this branch.') }}</li>
-                <li>{{ translate('In POS Innova at this branch, open Settings, E-Ride, and paste them.') }}</li>
-                <li>{{ translate('The products of the POS appear here. Link each one to a dish or item on your menu.') }}</li>
+                <li>{{ translate('In POS Innova, open E-Ride, then E-Ride link, and paste them in the box of this branch.') }}</li>
+                <li>{{ translate('In POS Innova, tick the products to sell on E-Ride (Products on E-Ride). They appear here: link each one to an item on your menu, or add it.') }}</li>
             </ol>
             <form method="POST" action="{{ route('partner.pos.link') }}">@csrf
                 <input type="hidden" name="kitchen" value="{{ $kitchen->id }}">
