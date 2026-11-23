@@ -274,7 +274,9 @@ class PartnerService
         return [
             'types' => $types->isNotEmpty(),
             'photos' => $types->isNotEmpty() && $types->every(fn($t) => count($t->photos ?? []) >= 1),
-            'rooms' => $types->isNotEmpty() && $types->every(fn($t) => $t->rooms_count >= 1),
+            'rooms' => $hotel->usesPos()
+                ? count(app(\Modules\HotelManagement\Service\HotelPosService::class)->mappedTypeIds($hotel)) > 0
+                : $types->isNotEmpty() && $types->every(fn($t) => $t->rooms_count >= 1),
             'phone' => filled($hotel->reception_phone),
         ];
     }

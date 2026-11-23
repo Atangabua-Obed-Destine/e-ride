@@ -8,6 +8,7 @@ use Modules\HotelManagement\Entities\HotelInquiry;
 use Modules\HotelManagement\Entities\HotelMessage;
 use Modules\HotelManagement\Entities\HotelRoomType;
 use Modules\HotelManagement\Entities\HotelStay;
+use Modules\HotelManagement\Service\HotelPosService;
 use Modules\HotelManagement\Service\InquiryService;
 use Modules\HotelManagement\Service\PartnerService;
 use Modules\HotelManagement\Service\StayService;
@@ -32,8 +33,8 @@ class HotelPresenter
             'fresh' => $fresh,
             'updated_at' => $hotel->board_touched_at?->toIso8601String(),
             'price_from' => $types->min('price_from'),
-            // Null when the counts are not trustworthy (rooms not updated lately): "Ask the reception".
-            'free_rooms' => $fresh && $from ? array_sum(array_map(fn($t) => $counts[(string)$t->id] ?? 0, $types->all())) : null,
+            // Null when the counts are not trustworthy (rooms not updated lately, or POS has not said): "Ask the reception".
+            'free_rooms' => $fresh && $from ? self::sumKnown($counts, $hotel->usesPos() ? $types->whereIn('id', app(HotelPosService::class)->mappedTypeIds($hotel))->all() : $types->all()) : null,
             'reception_phone' => $hotel->reception_phone,
             'check_in_from' => $hotel->check_in_from,
             'check_out_by' => $hotel->check_out_by,
@@ -41,13 +42,22 @@ class HotelPresenter
         ];
     }
 
+    /** Sum of the known counts of these types; null when none is known. */
+    protected static function sumKnown(array $counts, array $types): ?int
+    {
+        $known = array_filter(array_map(fn($t) => $counts[(string)$t->id] ?? null, $types), fn($n) => $n !== null);
+        return $known ? array_sum($known) : (empty($counts) ? 0 : null);
+    }
+
     /** Room types with photos, and for the dates how many are free (null when not fresh). */
     public static function roomTypes(Hotel $hotel, ?Carbon $from, ?Carbon $to): array
     {
         $fresh = $hotel->isFresh();
         $counts = $fresh && $from && $to ? app(StayService::class)->freeCounts($hotel, $from, $to) : [];
+        // On POS Innova: the types mapped to a POS room type (POS has the rooms); else types with rooms.
+        $mapped = $hotel->usesPos() ? app(HotelPosService::class)->mappedTypeIds($hotel) : null;
         return $hotel->roomTypes()->where('active', true)->withCount(['rooms' => fn($q) => $q->where('active', true)])->get()
-            ->filter(fn(HotelRoomType $t) => $t->rooms_count > 0)
+            ->filter(fn(HotelRoomType $t) => $mapped !== null ? in_array((string)$t->id, $mapped, true) : $t->rooms_count > 0)
             ->map(fn(HotelRoomType $t) => [
                 'id' => $t->id,
                 'name' => $t->name,
@@ -57,7 +67,7 @@ class HotelPresenter
                 'amenities' => array_values(array_intersect(HotelRoomType::AMENITIES, $t->amenities ?? [])),
                 'description' => $t->description,
                 'photos' => array_values(array_filter(array_map([self::class, 'photo'], $t->photos ?? []))),
-                'free' => $fresh && $from ? ($counts[(string)$t->id] ?? 0) : null,
+                'free' => $fresh && $from ? (array_key_exists((string)$t->id, $counts) ? $counts[(string)$t->id] : ($mapped !== null ? null : 0)) : null,
             ])->values()->all();
     }
 
@@ -93,6 +103,8 @@ class HotelPresenter
         $place = $hotel?->place;
         $kept = $q->status === HotelInquiry::KEPT
             ? $q->stays()->where('status', HotelStay::KEPT)->with('room')->get() : collect();
+        $booked = in_array($q->status, [HotelInquiry::KEPT, HotelInquiry::BOOKED], true)
+            ? $q->stays()->where('status', HotelStay::BOOKED)->count() : 0;
         $out = [
             'id' => $q->id,
             'status' => $q->status,
@@ -119,7 +131,9 @@ class HotelPresenter
             'price' => $q->price,
             'kept_until' => $kept->isNotEmpty() ? $kept->min('kept_until')?->toIso8601String() : null,
             'kept_rooms' => $kept->count(),
-            'on_the_way' => $q->status === HotelInquiry::KEPT ? app(InquiryService::class)->onTheWay($q) : false,
+            // Booked firmly by a hotel on POS Innova (no "until").
+            'booked_rooms' => $booked,
+            'on_the_way' => in_array($q->status, [HotelInquiry::KEPT, HotelInquiry::BOOKED], true) ? app(InquiryService::class)->onTheWay($q) : false,
             'unread' => $q->unread_guest,
             'last_message_at' => $q->last_message_at?->toIso8601String(),
             'created_at' => $q->created_at?->toIso8601String(),

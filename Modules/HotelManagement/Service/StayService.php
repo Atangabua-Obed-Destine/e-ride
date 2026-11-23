@@ -44,6 +44,10 @@ class StayService
     /** Free rooms per room type for the dates: [type id => count]. */
     public function freeCounts(Hotel $hotel, Carbon $from, Carbon $to): array
     {
+        if ($hotel->usesPos()) {
+            // [type id => count, or null when POS has not said for one of the nights].
+            return app(HotelPosService::class)->freeCounts($hotel, $from, $to);
+        }
         $counts = [];
         foreach ($this->freeRooms($hotel, null, $from, $to) as $room) {
             $counts[(string)$room->room_type_id] = ($counts[(string)$room->room_type_id] ?? 0) + 1;
@@ -310,7 +314,7 @@ class StayService
     public function tick(): array
     {
         $released = 0;
-        HotelStay::where('status', HotelStay::KEPT)->where('kept_until', '<', now())->orderBy('kept_until')->limit(200)->get()
+        HotelStay::where('status', HotelStay::KEPT)->whereNull('pos_ref')->where('kept_until', '<', now())->orderBy('kept_until')->limit(200)->get()
             ->each(function (HotelStay $stay) use (&$released) {
                 // Still kept and still past its time once locked: the guest may have
                 // just arrived, or the reception kept it longer.
@@ -324,7 +328,7 @@ class StayService
                 }
             });
         $ended = 0;
-        HotelStay::where('status', HotelStay::BOOKED)->where('check_out', '<=', today()->toDateString())->limit(200)->get()
+        HotelStay::where('status', HotelStay::BOOKED)->whereNull('pos_ref')->where('check_out', '<=', today()->toDateString())->limit(200)->get()
             ->each(function (HotelStay $stay) use (&$ended) {
                 if ($this->end($stay, $stay->source === HotelStay::BLOCKED ? HotelStay::RELEASED : HotelStay::NO_SHOW, [HotelStay::BOOKED])) {
                     $ended++;

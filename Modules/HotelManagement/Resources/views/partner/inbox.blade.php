@@ -94,7 +94,17 @@
             <button type="button" class="btn btn-soft w-100" id="priceBtn" style="border:1.5px solid var(--red);color:#b91c1c;background:#fff">{{ translate('Send price card') }}</button>
         </div>
 
+        @if($hotel->usesPos())
         <div class="h-card p-3 mb-3" style="border:2px solid #e8b562">
+            <h2 class="h-h mb-1">{{ translate('Keep or book in POS Innova') }}</h2>
+            <div class="h-hint">{{ translate('This request is on the POS hotel home. Keep or book the room there: the guest is told at once.') }}</div>
+            @foreach($current->stays()->whereNotNull('pos_ref')->whereIn('status', \Modules\HotelManagement\Entities\HotelStay::HOLDING)->get() as $ps)
+                <div class="small mt-2"><span class="h-tag {{ $ps->status === 'kept' ? 'warn' : ($ps->status === 'booked' ? 'blue' : 'ok') }}">{{ $ps->status === 'kept' ? translate('Kept') : ($ps->status === 'booked' ? translate('Booked') : translate('In the house')) }}</span>
+                    POS {{ $ps->pos_ref }}@if($ps->status === 'kept' && $ps->kept_until) · {{ translate(key: 'until {time}', replace: ['time' => $ps->kept_until->format('d/m H:i')]) }}@endif</div>
+            @endforeach
+        </div>
+        @endif
+        <div class="h-card p-3 mb-3" style="border:2px solid #e8b562" @if($hotel->usesPos()) hidden @endif>
             <h2 class="h-h mb-2" id="keepTitle">{{ translate('Keep a room') }}</h2>
             <div id="keptNow" class="mb-2"></div>
             <label for="kType" class="small text-muted">{{ translate('Room type') }}</label>

@@ -81,7 +81,9 @@ class InquiryService
             $this->post($inquiry, HotelMessage::GUEST, 'request', trim((string)($data['question'] ?? '')) ?: null, [
                 'room_type' => $type?->name, 'check_in' => $data['check_in'], 'check_out' => $data['check_out'], 'nights' => $inquiry->nights(),
                 'guests' => (int)$data['guests'], 'rooms' => (int)$data['rooms'], 'arrival' => $data['arrival'] ?? null,
-                'free' => $this->stays->freeRooms($hotel, $data['room_type_id'], Carbon::parse($data['check_in']), Carbon::parse($data['check_out']))->count(),
+                'free' => $hotel->usesPos()
+                    ? ($this->stays->freeCounts($hotel, Carbon::parse($data['check_in']), Carbon::parse($data['check_out']))[(string)$data['room_type_id']] ?? null)
+                    : $this->stays->freeRooms($hotel, $data['room_type_id'], Carbon::parse($data['check_in']), Carbon::parse($data['check_out']))->count(),
             ], $customer->id);
             return $inquiry->fresh();
         });
@@ -106,9 +108,7 @@ class InquiryService
         }
         DB::transaction(function () use ($inquiry) {
             $this->lockActive($inquiry);
-            foreach ($inquiry->stays()->where('status', HotelStay::KEPT)->get() as $stay) {
-                $this->stays->end($stay, HotelStay::RELEASED, [HotelStay::KEPT]);
-            }
+            $this->endHeld($inquiry, 'guest_let_go');
             $inquiry->update(['status' => HotelInquiry::CLOSED, 'close_reason' => 'guest']);
             $this->post($inquiry, HotelMessage::SYSTEM, 'released', null, ['reason' => 'guest']);
         });
@@ -160,6 +160,9 @@ class InquiryService
     {
         $this->mustBeActive($inquiry);
         $hotel = $inquiry->hotel;
+        if ($hotel->usesPos()) {
+            throw ValidationException::withMessages(['inquiry' => translate('Your rooms are in POS Innova: keep the room there, from the E-Ride requests on the hotel home.')]);
+        }
         $data = Validator::make($input, [
             'room_type_id' => ['required', Rule::exists('hotel_room_types', 'id')->where('hotel_id', $hotel->id)],
             'room_id' => ['nullable', Rule::exists('hotel_rooms', 'id')->where('hotel_id', $hotel->id)->where('active', true)],
@@ -222,7 +225,7 @@ class InquiryService
     }
 
     /** The reception closes the question: full on those dates, or nothing more to do. Kept rooms are let go. */
-    public function close(HotelInquiry $inquiry, string $userId, string $reason): HotelInquiry
+    public function close(HotelInquiry $inquiry, ?string $userId, string $reason, bool $fromPos = false): HotelInquiry
     {
         if (!in_array($reason, ['full', 'hotel'], true)) {
             $reason = 'hotel';
@@ -233,11 +236,9 @@ class InquiryService
         if ($inquiry->status === HotelInquiry::ARRIVED) {
             throw ValidationException::withMessages(['inquiry' => translate('The guest is in the house. Mark them as left on the rooms board.')]);
         }
-        DB::transaction(function () use ($inquiry, $reason, $userId) {
+        DB::transaction(function () use ($inquiry, $reason, $userId, $fromPos) {
             $this->lockActive($inquiry);
-            foreach ($inquiry->stays()->where('status', HotelStay::KEPT)->get() as $stay) {
-                $this->stays->end($stay, HotelStay::RELEASED, [HotelStay::KEPT]);
-            }
+            $this->endHeld($inquiry, $fromPos ? null : 'closed_on_eride');
             $inquiry->update(['status' => HotelInquiry::CLOSED, 'close_reason' => $reason]);
             $this->post($inquiry, HotelMessage::HOTEL, 'closed', null, ['reason' => $reason], $userId);
         });
@@ -247,6 +248,22 @@ class InquiryService
             $reason === 'full' ? 'See other hotels with free rooms in E-Ride.' : 'Open the chat to see their last message.',
             ['hotel' => $inquiry->hotel->name], ['hotel_inquiry_id' => $inquiry->id]);
         return $inquiry->fresh();
+    }
+
+    /**
+     * Lets go of the rooms held for the question. Rooms held in POS Innova (pos_ref) end here too, and
+     * with a $posReason POS is told to cancel its reservations (/inquiries/pending "to_release").
+     */
+    protected function endHeld(HotelInquiry $inquiry, ?string $posReason): void
+    {
+        foreach ($inquiry->stays()->whereIn('status', [HotelStay::KEPT, HotelStay::BOOKED])->get() as $stay) {
+            if (!$stay->pos_ref && $stay->status !== HotelStay::KEPT) {
+                continue;
+            }
+            if ($this->stays->end($stay, HotelStay::RELEASED, [HotelStay::KEPT, HotelStay::BOOKED]) && $stay->pos_ref && $posReason) {
+                $stay->forceFill(['pos_release_due_at' => now(), 'pos_release_reason' => $posReason])->save();
+            }
+        }
     }
 
     public function markReadByHotel(HotelInquiry $inquiry): void
@@ -260,6 +277,7 @@ class InquiryService
     public function staysChanged(HotelInquiry $inquiry, string $event): void
     {
         $holding = $inquiry->stays()->whereIn('status', [HotelStay::KEPT, HotelStay::BOOKED])->count();
+        $keptLeft = $inquiry->stays()->where('status', HotelStay::KEPT)->count();
         $inHouse = $inquiry->stays()->where('status', HotelStay::IN_HOUSE)->count();
         $hotel = $inquiry->hotel;
         if ($event === 'arrived' && $holding === 0 && $inquiry->status !== HotelInquiry::ARRIVED) {
@@ -267,11 +285,17 @@ class InquiryService
             $this->post($inquiry, HotelMessage::SYSTEM, 'arrived', null, null);
             HotelPush::send($inquiry->customer, 'hotel_arrived', 'Welcome to {hotel}', 'The reception checked you in. Enjoy your stay.',
                 ['hotel' => $hotel->name], ['hotel_inquiry_id' => $inquiry->id]);
-        } elseif (in_array($event, ['didnt_come', 'expired'], true) && $holding === 0 && $inHouse === 0 && $inquiry->isActive()) {
+        } elseif ($event === 'booked' && $keptLeft === 0 && $inHouse === 0 && in_array($inquiry->status, [HotelInquiry::OPEN, HotelInquiry::ANSWERED, HotelInquiry::KEPT], true)) {
+            $inquiry->update(['status' => HotelInquiry::BOOKED]);
+        } elseif (in_array($event, ['didnt_come', 'expired', 'cancelled'], true) && $holding === 0 && $inHouse === 0 && $inquiry->isActive()) {
             $inquiry->update(['status' => HotelInquiry::CLOSED, 'close_reason' => $event]);
             $this->post($inquiry, HotelMessage::SYSTEM, 'released', null, ['reason' => $event]);
             HotelPush::send($inquiry->customer, 'hotel_released', 'Your room at {hotel} was let go',
-                $event === 'expired' ? 'You were not there by the time it was kept until. Ask again if you still need a room.' : 'The reception marked that you did not come. Ask again if you still need a room.',
+                match ($event) {
+                    'expired' => 'You were not there by the time it was kept until. Ask again if you still need a room.',
+                    'cancelled' => 'The reception cancelled it. Ask again if you still need a room.',
+                    default => 'The reception marked that you did not come. Ask again if you still need a room.',
+                },
                 ['hotel' => $hotel->name], ['hotel_inquiry_id' => $inquiry->id]);
         } elseif ($event === 'stayed' && $holding === 0 && $inHouse === 0 && $inquiry->isActive()) {
             $inquiry->update(['status' => HotelInquiry::CLOSED, 'close_reason' => 'stayed']);
@@ -300,7 +324,7 @@ class InquiryService
     /** The guest is in an E-Ride ride heading to the hotel (destination within 300 m) while a room is kept. */
     public function onTheWay(HotelInquiry $inquiry): bool
     {
-        if ($inquiry->status !== HotelInquiry::KEPT) {
+        if (!in_array($inquiry->status, [HotelInquiry::KEPT, HotelInquiry::BOOKED], true)) {
             return false;
         }
         $place = $inquiry->hotel?->place;

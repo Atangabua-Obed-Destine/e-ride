@@ -30,6 +30,14 @@
 
 @section('content')
 <div class="h-card p-3 mb-3 d-flex flex-wrap align-items-center gap-3">
+    <i class="bi bi-pc-display fs-4" aria-hidden="true"></i>
+    <div class="flex-grow-1">
+        <div class="h-h">{{ translate('POS Innova') }} @if($hotel->usesPos())<span class="h-tag ok">{{ translate('Linked') }}</span>@endif</div>
+        <div class="h-hint">{{ translate('Running your rooms in POS Innova: link it so guests see the free rooms from POS, and reception keeps rooms there.') }}</div>
+    </div>
+    <a href="{{ route('hotel-partner.pos') }}" class="btn btn-soft">{{ translate('Set up') }}</a>
+</div>
+<div class="h-card p-3 mb-3 d-flex flex-wrap align-items-center gap-3">
     <div class="flex-grow-1">
         <div class="h-h">{{ in_array(false, $checklist, true) ? translate('Almost ready for guests') : translate('Ready: guests can ask you') }}</div>
         <div class="h-hint">{{ translate('Guests see your hotel in the app once every step is done. The hotel photos, address and map pin come from your E-Ride listing.') }}</div>

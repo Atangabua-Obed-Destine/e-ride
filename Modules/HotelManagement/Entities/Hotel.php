@@ -55,10 +55,31 @@ class Hotel extends Model
         return $this->status === self::LIVE;
     }
 
-    /** The reception touched its rooms recently enough for guests to see counts. */
+    /** The reception touched its rooms recently enough for guests to see counts (linked to POS: POS checked in). */
     public function isFresh(): bool
     {
+        if ($link = $this->posLink()) {
+            return $link->isConnected();
+        }
         return $this->board_touched_at !== null && $this->board_touched_at->gt(now()->subHours(HotelSettings::get('stale_hours')));
+    }
+
+    protected ?HotelPosLink $posLinkCache = null;
+    protected bool $posLinkLoaded = false;
+
+    /** Its live POS Innova link once POS has called (rooms then come from POS), else null. */
+    public function posLink(): ?HotelPosLink
+    {
+        if (!$this->posLinkLoaded) {
+            $this->posLinkCache = HotelPosLink::where('hotel_id', $this->id)->whereNull('revoked_at')->whereNotNull('linked_at')->latest()->first();
+            $this->posLinkLoaded = true;
+        }
+        return $this->posLinkCache;
+    }
+
+    public function usesPos(): bool
+    {
+        return $this->posLink() !== null;
     }
 
     public function touchBoard(): void

@@ -16,10 +16,12 @@ class HotelInquiry extends Model
     public const OPEN = 'open';
     public const ANSWERED = 'answered';
     public const KEPT = 'kept';
+    /** Booked firmly by a hotel on POS Innova (no "until"). */
+    public const BOOKED = 'booked';
     public const ARRIVED = 'arrived';
     public const CLOSED = 'closed';
     /** Still going: the guest and the reception can write. */
-    public const ACTIVE = [self::OPEN, self::ANSWERED, self::KEPT, self::ARRIVED];
+    public const ACTIVE = [self::OPEN, self::ANSWERED, self::KEPT, self::BOOKED, self::ARRIVED];
 
     public const ARRIVALS = ['afternoon', 'evening', 'late'];
 

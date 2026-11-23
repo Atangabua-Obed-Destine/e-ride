@@ -24,6 +24,14 @@ class RoomsController extends Controller
     public function index(Request $request): View
     {
         $hotel = $request->attributes->get('hotel');
+        if ($link = $hotel->posLink()) {
+            return view('hotelmanagement::partner.pos-rooms', [
+                'link' => $link,
+                'posTypes' => app(\Modules\HotelManagement\Service\HotelPosService::class)->types($link)->whereNotNull('room_type_id'),
+                'stays' => \Modules\HotelManagement\Entities\HotelStay::with('type')->where('hotel_id', $hotel->id)->whereNotNull('pos_ref')
+                    ->whereIn('status', \Modules\HotelManagement\Entities\HotelStay::HOLDING)->orderBy('check_in')->limit(100)->get(),
+            ]);
+        }
         $board = $this->stays->board($hotel);
         $counts = array_count_values(array_map(fn($r) => $r['status'], $board['rooms']));
         return view('hotelmanagement::partner.rooms', compact('board', 'counts'));

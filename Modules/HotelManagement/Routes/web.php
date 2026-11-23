@@ -25,12 +25,12 @@ Route::group(['prefix' => 'partner/hotel', 'as' => 'hotel-partner.'], function (
     Route::middleware(HotelPartner::class)->group(function () {
         Route::get('rooms', [RoomsController::class, 'index'])->name('rooms');
         Route::get('feed', [RoomsController::class, 'feed'])->name('feed');
-        Route::post('rooms/{room}/state', [RoomsController::class, 'state'])->name('rooms.state')->whereUuid('room');
-        Route::post('rooms/{room}/walk-in', [RoomsController::class, 'walkIn'])->name('rooms.walk-in')->whereUuid('room');
-        Route::post('stays/{stay}/arrive', [RoomsController::class, 'arrive'])->name('stays.arrive')->whereUuid('stay');
-        Route::post('stays/{stay}/no-show', [RoomsController::class, 'noShow'])->name('stays.no-show')->whereUuid('stay');
-        Route::post('stays/{stay}/leave', [RoomsController::class, 'leave'])->name('stays.leave')->whereUuid('stay');
-        Route::post('stays/{stay}/cancel', [RoomsController::class, 'cancel'])->name('stays.cancel')->whereUuid('stay');
+        Route::post('rooms/{room}/state', [RoomsController::class, 'state'])->name('rooms.state')->whereUuid('room')->middleware(\Modules\HotelManagement\Http\Middleware\HotelNotOnPos::class);
+        Route::post('rooms/{room}/walk-in', [RoomsController::class, 'walkIn'])->name('rooms.walk-in')->whereUuid('room')->middleware(\Modules\HotelManagement\Http\Middleware\HotelNotOnPos::class);
+        Route::post('stays/{stay}/arrive', [RoomsController::class, 'arrive'])->name('stays.arrive')->whereUuid('stay')->middleware(\Modules\HotelManagement\Http\Middleware\HotelNotOnPos::class);
+        Route::post('stays/{stay}/no-show', [RoomsController::class, 'noShow'])->name('stays.no-show')->whereUuid('stay')->middleware(\Modules\HotelManagement\Http\Middleware\HotelNotOnPos::class);
+        Route::post('stays/{stay}/leave', [RoomsController::class, 'leave'])->name('stays.leave')->whereUuid('stay')->middleware(\Modules\HotelManagement\Http\Middleware\HotelNotOnPos::class);
+        Route::post('stays/{stay}/cancel', [RoomsController::class, 'cancel'])->name('stays.cancel')->whereUuid('stay')->middleware(\Modules\HotelManagement\Http\Middleware\HotelNotOnPos::class);
 
         Route::get('inbox', [InboxController::class, 'index'])->name('inbox');
         Route::get('inbox/{inquiry}/messages', [InboxController::class, 'messages'])->name('inbox.messages')->whereUuid('inquiry');
@@ -40,12 +40,18 @@ Route::group(['prefix' => 'partner/hotel', 'as' => 'hotel-partner.'], function (
         Route::post('inbox/{inquiry}/close', [InboxController::class, 'close'])->name('inbox.close')->whereUuid('inquiry');
 
         Route::get('nights', [NightsController::class, 'index'])->name('nights');
-        Route::post('nights/book', [NightsController::class, 'book'])->name('nights.book');
+        Route::post('nights/book', [NightsController::class, 'book'])->name('nights.book')->middleware(\Modules\HotelManagement\Http\Middleware\HotelNotOnPos::class);
     });
 
     // The manager only.
     Route::middleware(HotelPartner::class . ':manager')->group(function () {
         Route::get('setup', [SetupController::class, 'index'])->name('setup');
+        // POS Innova: the key, and its room types mapped to E-Ride ones (docs/posinnova-hotel-contract.md).
+        Route::get('pos', [\Modules\HotelManagement\Http\Controllers\Web\Partner\PosController::class, 'index'])->name('pos');
+        Route::post('pos/link', [\Modules\HotelManagement\Http\Controllers\Web\Partner\PosController::class, 'createLink'])->name('pos.link')->middleware('throttle:10,1,hotel-pos-link');
+        Route::post('pos/revoke', [\Modules\HotelManagement\Http\Controllers\Web\Partner\PosController::class, 'revoke'])->name('pos.revoke');
+        Route::post('pos/types/{type}/map', [\Modules\HotelManagement\Http\Controllers\Web\Partner\PosController::class, 'map'])->name('pos.map')->whereUuid('type');
+        Route::post('pos/types/{type}/create', [\Modules\HotelManagement\Http\Controllers\Web\Partner\PosController::class, 'createType'])->name('pos.create')->whereUuid('type');
         Route::post('setup/types', [SetupController::class, 'saveType'])->name('setup.types.store');
         Route::post('setup/types/{type}', [SetupController::class, 'saveType'])->name('setup.types.update')->whereUuid('type');
         Route::post('setup/types/{type}/remove', [SetupController::class, 'removeType'])->name('setup.types.remove')->whereUuid('type');
