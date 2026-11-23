@@ -6404,4 +6404,5 @@
   'Your room at {hotel} is booked' => 'Votre chambre à :hotel est réservée',
   'The reception booked it for you. Ride there with E-Ride.' => 'La réception l\'a réservée pour vous. Allez-y avec E-Ride.',
   'The reception cancelled it. Ask again if you still need a room.' => 'La réception l\'a annulée. Redemandez si vous avez encore besoin d\'une chambre.',
+  'Guests see a room type once it is linked. Its price and number of guests come from POS. Its photos, beds and amenities stay those set on E-Ride.' => 'Les clients voient un type de chambre une fois relié. Son prix et son nombre de personnes viennent de POS. Ses photos, lits et équipements restent ceux définis sur E-Ride.',
 );

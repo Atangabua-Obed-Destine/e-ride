@@ -71,7 +71,7 @@
     <div class="col-lg-7">
         <div class="h-card p-3">
             <h2 class="h-h mb-1">{{ translate('Room types from POS') }}</h2>
-            <div class="h-hint mb-3">{{ translate('Guests see a room type once it is linked. Its price and number of guests come from POS; its photos, beds and amenities stay those set on E-Ride.') }}</div>
+            <div class="h-hint mb-3">{{ translate('Guests see a room type once it is linked. Its price and number of guests come from POS. Its photos, beds and amenities stay those set on E-Ride.') }}</div>
             @forelse($posTypes as $t)
                 <div class="d-flex flex-wrap align-items-center gap-2 py-2 border-top">
                     <div class="flex-grow-1" style="min-width:180px">
