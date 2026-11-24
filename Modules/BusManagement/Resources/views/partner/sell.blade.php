@@ -15,7 +15,7 @@
     .pax-seat { width: 38px; height: 34px; border-radius: 8px; background: var(--red); color: #fff; font-weight: 800; display: flex; align-items: center; justify-content: center; flex: none; }
     .total { font-size: 26px; font-weight: 800; }
     .done { text-align: center; padding: 22px 10px; }
-    .done .bi { font-size: 44px; color: var(--ok); }
+    .done > .bi { font-size: 44px; color: var(--ok); }
     .payer { background: #f4f6f5; border-radius: 10px; padding: 10px; margin: 6px 0 4px; }
     .payer-why { font-size: 12px; color: var(--muted); }
     /* The paper sheet of the chosen bus: what a new sheet looks like now, printed from here. */
@@ -45,6 +45,21 @@
     .ps-held { margin-top: 8px; border: 2px dashed #9a4a06; border-radius: 6px; padding: 6px 10px; }
     .ps-foot { margin-top: 8px; font-size: 11px; color: #333; }
     #psPrint { display: none; }
+    /* The tickets as they will print, checked before the sale goes through. */
+    .cf-ticket { border: 2px dashed #1d2d2b; border-radius: 8px; padding: 10px 12px; margin-bottom: 10px; background: #fff; }
+    .cf-ticket .ag { font-weight: 800; text-align: center; }
+    .cf-ticket .rt { text-align: center; font-weight: 700; color: #333; }
+    .cf-ticket .st { text-align: center; font-size: 22px; font-weight: 900; margin: 2px 0 6px; }
+    .cf-ticket table { width: 100%; font-size: 13px; }
+    .cf-ticket td { padding: 2px 0; vertical-align: top; }
+    .cf-ticket td:first-child { color: #555; width: 42%; }
+    .cf-ticket td:last-child { font-weight: 700; }
+    .cf-ticket .why { font-size: 11.5px; color: #555; margin-top: 4px; }
+    .cf-sum { display: flex; justify-content: space-between; align-items: baseline; border-top: 1px solid var(--line); padding-top: 10px; margin-top: 4px; }
+    .cf-tick { display: flex; gap: 10px; align-items: center; padding: 10px; border-radius: 8px; margin-top: 10px; cursor: pointer; font-weight: 700; font-size: 14px; }
+    .cf-tick input { width: 1.5em; height: 1.5em; margin: 0; flex: none; }
+    .cf-tick.money { background: #ecfdf3; border: 2px solid #16a34a; }
+    .cf-tick.paper { background: #fffaf0; border: 2px solid #f59e0b; }
     @media print {
         body.ps-printing > *:not(#psPrint) { display: none !important; }
         body.ps-printing #psPrint { display: block; padding: 0; }
@@ -113,19 +128,17 @@
             <div class="row g-2 mt-1">
                 <div class="col-12"><label class="form-label small fw-semibold" for="bookerId">{{ translate('ID number of the person paying (optional)') }}</label><input id="bookerId" class="form-control text-uppercase" maxlength="40" autocomplete="off"></div>
                 <div class="col-sm-7"><label class="form-label small fw-semibold" for="drop">{{ translate('Gets off at') }}</label><select id="drop" class="form-select"></select></div>
-                <div class="col-sm-5"><span class="form-label small fw-semibold d-block">{{ translate('Paid by') }}</span>
-                    <div class="seg"><input type="radio" name="method" id="m_cash" value="cash" checked><label for="m_cash">{{ translate('Cash') }}</label><input type="radio" name="method" id="m_momo" value="momo"><label for="m_momo">MoMo</label><input type="radio" name="method" id="m_orange" value="orange"><label for="m_orange">Orange</label></div></div>
+                <div class="col-sm-5"><label class="form-label small fw-semibold" for="method">{{ translate('Paid by') }}</label>
+                    <select id="method" class="form-select">
+                        <option value="cash" selected>{{ translate('Cash') }}</option>
+                        <option value="momo">MTN Mobile Money</option>
+                        <option value="orange">Orange Money</option>
+                    </select></div>
             </div>
             <div class="form-check form-switch mt-3">
                 <input class="form-check-input" type="checkbox" role="switch" id="paperSale">
                 <label class="form-check-label small fw-semibold" for="paperSale">{{ translate('Typing in a sale made on paper') }}</label>
             </div>
-            @if($paper)
-                <label class="d-flex gap-2 align-items-center mt-2 p-2 rounded small fw-bold" for="paperOk" style="background:#fffaf0;border:2px solid #f59e0b;cursor:pointer">
-                    <input class="form-check-input m-0 flex-none" type="checkbox" id="paperOk" style="width:1.4em;height:1.4em">
-                    <span><i class="bi bi-pencil-fill"></i> {{ translate('The seats are pencilled on the paper sheet') }}</span>
-                </label>
-            @endif
             <div class="d-flex align-items-center gap-3 mt-3">
                 <div class="flex-grow-1"><div class="b-hint">{{ translate('Total') }}</div><div class="total" id="total">0</div></div>
                 <button class="btn btn-primary btn-lg" id="sellBtn" disabled>{{ translate('Sell') }}</button>
@@ -135,7 +148,7 @@
             <i class="bi bi-check-circle-fill" aria-hidden="true"></i>
             <h2 class="fs-5 fw-bold mt-2" id="doneText"></h2>
             <div class="b-hint mb-3" id="doneCode"></div>
-            <div class="d-flex justify-content-center gap-2"><a class="btn btn-dark" id="printBtn" target="_blank" rel="noopener"><i class="bi bi-printer"></i> {{ translate('Print the tickets') }}</a><button class="btn btn-primary" id="nextBtn">{{ translate('Next customer') }}</button></div>
+            <div class="d-flex flex-column flex-sm-row justify-content-center gap-2"><a class="btn btn-dark" id="printBtn" target="_blank" rel="noopener"><i class="bi bi-printer"></i> {{ translate('Print the tickets') }}</a><button class="btn btn-primary" id="nextBtn">{{ translate('Next customer') }}</button></div>
         </div>
     </section>
 </div>
@@ -149,6 +162,36 @@
     <div class="b-hint mb-2">{{ translate('What a new sheet looks like now. Printing starts a fresh sheet: E-Ride counts the sold seats as pencilled.') }} <span id="psChecked"></span></div>
     <div id="psSheet" class="ps"></div>
 </section>
+
+<div class="modal fade" id="cfModal" tabindex="-1" aria-labelledby="cfTitle" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-scrollable modal-fullscreen-sm-down">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h2 class="modal-title fs-5 fw-bold" id="cfTitle">{{ translate('Check the tickets before you sell') }}</h2>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="{{ translate('Close') }}"></button>
+            </div>
+            <div class="modal-body">
+                <div id="cfTickets"></div>
+                <div class="b-hint">{{ translate('The ticket code and QR are added when you confirm.') }}</div>
+                <div class="cf-sum"><span class="fw-semibold" id="cfCount"></span><span class="total" id="cfTotal"></span></div>
+                <label class="cf-tick money" for="cfMoney">
+                    <input class="form-check-input" type="checkbox" id="cfMoney">
+                    <span><i class="bi bi-cash-coin" aria-hidden="true"></i> <span id="cfMoneyText"></span></span>
+                </label>
+                @if($paper)
+                    <label class="cf-tick paper" for="paperOk">
+                        <input class="form-check-input" type="checkbox" id="paperOk">
+                        <span><i class="bi bi-pencil-fill" aria-hidden="true"></i> <span id="cfPaperText"></span></span>
+                    </label>
+                @endif
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-light" data-bs-dismiss="modal">{{ translate('Change something') }}</button>
+                <button type="button" class="btn btn-primary btn-lg" id="cfSell" disabled>{{ translate('Confirm the sale') }}</button>
+            </div>
+        </div>
+    </div>
+</div>
 @endif
 @endsection
 
@@ -168,6 +211,12 @@
         pencilNow: @json(translate('Pencil these seats now')), heldWhy: @json(translate('Accepted, waiting for payment. Erase them if E-Ride frees them.')),
         foot: @json(translate('Paper sales: write the name and phone in the seat box. Type them into E-Ride as soon as it is back (Quick sell).')),
     };
+    T.leaves = @json(translate('Leaves')); T.getsOff = @json(translate('Gets off at')); T.fareL = @json(translate('Fare')); T.passenger = @json(translate('Passenger'));
+    T.paidBy = @json(translate('Paid by')); T.phoneL = @json(translate('Phone'));
+    T.payerWhy = @json(translate(key: 'Name of the person who paid for {n} seat(s). The passenger names were not taken.', replace: ['n' => '{n}']));
+    T.tickets = @json(translate(key: '{n} ticket(s)', replace: ['n' => '{n}']));
+    T.money = @json(translate(key: 'I collected {amount} ({method}) and everything is in order', replace: ['amount' => '{amount}', 'method' => '{method}']));
+    T.pencil = @json(translate(key: 'Seats {seats} are pencilled on the paper sheet', replace: ['seats' => '{seats}']));
     var printedUrl = @json(url('partner/bus-agency/paper/__/printed')), checkUrl = @json(url('partner/bus-agency/paper/__'));
     var payerOnly = false, payer = {};
     var seatsUrl = @json(url('partner/bus-agency/sell/__/seats')), sellUrl = @json(url('partner/bus-agency/sell/__'));
@@ -231,9 +280,8 @@
     }
     function refresh() {
         document.getElementById('total').textContent = money(total());
-        var paperOk = document.getElementById('paperOk');
         var named = payerOnly ? (payer.name || '').trim().length >= 2 : picked.every(function (s) { return pax[s] && (pax[s].name || '').trim().length >= 2; });
-        var ready = picked.length && named && fare() > 0 && (!paperOk || paperOk.checked);
+        var ready = picked.length && named && fare() > 0;
         document.getElementById('sellBtn').disabled = !ready;
     }
     function toggle(n) {
@@ -332,19 +380,52 @@
         refresh();
     });
     document.getElementById('drop').addEventListener('change', refresh);
-    if (document.getElementById('paperOk')) document.getElementById('paperOk').addEventListener('change', refresh);
     document.getElementById('depPick').addEventListener('change', function () {
         dep = this.value; picked = []; pax = {}; drawPax();
         history.replaceState(null, '', '?departure=' + dep);
         load(true).then(poll);
     });
+    var cfModal = new bootstrap.Modal(document.getElementById('cfModal')), paperBox = document.getElementById('paperOk');
+    function cfReady() {
+        document.getElementById('cfSell').disabled = !(document.getElementById('cfMoney').checked && (!paperBox || paperBox.checked));
+    }
+    document.getElementById('cfMoney').addEventListener('change', cfReady);
+    if (paperBox) paperBox.addEventListener('change', cfReady);
     document.getElementById('sellBtn').addEventListener('click', function () {
+        var sh = state.sheet || {}, f = fare(), dropSel = document.getElementById('drop'), methodSel = document.getElementById('method');
+        var dropName = (state.drop_points.find(function (x) { return x.id === dropSel.value; }) || {}).name || '';
+        var methodName = methodSel.options[methodSel.selectedIndex].text;
+        document.getElementById('cfTickets').innerHTML = picked.map(function (s) {
+            var p = payerOnly ? payer : (pax[s] || {});
+            var bags = +(pax[s] && pax[s].bags != null && pax[s].bags !== '' ? pax[s].bags : rules.free_bags);
+            var seatFare = f + Math.max(0, bags - rules.free_bags) * rules.extra_bag_fee;
+            return '<div class="cf-ticket"><div class="ag">' + esc(sh.agency) + '</div><div class="rt">' + esc(sh.route) + '</div>' +
+                '<div class="st">' + T.seat + ' ' + esc(s) + '</div><table>' +
+                '<tr><td>' + (payerOnly ? T.paidBy : T.passenger) + '</td><td>' + esc(p.name) + '</td></tr>' +
+                (p.phone ? '<tr><td>' + T.phoneL + '</td><td>' + esc(p.phone) + '</td></tr>' : '') +
+                '<tr><td>' + T.leaves + '</td><td>' + esc(sh.when) + '</td></tr>' +
+                '<tr><td>' + T.getsOff + '</td><td>' + esc(dropName) + '</td></tr>' +
+                '<tr><td>' + T.bus + '</td><td>' + esc(sh.class) + ' · ' + esc(sh.bus) + '</td></tr>' +
+                '<tr><td>' + T.bags + '</td><td>' + bags + '</td></tr>' +
+                '<tr><td>' + T.fareL + '</td><td>' + money(seatFare) + '</td></tr></table>' +
+                (payerOnly ? '<div class="why">' + esc(T.payerWhy.replace('{n}', picked.length)) + '</div>' : '') + '</div>';
+        }).join('');
+        document.getElementById('cfCount').textContent = T.tickets.replace('{n}', picked.length);
+        document.getElementById('cfTotal').textContent = money(total());
+        document.getElementById('cfMoneyText').textContent = T.money.replace('{amount}', money(total())).replace('{method}', methodName);
+        if (paperBox) { document.getElementById('cfPaperText').textContent = T.pencil.replace('{seats}', picked.join(', ')); paperBox.checked = false; }
+        document.getElementById('cfMoney').checked = false;
+        cfReady();
+        cfModal.show();
+    });
+    document.getElementById('cfSell').addEventListener('click', function () {
         var btn = this; btn.disabled = true;
         busPost(sellUrl.replace('__', dep), {
             seats: picked, drop_point_id: document.getElementById('drop').value,
-            method: document.querySelector('input[name=method]:checked').value,
+            method: document.getElementById('method').value,
+            collected: document.getElementById('cfMoney').checked,
             booker_id_number: document.getElementById('bookerId').value.trim() || null,
-            paper: !!(document.getElementById('paperOk') && document.getElementById('paperOk').checked),
+            paper: !!(paperBox && paperBox.checked),
             paper_sale: document.getElementById('paperSale').checked,
             payer_only: payerOnly,
             passengers: picked.map(function (s) {
@@ -353,13 +434,16 @@
             }),
         }).then(function (d) {
             if (!d.ok) { busToast(d.message); load(false); btn.disabled = false; return; }
+            cfModal.hide();
             document.getElementById('saleForm').hidden = true;
             document.getElementById('saleDone').hidden = false;
             document.getElementById('doneText').textContent = d.message;
             document.getElementById('doneCode').textContent = d.code;
             document.getElementById('printBtn').href = d.print;
             picked = []; pax = {}; payer = {}; drawPax(); load(false); document.getElementById('bookerId').value = '';
-            if (document.getElementById('paperOk')) document.getElementById('paperOk').checked = false;
+            if (paperBox) paperBox.checked = false;
+            document.getElementById('cfMoney').checked = false;
+            document.getElementById('method').value = 'cash';
             if (!document.getElementById('paperSale').disabled) document.getElementById('paperSale').checked = false;
             document.getElementById('printBtn').focus();
         }).catch(function () { btn.disabled = false; });

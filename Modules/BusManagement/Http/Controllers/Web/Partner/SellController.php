@@ -65,6 +65,10 @@ class SellController extends Controller
         $agency = $request->attributes->get('busAgency');
         $d = BusDeparture::where('agency_id', $agency->id)->findOrFail($departure);
         // Keeping a paper copy: the seats sold go on the sheet too (the agent ticks it).
+        // The agent checked the tickets and took the money before the sale goes through.
+        if (!$request->boolean('collected')) {
+            return response()->json(['ok' => false, 'message' => translate('Collect the money and tick it first.')], 422);
+        }
         $paper = PaperService::on($agency);
         if ($paper && !$request->boolean('paper')) {
             return response()->json(['ok' => false, 'message' => translate('Pencil the seats on the paper sheet and tick it first.')], 422);

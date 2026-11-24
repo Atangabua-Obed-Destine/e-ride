@@ -6622,4 +6622,13 @@
   'Seat {seat} is not on this bus.' => 'La place {seat} n\'est pas dans ce bus.',
   'This bus does not stop there.' => 'Ce bus ne s\'arrête pas là.',
   'This departure just changed. Look at it again.' => 'Ce départ vient de changer. Regardez-le à nouveau.',
+  'Check the tickets before you sell' => 'Vérifiez les billets avant de vendre',
+  'The ticket code and QR are added when you confirm.' => 'Le code et le QR du billet sont ajoutés quand vous confirmez.',
+  'Change something' => 'Modifier',
+  'Confirm the sale' => 'Confirmer la vente',
+  '{n} ticket(s)' => '{n} billet(s)',
+  'I collected {amount} ({method}) and everything is in order' => 'J\'ai encaissé {amount} ({method}) et tout est en ordre',
+  'Seats {seats} are pencilled on the paper sheet' => 'Les places {seats} sont notées au crayon sur la feuille',
+  'Collect the money and tick it first.' => 'Encaissez l\'argent et cochez-le d\'abord.',
+  'Sold: {n} ticket(s), {amount}.' => 'Vendu : {n} billet(s), {amount}.',
 );
