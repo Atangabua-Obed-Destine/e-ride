@@ -5,7 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
     <meta name="robots" content="noindex">
     <meta name="theme-color" content="#111114">
-    <title>{{ translate('E-Ride for bus agencies') }}</title>
+    <title>{{ $heading ?? translate('E-Ride for bus agencies') }}</title>
     <link rel="icon" href="{{ dynamicAsset('public/assets/admin-module/img/favicon.png') }}">
     <link rel="stylesheet" href="{{ dynamicAsset('public/assets/admin-module/css/bootstrap.min.css') }}">
     <style>
@@ -26,12 +26,12 @@
 <body>
 <main class="box">
     <div class="mark" aria-hidden="true"><svg width="30" height="30" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="4" y="3" width="16" height="15" rx="3"/><path d="M4 11h16M8 18v2M16 18v2"/><circle cx="8" cy="14.5" r="1"/><circle cx="16" cy="14.5" r="1"/></svg></div>
-    <h1>{{ translate('E-Ride for bus agencies') }}</h1>
-    <p class="sub">{{ translate('Seat requests, counter sales, boarding and your departures, in one place.') }}</p>
+    <h1>{{ $heading ?? translate('E-Ride for bus agencies') }}</h1>
+    <p class="sub">{{ $sub ?? translate('Seat requests, counter sales, boarding and your departures, in one place.') }}</p>
     @if ($errors->any())
         <div class="err" role="alert">{{ $errors->first() }}</div>
     @endif
-    <form action="{{ route('bus-partner.login.submit') }}" method="POST">
+    <form action="{{ $action ?? route('bus-partner.login.submit') }}" method="POST">
         @csrf
         <div class="mb-3">
             <label for="login">{{ translate('Email or username') }}</label>
@@ -44,7 +44,7 @@
         <input type="hidden" name="remember" value="1">
         <button type="submit" class="btn-go">{{ translate('Sign_in') }}</button>
     </form>
-    <p class="help">{{ translate('Lost your password: your manager can set a new one in Staff. Managers: ask the E-Ride team.') }}</p>
+    <p class="help">{{ $help ?? translate('Lost your password: your manager can set a new one in Staff. Managers: ask the E-Ride team.') }}</p>
 </main>
 </body>
 </html>

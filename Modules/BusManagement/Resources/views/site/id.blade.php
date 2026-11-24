@@ -10,7 +10,7 @@
             <svg width="30" height="30" viewBox="0 0 24 24" fill="none" stroke="#3730A3" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="5" width="18" height="14" rx="2.5"/><circle cx="9" cy="11" r="2.2"/><path d="M5.8 16c.6-1.6 1.8-2.4 3.2-2.4s2.6.8 3.2 2.4M14.5 10h4M14.5 13h3"/></svg>
         </div>
         <h1>{{ $t('id_title') }}</h1>
-        <p class="sm muted" style="margin:0">{{ $t('id_body', ['agency' => $departure->agency->name]) }}</p>
+        <p class="sm muted" style="margin:0">{{ $t('id_body', ['agency' => $departure->agency->displayName()]) }}</p>
     </div>
     <div class="card col" style="gap:14px;margin:4px 16px 0">
         @foreach([['1', $t('id_step1'), $t('id_step1_sub', ['phone' => $me->phone])], ['2', $t('id_step2'), $t('id_step2_sub')], ['3', $t('id_step3'), $t('id_step3_sub')]] as [$n, $title, $sub])

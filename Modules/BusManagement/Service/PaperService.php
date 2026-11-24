@@ -250,7 +250,7 @@ class PaperService
                     $declined++;
                     BusPush::send($booking->customer, 'bus_declined', '{agency} could not take your request',
                         '{reason}. Your seats are free again: try a bit later or another departure.',
-                        ['agency' => $agency->name, 'reason' => $reason], ['bus_booking_id' => $booking->id]);
+                        ['agency' => $agency->displayName(), 'reason' => $reason], ['bus_booking_id' => $booking->id]);
                 }
             });
         return $declined;

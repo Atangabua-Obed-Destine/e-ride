@@ -37,7 +37,7 @@
     @if($status === 'requested')
         <div class="sec col" style="gap:6px;padding-top:22px">
             <div class="xs b" style="color:#B45309;letter-spacing:.04em">{{ mb_strtoupper($t('booking', ['code' => $booking->code])) }} · {{ mb_strtoupper($t('seats_held')) }}</div>
-            <h1>{{ $t('answering', ['agency' => $agency->name]) }}</h1>
+            <h1>{{ $t('answering', ['agency' => $agency->displayName()]) }}</h1>
             <p class="sm muted" style="margin:0">{{ $answerMin ? $t('usually', ['n' => $answerMin]) . ' ' : '' }}{{ $t('answering_sub') }}</p>
         </div>
         <div class="card" style="margin:6px 16px 0">
@@ -55,7 +55,7 @@
     {{-- Accepted: pay --}}
     @elseif($status === 'accepted')
         <div class="sec col" style="gap:6px;padding-top:22px">
-            <div class="row" style="gap:8px"><span class="dot" style="width:22px;height:22px;background:#15803D">@include('busmanagement::site._check')</span><span class="sm b" style="color:#15803D">{{ $t('accepted', ['agency' => $agency->name]) }}</span></div>
+            <div class="row" style="gap:8px"><span class="dot" style="width:22px;height:22px;background:#15803D">@include('busmanagement::site._check')</span><span class="sm b" style="color:#15803D">{{ $t('accepted', ['agency' => $agency->displayName()]) }}</span></div>
             <h1>{{ $t('pay_to_confirm') }} · {{ count(explode(', ', $seatList)) === 1 ? $t('seat_n', ['seat' => $seatList]) : $t('seats_n', ['seats' => $seatList]) }}</h1>
         </div>
         @if($booking->pay_by)
@@ -72,7 +72,7 @@
         <div class="sec col" style="gap:10px">
             <div class="row" style="justify-content:space-between"><span class="sm muted">{{ $t->when($at) }} · {{ $t->classLabel($d->class) }}</span><span class="b" style="font-size:20px">{{ $t->money($booking->amount) }}</span></div>
             <div class="row" style="gap:8px"><span class="tag" style="background:#FFCC00;color:#1D2D2B">MTN MoMo</span><span class="tag" style="background:#1D2D2B;color:#FF7900">Orange Money</span></div>
-            <p class="xs muted" style="margin:0">{{ $t('pay_direct', ['agency' => $agency->name]) }}</p>
+            <p class="xs muted" style="margin:0">{{ $t('pay_direct', ['agency' => $agency->displayName()]) }}</p>
             <form method="POST" action="{{ route('bus.web.booking.pay', ['code' => $booking->code]) }}" onsubmit="this.querySelector('button').disabled=true">@csrf<button class="btn" type="submit">{{ $t('pay_amount', ['amount' => $t->money($booking->amount)]) }}</button></form>
             <form method="POST" action="{{ route('bus.web.booking.cancel', ['code' => $booking->code]) }}" onsubmit="return confirm(@json($t('cancel_confirm')))">@csrf<button class="btn ghost" type="submit">{{ $t('cancel_request') }}</button></form>
         </div>
@@ -83,15 +83,15 @@
         @if($d->status === 'cancelled')<div class="err">{{ $t('departure_cancelled') }} @if($d->cancel_reason){{ $t('reason', ['reason' => $d->cancel_reason]) }}@endif</div>@endif
         @if($collect)
             <div class="ticket" style="margin:12px 16px 0">
-                <div class="th"><div class="col" style="gap:0"><span class="b">{{ $agency->name }}</span><span class="xs" style="color:#C9D1D0">{{ $agency->origin_city }} → {{ $d->destination?->city }} · {{ $t->classLabel($d->class) }}</span></div><span class="b" style="letter-spacing:.06em">{{ $booking->code }}</span></div>
+                <div class="th"><div class="col" style="gap:0"><span class="b">{{ $agency->displayName() }}</span><span class="xs" style="color:#C9D1D0">{{ $agency->origin_city }} → {{ $d->destination?->city }} · {{ $t->classLabel($d->class) }}</span></div><span class="b" style="letter-spacing:.06em">{{ $booking->code }}</span></div>
                 <div class="tg"><div><div class="k">{{ $t('date') }}</div><div class="v">{{ $t->day($at) }}</div></div><div><div class="k">{{ $t('leaves') }}</div><div class="v">{{ $at->format('H:i') }}</div></div><div><div class="k">{{ $t('seat') }}</div><div class="v">{{ $seatList }}</div></div></div>
-                <div class="qr">{!! $qr('ERIDE-BUS:' . $booking->code) !!}<div class="col" style="gap:4px"><span class="sm b">{{ $t('collect_title') }}</span><span class="xs muted">{{ $t('collect_body', ['agency' => $agency->name, 'city' => $agency->origin_city]) }}</span>@if($b['collect']['collected'] ?? false)<span class="tag t-green">{{ $t('collected') }}</span>@endif</div></div>
+                <div class="qr">{!! $qr('ERIDE-BUS:' . $booking->code) !!}<div class="col" style="gap:4px"><span class="sm b">{{ $t('collect_title') }}</span><span class="xs muted">{{ $t('collect_body', ['agency' => $agency->displayName(), 'city' => $agency->origin_city]) }}</span>@if($b['collect']['collected'] ?? false)<span class="tag t-green">{{ $t('collected') }}</span>@endif</div></div>
             </div>
         @else
             @foreach($booking->tickets->sortBy(fn($x) => (int)$x->seat) as $ticket)
                 @continue($ticket->status === 'cancelled')
                 <div class="ticket" style="margin:12px 16px 0">
-                    <div class="th"><div class="col" style="gap:0"><span class="b">{{ $agency->name }}</span><span class="xs" style="color:#C9D1D0">{{ $agency->origin_city }} → {{ $d->destination?->city }} · {{ $t->classLabel($d->class) }}</span></div><span class="b" style="letter-spacing:.06em">{{ $booking->code }}</span></div>
+                    <div class="th"><div class="col" style="gap:0"><span class="b">{{ $agency->displayName() }}</span><span class="xs" style="color:#C9D1D0">{{ $agency->origin_city }} → {{ $d->destination?->city }} · {{ $t->classLabel($d->class) }}</span></div><span class="b" style="letter-spacing:.06em">{{ $booking->code }}</span></div>
                     <div class="tg">
                         <div><div class="k">{{ $t('date') }}</div><div class="v">{{ $t->day($at) }}</div></div>
                         <div><div class="k">{{ $t('leaves') }}</div><div class="v">{{ $at->format('H:i') }}</div></div>
@@ -107,14 +107,14 @@
             <a class="btn line" href="{{ route('bus.web.booking.print', ['code' => $booking->code]) }}" target="_blank" rel="noopener">{{ $t('print') }}</a>
         </div>
         @if(!empty($b['refund']))
-            <div class="warn" style="margin:12px 16px 0">{{ $b['refund']['status'] === 'sent' ? $t('refund_sent', ['agency' => $agency->name, 'amount' => $t->money($b['refund']['amount'])]) : $t('refund_due', ['agency' => $agency->name, 'amount' => $t->money($b['refund']['amount'])]) }}</div>
+            <div class="warn" style="margin:12px 16px 0">{{ $b['refund']['status'] === 'sent' ? $t('refund_sent', ['agency' => $agency->displayName(), 'amount' => $t->money($b['refund']['amount'])]) : $t('refund_due', ['agency' => $agency->displayName(), 'amount' => $t->money($b['refund']['amount'])]) }}</div>
         @endif
 
     {{-- Ended without a ticket --}}
     @else
         @php
             $title = match (true) {
-                $status === 'declined' => $t('declined_title', ['agency' => $agency->name]),
+                $status === 'declined' => $t('declined_title', ['agency' => $agency->displayName()]),
                 $status === 'expired' && $booking->accepted_at => $t('pay_expired_title'),
                 $status === 'expired' => $t('expired_title'),
                 default => $t('cancelled_title'),
@@ -126,7 +126,7 @@
             <p class="sm muted" style="margin:0">{{ $t->when($at) }} · {{ $agency->origin_city }} → {{ $d->destination?->city }} · {{ $seatList }}</p>
             @if($booking->decline_reason)<p class="sm" style="margin:0">{{ $t('reason', ['reason' => $booking->decline_reason]) }}</p>@endif
             @if(!empty($b['refund']))
-                <div class="warn">{{ $b['refund']['status'] === 'sent' ? $t('refund_sent', ['agency' => $agency->name, 'amount' => $t->money($b['refund']['amount'])]) : $t('refund_due', ['agency' => $agency->name, 'amount' => $t->money($b['refund']['amount'])]) }}</div>
+                <div class="warn">{{ $b['refund']['status'] === 'sent' ? $t('refund_sent', ['agency' => $agency->displayName(), 'amount' => $t->money($b['refund']['amount'])]) : $t('refund_due', ['agency' => $agency->displayName(), 'amount' => $t->money($b['refund']['amount'])]) }}</div>
             @elseif(!$booking->paid_at)
                 <div class="ok">{{ $t('nothing_charged') }}</div>
             @endif

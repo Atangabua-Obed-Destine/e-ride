@@ -173,6 +173,52 @@ Route::group(['prefix' => 'bus', 'as' => 'bus.web.'], function () {
         ->withoutMiddleware([VerifyCsrfToken::class])->middleware('throttle:300,1,bus-wa');
 });
 
+/*
+| A bus company's head office portal (/partner/bus-company): every branch, reports and a few controls.
+*/
+Route::group(['prefix' => 'partner/bus-company', 'as' => 'bus-company.'], function () {
+    $c = \Modules\BusManagement\Http\Controllers\Web\Company\CompanyPortalController::class;
+    $auth = \Modules\BusManagement\Http\Controllers\Web\Company\CompanyAuthController::class;
+    $mw = \Modules\BusManagement\Http\Middleware\BusHeadOffice::class;
+    Route::get('login', [$auth, 'showLogin'])->name('login');
+    Route::post('login', [$auth, 'login'])->name('login.submit')->middleware('throttle:10,1,bus-company-login');
+    Route::post('logout', [$auth, 'logout'])->name('logout');
+    Route::get('/', fn() => redirect()->route('bus-company.overview'))->name('home');
+
+    // Everyone at the head office (the accountant only reads).
+    Route::middleware($mw)->group(function () use ($c) {
+        Route::get('overview', [$c, 'overview'])->name('overview');
+        Route::get('overview/feed', [$c, 'feed'])->name('overview.feed');
+        Route::get('branches', [$c, 'branches'])->name('branches');
+        Route::get('branches/{branch}', [$c, 'branchShow'])->name('branches.show')->whereUuid('branch');
+        Route::get('reports', [$c, 'reports'])->name('reports');
+        Route::get('reports/{section}.csv', [$c, 'csv'])->name('reports.csv')->where('section', 'branches|routes|agents|days');
+        Route::get('staff', [$c, 'staff'])->name('staff');
+        Route::get('buses', [$c, 'buses'])->name('buses');
+        Route::get('rules', [$c, 'rules'])->name('rules');
+        Route::get('money', [$c, 'money'])->name('money');
+    });
+    // The director and regional managers act.
+    Route::middleware($mw . ':act')->group(function () use ($c) {
+        Route::post('branches/{branch}/pause', [$c, 'pause'])->name('branches.pause')->whereUuid('branch');
+        Route::post('branches/{branch}/fares', [$c, 'fares'])->name('branches.fares')->whereUuid('branch');
+        Route::post('staff/branch', [$c, 'addBranchStaff'])->name('staff.branch');
+        Route::post('staff/branch/{staff}/toggle', [$c, 'branchStaffToggle'])->name('staff.branch.toggle')->whereNumber('staff');
+        Route::post('staff/branch/{staff}/password', [$c, 'branchStaffPassword'])->name('staff.branch.password')->whereNumber('staff');
+    });
+    // The director only: the company's rules, head office logins, money and the E-Ride bill.
+    Route::middleware($mw . ':director')->group(function () use ($c) {
+        Route::post('rules', [$c, 'saveRules'])->name('rules.save');
+        Route::post('staff/company', [$c, 'addCompanyStaff'])->name('staff.company');
+        Route::post('staff/company/{staff}/toggle', [$c, 'companyStaffToggle'])->name('staff.company.toggle')->whereNumber('staff');
+        Route::post('staff/company/{staff}/password', [$c, 'companyStaffPassword'])->name('staff.company.password')->whereNumber('staff');
+        Route::post('money/modes', [$c, 'saveModes'])->name('money.modes');
+        Route::post('money/fapshi', [$c, 'saveFapshi'])->name('money.fapshi');
+        Route::post('money/fapshi/test', [$c, 'testFapshi'])->name('money.fapshi.test');
+        Route::post('money/statements/{statement}/pay', [$c, 'payStatement'])->name('money.pay')->whereUuid('statement');
+    });
+});
+
 // E-Ride admin (sidebar "Bus agencies").
 Route::group(['prefix' => 'admin/bus', 'as' => 'admin.bus.', 'middleware' => 'admin'], function () {
     Route::get('/', [BusAdminController::class, 'index'])->name('index');
@@ -187,5 +233,14 @@ Route::group(['prefix' => 'admin/bus', 'as' => 'admin.bus.', 'middleware' => 'ad
     Route::post('{agency}/verify', [BusAdminController::class, 'verify'])->name('verify')->whereUuid('agency');
     Route::post('{agency}/pause', [BusAdminController::class, 'pause'])->name('pause')->whereUuid('agency');
     Route::post('statements/{statement}/paid', [BusAdminController::class, 'statementPaid'])->name('statement.paid')->whereUuid('statement');
+    // Bus companies (head offices over branches).
+    Route::post('companies', [\Modules\BusManagement\Http\Controllers\Web\Admin\CompanyAdminController::class, 'store'])->name('companies.store');
+    Route::get('companies/{company}', [\Modules\BusManagement\Http\Controllers\Web\Admin\CompanyAdminController::class, 'show'])->name('companies.show')->whereUuid('company');
+    Route::post('companies/{company}', [\Modules\BusManagement\Http\Controllers\Web\Admin\CompanyAdminController::class, 'update'])->name('companies.update')->whereUuid('company');
+    Route::post('companies/{company}/link', [\Modules\BusManagement\Http\Controllers\Web\Admin\CompanyAdminController::class, 'link'])->name('companies.link')->whereUuid('company');
+    Route::post('companies/{company}/unlink/{agency}', [\Modules\BusManagement\Http\Controllers\Web\Admin\CompanyAdminController::class, 'unlink'])->name('companies.unlink')->whereUuid('company')->whereUuid('agency');
+    Route::post('companies/{company}/staff', [\Modules\BusManagement\Http\Controllers\Web\Admin\CompanyAdminController::class, 'addStaff'])->name('companies.staff')->whereUuid('company');
+    Route::post('companies/{company}/staff/{staff}/toggle', [\Modules\BusManagement\Http\Controllers\Web\Admin\CompanyAdminController::class, 'toggleStaff'])->name('companies.staff.toggle')->whereUuid('company');
+    Route::post('companies/{company}/modes', [\Modules\BusManagement\Http\Controllers\Web\Admin\CompanyAdminController::class, 'modes'])->name('companies.modes')->whereUuid('company');
     Route::post('{agency}/sandbox', [BusAdminController::class, 'sandbox'])->name('sandbox')->whereUuid('agency');
 });

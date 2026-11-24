@@ -167,13 +167,13 @@ class ClosureService
                 }
             });
             BusPush::send($b->customer, 'bus_closure_declined', '{agency} cannot take your request', '{reason} Nothing was paid.',
-                ['agency' => $closure->agency->name, 'reason' => $reason], ['bus_booking_id' => $b->id]);
+                ['agency' => $closure->agency->displayName(), 'reason' => $reason], ['bus_booking_id' => $b->id]);
         });
 
         if ($closure->outcome === BusClosure::AT_RISK) {
             $this->eachPaid($d, fn(BusBooking $b) => BusPush::send($b->customer, 'bus_closure_at_risk', 'Your trip to {city} may not go ahead',
                 '{reason} {agency} decides by {time}. You can cancel now for a full refund.',
-                ['city' => $d->destination?->city, 'reason' => $reason, 'agency' => $closure->agency->name, 'time' => $closure->decide_by->format('d/m H:i')],
+                ['city' => $d->destination?->city, 'reason' => $reason, 'agency' => $closure->agency->displayName(), 'time' => $closure->decide_by->format('d/m H:i')],
                 ['bus_booking_id' => $b->id]));
             return;
         }
@@ -221,7 +221,7 @@ class ClosureService
             });
             BusPush::send($b->customer, 'bus_closure_refund', 'Your trip to {city} is cancelled',
                 '{reason} {agency} refunds you in full to your Mobile Money.',
-                ['city' => $d->destination?->city, 'reason' => $reason, 'agency' => $closure->agency->name], ['bus_booking_id' => $b->id]);
+                ['city' => $d->destination?->city, 'reason' => $reason, 'agency' => $closure->agency->displayName()], ['bus_booking_id' => $b->id]);
         }
         $d->refresh();
     }
@@ -313,14 +313,14 @@ class ClosureService
             if (!$wasCancelled) {
                 $this->eachPaid($d, fn(BusBooking $b) => BusPush::send($b->customer, 'bus_closure_lifted', 'Your trip to {city} goes ahead',
                     '{agency} lifted the warning: the bus leaves at {time} as planned.',
-                    ['city' => $d->destination?->city, 'agency' => $closure->agency->name, 'time' => $d->leavesAt()->format('d/m H:i')], ['bus_booking_id' => $b->id]));
+                    ['city' => $d->destination?->city, 'agency' => $closure->agency->displayName(), 'time' => $d->leavesAt()->format('d/m H:i')], ['bus_booking_id' => $b->id]));
             }
         }
         // Passengers already moved keep their new time; they hear the original runs again.
         BusBooking::with(['customer', 'departure'])->where('closure_id', $closure->id)->where('status', BusBooking::PAID)->whereNotNull('moved_at')->get()
             ->each(fn(BusBooking $b) => BusPush::send($b->customer, 'bus_closure_lifted', '{agency} lifted the {kind}',
                 'Your ticket stays on {when}. To travel on the original departure instead, speak to the agency.',
-                ['agency' => $closure->agency->name, 'kind' => mb_strtolower(self::kindLabel($closure->kind)), 'when' => $b->departure?->leavesAt()->format('d/m H:i')],
+                ['agency' => $closure->agency->displayName(), 'kind' => mb_strtolower(self::kindLabel($closure->kind)), 'when' => $b->departure?->leavesAt()->format('d/m H:i')],
                 ['bus_booking_id' => $b->id]));
         return $closure->fresh();
     }
@@ -384,7 +384,7 @@ class ClosureService
             : $c->starts_at->translatedFormat('D j M H:i') . ' - ' . $c->ends_at->translatedFormat('D j M H:i');
         return [
             'id' => $c->id,
-            'agency' => $c->agency?->name,
+            'agency' => $c->agency?->displayName(),
             'kind' => self::kindLabel($c->kind),
             'note' => $c->note,
             'when' => $when,

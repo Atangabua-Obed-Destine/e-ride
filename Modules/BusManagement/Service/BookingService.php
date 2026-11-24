@@ -312,7 +312,7 @@ class BookingService
         $this->recordAnswer($agency, $booking);
         BusPush::send($booking->customer, 'bus_accepted', '{agency} accepted your seats',
             'Pay {amount} before {time} and your tickets are yours.',
-            ['agency' => $agency->name, 'amount' => getCurrencyFormat($booking->amount), 'time' => $booking->pay_by->format('H:i')],
+            ['agency' => $agency->displayName(), 'amount' => getCurrencyFormat($booking->amount), 'time' => $booking->pay_by->format('H:i')],
             ['bus_booking_id' => $booking->id]);
         return $booking->fresh();
     }
@@ -333,7 +333,7 @@ class BookingService
         $this->recordAnswer($agency, $booking);
         BusPush::send($booking->customer, 'bus_declined', '{agency} could not take your request',
             $reason !== '' ? '{reason}. Your seats are free again: try another departure.' : 'Your seats are free again: try another departure.',
-            ['agency' => $agency->name, 'reason' => $reason], ['bus_booking_id' => $booking->id]);
+            ['agency' => $agency->displayName(), 'reason' => $reason], ['bus_booking_id' => $booking->id]);
         $this->notifyWaitlist($booking->departure);
         return $booking->fresh();
     }
@@ -395,7 +395,7 @@ class BookingService
         if ($wasPaid && $quote['refund'] > 0) {
             BusPush::send($booking->customer, 'bus_refund_due', 'Booking cancelled: {amount} to come back',
                 '{agency} sends your refund to your Mobile Money within {hours} hours.',
-                ['amount' => getCurrencyFormat($quote['refund']), 'agency' => $booking->agency->name, 'hours' => BusSettings::all()['refund_hours']],
+                ['amount' => getCurrencyFormat($quote['refund']), 'agency' => $booking->agency->displayName(), 'hours' => BusSettings::all()['refund_hours']],
                 ['bus_booking_id' => $booking->id]);
         }
         $this->notifyWaitlist($booking->departure);
@@ -459,7 +459,7 @@ class BookingService
         }
         $booking->loadMissing(['agency', 'departure.destination']);
         $replace = [
-            'agency' => $booking->agency->name,
+            'agency' => $booking->agency->displayName(),
             'city' => $booking->departure->destination?->city,
             'time' => $booking->departure->leavesAt()->format('d/m H:i'),
             'reason' => Str::limit(trim($reason), 120, ''),
@@ -611,7 +611,7 @@ class BookingService
         });
         BusPush::send($booking->customer, 'bus_refund_sent', '{agency} sent your refund',
             '{amount} sent to your Mobile Money. Reference {ref}.',
-            ['agency' => $agency->name, 'amount' => getCurrencyFormat($sent), 'ref' => $reference], ['bus_booking_id' => $booking->id]);
+            ['agency' => $agency->displayName(), 'amount' => getCurrencyFormat($sent), 'ref' => $reference], ['bus_booking_id' => $booking->id]);
         return $booking->fresh();
     }
 
@@ -657,7 +657,7 @@ class BookingService
                     app(PaperService::class)->unanswered($booking->agency);
                     BusPush::send($booking->customer, 'bus_request_expired', '{agency} did not answer in time',
                         'Your seats are free again. Try another departure or another agency.',
-                        ['agency' => $booking->agency?->name], ['bus_booking_id' => $booking->id]);
+                        ['agency' => $booking->agency?->displayName()], ['bus_booking_id' => $booking->id]);
                     $this->notifyWaitlist($booking->departure);
                 }
             });
@@ -673,7 +673,7 @@ class BookingService
                     $done['unpaid']++;
                     BusPush::send($booking->customer, 'bus_pay_expired', 'Your seats were released',
                         'The time to pay for your seats with {agency} ran out. You can ask again if seats are left.',
-                        ['agency' => $booking->agency?->name], ['bus_booking_id' => $booking->id]);
+                        ['agency' => $booking->agency?->displayName()], ['bus_booking_id' => $booking->id]);
                     $this->notifyWaitlist($booking->departure);
                 }
             });
@@ -755,7 +755,7 @@ class BookingService
                 $whenFull = $d->kind === 'when_full';
                 $words = [
                     'city' => (string)$d->destination?->city,
-                    'agency' => $b->agency->name,
+                    'agency' => $b->agency->displayName(),
                     'time' => $leaves->format('H:i'),
                     // A bus that leaves when full can go at its time: be there by then.
                     'early' => $whenFull ? $leaves->format('H:i') : $leaves->copy()->subMinutes(self::REMIND_BE_THERE_MINUTES)->format('H:i'),
@@ -825,7 +825,7 @@ class BookingService
                 $b->forceFill(['collect_reminded_at' => $now])->save();
                 BusPush::send($b->customer, 'bus_collect_reminder', 'Collect your ticket at {agency}',
                     'Show code {code} at the counter before {time}. Your bus to {city} leaves at {leaves}.',
-                    ['agency' => $b->agency->name, 'code' => $b->code, 'time' => $leaves->copy()->subMinutes(30)->format('H:i'),
+                    ['agency' => $b->agency->displayName(), 'code' => $b->code, 'time' => $leaves->copy()->subMinutes(30)->format('H:i'),
                         'city' => $b->departure->destination?->city, 'leaves' => $leaves->format('H:i')], ['bus_booking_id' => $b->id]);
                 $sent++;
             });
@@ -864,7 +864,7 @@ class BookingService
             $row->update(['notified_at' => now()]);
             BusPush::send(User::find($row->user_id), 'bus_seat_free', 'A seat is free to {city}',
                 '{agency}, {time}: a seat just freed up. Be quick.',
-                ['city' => $departure->destination?->city, 'agency' => $departure->agency->name, 'time' => $departure->leavesAt()->format('d/m H:i')],
+                ['city' => $departure->destination?->city, 'agency' => $departure->agency->displayName(), 'time' => $departure->leavesAt()->format('d/m H:i')],
                 ['bus_departure_id' => $departure->id]);
         }
         return $rows->count();

@@ -39,7 +39,7 @@ class DepartureController extends Controller
             ->groupBy('departure_id')->pluck('n', 'departure_id');
         $destinations = BusDestination::with(['dropPoints' => fn($q) => $q->where('active', true)])->where('agency_id', $agency->id)
             ->where('active', true)->orderBy('city')->get();
-        $buses = BusVehicle::where('agency_id', $agency->id)->where('status', BusVehicle::READY)->orderBy('registration')->get();
+        $buses = BusVehicle::usableByAgency($agency)->where('status', BusVehicle::READY)->orderBy('registration')->get();
         $canEdit = $request->attributes->get('busStaff')->role === BusStaff::MANAGER;
         return view('busmanagement::partner.departures', compact('start', 'lines', 'departures', 'sold', 'destinations', 'buses', 'canEdit'));
     }
@@ -87,7 +87,7 @@ class DepartureController extends Controller
         if (!$d->isOpen()) {
             return back()->withErrors(['vehicle_id' => translate('This departure has left or was cancelled.')]);
         }
-        $vehicle = $request->filled('vehicle_id') ? BusVehicle::where('agency_id', $agency->id)->findOrFail($request->input('vehicle_id')) : null;
+        $vehicle = $request->filled('vehicle_id') ? BusVehicle::usableByAgency($agency)->findOrFail($request->input('vehicle_id')) : null;
         try {
             $this->schedules->setVehicle($d, $vehicle);
         } catch (ValidationException $e) {

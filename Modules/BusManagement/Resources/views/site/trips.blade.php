@@ -41,7 +41,7 @@
                 <a class="trip" href="{{ route('bus.web.booking', ['code' => $b->code]) }}">
                     <div class="col" style="gap:2px;flex:1;min-width:0">
                         <span class="sm b">{{ $b->agency?->origin_city }} → {{ $b->departure?->destination?->city }} · {{ $b->departure ? $t->when($b->departure->leavesAt()) : '' }}</span>
-                        <span class="xs muted">{{ $b->agency?->name }} · {{ $b->tickets->pluck('seat')->sortBy(fn($s) => (int)$s)->implode(', ') }} · {{ $b->code }}</span>
+                        <span class="xs muted">{{ $b->agency?->displayName() }} · {{ $b->tickets->pluck('seat')->sortBy(fn($s) => (int)$s)->implode(', ') }} · {{ $b->code }}</span>
                     </div>
                     <span class="tag {{ $cls }}">{{ $text }}</span>
                 </a>

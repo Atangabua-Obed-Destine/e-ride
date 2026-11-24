@@ -26,6 +26,25 @@
         @endif
 
         <div class="card mb-3">
+            <div class="card-header"><h5 class="mb-0">{{ translate('Bus companies') }}</h5>
+                <div class="fs-12 text-muted">{{ translate('A company groups its branches (each a verified agency) under one head office that watches them all.') }}</div></div>
+            <div class="card-body">
+                @foreach($companies as $c)
+                    <div class="d-flex flex-wrap gap-2 align-items-center border-bottom py-2">
+                        <div class="flex-grow-1"><b>{{ $c->name }}</b> · {{ translate(key: '{n} branch(es)', replace: ['n' => $c->branches_count]) }}
+                            <div class="fs-12 text-muted">{{ $c->collectsMoney() ? translate('One company account') : translate('Each branch its own account') }} · {{ $c->billedTogether() ? translate('One statement for the company') : translate('A statement per branch') }}</div></div>
+                        <a class="btn btn-sm btn-outline-primary" href="{{ route('admin.bus.companies.show', $c->id) }}">{{ translate('Open') }}</a>
+                    </div>
+                @endforeach
+                <form method="POST" action="{{ route('admin.bus.companies.store') }}" class="d-flex flex-wrap gap-2 mt-2">
+                    @csrf
+                    <input name="name" class="form-control" style="max-width:320px" required maxlength="120" placeholder="{{ translate('Company name, e.g. Vatican Express') }}" aria-label="{{ translate('Company name') }}">
+                    <button class="btn btn-primary">{{ translate('Add a company') }}</button>
+                </form>
+            </div>
+        </div>
+
+        <div class="card mb-3">
             <div class="card-header"><h5 class="mb-0">{{ translate('Agencies on E-Ride') }}</h5></div>
             <div class="table-responsive">
                 <table class="table table-borderless align-middle mb-0">
@@ -33,7 +52,7 @@
                     <tbody>
                     @forelse($agencies as $a)
                         <tr>
-                            <td><div class="fw-semibold">{{ $a->name }}</div><div class="fs-12 text-muted">{{ $a->address }}</div></td>
+                            <td><div class="fw-semibold">{{ $a->name }}</div>@if($a->company)<div class="fs-12"><span class="badge bg-primary-subtle text-primary-emphasis">{{ $a->displayName() }}</span></div>@endif<div class="fs-12 text-muted">{{ $a->address }}</div></td>
                             <td><span class="badge {{ $statusTag[$a->status][0] }}">{{ $statusTag[$a->status][1] }}</span>@if($a->status === BusAgency::PAUSED && $a->pause_note)<div class="fs-12 text-muted">{{ $a->pause_note }}</div>@endif</td>
                             <td>{{ $a->origin_city }}</td>
                             <td>@if($a->fapshi_ok_at)<span class="badge bg-success-subtle text-success-emphasis">{{ translate('Connected') }}</span>@else<span class="text-muted fs-12">{{ translate('Not yet') }}</span>@endif</td>

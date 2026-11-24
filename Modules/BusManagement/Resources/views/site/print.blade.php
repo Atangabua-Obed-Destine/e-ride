@@ -25,14 +25,14 @@ body{margin:0;font:14px/1.4 system-ui,-apple-system,"Segoe UI",Roboto,sans-serif
 @php($at = $d->leavesAt())
 @if($collect)
     <div class="t">
-        <div class="h"><b>E-Ride Bus · {{ $booking->agency->name }}</b><b>{{ $booking->code }}</b></div>
+        <div class="h"><b>E-Ride Bus · {{ $booking->agency->displayName() }}</b><b>{{ $booking->code }}</b></div>
         <div class="g"><div><div class="k">{{ $t('date') }}</div><div class="v">{{ $t->day($at) }}</div></div><div><div class="k">{{ $t('leaves') }}</div><div class="v">{{ $at->format('H:i') }}</div></div><div><div class="k">{{ $t('seat') }}</div><div class="v">{{ $booking->tickets->where('status', '!=', 'cancelled')->pluck('seat')->implode(', ') }}</div></div></div>
-        <div class="q">{!! $qr('ERIDE-BUS:' . $booking->code) !!}<div><b>{{ $t('collect_title') }}</b><br>{{ $t('collect_body', ['agency' => $booking->agency->name, 'city' => $booking->agency->origin_city]) }}</div></div>
+        <div class="q">{!! $qr('ERIDE-BUS:' . $booking->code) !!}<div><b>{{ $t('collect_title') }}</b><br>{{ $t('collect_body', ['agency' => $booking->agency->displayName(), 'city' => $booking->agency->origin_city]) }}</div></div>
     </div>
 @else
     @foreach($booking->tickets->whereIn('status', ['valid', 'boarded'])->sortBy(fn($x) => (int)$x->seat) as $ticket)
         <div class="t">
-            <div class="h"><b>E-Ride Bus · {{ $booking->agency->name }}</b><b>{{ $booking->code }}</b></div>
+            <div class="h"><b>E-Ride Bus · {{ $booking->agency->displayName() }}</b><b>{{ $booking->code }}</b></div>
             <div class="g">
                 <div><div class="k">{{ $t('from') }}</div><div class="v">{{ $booking->agency->origin_city }}</div></div>
                 <div><div class="k">{{ $t('to') }}</div><div class="v">{{ $d->destination?->city }}</div></div>

@@ -15,7 +15,7 @@ class BusStatement extends Model
     public const PAID = 'paid';
 
     protected $fillable = [
-        'agency_id', 'month', 'app_tickets', 'app_fares', 'app_commission', 'counter_tickets', 'counter_fares', 'counter_commission', 'total',
+        'agency_id', 'company_statement_id', 'month', 'app_tickets', 'app_fares', 'app_commission', 'counter_tickets', 'counter_fares', 'counter_commission', 'total',
         'due_on', 'status', 'paid_at', 'reference', 'marked_by',
     ];
 

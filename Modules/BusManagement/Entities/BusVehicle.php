@@ -19,7 +19,7 @@ class BusVehicle extends Model
     public const AMENITIES = ['air_con', 'usb', 'wifi', 'toilet', 'tv', 'water', 'reclining'];
 
     protected $fillable = [
-        'agency_id', 'registration', 'name', 'class', 'status', 'total_seats', 'driver_position', 'is_double_decker', 'upper_deck_seats',
+        'agency_id', 'company_id', 'registration', 'name', 'class', 'status', 'total_seats', 'driver_position', 'is_double_decker', 'upper_deck_seats',
         'has_rear_seats', 'rear_seats_count', 'seats_per_row', 'aisle_position', 'first_seat_position', 'door_positions', 'cargo_kg',
         'amenities', 'photos',
     ];
@@ -41,6 +41,25 @@ class BusVehicle extends Model
     public function agency(): BelongsTo
     {
         return $this->belongsTo(BusAgency::class, 'agency_id');
+    }
+
+    /** The buses a branch can put on its departures: its company's (shared by all branches), else its own. */
+    public function scopeUsableByAgency($q, BusAgency $agency)
+    {
+        return $agency->company_id
+            ? $q->where(fn($w) => $w->where('bus_vehicles.company_id', $agency->company_id)->orWhere('bus_vehicles.agency_id', $agency->id))
+            : $q->where('bus_vehicles.agency_id', $agency->id);
+    }
+
+    public function usableBy(BusAgency $agency): bool
+    {
+        return (string)$this->agency_id === (string)$agency->id
+            || ($agency->company_id && (string)$this->company_id === (string)$agency->company_id);
+    }
+
+    public function company(): BelongsTo
+    {
+        return $this->belongsTo(BusCompany::class, 'company_id');
     }
 
     public function seatPlan(): array

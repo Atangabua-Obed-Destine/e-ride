@@ -69,7 +69,11 @@
                     @endif
                     <a class="btn btn-soft btn-sm" href="{{ route('bus-partner.payments.statement', $s->id) }}">{{ translate('Details') }}</a>
                     @if($s->status === 'due')
+                        @if($s->company_statement_id)
+                            <span class="b-tag mute">{{ translate('Paid by your head office') }}</span>
+                        @else
                         <form method="POST" action="{{ route('bus-partner.payments.statement.pay', $s->id) }}" class="m-0">@csrf<button class="btn btn-primary btn-sm">{{ translate('Pay with Mobile Money') }}</button></form>
+                        @endif
                     @endif
                 </div>
             @empty

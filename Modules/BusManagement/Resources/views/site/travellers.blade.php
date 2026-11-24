@@ -25,7 +25,7 @@
     <div style="padding:12px 16px 0">
         <div class="card row" style="gap:10px;background:#F4F6F6;border:0">
             <div class="col" style="gap:0"><span class="sm b">{{ $t->when($at) }} · {{ count($seats) === 1 ? $t('seat_n', ['seat' => $seats[0]]) : $t('seats_n', ['seats' => implode(', ', $seats)]) }}</span>
-                <span class="xs muted">{{ $departure->agency->name }} · {{ $info['from'] }} → {{ $info['to'] }} · {{ $t->classLabel($info['class']) }}</span></div>
+                <span class="xs muted">{{ $departure->agency->displayName() }} · {{ $info['from'] }} → {{ $info['to'] }} · {{ $t->classLabel($info['class']) }}</span></div>
         </div>
     </div>
 

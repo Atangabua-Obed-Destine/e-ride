@@ -207,10 +207,11 @@ class AgencyService
         });
     }
 
-    public function setStaffActive(BusAgency $agency, BusStaff $staff, bool $active, BusStaff $by): BusStaff
+    /** $by is the branch manager doing it, or null when the company's head office does. */
+    public function setStaffActive(BusAgency $agency, BusStaff $staff, bool $active, ?BusStaff $by): BusStaff
     {
         $this->own($agency, $staff);
-        if ($staff->id === $by->id) {
+        if ($by && $staff->id === $by->id) {
             throw ValidationException::withMessages(['staff' => translate('You cannot switch off your own account.')]);
         }
         if (!$active && $staff->role === BusStaff::MANAGER
@@ -243,7 +244,7 @@ class AgencyService
         return str_contains($typed, '@') ? $typed : $typed . '@' . self::USERNAME_DOMAIN;
     }
 
-    protected function freeUsername(string $name, BusAgency $agency): string
+    public function freeUsername(string $name, BusAgency|\Modules\BusManagement\Entities\BusCompany $agency): string
     {
         $base = Str::of(Str::ascii($name))->lower()->replaceMatches('/[^a-z0-9]+/', '')->limit(12, '')->value() ?: 'staff';
         $suffix = strtolower(substr($agency->webhook_code, 0, 5));
@@ -263,8 +264,11 @@ class AgencyService
 
     // ------------------------------------------------------------- Fapshi
 
-    /** Saves the agency's Fapshi keys. An empty key or secret keeps the saved one. Changing anything needs a new test. */
-    public function saveFapshi(BusAgency $agency, array $input): BusAgency
+    /**
+     * Saves the Fapshi keys of an agency (a branch) or of a company that collects for all its branches.
+     * An empty key or secret keeps the saved one. Changing anything needs a new test.
+     */
+    public function saveFapshi(BusAgency|\Modules\BusManagement\Entities\BusCompany $agency, array $input): BusAgency|\Modules\BusManagement\Entities\BusCompany
     {
         $data = Validator::make($input, [
             'api_user' => 'required|string|max:120',
@@ -292,14 +296,27 @@ class AgencyService
         return $agency;
     }
 
-    public function fapshiClient(BusAgency $agency): ?FapshiClient
+    public function fapshiClient(BusAgency|\Modules\BusManagement\Entities\BusCompany $agency): ?FapshiClient
     {
         $values = $agency->fapshiValues();
         return $values ? new FapshiClient($values, $values['mode'] ?? 'test') : null;
     }
 
+    /** The account passengers of this branch pay into: its company's when the company collects, else its own. */
+    public function paymentAccount(BusAgency $agency): BusAgency|\Modules\BusManagement\Entities\BusCompany
+    {
+        $company = $agency->company_id ? $agency->company : null;
+        return $company && $company->collectsMoney() ? $company : $agency;
+    }
+
+    /** The Fapshi client passengers of this branch pay through. */
+    public function paymentClient(BusAgency $agency): ?FapshiClient
+    {
+        return $this->fapshiClient($this->paymentAccount($agency));
+    }
+
     /** Checks the keys against Fapshi (the balance). Returns [ok, message]; ok marks the account connected. */
-    public function testFapshi(BusAgency $agency): array
+    public function testFapshi(BusAgency|\Modules\BusManagement\Entities\BusCompany $agency): array
     {
         $client = $this->fapshiClient($agency);
         if (!$client) {
@@ -321,7 +338,11 @@ class AgencyService
         }
         if ($response->successful()) {
             $agency->update(['fapshi_ok_at' => now()]);
-            $this->refreshStatus($agency);
+            if ($agency instanceof BusAgency) {
+                $this->refreshStatus($agency);
+            } else {
+                $agency->branches()->get()->each(fn($b) => $this->refreshStatus($b));
+            }
             return [true, $client->environment() === 'live'
                 ? translate('Connected to Fapshi (live). Passengers will pay straight into this account.')
                 : translate('Connected to Fapshi (test). Payments are only pretend until you switch to Live.')];
@@ -339,7 +360,7 @@ class AgencyService
      * Testing only: the agency uses E-Ride's own Fapshi sandbox keys (copied on the server, never shown), so a test
      * agency can take pretend payments. Refused unless they really are sandbox keys. Returns [ok, message].
      */
-    public function useEridesSandbox(BusAgency $agency): array
+    public function useEridesSandbox(BusAgency|\Modules\BusManagement\Entities\BusCompany $agency): array
     {
         $row = DB::table('settings')->where('key_name', 'fapshi')->where('settings_type', PAYMENT_CONFIG)->first();
         $values = $row ? (json_decode((string)$row->test_values, true) ?: []) : [];
@@ -368,7 +389,7 @@ class AgencyService
      */
     public function refreshStatus(BusAgency $agency): BusAgency
     {
-        if ($agency->status === BusAgency::SETUP && $agency->fapshi_ok_at
+        if ($agency->status === BusAgency::SETUP && $agency->paymentsReady()
             && BusDeparture::where('agency_id', $agency->id)->whereNotNull('vehicle_id')->whereIn('status', BusDeparture::OPEN)
                 ->where('date', '>=', today())->exists()) {
             $agency->update(['status' => BusAgency::LIVE]);

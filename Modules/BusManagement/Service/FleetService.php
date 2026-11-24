@@ -30,7 +30,9 @@ class FleetService
         }
         $data = Validator::make($input, [
             'registration' => ['required', 'string', 'max:20',
-                Rule::unique('bus_vehicles', 'registration')->where('agency_id', $agency->id)->ignore($vehicle?->id)],
+                // One plate once in the company's shared fleet (or the agency's own).
+                Rule::unique('bus_vehicles', 'registration')->where(fn($q) => $agency->company_id
+                    ? $q->where('company_id', $agency->company_id) : $q->where('agency_id', $agency->id))->ignore($vehicle?->id)],
             'name' => 'nullable|string|max:60',
             'class' => ['required', Rule::in(BusVehicle::CLASSES)],
             'status' => ['required', Rule::in(BusVehicle::STATUSES)],
@@ -76,7 +78,9 @@ class FleetService
         return DB::transaction(function () use ($agency, $data, $vehicle) {
             $vehicle ??= new BusVehicle(['agency_id' => $agency->id]);
             $vehicle->fill($data);
-            $vehicle->agency_id = $agency->id;
+            // A company bus keeps its home branch when another branch changes it.
+            $vehicle->agency_id = $vehicle->exists ? $vehicle->agency_id : $agency->id;
+            $vehicle->company_id = $agency->company_id ?: $vehicle->company_id;
             $vehicle->save();
             $this->refreshPlans($vehicle);
             return $vehicle->fresh();

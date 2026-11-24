@@ -32,21 +32,23 @@ class BusPayController extends Controller
      */
     public function webhook(Request $request, string $code): JsonResponse
     {
-        $agency = BusAgency::where('webhook_code', $code)->first();
-        if (!$agency) {
+        // A branch's own account, or a company account that collects for all its branches.
+        $account = BusAgency::where('webhook_code', $code)->first() ?? \Modules\BusManagement\Entities\BusCompany::where('webhook_code', $code)->first();
+        if (!$account) {
             return response()->json(['ok' => false]);
         }
-        $client = app(AgencyService::class)->fapshiClient($agency);
+        $client = app(AgencyService::class)->fapshiClient($account);
         if (!$client || !$client->webhookSecretMatches($request->header('x-wh-secret'))) {
-            Log::warning('Bus Fapshi webhook with a wrong secret ignored', ['agency' => $agency->id, 'ip' => $request->ip()]);
+            Log::warning('Bus Fapshi webhook with a wrong secret ignored', ['account' => $account->id, 'ip' => $request->ip()]);
             return response()->json(['ok' => false]);
         }
+        $agencyIds = $account instanceof BusAgency ? [$account->id] : $account->branches()->pluck('id')->all();
         $transId = (string)$request->input('transId', '');
         $externalId = (string)$request->input('externalId', '');
         if ($transId === '' && $externalId === '') {
             return response()->json(['ok' => true, 'known' => false]);
         }
-        $payment = BusPayment::where('agency_id', $agency->id)
+        $payment = BusPayment::whereIn('agency_id', $agencyIds)
             ->when($transId !== '', fn($q) => $q->where('trans_id', $transId), fn($q) => $q->where('external_id', $externalId))
             ->first();
         if (!$payment) {

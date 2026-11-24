@@ -82,6 +82,9 @@ class PaymentController extends Controller
     public function pay(Request $request, string $statement): RedirectResponse
     {
         $s = $this->find($request, $statement);
+        if ($s->company_statement_id) {
+            return back()->withErrors(['statement' => translate('Your head office pays this statement for all branches.')]);
+        }
         try {
             return redirect()->away($this->statements->payLink($s, auth()->user()));
         } catch (ValidationException $e) {

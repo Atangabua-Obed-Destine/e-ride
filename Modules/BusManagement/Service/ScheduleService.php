@@ -29,7 +29,7 @@ class ScheduleService
             'kind' => ['required', Rule::in([BusSchedule::FIXED, BusSchedule::WHEN_FULL])],
             'time' => ['required', 'date_format:H:i'],
             'days' => 'required|integer|min:1|max:127',
-            'vehicle_id' => ['nullable', Rule::exists('bus_vehicles', 'id')->where('agency_id', $agency->id)],
+            'vehicle_id' => ['nullable', self::busRule($agency)],
             'auto_accept' => 'boolean',
             'active' => 'boolean',
         ])->validate();
@@ -127,7 +127,7 @@ class ScheduleService
             'kind' => ['required', Rule::in([BusSchedule::FIXED, BusSchedule::WHEN_FULL])],
             'date' => 'required|date_format:Y-m-d|after_or_equal:today|before_or_equal:' . now()->addDays(60)->toDateString(),
             'time' => ['required', 'date_format:H:i'],
-            'vehicle_id' => ['nullable', Rule::exists('bus_vehicles', 'id')->where('agency_id', $agency->id)],
+            'vehicle_id' => ['nullable', self::busRule($agency)],
             'auto_accept' => 'boolean',
         ])->validate();
         if (now()->gte(\Illuminate\Support\Carbon::parse($data['date'] . ' ' . $data['time']))) {
@@ -168,10 +168,15 @@ class ScheduleService
                 $departure->update(['vehicle_id' => null, 'seat_plan' => null, 'capacity' => 0]);
                 return $departure;
             }
-            if ((string)$vehicle->agency_id !== (string)$departure->agency_id) {
+            if (!$vehicle->usableBy($departure->agency)) {
                 throw ValidationException::withMessages(['vehicle_id' => translate('This bus is not yours.')]);
             }
             $this->checkVehicle($vehicle, $departure->class);
+            // One bus, one trip at a time: lock the bus so two branches cannot give it two trips at once.
+            BusVehicle::whereKey($vehicle->id)->lockForUpdate()->first();
+            if ($clash = $this->vehicleClash($vehicle, $departure)) {
+                throw ValidationException::withMessages(['vehicle_id' => self::clashMessage($vehicle, $clash)]);
+            }
             $plan = $vehicle->seatPlan();
             $missing = array_diff($claimed, $plan['seats']);
             if ($missing) {
@@ -190,6 +195,58 @@ class ScheduleService
             $this->setVehicle($departure, $vehicle);
         } catch (ValidationException) {
         }
+    }
+
+    /** A bus the branch can use (its own, or its company's). */
+    public static function busRule(BusAgency $agency)
+    {
+        return Rule::exists('bus_vehicles', 'id')->where(fn($q) => $agency->company_id
+            ? $q->where(fn($w) => $w->where('company_id', $agency->company_id)->orWhere('agency_id', $agency->id))
+            : $q->where('agency_id', $agency->id));
+    }
+
+    /** Fallback trip length when a destination has none set. */
+    public const DEFAULT_TRIP_MINUTES = 360;
+    public const DEFAULT_TURNAROUND_MINUTES = 60;
+
+    /**
+     * When the bus is busy with a departure: from when it leaves until it is back for another trip
+     * (the trip to the destination, then the company's turnaround time).
+     * @return array{0: \Illuminate\Support\Carbon, 1: \Illuminate\Support\Carbon}
+     */
+    public static function busyWindow(BusDeparture $d): array
+    {
+        $d->loadMissing(['destination', 'agency.company']);
+        $start = $d->status === BusDeparture::DEPARTED && $d->departed_at ? $d->departed_at->copy() : $d->leavesAt();
+        $trip = (int)($d->destination?->duration_minutes ?: self::DEFAULT_TRIP_MINUTES);
+        $turn = (int)($d->agency?->company?->turnaround_minutes ?? self::DEFAULT_TURNAROUND_MINUTES);
+        return [$start, $start->copy()->addMinutes($trip + $turn)];
+    }
+
+    /** Another departure this bus is already on at the same time (open, or left and still on the road), or null. */
+    public function vehicleClash(BusVehicle $vehicle, BusDeparture $departure): ?BusDeparture
+    {
+        [$start, $end] = self::busyWindow($departure);
+        return BusDeparture::with(['destination', 'agency.company'])->where('vehicle_id', $vehicle->id)->where('id', '!=', $departure->id)
+            ->whereIn('status', [BusDeparture::SCHEDULED, BusDeparture::BOARDING, BusDeparture::DEPARTED])
+            ->whereBetween('date', [$start->copy()->subDays(3)->toDateString(), $end->copy()->addDays(1)->toDateString()])
+            ->get()->first(function (BusDeparture $other) use ($start, $end) {
+                [$s, $e] = self::busyWindow($other);
+                return $s->lt($end) && $start->lt($e);
+            });
+    }
+
+    public static function clashMessage(BusVehicle $vehicle, BusDeparture $other): string
+    {
+        [, $until] = self::busyWindow($other);
+        $other->loadMissing(['agency', 'destination']);
+        return translate(key: '{bus} is already on the {when} bus from {from} to {to}, busy until about {until}. Choose another bus or another time.', replace: [
+            'bus' => $vehicle->registration,
+            'when' => $other->leavesAt()->translatedFormat('D j M H:i'),
+            'from' => $other->agency?->origin_city,
+            'to' => $other->destination?->city,
+            'until' => $until->translatedFormat($until->isSameDay($other->leavesAt()) ? 'H:i' : 'D j M H:i'),
+        ]);
     }
 
     protected function checkVehicle(?BusVehicle $vehicle, string $class): void

@@ -26,8 +26,9 @@ class BusPaymentService
 
     public function clientFor(BusPayment|BusBooking $of): ?FapshiClient
     {
+        // The branch's own account, or its company's when the company collects for all branches.
         $agency = $of->agency;
-        return $agency ? $this->agencies->fapshiClient($agency) : null;
+        return $agency ? $this->agencies->paymentClient($agency) : null;
     }
 
     /**
@@ -68,7 +69,7 @@ class BusPaymentService
             return ['error' => translate('The time to pay has run out.')];
         }
         $client = $this->clientFor($booking);
-        if (!$client || !$booking->agency->fapshi_ok_at) {
+        if (!$client || !$booking->agency->paymentsReady()) {
             return ['error' => translate('This agency cannot take Mobile Money right now. Speak to the agency.')];
         }
         $amount = (int)ceil((float)$booking->amount);
@@ -95,7 +96,7 @@ class BusPaymentService
         $payload = [
             'amount' => $amount,
             'externalId' => $payment->external_id,
-            'message' => Str::limit($booking->agency->name . ' ticket ' . $booking->code, 60, ''),
+            'message' => Str::limit($booking->agency->displayName() . ' ticket ' . $booking->code, 60, ''),
             'redirectUrl' => route('bus.pay.return', ['reference' => $payment->external_id]),
         ];
         if (preg_match('/^[A-Za-z0-9_-]{1,100}$/', (string)$booking->customer_id)) {
@@ -215,7 +216,7 @@ class BusPaymentService
 
         if ($outcome !== null) {
             $booking = BusBooking::with(['agency', 'departure.destination', 'customer'])->find($payment->booking_id);
-            $replace = ['agency' => $booking->agency->name, 'city' => $booking->departure->destination?->city,
+            $replace = ['agency' => $booking->agency->displayName(), 'city' => $booking->departure->destination?->city,
                 'time' => $booking->departure->leavesAt()->format('d/m H:i'), 'amount' => getCurrencyFormat($payment->amount)];
             $outcome === 'paid'
                 ? BusPush::send($booking->customer, 'bus_paid', 'Your tickets to {city} are ready',

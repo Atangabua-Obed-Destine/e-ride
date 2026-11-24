@@ -186,7 +186,7 @@ class BusController extends Controller
 
     protected function live()
     {
-        return BusAgency::where('status', BusAgency::LIVE)->whereNotNull('fapshi_ok_at');
+        return BusAgency::bookable();
     }
 
     /** @return array<string, string[]> taken seats by departure */

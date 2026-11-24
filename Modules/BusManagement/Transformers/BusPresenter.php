@@ -14,13 +14,43 @@ use Modules\BusManagement\Service\ScheduleService;
 /** What the customer app gets for agencies, departures, seat maps and bookings. Times are ISO 8601 with the offset. */
 class BusPresenter
 {
+    /** Ratings of a company's branches together (weighted by how many people rated each), once per request. */
+    protected static array $brandRatings = [];
+
+    public static function brand(BusAgency $a): ?array
+    {
+        $company = $a->company_id ? $a->company : null;
+        if (!$company) {
+            return null;
+        }
+        $key = (string)$company->id;
+        if (!isset(self::$brandRatings[$key])) {
+            $rows = BusAgency::where('company_id', $company->id)->get(['rating', 'rating_count']);
+            $count = (int)$rows->sum('rating_count');
+            self::$brandRatings[$key] = [$count > 0 ? round($rows->sum(fn($r) => (float)$r->rating * (int)$r->rating_count) / $count, 1) : null, $count];
+        }
+        [$rating, $count] = self::$brandRatings[$key];
+        return [
+            'id' => $company->id,
+            'name' => $company->name,
+            'logo' => $company->logoUrl(),
+            'rating' => $rating,
+            'rating_count' => $count,
+        ];
+    }
+
     public static function agency(BusAgency $a, bool $full = false): array
     {
+        $brand = self::brand($a);
         $out = [
             'id' => $a->id,
-            'name' => $a->name,
+            // "Vatican Express · Bamenda" for a branch of a company (older app versions show this as it is).
+            'name' => $a->displayName(),
+            // The company and the branch, for grouping branches under their brand.
+            'brand' => $brand,
+            'branch' => $brand ? $a->branchLabel() : null,
             'origin_city' => $a->origin_city,
-            'logo' => $a->logo ? dynamicStorage('storage/app/public/bus/logo/' . $a->logo) : null,
+            'logo' => $a->logo ? dynamicStorage('storage/app/public/bus/logo/' . $a->logo) : ($brand['logo'] ?? null),
             'rating' => $a->rating,
             'rating_count' => (int)$a->rating_count,
             // "Usually answers in 3 min".

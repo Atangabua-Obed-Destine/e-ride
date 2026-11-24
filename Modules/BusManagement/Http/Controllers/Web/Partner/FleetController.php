@@ -21,7 +21,7 @@ class FleetController extends Controller
     public function index(Request $request): View
     {
         $agency = $this->agency($request);
-        $buses = BusVehicle::where('agency_id', $agency->id)->orderByRaw("FIELD(status, 'ready', 'garage', 'retired')")->orderBy('registration')->get();
+        $buses = BusVehicle::usableByAgency($agency)->orderByRaw("FIELD(status, 'ready', 'garage', 'retired')")->orderBy('registration')->get();
         $bus = $request->filled('bus') ? $buses->firstWhere('id', $request->query('bus')) : null;
         $creating = !$bus && ($request->boolean('new') || $buses->isEmpty());
         if (!$bus && !$creating) {
@@ -34,7 +34,7 @@ class FleetController extends Controller
     public function save(Request $request, ?string $bus = null): RedirectResponse
     {
         $agency = $this->agency($request);
-        $vehicle = $bus ? BusVehicle::where('agency_id', $agency->id)->findOrFail($bus) : null;
+        $vehicle = $bus ? BusVehicle::usableByAgency($agency)->findOrFail($bus) : null;
         $input = $request->all();
         foreach (['is_double_decker', 'has_rear_seats'] as $flag) {
             $input[$flag] = $request->boolean($flag);

@@ -114,7 +114,7 @@ class BoardingService
             $b = $tickets->first()->booking;
             BusPush::send($b->customer, 'bus_no_show', 'Your bus to {city} has left',
                 '{agency} marked seat {seats} as not on board when it left at {time}. Speak to the agency if this is wrong.',
-                ['city' => $departure->destination?->city, 'agency' => $agency->name, 'seats' => $tickets->pluck('seat')->implode(', '), 'time' => now()->format('H:i')],
+                ['city' => $departure->destination?->city, 'agency' => $agency->displayName(), 'seats' => $tickets->pluck('seat')->implode(', '), 'time' => now()->format('H:i')],
                 ['bus_booking_id' => $b->id]);
         }
         return [$boarded, $noShows->count()];
@@ -139,7 +139,7 @@ class BoardingService
         BusBooking::with('customer')->where('departure_id', $departure->id)->where('source', BusBooking::APP)
             ->whereIn('status', [...BusBooking::HOLDING, BusBooking::PAID])->get()
             ->each(fn(BusBooking $b) => BusPush::send($b->customer, 'bus_delayed', 'Your bus to {city} leaves later',
-                '{agency}: the bus now leaves at {time}.', ['city' => $departure->destination?->city, 'agency' => $agency->name, 'time' => $time],
+                '{agency}: the bus now leaves at {time}.', ['city' => $departure->destination?->city, 'agency' => $agency->displayName(), 'time' => $time],
                 ['bus_booking_id' => $b->id]));
         return $departure->fresh();
     }

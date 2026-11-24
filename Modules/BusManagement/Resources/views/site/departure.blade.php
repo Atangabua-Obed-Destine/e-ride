@@ -35,7 +35,7 @@
         <a class="chip" href="{{ url()->previous() !== url()->current() ? url()->previous() : route('bus.web.search', ['from' => $info['from'], 'to' => $info['to'], 'date' => $info['date']]) }}" aria-label="{{ $t('back') }}">‹</a>
         <div class="col" style="gap:0;min-width:0">
             <h1 style="font-size:18px">{{ $t->when($at) }} · {{ $info['to'] }}</h1>
-            <span class="xs muted">{{ $departure->agency->name }} · {{ $t->classLabel($info['class']) }}@if($info['bus']) · {{ $info['bus']['name'] }}@endif</span>
+            <span class="xs muted">{{ $departure->agency->displayName() }} · {{ $t->classLabel($info['class']) }}@if($info['bus']) · {{ $info['bus']['name'] }}@endif</span>
         </div>
     </div>
 </div>

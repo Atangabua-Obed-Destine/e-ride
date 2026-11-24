@@ -29,7 +29,8 @@ class BusAdminController extends Controller
 
     public function index(Request $request): View
     {
-        $agencies = BusAgency::withCount(['staff', 'vehicles'])->orderByRaw("FIELD(status, 'checking', 'setup', 'live', 'paused')")->orderBy('name')->get();
+        $companies = \Modules\BusManagement\Entities\BusCompany::withCount('branches')->orderBy('name')->get();
+        $agencies = BusAgency::with('company')->withCount(['staff', 'vehicles'])->orderByRaw("FIELD(status, 'checking', 'setup', 'live', 'paused')")->orderBy('name')->get();
         $monthStart = now()->startOfMonth();
         $appTickets = BusBooking::where('source', BusBooking::APP)->where('status', BusBooking::PAID)->where('paid_at', '>=', $monthStart)
             ->selectRaw('agency_id, count(*) as n')->groupBy('agency_id')->pluck('n', 'agency_id');
@@ -48,7 +49,7 @@ class BusAdminController extends Controller
         $messages = \Modules\BusManagement\Entities\BusMessage::where('created_at', '>=', now()->subDays(30))
             ->selectRaw('channel, status, count(*) as n')->groupBy('channel', 'status')->get();
         $webBookings = BusBooking::where('via', BusBooking::WEB)->where('created_at', '>=', $monthStart)->count();
-        return view('busmanagement::admin.agencies', compact('agencies', 'appTickets', 'openDepartures', 'google', 'known', 'settings', 'lat', 'lng', 'owed',
+        return view('busmanagement::admin.agencies', compact('companies', 'agencies', 'appTickets', 'openDepartures', 'google', 'known', 'settings', 'lat', 'lng', 'owed',
             'web', 'wa', 'messages', 'webBookings'));
     }
 

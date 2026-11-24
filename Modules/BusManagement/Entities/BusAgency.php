@@ -21,7 +21,7 @@ class BusAgency extends Model
     public const PAUSED = 'paused';
 
     protected $fillable = [
-        'name', 'slug', 'google_place_id', 'origin_city', 'address', 'lat', 'lng', 'phone', 'logo', 'about', 'status', 'pause_reason',
+        'company_id', 'branch_label', 'region', 'name', 'slug', 'google_place_id', 'origin_city', 'address', 'lat', 'lng', 'phone', 'logo', 'about', 'status', 'pause_reason',
         'pause_note', 'checks', 'licence_file', 'verified_by', 'verified_at', 'commission_app_pct', 'commission_counter_pct', 'fapshi',
         'fapshi_ok_at', 'webhook_code', 'rules', 'rating', 'rating_count', 'answer_seconds_avg',
         'online_paused_at', 'online_paused_by', 'online_pause_auto', 'unanswered_streak',
@@ -70,9 +70,46 @@ class BusAgency extends Model
         return $this->hasMany(BusDeparture::class, 'agency_id');
     }
 
+    /** The head office this branch belongs to, if any. */
+    public function company(): BelongsTo
+    {
+        return $this->belongsTo(BusCompany::class, 'company_id');
+    }
+
     public function isBookable(): bool
     {
-        return $this->status === self::LIVE && $this->fapshi_ok_at !== null;
+        return $this->status === self::LIVE && $this->paymentsReady();
+    }
+
+    /** Passengers can pay: the branch's own Fapshi works, or its company's when the company collects the money. */
+    public function paymentsReady(): bool
+    {
+        $company = $this->company_id ? $this->company : null;
+        return $company && $company->collectsMoney() ? $company->fapshi_ok_at !== null : $this->fapshi_ok_at !== null;
+    }
+
+    /** Agencies passengers can book: live, and able to take payment (their own account or their company's). */
+    public function scopeBookable($q)
+    {
+        return $q->where('bus_agencies.status', self::LIVE)->where(function ($w) {
+            $w->where(function ($own) {
+                $own->whereNotNull('bus_agencies.fapshi_ok_at')->where(function ($c) {
+                    $c->whereNull('bus_agencies.company_id')->orWhereIn('bus_agencies.company_id', BusCompany::where('money_mode', BusCompany::PER_BRANCH)->select('id'));
+                });
+            })->orWhereIn('bus_agencies.company_id', BusCompany::where('money_mode', BusCompany::COMPANY)->whereNotNull('fapshi_ok_at')->select('id'));
+        });
+    }
+
+    /** "Vatican Express · Bamenda" for a branch of a company, else the agency's own name. */
+    public function displayName(): string
+    {
+        $company = $this->company_id ? $this->company : null;
+        return $company ? $company->name . ' · ' . $this->branchLabel() : $this->name;
+    }
+
+    public function branchLabel(): string
+    {
+        return $this->branch_label ?: $this->origin_city;
     }
 
     /** The agency's Fapshi values for FapshiClient, or null when not set. */

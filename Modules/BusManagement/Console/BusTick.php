@@ -35,7 +35,7 @@ class BusTick extends Command
         $counts['closures_decided'] = app(\Modules\BusManagement\Service\ClosureService::class)->tick();
         if ($this->option('open') || now()->minute % 15 === 0) {
             $counts['opened'] = $schedule->openAhead();
-            BusAgency::where('status', BusAgency::SETUP)->whereNotNull('fapshi_ok_at')->get()->each(fn($a) => $agencies->refreshStatus($a));
+            BusAgency::where('status', BusAgency::SETUP)->get()->filter(fn($a) => $a->paymentsReady())->each(fn($a) => $agencies->refreshStatus($a));
         }
         if ($this->option('daily') || Cache::add('bus-daily:' . today()->toDateString(), 1, now()->addDay())) {
             $counts['statements'] = $statements->generate();

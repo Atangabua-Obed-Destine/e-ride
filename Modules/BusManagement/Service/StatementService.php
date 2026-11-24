@@ -34,6 +34,9 @@ class StatementService
 
     public const HOOK = 'busStatementPaid';
     public const ATTRIBUTE = 'bus_statement';
+    /** A company billed for all its branches together pays one statement. */
+    public const COMPANY_HOOK = 'busCompanyStatementPaid';
+    public const COMPANY_ATTRIBUTE = 'bus_company_statement';
     /** Pause reasons this service sets (and so may lift). */
     public const REASON_LATE = 'statement';
     public const REASON_DECLINES = 'declines';
@@ -105,7 +108,92 @@ class StatementService
                 $made++;
             }
         });
+        // Companies billed together: one statement summing their branches'.
+        \Modules\BusManagement\Entities\BusCompany::where('bill_mode', \Modules\BusManagement\Entities\BusCompany::COMPANY)->get()
+            ->each(fn($company) => $this->buildCompany($company, $month));
         return $made;
+    }
+
+    /**
+     * One statement for all of a company's branches in a month: the sum of their statements (which stay, for
+     * the detail per branch). Built while unpaid; branch statements already paid on their own are left out.
+     */
+    public function buildCompany(\Modules\BusManagement\Entities\BusCompany $company, CarbonInterface $month): \Modules\BusManagement\Entities\BusCompanyStatement
+    {
+        $start = Carbon::instance($month)->startOfMonth();
+        $statement = \Modules\BusManagement\Entities\BusCompanyStatement::firstOrNew(['company_id' => $company->id, 'month' => $start->toDateString()]);
+        if ($statement->exists && $statement->status === BusStatement::PAID) {
+            return $statement;
+        }
+        $branchIds = BusAgency::where('company_id', $company->id)->pluck('id');
+        $lines = BusStatement::whereIn('agency_id', $branchIds)->where('month', $start->toDateString())
+            ->where(fn($q) => $q->where('status', BusStatement::DUE)->orWhereNotNull('company_statement_id'))->get();
+        $total = round((float)$lines->where('status', BusStatement::DUE)->sum('total'), 2);
+        $statement->fill([
+            'total' => $total,
+            'due_on' => $start->copy()->addMonth()->day(BusSettings::all()['statement_due_day'])->toDateString(),
+            'status' => $total > 0 ? BusStatement::DUE : BusStatement::PAID,
+            'paid_at' => $total > 0 ? null : now(),
+            'reference' => $total > 0 ? null : 'nothing due',
+        ]);
+        $statement->save();
+        BusStatement::whereIn('id', $lines->pluck('id'))->update(['company_statement_id' => $statement->id]);
+        return $statement;
+    }
+
+    /** The checkout link for a company statement, at E-Ride's own Fapshi, for the director. */
+    public function payCompanyLink(\Modules\BusManagement\Entities\BusCompanyStatement $statement, User $director): string
+    {
+        if ($statement->status !== BusStatement::DUE) {
+            throw ValidationException::withMessages(['statement' => translate('This statement is already paid.')]);
+        }
+        $info = new PaymentInfo(
+            hook: self::COMPANY_HOOK,
+            currencyCode: businessConfig('currency_code')?->value ?? 'XAF',
+            paymentMethod: 'fapshi',
+            paymentPlatform: 'web',
+            payerId: $director->id,
+            receiverId: '100',
+            additionalData: [
+                'business_name' => businessConfig('business_name')?->value,
+                'business_logo' => dynamicStorage('storage/app/public/business') . '/' . businessConfig('header_logo')?->value,
+            ],
+            paymentAmount: (float)ceil($statement->total),
+            externalRedirectLink: route('bus-company.money'),
+            attribute: self::COMPANY_ATTRIBUTE,
+            attributeId: $statement->id,
+        );
+        $payer = new Payer(name: $director->first_name, email: $director->email, phone: $director->phone ?? '', address: '');
+        $link = $this->generate_link($payer, $info, new Receiver('receiver_name', 'example.png'));
+        if (!$link) {
+            throw ValidationException::withMessages(['statement' => translate('Mobile Money is not available right now. Try again later.')]);
+        }
+        return $link;
+    }
+
+    public function onCompanyGatewayPaid(PaymentRequest $paymentRequest): void
+    {
+        if (!(int)$paymentRequest->is_paid) {
+            return;
+        }
+        $statement = \Modules\BusManagement\Entities\BusCompanyStatement::find($paymentRequest->attribute_id);
+        if ($statement && (float)$paymentRequest->payment_amount >= (float)$statement->total) {
+            $this->markCompanyPaid($statement, 'Fapshi ' . ($paymentRequest->transaction_id ?? $paymentRequest->id), null);
+        }
+    }
+
+    /** The company statement is paid: so is each branch statement in it (which lifts their late pauses). */
+    public function markCompanyPaid(\Modules\BusManagement\Entities\BusCompanyStatement $statement, string $reference, ?string $byUserId): \Modules\BusManagement\Entities\BusCompanyStatement
+    {
+        DB::transaction(function () use ($statement, $reference, $byUserId) {
+            $s = \Modules\BusManagement\Entities\BusCompanyStatement::whereKey($statement->id)->lockForUpdate()->first();
+            if ($s->status !== BusStatement::PAID) {
+                $s->update(['status' => BusStatement::PAID, 'paid_at' => now(), 'reference' => Str::limit(trim($reference), 100, '') ?: null, 'marked_by' => $byUserId]);
+            }
+        });
+        BusStatement::where('company_statement_id', $statement->id)->where('status', BusStatement::DUE)->get()
+            ->each(fn(BusStatement $line) => $this->markPaid($line, $reference . ' (company)', $byUserId));
+        return $statement->fresh();
     }
 
     /** Every ticket of a statement, for the portal and the CSV. */
@@ -194,8 +282,11 @@ class StatementService
             $late = $this->lateStatements($agency, $now)->orderBy('month')->first();
             if ($late) {
                 $agency->update(['status' => BusAgency::PAUSED, 'pause_reason' => self::REASON_LATE,
-                    'pause_note' => translate(key: 'The E-Ride statement of {month} is unpaid. Pay it in Payments and online booking comes back by itself.',
-                        replace: ['month' => $late->month->translatedFormat('F Y')])]);
+                    'pause_note' => $late->company_statement_id
+                        ? translate(key: 'The E-Ride statement of {month} is unpaid. Your head office pays it for all branches; online booking comes back by itself once it is paid.',
+                            replace: ['month' => $late->month->translatedFormat('F Y')])
+                        : translate(key: 'The E-Ride statement of {month} is unpaid. Pay it in Payments and online booking comes back by itself.',
+                            replace: ['month' => $late->month->translatedFormat('F Y')])]);
                 $paused++;
             }
         });

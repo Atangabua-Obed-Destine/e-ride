@@ -64,7 +64,7 @@ class SiteController extends SiteBase
         return [
             'origins' => array_keys($routes) ?: $live->pluck('origin_city')->unique()->values()->all(),
             'routes' => $routes,
-            'agencies' => $live->map(fn(BusAgency $a) => ['name' => $a->name, 'slug' => $a->slug, 'city' => $a->origin_city])->values()->all(),
+            'agencies' => $live->map(fn(BusAgency $a) => ['name' => $a->displayName(), 'slug' => $a->slug, 'city' => $a->origin_city])->values()->all(),
         ];
     }
 
