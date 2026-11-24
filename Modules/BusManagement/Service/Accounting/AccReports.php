@@ -71,6 +71,7 @@ class AccReports
             'bills' => $bills,
             'agents' => $this->service->agentsHolding($agency),
             'balanced' => abs((float)$totals->d - (float)$totals->c) < 0.01,
+            'health' => $this->health($agency),
             'pending' => BusMoneyMove::where('agency_id', $agency->id)->whereNull('entry_id')->whereNull('skipped')->count(),
             'closed' => DB::table('bus_acc_months')->where('agency_id', $agency->id)->whereNotNull('closed_at')->orderByDesc('month')->value('month'),
         ];
@@ -309,6 +310,87 @@ class AccReports
             'internal' => round($internal, 2), 'agrees' => abs($opening + $net - $closing) < 0.01];
     }
 
+    /**
+     * The books checked against the bus records, not against themselves:
+     *  - every entry balanced, and debits equal credits overall;
+     *  - 4771 tie-out: what is held for each trip not gone yet equals what its paid tickets hold
+     *    (fare less any refund), and nothing stays held for a trip that should have left;
+     *  - till tie-out: each agent's counter cash equals their cash sales, less the cash refunds
+     *    they gave, plus or less what they took in or paid out by hand, less what they handed in.
+     * Returns a list of problems (empty when all is well).
+     */
+    public function health(BusAgency $agency): array
+    {
+        $problems = [];
+        $books = $this->ledger->books($agency);
+        if (!$books) {
+            return $problems;
+        }
+        $start = $books->starts_on->toDateString();
+        $tot = DB::table('bus_acc_lines')->where('agency_id', $agency->id)->selectRaw('coalesce(sum(debit),0) d, coalesce(sum(credit),0) c')->first();
+        if (abs((float)$tot->d - (float)$tot->c) >= 0.01) {
+            $problems[] = translate('Debits and credits are not equal.');
+        }
+        $unbalanced = DB::table('bus_acc_lines')->where('agency_id', $agency->id)->groupBy('entry_id')->havingRaw('abs(sum(debit) - sum(credit)) >= 0.01')->select('entry_id')->get()->count();
+        if ($unbalanced) {
+            $problems[] = translate(key: '{n} entries do not balance.', replace: ['n' => $unbalanced]);
+        }
+
+        // 4771 against the tickets.
+        $unearned = BusAccAccount::where('agency_id', $agency->id)->where('role', 'unearned')->first();
+        $held = BusAccLine::where('agency_id', $agency->id)->where('account_id', $unearned->id)->groupBy('departure_id')
+            ->selectRaw('departure_id, sum(credit) - sum(debit) as held')->pluck('held', 'departure_id')->mapWithKeys(fn($v, $k) => [(string)$k => round((float)$v, 2)]);
+        $recognized = DB::table('bus_acc_recognized')->where('agency_id', $agency->id)->pluck('departure_id')->map(fn($id) => (string)$id)->flip();
+        $tickets = DB::table('bus_bookings as b')->join('bus_departures as d', 'd.id', '=', 'b.departure_id')
+            ->where('b.agency_id', $agency->id)->whereNotNull('b.paid_at')->where('d.date', '>=', $start)
+            ->groupBy('b.departure_id')->selectRaw('b.departure_id, sum(b.amount - coalesce(b.refund_amount, 0)) as held')->pluck('held', 'departure_id')
+            ->mapWithKeys(fn($v, $k) => [(string)$k => round((float)$v, 2)]);
+        $deps = BusDeparture::with('destination')->whereIn('id', $held->keys()->merge($tickets->keys())->filter()->unique()->values())->get()->keyBy(fn($d) => (string)$d->id);
+        $label = fn($id) => isset($deps[$id]) ? $deps[$id]->leavesAt()->format('d/m H:i') . ' → ' . ($deps[$id]->destination?->city ?? '') : translate('a trip');
+        foreach ($held->keys()->merge($tickets->keys())->unique() as $id) {
+            $inBooks = $held[$id] ?? 0.0;
+            $d = $deps[$id] ?? null;
+            if ($id === '' || !$d || $d->leavesAt()->lt($books->starts_on->copy()->startOfDay())) {
+                if (abs($inBooks) >= 0.01) {
+                    $problems[] = translate(key: '{amount} is held on 4771 without a trip of the books.', replace: ['amount' => \Modules\BusManagement\Lib\AccFormat::n($inBooks)]);
+                }
+                continue;
+            }
+            $should = isset($recognized[$id]) ? 0.0 : ($tickets[$id] ?? 0.0);
+            if (abs($inBooks - $should) >= 0.01) {
+                $problems[] = translate(key: 'Trip {trip}: {books} held in the books, {tickets} by its tickets.', replace: ['trip' => $label($id), 'books' => \Modules\BusManagement\Lib\AccFormat::n($inBooks), 'tickets' => \Modules\BusManagement\Lib\AccFormat::n($should)]);
+            } elseif (!isset($recognized[$id]) && abs($inBooks) >= 0.01 && $d->leavesAt()->lt(now()->subDay())) {
+                $problems[] = translate(key: 'Trip {trip} should have left: mark it departed or cancelled so its tickets count.', replace: ['trip' => $label($id)]);
+            }
+        }
+
+        // Each agent's counter cash against their sales, refunds, hand-ins.
+        $cash = BusAccAccount::where('agency_id', $agency->id)->where('role', 'counter_cash')->first();
+        $ledgerCash = BusAccLine::where('agency_id', $agency->id)->where('account_id', $cash->id)->groupBy('staff_user_id')
+            ->selectRaw('staff_user_id, sum(debit) - sum(credit) as b')->pluck('b', 'staff_user_id')->mapWithKeys(fn($v, $k) => [(string)$k => round((float)$v, 2)]);
+        $sales = DB::table('bus_bookings')->where('agency_id', $agency->id)->where('source', 'counter')->where('payment_method', 'cash')
+            ->where('paid_at', '>=', $start)->groupBy('staff_user_id')->selectRaw('staff_user_id, sum(amount) s')->pluck('s', 'staff_user_id');
+        $refunds = DB::table('bus_money_moves')->where('agency_id', $agency->id)->where('kind', 'cash_refund')->where('method', 'cash')
+            ->where('at', '>=', $start)->groupBy('staff_user_id')->selectRaw('staff_user_id, sum(amount) s')->pluck('s', 'staff_user_id');
+        $docs = BusAccDocument::where('agency_id', $agency->id)->where('status', 'posted')->get();
+        $names = [];
+        foreach ($ledgerCash->keys()->merge($sales->keys()->map(fn($k) => (string)$k))->unique() as $agent) {
+            if ($agent === '') {
+                continue;
+            }
+            $should = (float)($sales[$agent] ?? 0) - (float)($refunds[$agent] ?? 0)
+                + $docs->where('type', 'income')->where('money_account_id', (string)$cash->id)->where('staff_user_id', $agent)->sum('amount')
+                - $docs->whereIn('type', ['expense', 'bill_payment'])->where('money_account_id', (string)$cash->id)->where('staff_user_id', $agent)->sum('amount')
+                - $docs->where('type', 'cash_count')->where('staff_user_id', $agent)->sum('expected');
+            $inBooks = $ledgerCash[$agent] ?? 0.0;
+            if (abs($inBooks - $should) >= 0.01) {
+                $names[$agent] ??= $this->service->userName($agent);
+                $problems[] = translate(key: 'Counter cash of {agent}: {books} in the books, {records} by the sales, refunds and counts.', replace: ['agent' => $names[$agent], 'books' => \Modules\BusManagement\Lib\AccFormat::n($inBooks), 'records' => \Modules\BusManagement\Lib\AccFormat::n($should)]);
+            }
+        }
+        return $problems;
+    }
+
     /** One branch in figures, for the head office. */
     public function branchFigures(BusAgency $agency, string $from, string $to): ?array
     {
@@ -325,7 +407,7 @@ class AccReports
             'money' => round($ov['money']->sum('balance'), 2), 'agents' => round(collect($ov['agents'])->sum('held'), 2),
             'held' => $ov['held'], 'owes' => round($ov['refunds_owed'] + $ov['eride'] + $ov['suppliers'], 2),
             'cash_short' => round((float)collect($is['spending'])->filter(fn($r) => $r['account']->role === 'cash_short')->sum('amount'), 2),
-            'balanced' => $ov['balanced'], 'pending' => $ov['pending'],
+            'balanced' => $ov['balanced'] && !$ov['health'], 'pending' => $ov['pending'], 'health' => $ov['health'],
         ];
     }
 

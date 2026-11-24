@@ -32,7 +32,7 @@
                     <td class="n {{ $f['cash_short'] > 0 ? 'neg' : '' }}">{{ F::n($f['cash_short'], true) }}</td>
                     <td class="n">{{ F::n($f['money']) }}</td><td class="n">{{ F::n($f['agents']) }}</td><td class="n">{{ F::n($f['held']) }}</td><td class="n">{{ F::n($f['owes']) }}</td>
                     <td class="text-nowrap">
-                        @if(!$f['balanced'] || $f['pending'] > 0)<span class="b-tag bad">{{ translate('Check') }}</span>@endif
+                        @if(!$f['balanced'] || $f['pending'] > 0)<span class="b-tag bad" title="{{ implode(' · ', $f['health']) }}">{{ translate('Check') }}</span>@endif
                         <a class="btn btn-soft btn-sm" href="{{ request()->fullUrlWithQuery(['branch' => $r['branch']->id, 'tab' => 'income']) }}">{{ translate('Open') }}</a>
                     </td>
                 @else

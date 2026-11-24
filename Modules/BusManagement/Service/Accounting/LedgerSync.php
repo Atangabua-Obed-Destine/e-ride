@@ -173,6 +173,7 @@ class LedgerSync
     {
         $done = 0;
         $unearned = $this->ledger->account($books->agency_id, 'unearned');
+        $this->unrecognizeReopened($books);
         $departures = BusDeparture::where('agency_id', $books->agency_id)
             ->whereIn('status', [BusDeparture::DEPARTED, BusDeparture::CANCELLED])
             ->where('date', '>=', $books->starts_on->copy()->subDay()->toDateString())
@@ -213,7 +214,9 @@ class LedgerSync
                         $entry = $this->ledger->post($books->agency_id, [
                             'date' => $when->gt(now()) ? now() : $when, 'journal' => 'sales', 'auto' => true,
                             'memo' => translate('Trip left: its tickets become sales') . ' · ' . $d->leavesAt()->format('d/m H:i') . ' ' . ($d->destination?->city ?? ''),
-                            'lines' => $lines, 'source_type' => 'departure', 'source_id' => (string)$d->id, 'source_key' => 'dep:' . $d->id,
+                            'lines' => $lines, 'source_type' => 'departure', 'source_id' => (string)$d->id,
+                            // A trip recognized again after running again gets its own key.
+                            'source_key' => 'dep:' . $d->id . (($n = BusAccEntry::where('agency_id', $books->agency_id)->where('source_type', 'departure')->where('source_id', (string)$d->id)->whereNull('reverses_id')->count()) ? ':' . $n : ''),
                         ]);
                     }
                     DB::table('bus_acc_recognized')->insert(['agency_id' => $books->agency_id, 'departure_id' => (string)$d->id,
@@ -227,6 +230,29 @@ class LedgerSync
             }
         }
         return $done;
+    }
+
+    /**
+     * A trip counted as gone that runs again (a cancelled trip brought back when a lockdown is
+     * lifted, or a departure undone): its sales go back to "paid for trips not gone yet" by
+     * mirroring the recognition entry, and it is recognized again when it really leaves.
+     */
+    protected function unrecognizeReopened(BusAccBook $books): void
+    {
+        $rows = DB::table('bus_acc_recognized as r')->join('bus_departures as d', 'd.id', '=', 'r.departure_id')
+            ->where('r.agency_id', $books->agency_id)->whereIn('d.status', BusDeparture::OPEN)->select('r.id', 'r.entry_id', 'r.departure_id')->get();
+        foreach ($rows as $row) {
+            try {
+                DB::transaction(function () use ($row) {
+                    if ($row->entry_id && ($entry = BusAccEntry::find($row->entry_id)) && !$entry->reversed_by_id) {
+                        $this->ledger->reverse($entry, translate('Trip runs again: its tickets are held for it again'), null, null, 'unrec:' . $entry->id);
+                    }
+                    DB::table('bus_acc_recognized')->where('id', $row->id)->delete();
+                });
+            } catch (Throwable $e) {
+                Log::warning('Bus accounting: a reopened trip could not be put back', ['departure' => $row->departure_id, 'error' => $e->getMessage()]);
+            }
+        }
     }
 
     /** E-Ride's monthly commission: owed when the statement is made, settled when it is paid. */

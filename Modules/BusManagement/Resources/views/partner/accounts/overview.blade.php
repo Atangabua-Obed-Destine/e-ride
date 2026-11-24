@@ -11,6 +11,10 @@
 @section('content')
 @include('busmanagement::partner.accounts._nav')
 
+@if($o['health'])
+    <div class="rv-problem mb-3"><b>{{ translate('The books disagree with the bus records') }}</b>
+        <ul class="mb-0 ps-3">@foreach($o['health'] as $h)<li>{{ $h }}</li>@endforeach</ul></div>
+@endif
 @if(!$o['balanced'] || $o['pending'] > 0)
     <div class="rv-warn mb-3">
         @if(!$o['balanced']){{ translate('The books do not balance. Contact E-Ride.') }}@endif
@@ -89,7 +93,7 @@
             @endforelse
         </div>
         <div class="b-hint mt-2">
-            @if($o['balanced']){{ translate('Books checked: debits equal credits.') }} · @endif
+            @if($o['balanced'] && !$o['health']){{ translate('Books checked against the tickets and the agents cash: all agree.') }} · @endif
             @if($o['closed']){{ translate(key: 'Closed up to {month}', replace: ['month' => \Illuminate\Support\Carbon::parse($o['closed'])->translatedFormat('F Y')]) }} · @endif
             {{ translate('Amounts in FCFA') }}
         </div>
