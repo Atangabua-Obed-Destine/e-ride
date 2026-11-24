@@ -1,4 +1,4 @@
-@extends('busmanagement::partner.layout')
+@extends($accLayout)
 
 @section('title', translate('Spending'))
 
@@ -55,12 +55,12 @@
         <tbody>
         @foreach($bills as $b)
             <tr>
-                <td><a href="{{ route('bus-partner.accounts.document', $b->id) }}">{{ $b->number }}</a><div class="acc-tag">{{ $b->date->format('d/m/Y') }} · {{ $b->account ? translate($b->account->name) : '' }}</div></td>
+                <td><a href="{{ route($acc . '.document', $b->id) }}">{{ $b->number }}</a><div class="acc-tag">{{ $b->date->format('d/m/Y') }} · {{ $b->account ? $b->account->displayName() : '' }}</div></td>
                 <td>{{ $b->supplier }}</td>
                 <td>@if($b->due_on){{ $b->due_on->format('d/m/Y') }}@if($b->due_on->lt(today())) <span class="b-tag bad">{{ translate('Late') }}</span>@endif @else <span class="acc-tag">-</span>@endif</td>
                 <td class="n">{{ F::n($b->amount) }}</td>
                 <td class="n fw-bold">{{ F::n($b->owed) }}</td>
-                <td class="text-end"><a class="btn btn-soft btn-sm" href="{{ route('bus-partner.accounts.document', $b->id) }}#pay">{{ translate('Pay') }}</a></td>
+                <td class="text-end"><a class="btn btn-soft btn-sm" href="{{ route($acc . '.document', $b->id) }}#pay">{{ translate('Pay') }}</a></td>
             </tr>
         @endforeach
         </tbody>
@@ -75,7 +75,7 @@
             <input type="date" class="form-control form-control-sm" name="from" value="{{ $from }}" aria-label="{{ translate('From') }}" style="width: 150px">
             <input type="date" class="form-control form-control-sm" name="to" value="{{ $to }}" aria-label="{{ translate('To') }}" style="width: 150px">
             <select class="form-select form-select-sm" name="category" aria-label="{{ translate('Category') }}" style="width: 200px"><option value="">{{ translate('All categories') }}</option>
-                @foreach($expenseCats as $c)<option value="{{ $c->id }}" @selected(request('category') == $c->id)>{{ translate($c->name) }}</option>@endforeach</select>
+                @foreach($expenseCats as $c)<option value="{{ $c->id }}" @selected(request('category') == $c->id)>{{ $c->displayName() }}</option>@endforeach</select>
             <select class="form-select form-select-sm" name="bus" aria-label="{{ translate('Bus') }}" style="width: 160px"><option value="">{{ translate('All buses') }}</option>
                 @foreach($buses as $bus)<option value="{{ $bus->id }}" @selected(request('bus') == $bus->id)>{{ $bus->registration }}</option>@endforeach</select>
             <button class="btn btn-soft btn-sm">{{ translate('Show') }}</button>
@@ -87,9 +87,9 @@
         @forelse($expenses as $e)
             <tr class="{{ $e->status === 'void' ? 'void' : '' }}">
                 <td class="text-nowrap">{{ $e->date->format('d/m/Y') }}</td>
-                <td><a href="{{ route('bus-partner.accounts.document', $e->id) }}">{{ $e->number }}</a></td>
-                <td>{{ $e->account ? translate($e->account->name) : '' }}@if($e->note)<div class="acc-tag">{{ $e->note }}</div>@endif</td>
-                <td>{{ $e->moneyAccount ? translate($e->moneyAccount->name) : ($e->supplier ? translate('Bill') . ' · ' . $e->supplier : '') }}</td>
+                <td><a href="{{ route($acc . '.document', $e->id) }}">{{ $e->number }}</a></td>
+                <td>{{ $e->account ? $e->account->displayName() : '' }}@if($e->note)<div class="acc-tag">{{ $e->note }}</div>@endif</td>
+                <td>{{ $e->moneyAccount ? $e->moneyAccount->displayName() : ($e->supplier ? translate('Bill') . ' · ' . $e->supplier : '') }}</td>
                 <td>{{ $e->vehicle?->registration }}</td>
                 <td class="n">{{ F::n($e->amount) }}</td>
             </tr>
@@ -111,8 +111,8 @@
         <thead><tr><th>{{ translate('Date') }}</th><th>{{ translate('Number') }}</th><th>{{ translate('Bill') }}</th><th>{{ translate('Paid from') }}</th><th class="n">{{ translate('Amount') }}</th></tr></thead>
         <tbody>
         @foreach($payments as $p)
-            <tr class="{{ $p->status === 'void' ? 'void' : '' }}"><td>{{ $p->date->format('d/m/Y') }}</td><td><a href="{{ route('bus-partner.accounts.document', $p->id) }}">{{ $p->number }}</a></td>
-                <td>{{ $p->parent?->number }} · {{ $p->supplier }}</td><td>{{ $p->moneyAccount ? translate($p->moneyAccount->name) : '' }}</td><td class="n">{{ F::n($p->amount) }}</td></tr>
+            <tr class="{{ $p->status === 'void' ? 'void' : '' }}"><td>{{ $p->date->format('d/m/Y') }}</td><td><a href="{{ route($acc . '.document', $p->id) }}">{{ $p->number }}</a></td>
+                <td>{{ $p->parent?->number }} · {{ $p->supplier }}</td><td>{{ $p->moneyAccount ? $p->moneyAccount->displayName() : '' }}</td><td class="n">{{ F::n($p->amount) }}</td></tr>
         @endforeach
         </tbody>
     </table></div>

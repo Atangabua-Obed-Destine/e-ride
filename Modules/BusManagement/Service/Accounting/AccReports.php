@@ -7,8 +7,11 @@ use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
 use Modules\BusManagement\Entities\BusAccAccount;
 use Modules\BusManagement\Entities\BusAccDocument;
+use Modules\BusManagement\Entities\BusAccEntry;
 use Modules\BusManagement\Entities\BusAccLine;
 use Modules\BusManagement\Entities\BusAgency;
+use Modules\BusManagement\Entities\BusAccAsset;
+use Modules\BusManagement\Entities\BusCompany;
 use Modules\BusManagement\Entities\BusDeparture;
 use Modules\BusManagement\Entities\BusDestination;
 use Modules\BusManagement\Entities\BusMoneyMove;
@@ -24,15 +27,18 @@ class AccReports
     {
     }
 
-    public function accounts(BusAgency|string $agency): Collection
+    public function accounts(BusAgency|BusCompany|string $agency): Collection
     {
         return BusAccAccount::where('agency_id', $this->id($agency))->orderBy('code')->get();
     }
 
     /** Sums per account for a period (or up to a date): debit, credit, and the balance in the account's normal direction. */
-    public function sums(BusAgency|string $agency, ?string $from, ?string $to): Collection
+    public function sums(BusAgency|BusCompany|string $agency, ?string $from, ?string $to, bool $noClosing = false): Collection
     {
         $q = BusAccLine::where('agency_id', $this->id($agency));
+        if ($noClosing) {
+            $q->whereNotIn('entry_id', BusAccEntry::where('agency_id', $this->id($agency))->where('journal', 'closing')->select('id'));
+        }
         if ($from) {
             $q->where('date', '>=', $from);
         }
@@ -42,11 +48,14 @@ class AccReports
         return $q->groupBy('account_id')->selectRaw('account_id, sum(debit) d, sum(credit) c')->get()->keyBy(fn($r) => (string)$r->account_id);
     }
 
-    public function overview(BusAgency $agency): array
+    public function overview(BusAgency|BusCompany $agency): array
     {
         $accounts = $this->accounts($agency)->keyBy(fn($a) => (string)$a->id);
         $all = $this->sums($agency, null, null);
-        $bal = function (BusAccAccount $a) use ($all) {
+        $bal = function (?BusAccAccount $a) use ($all) {
+            if (!$a) {
+                return 0.0;
+            }
             $r = $all[(string)$a->id] ?? null;
             $net = $r ? (float)$r->d - (float)$r->c : 0;
             return round($a->debitNormal() ? $net : -$net, 2);
@@ -54,7 +63,7 @@ class AccReports
         $role = fn(string $r) => $accounts->first(fn($a) => $a->role === $r);
         $money = $accounts->filter(fn($a) => $a->money && $a->active)->map(fn($a) => ['account' => $a, 'balance' => $bal($a)])->values();
         $ho = $role('head_office');
-        if ($ho && ($agency->company_id || abs($bal($ho)) >= 0.005)) {
+        if ($ho && (($agency instanceof BusAgency && $agency->company_id) || abs($bal($ho)) >= 0.005)) {
             $money->push(['account' => $ho, 'balance' => $bal($ho)]);
         }
         $month = $this->incomeStatement($agency, today()->startOfMonth()->toDateString(), today()->toDateString());
@@ -69,7 +78,12 @@ class AccReports
             'eride' => $bal($role('eride')),
             'suppliers' => $bal($role('suppliers')),
             'bills' => $bills,
-            'agents' => $this->service->agentsHolding($agency),
+            'agents' => $agency instanceof BusAgency ? $this->service->agentsHolding($agency) : [],
+            // A head office: what it holds for each branch (its account of the branch).
+            'branches' => $accounts->filter(fn($a) => $a->role === 'branch')->map(fn($a) => ['account' => $a, 'balance' => $bal($a)])->values(),
+            'loans' => $bal($role('loans')),
+            'buses' => ['count' => BusAccAsset::where('agency_id', $agency->id)->where('status', 'active')->count(),
+                'value' => $bal($role('buses')) + $bal($role('bus_wear'))],
             'balanced' => abs((float)$totals->d - (float)$totals->c) < 0.01,
             'health' => $this->health($agency),
             'pending' => BusMoneyMove::where('agency_id', $agency->id)->whereNull('entry_id')->whereNull('skipped')->count(),
@@ -78,9 +92,9 @@ class AccReports
     }
 
     /** Income and spending per account for a period, and the result. */
-    public function incomeStatement(BusAgency|string $agency, string $from, string $to): array
+    public function incomeStatement(BusAgency|BusCompany|string $agency, string $from, string $to): array
     {
-        $sums = $this->sums($agency, $from, $to);
+        $sums = $this->sums($agency, $from, $to, true);
         $income = [];
         $spending = [];
         foreach ($this->accounts($agency) as $a) {
@@ -103,11 +117,13 @@ class AccReports
      * Profit per bus, per route or per trip: income and spending tagged to it, and E-Ride's
      * commission on its tickets (from the bookings, as the monthly statement is not split by trip).
      */
-    public function profit(BusAgency $agency, string $from, string $to, string $by): array
+    public function profit(BusAgency|BusCompany|string $agency, string $from, string $to, string $by): array
     {
+        $agency = is_string($agency) ? (object)['id' => $agency] : $agency;
         $col = ['bus' => 'vehicle_id', 'route' => 'destination_id', 'trip' => 'departure_id'][$by] ?? 'vehicle_id';
         $rows = BusAccLine::query()->from('bus_acc_lines as l')->join('bus_acc_accounts as a', 'a.id', '=', 'l.account_id')
             ->where('l.agency_id', $agency->id)->whereBetween('l.date', [$from, $to])->whereIn('a.type', ['revenue', 'expense'])
+            ->whereNotIn('l.entry_id', BusAccEntry::where('agency_id', $agency->id)->where('journal', 'closing')->select('id'))
             ->groupBy("l.$col")
             ->selectRaw("l.$col as k,
                 sum(case when a.type = 'revenue' then l.credit - l.debit else 0 end) as income,
@@ -164,7 +180,7 @@ class AccReports
     }
 
     /** Each account: balance before the period, debits and credits in it, balance at its end. Debits equal credits in every column. */
-    public function trialBalance(BusAgency $agency, string $from, string $to): array
+    public function trialBalance(BusAgency|BusCompany $agency, string $from, string $to): array
     {
         $before = $this->sums($agency, null, Carbon::parse($from)->subDay()->toDateString());
         $period = $this->sums($agency, $from, $to);
@@ -190,7 +206,7 @@ class AccReports
     }
 
     /** What the branch has and owes at a date. The result since the start sits in equity until a year is closed. */
-    public function balanceSheet(BusAgency $agency, string $at): array
+    public function balanceSheet(BusAgency|BusCompany $agency, string $at): array
     {
         $sums = $this->sums($agency, null, $at);
         $has = [];
@@ -249,7 +265,7 @@ class AccReports
      * kind (tickets paid, refunds, spending, other income, E-Ride, owner, charges), and at the end.
      * Money moved between the branch's own accounts nets to zero and is shown apart.
      */
-    public function cashFlow(BusAgency $agency, string $from, string $to): array
+    public function cashFlow(BusAgency|BusCompany $agency, string $from, string $to): array
     {
         $money = BusAccAccount::where('agency_id', $agency->id)->where(fn($q) => $q->where('money', true)->orWhere('role', 'head_office'))->pluck('id')->map(fn($id) => (string)$id);
         $balanceAt = fn(?string $date) => (float)BusAccLine::where('agency_id', $agency->id)->whereIn('account_id', $money)
@@ -278,6 +294,7 @@ class AccReports
                 $f->source_type === 'move' && in_array($f->move_kind, ['sale', 'extra'], true) => 'tickets',
                 $f->source_type === 'move' && in_array($f->move_kind, ['refund_sent', 'cash_refund'], true) => 'refunds',
                 $f->source_type === 'statement_paid' => 'eride',
+                $f->source_type === 'fee' => 'charges',
                 in_array($f->doc_type, ['expense', 'bill_payment'], true) => 'spending',
                 $f->doc_type === 'income' => 'income',
                 $f->doc_type === 'check' => 'charges',
@@ -319,7 +336,7 @@ class AccReports
      *    they gave, plus or less what they took in or paid out by hand, less what they handed in.
      * Returns a list of problems (empty when all is well).
      */
-    public function health(BusAgency $agency): array
+    public function health(BusAgency|BusCompany $agency): array
     {
         $problems = [];
         $books = $this->ledger->books($agency);
@@ -336,6 +353,21 @@ class AccReports
             $problems[] = translate(key: '{n} entries do not balance.', replace: ['n' => $unbalanced]);
         }
 
+        if ($agency instanceof BusCompany) {
+            // The head office's account of each branch must equal that branch's own 1811.
+            foreach (BusAgency::where('company_id', $agency->id)->get() as $branch) {
+                if (!$this->ledger->books($branch)) {
+                    continue;
+                }
+                $hoSide = $this->ledger->balance($this->ledger->branchAccount($agency, $branch));
+                $brSide = $this->ledger->balance($this->ledger->account($branch, 'head_office'));
+                if (abs($hoSide - $brSide) >= 0.01) {
+                    $problems[] = translate(key: 'Branch {branch}: the head office books say it holds {ho} for the branch, the branch books say {br}.',
+                        replace: ['branch' => $branch->branchLabel(), 'ho' => \Modules\BusManagement\Lib\AccFormat::n($hoSide), 'br' => \Modules\BusManagement\Lib\AccFormat::n($brSide)]);
+                }
+            }
+            return $problems;
+        }
         // 4771 against the tickets.
         $unearned = BusAccAccount::where('agency_id', $agency->id)->where('role', 'unearned')->first();
         $held = BusAccLine::where('agency_id', $agency->id)->where('account_id', $unearned->id)->groupBy('departure_id')
@@ -391,6 +423,105 @@ class AccReports
         return $problems;
     }
 
+    /** The buses carried in these books, with their wear so far and the value left. */
+    public function assets(BusAgency|BusCompany $agency): Collection
+    {
+        return BusAccAsset::with('vehicle')->where('agency_id', $agency->id)->orderByRaw("status = 'active' desc")->orderBy('name')->get()
+            ->map(function (BusAccAsset $a) {
+                $worn = in_array($a->status, ['active'], true) ? round($this->service->wornSoFar($a), 2) : null;
+                return ['asset' => $a, 'worn' => $worn, 'left' => $worn !== null ? round($a->value - $worn, 2) : null, 'monthly' => $a->monthly(),
+                    'ends' => $a->lastMonth()];
+            });
+    }
+
+    /**
+     * The company as a whole: the head office's books and every branch's added together, account by
+     * account (same OHADA numbers), the accounts between head office and branches left out (they are
+     * the same money seen from both sides, and must cancel). Returns the figures in the shape of the
+     * single-book reports, so the same tables show them.
+     */
+    public function combined(BusCompany $company, string $tab, string $from, string $to, string $by = 'bus'): array
+    {
+        $ids = collect([(string)$company->id])->merge(BusAgency::where('company_id', $company->id)->pluck('id')->map(fn($i) => (string)$i))
+            ->filter(fn($id) => $this->ledger->books($id))->values()->all();
+        // Head office / branch accounts cancel out only when both sides are in: a branch without books
+        // keeps its head office account (money held for it), and branches keep 1811 if the head office has no books.
+        $companyIn = in_array((string)$company->id, $ids, true);
+        $accounts = BusAccAccount::whereIn('agency_id', $ids)->orderBy('code')->get()->reject(fn($a) =>
+            ($a->role === 'branch' && in_array((string)$a->link_id, $ids, true)) || ($a->role === 'head_office' && $companyIn))->values();
+        $byCode = $accounts->groupBy('code')->map(fn($g) => $g->first());
+        $idToCode = $accounts->mapWithKeys(fn($a) => [(string)$a->id => $a->code]);
+        $sum = function (?string $f, ?string $t, bool $noClosing) use ($ids, $idToCode) {
+            $q = BusAccLine::whereIn('agency_id', $ids)->whereIn('account_id', $idToCode->keys());
+            if ($f) { $q->where('date', '>=', $f); }
+            if ($t) { $q->where('date', '<=', $t); }
+            if ($noClosing) { $q->whereNotIn('entry_id', BusAccEntry::whereIn('agency_id', $ids)->where('journal', 'closing')->select('id')); }
+            $out = [];
+            foreach ($q->groupBy('account_id')->selectRaw('account_id, sum(debit) d, sum(credit) c')->get() as $r) {
+                $code = $idToCode[(string)$r->account_id];
+                $out[$code] = ['d' => ($out[$code]['d'] ?? 0) + (float)$r->d, 'c' => ($out[$code]['c'] ?? 0) + (float)$r->c];
+            }
+            return $out;
+        };
+        if ($tab === 'income') {
+            $sums = $sum($from, $to, true);
+            $income = []; $spending = [];
+            foreach ($byCode as $code => $a) {
+                if (!isset($sums[$code])) { continue; }
+                if ($a->type === 'revenue') { $income[] = ['account' => $a, 'amount' => round($sums[$code]['c'] - $sums[$code]['d'], 2)]; }
+                elseif ($a->type === 'expense') { $spending[] = ['account' => $a, 'amount' => round($sums[$code]['d'] - $sums[$code]['c'], 2)]; }
+            }
+            $in = round(array_sum(array_column($income, 'amount')), 2);
+            $out = round(array_sum(array_column($spending, 'amount')), 2);
+            return ['from' => $from, 'to' => $to, 'income' => $income, 'spending' => $spending, 'total_income' => $in, 'total_spending' => $out, 'result' => round($in - $out, 2)];
+        }
+        if ($tab === 'trial') {
+            $before = $sum(null, Carbon::parse($from)->subDay()->toDateString(), false);
+            $period = $sum($from, $to, false);
+            $rows = []; $tot = ['od' => 0, 'oc' => 0, 'd' => 0, 'c' => 0, 'cd' => 0, 'cc' => 0];
+            foreach ($byCode as $code => $a) {
+                if (!isset($before[$code]) && !isset($period[$code])) { continue; }
+                $open = isset($before[$code]) ? $before[$code]['d'] - $before[$code]['c'] : 0;
+                $d = $period[$code]['d'] ?? 0; $c = $period[$code]['c'] ?? 0; $close = $open + $d - $c;
+                $row = ['account' => $a, 'od' => max($open, 0), 'oc' => max(-$open, 0), 'd' => $d, 'c' => $c, 'cd' => max($close, 0), 'cc' => max(-$close, 0)];
+                foreach ($tot as $k => $v) { $tot[$k] += $row[$k]; }
+                $rows[] = $row;
+            }
+            return ['rows' => $rows, 'totals' => array_map(fn($v) => round($v, 2), $tot), 'balanced' => abs($tot['d'] - $tot['c']) < 0.01 && abs($tot['cd'] - $tot['cc']) < 0.01];
+        }
+        if ($tab === 'profit') {
+            $rows = [];
+            foreach ($ids as $id) {
+                foreach ($this->profit($id, $from, $to, $by) as $r) {
+                    $k = $r['key'];
+                    $rows[$k] ??= ['key' => $k, 'label' => $r['label'], 'income' => 0, 'fuel' => 0, 'other' => 0, 'commission' => 0, 'profit' => 0];
+                    foreach (['income', 'fuel', 'other', 'commission', 'profit'] as $f) { $rows[$k][$f] = round($rows[$k][$f] + $r[$f], 2); }
+                    $rows[$k]['label'] ??= $r['label'];
+                }
+            }
+            $rows = array_values($rows);
+            usort($rows, fn($a, $b) => [$a['key'] === '' ? 1 : 0, -$a['income']] <=> [$b['key'] === '' ? 1 : 0, -$b['income']]);
+            return $rows;
+        }
+        // Balance sheet.
+        $sums = $sum(null, $to, false);
+        $has = []; $owes = []; $equity = []; $result = 0.0;
+        foreach ($byCode as $code => $a) {
+            if (!isset($sums[$code])) { continue; }
+            $net = $sums[$code]['d'] - $sums[$code]['c'];
+            if (in_array($a->type, ['revenue', 'expense'], true)) { $result -= $net; continue; }
+            if (abs($net) < 0.005) { continue; }
+            if ($a->type === 'equity') { $equity[] = ['account' => $a, 'amount' => round(-$net, 2)]; }
+            elseif ($a->type === 'asset') { $has[] = ['account' => $a, 'amount' => round($net, 2)]; }
+            else { $owes[] = ['account' => $a, 'amount' => round(-$net, 2)]; }
+        }
+        $totalHas = round(array_sum(array_column($has, 'amount')), 2);
+        $totalOwes = round(array_sum(array_column($owes, 'amount')), 2);
+        $totalEquity = round(array_sum(array_column($equity, 'amount')) + $result, 2);
+        return ['at' => $to, 'has' => $has, 'owes' => $owes, 'equity' => $equity, 'result' => round($result, 2),
+            'total_has' => $totalHas, 'total_owes' => $totalOwes, 'total_equity' => $totalEquity, 'balanced' => abs($totalHas - $totalOwes - $totalEquity) < 0.01];
+    }
+
     /** One branch in figures, for the head office. */
     public function branchFigures(BusAgency $agency, string $from, string $to): ?array
     {
@@ -411,8 +542,8 @@ class AccReports
         ];
     }
 
-    protected function id(BusAgency|string $agency): string
+    protected function id(BusAgency|BusCompany|string $agency): string
     {
-        return $agency instanceof BusAgency ? (string)$agency->id : (string)$agency;
+        return is_string($agency) ? $agency : (string)$agency->id;
     }
 }

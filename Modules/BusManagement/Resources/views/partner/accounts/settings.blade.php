@@ -1,4 +1,4 @@
-@extends('busmanagement::partner.layout')
+@extends($accLayout)
 
 @section('title', translate('Settings'))
 
@@ -6,7 +6,7 @@
     use Modules\BusManagement\Lib\AccFormat as F;
     use Modules\BusManagement\Entities\BusStaff;
     $payFrom = ['mtn' => 'MTN Mobile Money', 'orange' => 'Orange Money', 'bank' => 'Bank account', 'safe' => 'Office safe', 'fapshi' => 'Fapshi balance (app payments)'];
-    $isManager = $busStaff->role === BusStaff::MANAGER;
+    $isManager = $canReopen;
 @endphp
 
 @push('head')
@@ -20,7 +20,7 @@
     <div class="col-lg-6">
         <div class="acc-card">
             <h2 class="acc-h">{{ translate('Months') }}</h2>
-            <p class="b-hint">{{ translate('Close a month once its agent cash counts and reconciliations are done. Nothing can be posted in a closed month: tickets and refunds that come late are posted in the next open month.') }}</p>
+            <p class="b-hint">{{ $isCompanyBooks ? translate('Close a month once its reconciliations are done and the bus wear is posted (on the 1st). Nothing can be posted in a closed month.') : translate('Close a month once its agent cash counts and reconciliations are done. Nothing can be posted in a closed month: tickets and refunds that come late are posted in the next open month.') }}</p>
             <table class="acc-t"><tbody>
             @foreach($months as $m)
                 <tr>
@@ -55,12 +55,49 @@
             </tbody></table>
         </div>
 
-        <form class="acc-card acc-form" method="POST" action="{{ route('bus-partner.accounts.settings.save') }}">
+        <div class="acc-card">
+            <h2 class="acc-h">{{ translate('Years') }}</h2>
+            <p class="b-hint">{{ translate('A year (1 January to 31 December) closes once all its months are closed. Its income and spending go to the Result of the year, and nothing more can be dated in it.') }}
+                @if($isCompanyBooks) {{ translate('The head office closes it for itself and every branch together.') }}@endif</p>
+            <table class="acc-t"><tbody>
+            @foreach($years as $y)
+                <tr>
+                    <td class="fw-bold">{{ $y['year'] }}</td>
+                    <td>
+                        @if($y['row'] && $y['row']->closed_at)<span class="b-tag mute"><i class="bi bi-lock"></i> {{ translate('Closed') }}</span> <span class="acc-tag">{{ translate('Result') }} {{ F::n($y['row']->result) }}</span>
+                        @elseif($y['over'])<span class="b-tag warn">{{ translate('Over, still open') }}</span>
+                        @else<span class="b-tag ok">{{ translate('Current') }}</span>@endif
+                        @if($y['row'] && $y['row']->reopen_reason)<div class="acc-tag">{{ translate('Reopened') }}: {{ $y['row']->reopen_reason }}</div>@endif
+                    </td>
+                    <td class="text-end">
+                        @if($headOfficeCloses)
+                            <span class="acc-tag">{{ translate('Closed by the head office') }}</span>
+                        @elseif($y['over'] && !($y['row'] && $y['row']->closed_at))
+                            <form class="d-inline" data-acc-action="closeyear" data-acc-title="{{ translate('Close the year') }} {{ $y['year'] }}">
+                                <input type="hidden" name="year" value="{{ $y['year'] }}">
+                                <button class="btn btn-soft btn-sm">{{ translate('Close the year') }}</button>
+                            </form>
+                        @elseif($y['row'] && $y['row']->closed_at && $isManager)
+                            <form class="d-flex gap-2" data-acc-action="reopenyear" data-acc-title="{{ translate('Reopen the year') }} {{ $y['year'] }}">
+                                <input type="hidden" name="year" value="{{ $y['year'] }}">
+                                <input type="text" class="form-control form-control-sm" name="reason" minlength="5" maxlength="300" required placeholder="{{ translate('Why it must be reopened') }}" aria-label="{{ translate('Why it must be reopened') }}">
+                                <button class="btn btn-light btn-sm">{{ translate('Reopen') }}</button>
+                            </form>
+                        @endif
+                    </td>
+                </tr>
+            @endforeach
+            </tbody></table>
+        </div>
+
+        <form class="acc-card acc-form" method="POST" action="{{ route($acc . '.settings.save') }}">
             @csrf
             <h2 class="acc-h">{{ translate('Which account pays') }}</h2>
             <div class="row g-2">
+                @unless($isCompanyBooks)
                 <div class="col-sm-6"><label class="form-label" for="st_ref">{{ translate('Refunds to passengers are sent from') }}</label>
                     <select class="form-select" id="st_ref" name="refunds_from">@foreach($payFrom as $k => $l)<option value="{{ $k }}" @selected($books->setting('refunds_from', 'mtn') === $k)>{{ translate($l) }}</option>@endforeach</select></div>
+                @endunless
                 <div class="col-sm-6"><label class="form-label" for="st_er">{{ translate('E-Ride statements are paid from') }}</label>
                     <select class="form-select" id="st_er" name="eride_from">@foreach($payFrom as $k => $l)<option value="{{ $k }}" @selected($books->setting('eride_from', 'mtn') === $k)>{{ translate($l) }}</option>@endforeach</select></div>
             </div>
@@ -77,14 +114,14 @@
                 <tbody>
                 @foreach($accounts as $a)
                     <tr class="{{ $a->active ? '' : 'void' }}">
-                        <td><span class="fw-semibold">{{ $a->code }}</span> {{ translate($a->name) }}
+                        <td><span class="fw-semibold">{{ $a->code }}</span> {{ $a->displayName() }}
                             @if($a->role)<span class="acc-tag">· {{ translate('automatic') }}</span>@endif
                             @if($a->money)<span class="acc-tag">· {{ translate('money') }}</span>@endif</td>
                         <td class="n">{{ F::n($balances[(string)$a->id] ?? 0, true) }}</td>
                         <td class="text-end"><button type="button" class="btn btn-light btn-sm" data-bs-toggle="collapse" data-bs-target="#acc-{{ $a->code }}" aria-label="{{ translate('Edit') }}"><i class="bi bi-pencil"></i></button></td>
                     </tr>
                     <tr class="collapse" id="acc-{{ $a->code }}"><td colspan="3">
-                        <form method="POST" action="{{ route('bus-partner.accounts.account', $a->id) }}" class="d-flex flex-wrap gap-2 align-items-center">
+                        <form method="POST" action="{{ route($acc . '.account', $a->id) }}" class="d-flex flex-wrap gap-2 align-items-center">
                             @csrf
                             <input type="text" class="form-control form-control-sm" name="name" value="{{ $a->name }}" maxlength="120" required style="max-width: 320px" aria-label="{{ translate('Name') }}">
                             @unless($a->role)
@@ -98,7 +135,7 @@
                 </tbody>
             </table></div>
         </div>
-        <form class="acc-card acc-form" method="POST" action="{{ route('bus-partner.accounts.account') }}">
+        <form class="acc-card acc-form" method="POST" action="{{ route($acc . '.account') }}">
             @csrf
             <h2 class="acc-h">{{ translate('Add an account') }}</h2>
             <div class="row g-2">

@@ -66,14 +66,14 @@
     <div class="row g-3">
         <div class="col-lg-6">
             <table class="acc-t"><tbody>
-                <tr class="sub"><td colspan="2">{{ translate('What the branch has') }}</td></tr>
+                <tr class="sub"><td colspan="2">{{ ($isCompanyBooks ?? false) ? translate('What the company has') : translate('What the branch has') }}</td></tr>
                 @foreach($data['has'] as $r)<tr><td>{{ $r['account']->label() }}</td><td class="n {{ F::cls($r['amount']) }}">{{ F::n($r['amount']) }}</td></tr>@endforeach
                 <tr class="tot"><td>{{ translate('Total') }}</td><td class="n">{{ F::n($data['total_has']) }}</td></tr>
             </tbody></table>
         </div>
         <div class="col-lg-6">
             <table class="acc-t"><tbody>
-                <tr class="sub"><td colspan="2">{{ translate('What the branch owes') }}</td></tr>
+                <tr class="sub"><td colspan="2">{{ ($isCompanyBooks ?? false) ? translate('What the company owes') : translate('What the branch owes') }}</td></tr>
                 @foreach($data['owes'] as $r)<tr><td>{{ $r['account']->label() }}</td><td class="n {{ F::cls($r['amount']) }}">{{ F::n($r['amount']) }}</td></tr>@endforeach
                 <tr class="tot"><td>{{ translate('Total') }}</td><td class="n">{{ F::n($data['total_owes']) }}</td></tr>
                 <tr class="sub"><td colspan="2">{{ translate('Owner') }}</td></tr>

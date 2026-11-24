@@ -83,6 +83,7 @@ Route::group(['prefix' => 'partner/bus-agency', 'as' => 'bus-partner.'], functio
         Route::get('money', [$acc, 'money'])->name('.money');
         Route::get('cash', [$acc, 'cash'])->name('.cash');
         Route::get('reconcile', [$acc, 'reconcile'])->name('.reconcile');
+        Route::get('buses', [$acc, 'buses'])->name('.buses');
         Route::get('reports', [$acc, 'reports'])->name('.reports');
         Route::get('journal', [$acc, 'journal'])->name('.journal');
         Route::get('settings', [$acc, 'settings'])->name('.settings');
@@ -217,6 +218,24 @@ Route::group(['prefix' => 'partner/bus-company', 'as' => 'bus-company.'], functi
         Route::get('rules', [$c, 'rules'])->name('rules');
         Route::get('money', [$c, 'money'])->name('money');
         Route::get('accounts', [$c, 'accounts'])->name('accounts');
+    });
+    // The head office's own books (director and accountant; regional managers are refused in the controller).
+    Route::middleware($mw)->prefix('books')->name('books')->group(function () {
+        $acc = \Modules\BusManagement\Http\Controllers\Web\Partner\AccountsController::class;
+        Route::get('/', [$acc, 'index'])->name('');
+        Route::get('setup', [$acc, 'setup'])->name('.setup');
+        Route::get('spending', [$acc, 'spending'])->name('.spending');
+        Route::get('money', [$acc, 'money'])->name('.money');
+        Route::get('reconcile', [$acc, 'reconcile'])->name('.reconcile');
+        Route::get('buses', [$acc, 'buses'])->name('.buses');
+        Route::get('reports', [$acc, 'reports'])->name('.reports');
+        Route::get('journal', [$acc, 'journal'])->name('.journal');
+        Route::get('settings', [$acc, 'settings'])->name('.settings');
+        Route::get('documents/{document}', [$acc, 'document'])->name('.document')->whereUuid('document');
+        Route::post('accounts/{account?}', [$acc, 'saveAccount'])->name('.account')->whereUuid('account');
+        Route::post('settings', [$acc, 'saveSettings'])->name('.settings.save');
+        Route::post('preview/{action}', [$acc, 'previewAction'])->name('.preview')->where('action', '[a-z]+')->middleware('throttle:120,1,bus-acc-preview');
+        Route::post('do/{action}', [$acc, 'doAction'])->name('.do')->where('action', '[a-z]+')->middleware('throttle:60,1,bus-acc-do');
     });
     // The director and regional managers act.
     Route::middleware($mw . ':act')->group(function () use ($c) {

@@ -6,11 +6,14 @@ use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
+use Modules\BusManagement\Entities\BusAccAsset;
 use Modules\BusManagement\Entities\BusAccBook;
 use Modules\BusManagement\Entities\BusAccDocument;
 use Modules\BusManagement\Entities\BusAccEntry;
 use Modules\BusManagement\Entities\BusAccLine;
 use Modules\BusManagement\Entities\BusAgency;
+use Modules\BusManagement\Entities\BusCompany;
+use Modules\BusManagement\Entities\BusCompanyStatement;
 use Modules\BusManagement\Entities\BusDeparture;
 use Modules\BusManagement\Entities\BusMoneyMove;
 use Modules\BusManagement\Entities\BusStatement;
@@ -37,26 +40,244 @@ class LedgerSync
     }
 
     /** @return array counts of what was posted */
-    public function sync(BusAgency|string $agency, int $limit = 1000): array
+    public function sync(BusAgency|BusCompany|string $agency, int $limit = 1000): array
     {
-        $agencyId = $agency instanceof BusAgency ? (string)$agency->id : (string)$agency;
+        $agencyId = is_string($agency) ? $agency : (string)$agency->id;
         $books = $this->ledger->books($agencyId);
         if (!$books) {
             return [];
+        }
+        if ($books->isCompany()) {
+            // The branches first: the head office mirrors what they recorded.
+            foreach (BusAgency::where('company_id', $agencyId)->pluck('id') as $branchId) {
+                $this->sync((string)$branchId, $limit);
+            }
         }
         $lock = Cache::lock('bus-acc-sync:' . $agencyId, 120);
         if (!$lock->get()) {
             return ['busy' => 1];
         }
         try {
-            $counts = ['moves' => $this->postMoves($books, $limit), 'trips' => $this->recognize($books, $limit)];
-            $counts['statements'] = $this->statements($books);
+            if ($books->isCompany()) {
+                $counts = ['mirrored' => $this->mirrorBranches($books)];
+                $counts['fees'] = $this->postFees($books, 'company');
+            } else {
+                $counts = ['moves' => $this->postMoves($books, $limit), 'trips' => $this->recognize($books, $limit)];
+                $counts['fees'] = $this->postFees($books, 'fapshi');
+                $counts['statements'] = $this->statements($books);
+            }
+            $counts['wear'] = $this->depreciate($books);
             $counts['reversed'] = $this->autoReversals($books);
             $books->update(['synced_at' => now()]);
             return $counts;
         } finally {
             $lock->release();
         }
+    }
+
+    /**
+     * A head office's books follow its branches' records: app and web payments collected on the
+     * company account (Dr company Fapshi / Cr the branch's account), branch statements paid by the
+     * head office (Dr the branch's account / Cr E-Ride), and the company statement paid (Dr E-Ride /
+     * Cr the paying account). The branch books post their side of the same events, so the head
+     * office's account of each branch always equals that branch's 1811.
+     */
+    protected function mirrorBranches(BusAccBook $books): int
+    {
+        $n = 0;
+        $company = BusCompany::find($books->agency_id);
+        if (!$company) {
+            return 0;
+        }
+        $branches = BusAgency::where('company_id', $company->id)->get()->keyBy(fn($b) => (string)$b->id);
+        $start = $books->starts_on->copy()->startOfDay();
+        $moves = BusMoneyMove::whereIn('agency_id', $branches->keys())->where('method', 'company')->whereIn('kind', [BusMoneyMove::SALE, BusMoneyMove::EXTRA])
+            ->where('at', '>=', $start)
+            ->whereNotExists(fn($q) => $q->from('bus_acc_entries')->where('bus_acc_entries.agency_id', $books->agency_id)
+                ->whereRaw("bus_acc_entries.source_key = concat('mm:', bus_money_moves.id)"))
+            ->orderBy('id')->limit(1000)->get();
+        foreach ($moves as $m) {
+            try {
+                $this->ledger->post($books->agency_id, [
+                    'date' => $m->at, 'journal' => 'cash', 'auto' => true,
+                    'memo' => translate('App and web tickets paid to the company account') . ' · ' . $branches[(string)$m->agency_id]->branchLabel(),
+                    'lines' => [[$this->ledger->account($books->agency_id, 'fapshi'), $m->amount, 0],
+                        [$this->ledger->branchAccount($company, $branches[(string)$m->agency_id]), 0, $m->amount]],
+                    'source_type' => 'move', 'source_id' => (string)$m->id, 'source_key' => 'mm:' . $m->id,
+                ]);
+                $n++;
+            } catch (Throwable $e) {
+                Log::warning('Bus accounting: a company payment could not be mirrored', ['move' => $m->id, 'error' => $e->getMessage()]);
+                break;
+            }
+        }
+        $statements = BusStatement::whereIn('agency_id', $branches->keys())->whereNotNull('company_statement_id')->where('status', BusStatement::PAID)
+            ->where('paid_at', '>=', $start)->where('total', '>', 0)->get();
+        foreach ($statements as $s) {
+            if (BusAccEntry::where('agency_id', $books->agency_id)->where('source_key', 'ms:' . $s->id)->exists()) {
+                continue;
+            }
+            try {
+                $this->ledger->post($books->agency_id, [
+                    'date' => $s->paid_at, 'journal' => 'cash', 'auto' => true,
+                    'memo' => translate('E-Ride commission of the branch, paid by the head office') . ' · ' . $branches[(string)$s->agency_id]->branchLabel() . ' · ' . $s->month->translatedFormat('F Y'),
+                    'lines' => [[$this->ledger->branchAccount($company, $branches[(string)$s->agency_id]), $s->total, 0], [$this->ledger->account($books->agency_id, 'eride'), 0, $s->total]],
+                    'source_type' => 'statement', 'source_id' => (string)$s->id, 'source_key' => 'ms:' . $s->id,
+                ]);
+                $n++;
+            } catch (Throwable $e) {
+                Log::warning('Bus accounting: a branch statement could not be mirrored', ['statement' => $s->id, 'error' => $e->getMessage()]);
+            }
+        }
+        foreach (BusCompanyStatement::where('company_id', $company->id)->where('status', 'paid')->where('paid_at', '>=', $start)->where('total', '>', 0)->get() as $cs) {
+            if (BusAccEntry::where('agency_id', $books->agency_id)->where('source_key', 'cs:' . $cs->id)->exists()) {
+                continue;
+            }
+            try {
+                $this->ledger->post($books->agency_id, [
+                    'date' => $cs->paid_at, 'journal' => 'cash', 'auto' => true,
+                    'memo' => translate('E-Ride company statement paid') . ' · ' . $cs->month->translatedFormat('F Y'),
+                    'lines' => [[$this->ledger->account($books->agency_id, 'eride'), $cs->total, 0], [$this->ledger->account($books->agency_id, $books->setting('eride_from', 'bank')), 0, $cs->total]],
+                    'source_type' => 'statement_paid', 'source_id' => (string)$cs->id, 'source_key' => 'cs:' . $cs->id,
+                ]);
+                $n++;
+            } catch (Throwable $e) {
+                Log::warning('Bus accounting: a company statement could not post', ['statement' => $cs->id, 'error' => $e->getMessage()]);
+            }
+        }
+        return $n;
+    }
+
+    /**
+     * Fapshi keeps its fee on each app or web payment and puts the rest on the balance (amount 12000,
+     * revenue 11640). The ticket stays at its full price; the fee is a charge (Dr 6311 / Cr Fapshi),
+     * posted as its own entry right after the payment, so the Fapshi account agrees with Fapshi's
+     * statement. On a branch's books for its own Fapshi account; on the head office's books for the
+     * company account (method "company").
+     */
+    protected function postFees(BusAccBook $books, string $method): int
+    {
+        $n = 0;
+        $q = BusMoneyMove::where('method', $method)->whereIn('kind', [BusMoneyMove::SALE, BusMoneyMove::EXTRA])->whereNull('skipped');
+        if ($method === 'company') {
+            $q->whereIn('agency_id', BusAgency::where('company_id', $books->agency_id)->pluck('id'))->where('at', '>=', $books->starts_on->copy()->startOfDay());
+        } else {
+            $q->where('agency_id', $books->agency_id)->whereNotNull('entry_id');
+        }
+        $prefix = $method === 'company' ? 'cfee:' : 'fee:';
+        $moves = $q->whereNotExists(fn($w) => $w->from('bus_acc_entries')->where('bus_acc_entries.agency_id', $books->agency_id)
+            ->whereRaw("bus_acc_entries.source_key = concat(?, bus_money_moves.id)", [$prefix]))->orderBy('id')->limit(1000)->get();
+        foreach ($moves as $m) {
+            $fee = $this->feeFor($m);
+            if ($fee === null) {
+                continue;
+            }
+            try {
+                $code = DB::table('bus_bookings')->where('id', $m->booking_id)->value('code');
+                $this->ledger->post($books->agency_id, [
+                    'date' => $m->at, 'journal' => 'cash', 'auto' => true,
+                    'memo' => translate('Fapshi fee kept on the payment') . ($code ? ' · ' . $code : ''),
+                    'lines' => [[$this->ledger->account($books->agency_id, 'charges'), $fee, 0, 'channel' => $m->channel],
+                        [$this->ledger->account($books->agency_id, 'fapshi'), 0, $fee]],
+                    'source_type' => 'fee', 'source_id' => (string)$m->id, 'source_key' => $prefix . $m->id,
+                ]);
+                $n++;
+            } catch (Throwable $e) {
+                Log::warning('Bus accounting: a Fapshi fee could not post', ['move' => $m->id, 'error' => $e->getMessage()]);
+                break;
+            }
+        }
+        return $n;
+    }
+
+    /**
+     * The fee Fapshi kept on the payment behind a money move: the booking's successful payments in
+     * order, matched to its online money-in moves in order. Null when not known yet (no revenue
+     * figure), 0 when nothing was kept.
+     */
+    public function feeFor(BusMoneyMove $m): ?float
+    {
+        $payments = \Modules\BusManagement\Entities\BusPayment::where('booking_id', $m->booking_id)->where('status', \Modules\BusManagement\Entities\BusPayment::SUCCESSFUL)
+            ->orderBy('id')->get();
+        $moves = BusMoneyMove::where('booking_id', $m->booking_id)->whereIn('kind', [BusMoneyMove::SALE, BusMoneyMove::EXTRA])
+            ->whereIn('method', ['fapshi', 'company'])->orderBy('id')->pluck('id')->map(fn($id) => (int)$id)->values()->all();
+        $i = array_search((int)$m->id, $moves, true);
+        $p = $i === false ? null : ($payments[$i] ?? null);
+        if (!$p) {
+            return null;
+        }
+        $revenue = $p->raw_response['payment-status']['revenue'] ?? null;
+        $amount = $p->raw_response['payment-status']['amount'] ?? $p->amount;
+        if (!is_numeric($revenue) || !is_numeric($amount)) {
+            return null;
+        }
+        $fee = round((float)$amount - (float)$revenue, 2);
+        return $fee > 0 && $fee < (float)$amount ? $fee : 0.0;
+    }
+
+    /**
+     * Each month's wear of the buses carried in these books (straight-line), for every month ended
+     * up to $upTo (the end of last month by default). A head office's bus is charged to the branch it
+     * belongs to when that branch keeps books: the head office's account of the branch goes down
+     * (Dr) against the wear (Cr 2845), and the branch carries the cost (Dr 6813, tagged with the bus)
+     * against 1811. Otherwise the cost stays where the bus is.
+     */
+    public function depreciate(BusAccBook $books, ?Carbon $upTo = null): int
+    {
+        $n = 0;
+        $upTo = ($upTo ?? today()->startOfMonth()->subDay())->copy()->endOfMonth();
+        if ($upTo->gte(today()->startOfDay())) {
+            $upTo = today()->startOfMonth()->subDay();
+        }
+        foreach (BusAccAsset::with('vehicle')->where('agency_id', $books->agency_id)->where('status', 'active')->get() as $asset) {
+            $month = $asset->starts_on->copy()->startOfMonth();
+            $last = $asset->lastMonth();
+            $target = round($asset->value - $asset->end_value, 2);
+            while ($month->lte($last) && $month->copy()->endOfMonth()->lte($upTo)) {
+                $key = 'wear:' . $asset->id . ':' . $month->format('Y-m');
+                if (!BusAccEntry::where('agency_id', $books->agency_id)->where('source_key', $key)->exists()) {
+                    $done = round(DB::table('bus_acc_entries')->where('agency_id', $books->agency_id)->where('source_type', 'wear')->where('source_id', (string)$asset->id)
+                        ->whereNull('reverses_id')->sum('total'), 2);
+                    $amount = $month->eq($last) ? round($target - $done, 2) : min($asset->monthly(), round($target - $done, 2));
+                    if ($amount >= 0.005) {
+                        try {
+                            DB::transaction(fn() => $this->postWear($books, $asset, $month, $amount, $key));
+                            $n++;
+                        } catch (Throwable $e) {
+                            Log::warning('Bus accounting: bus wear could not post', ['asset' => $asset->id, 'month' => $month->format('Y-m'), 'error' => $e->getMessage()]);
+                            break;
+                        }
+                    }
+                }
+                $month->addMonth();
+            }
+        }
+        return $n;
+    }
+
+    protected function postWear(BusAccBook $books, BusAccAsset $asset, Carbon $month, float $amount, string $key): void
+    {
+        $tag = ['vehicle_id' => (string)$asset->vehicle_id];
+        $date = $month->copy()->endOfMonth()->startOfDay();
+        $memo = translate('Bus wear of the month') . ' · ' . $asset->name . ' · ' . $month->translatedFormat('F Y');
+        $common = ['date' => $date, 'journal' => 'general', 'auto' => true, 'memo' => $memo, 'source_type' => 'wear', 'source_id' => (string)$asset->id, 'source_key' => $key];
+        $home = $books->isCompany() && $asset->vehicle ? BusAgency::find($asset->vehicle->agency_id) : null;
+        $homeBooks = $home && (string)$home->company_id === (string)$books->agency_id ? $this->ledger->books($home) : null;
+        if ($homeBooks && $homeBooks->starts_on->lte($date)) {
+            $this->ledger->post($books->agency_id, $common + ['lines' => [
+                [$this->ledger->branchAccount((string)$books->agency_id, $home), $amount, 0, 'memo' => translate('Charged to the branch')] + $tag,
+                [$this->ledger->account($books->agency_id, 'bus_wear'), 0, $amount] + $tag,
+            ]]);
+            $this->ledger->post($home, ['source_type' => 'wear_charge'] + $common + ['lines' => [
+                [$this->ledger->account($home, 'depreciation'), $amount, 0] + $tag,
+                [$this->ledger->account($home, 'head_office'), 0, $amount, 'memo' => translate('Charged by the head office')],
+            ]]);
+            return;
+        }
+        $this->ledger->post($books->agency_id, $common + ['lines' => [
+            [$this->ledger->account($books->agency_id, 'depreciation'), $amount, 0] + $tag,
+            [$this->ledger->account($books->agency_id, 'bus_wear'), 0, $amount] + $tag,
+        ]]);
     }
 
     /** Moves not posted yet (or that could not post, like a closed month). */

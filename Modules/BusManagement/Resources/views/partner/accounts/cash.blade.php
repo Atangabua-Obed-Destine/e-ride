@@ -1,4 +1,4 @@
-@extends('busmanagement::partner.layout')
+@extends($accLayout)
 
 @section('title', translate('Agent cash'))
 
@@ -34,7 +34,7 @@
                     <input type="number" class="form-control" id="ct_counted" name="counted" min="0" step="1" inputmode="numeric" required></div>
                 <div class="col-6"><label class="form-label" for="ct_to">{{ translate('Put in') }}</label>
                     <select class="form-select" id="ct_to" name="to_account_id" required>
-                        @foreach($moneyAccounts->where('role', '!=', 'counter_cash') as $ma)<option value="{{ $ma->id }}" @selected($safe && $ma->id === $safe->id)>{{ translate($ma->name) }}</option>@endforeach
+                        @foreach($moneyAccounts->where('role', '!=', 'counter_cash') as $ma)<option value="{{ $ma->id }}" @selected($safe && $ma->id === $safe->id)>{{ $ma->displayName() }}</option>@endforeach
                     </select></div>
                 <div class="col-12"><label class="form-label" for="ct_note">{{ translate('Note (needed when the cash is short or over)') }}</label>
                     <input type="text" class="form-control" id="ct_note" name="note" maxlength="500"></div>
@@ -50,7 +50,7 @@
                 <tbody>
                 @forelse($holding as $h)
                     <tr><td>{{ $h['name'] }}</td><td>{{ $h['last_count'] ? \Illuminate\Support\Carbon::parse($h['last_count'])->format('d/m H:i') : translate('Never') }}</td>
-                        <td class="n fw-bold {{ F::cls($h['held']) }}">@if($h['user_id'])<a href="{{ route('bus-partner.accounts.journal', ['account' => $moneyAccounts->firstWhere('role', 'counter_cash')?->id, 'agent' => $h['user_id'], 'from' => $books->starts_on->toDateString()]) }}">{{ F::n($h['held']) }}</a>@else{{ F::n($h['held']) }}@endif</td></tr>
+                        <td class="n fw-bold {{ F::cls($h['held']) }}">@if($h['user_id'])<a href="{{ route($acc . '.journal', ['account' => $moneyAccounts->firstWhere('role', 'counter_cash')?->id, 'agent' => $h['user_id'], 'from' => $books->starts_on->toDateString()]) }}">{{ F::n($h['held']) }}</a>@else{{ F::n($h['held']) }}@endif</td></tr>
                 @empty
                     <tr><td colspan="3" class="acc-empty">{{ translate('No agent holds counter cash.') }}</td></tr>
                 @endforelse
@@ -71,10 +71,10 @@
             @php $diff = $c->counted - $c->expected; @endphp
             <tr class="{{ $c->status === 'void' ? 'void' : '' }}">
                 <td class="text-nowrap">{{ $c->created_at->format('d/m/Y H:i') }}</td>
-                <td><a href="{{ route('bus-partner.accounts.document', $c->id) }}">{{ $c->number }}</a></td>
+                <td><a href="{{ route($acc . '.document', $c->id) }}">{{ $c->number }}</a></td>
                 <td>{{ trim(($c->staffUser->first_name ?? '') . ' ' . ($c->staffUser->last_name ?? '')) }}</td>
                 <td>{{ $c->creator->first_name ?? '' }}</td>
-                <td>{{ translate($c->toAccount?->name ?? '') }}</td>
+                <td>{{ ($c->toAccount?->displayName() ?? '') }}</td>
                 <td class="n">{{ F::n($c->expected) }}</td>
                 <td class="n">{{ F::n($c->counted) }}</td>
                 <td class="n fw-bold {{ F::cls($diff) }}">{{ F::n($diff) }}@if($c->note)<div class="acc-tag fw-normal">{{ $c->note }}</div>@endif</td>

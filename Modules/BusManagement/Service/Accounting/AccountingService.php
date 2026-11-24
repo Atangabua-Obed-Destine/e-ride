@@ -8,11 +8,13 @@ use Illuminate\Support\Facades\Validator;
 use Illuminate\Validation\Rule;
 use Illuminate\Validation\ValidationException;
 use Modules\BusManagement\Entities\BusAccAccount;
+use Modules\BusManagement\Entities\BusAccAsset;
 use Modules\BusManagement\Entities\BusAccBook;
 use Modules\BusManagement\Entities\BusAccDocument;
 use Modules\BusManagement\Entities\BusAccEntry;
 use Modules\BusManagement\Entities\BusAccLine;
 use Modules\BusManagement\Entities\BusAgency;
+use Modules\BusManagement\Entities\BusCompany;
 use Modules\BusManagement\Entities\BusDeparture;
 use Modules\BusManagement\Entities\BusDestination;
 use Modules\BusManagement\Entities\BusMoneyMove;
@@ -35,50 +37,59 @@ class AccountingService
     // ------------------------------------------------------------------ opening the books
 
     /**
-     * Opens a branch's books: the chart of accounts, the start date, the default accounts and the
-     * opening balances (money the branch has, what it owes suppliers). The tickets already paid for
-     * trips still ahead, the refunds owed and E-Ride's unpaid statements are added from the records.
+     * Opens a set of books: a branch's, or a head office's (its own books, beside its branches').
+     * The chart of accounts, the start date, the default accounts and the opening balances (money
+     * on hand, what is owed to suppliers and lenders). What the records already know is added:
+     * for a branch, tickets paid for trips still ahead, refunds owed, E-Ride statements not paid,
+     * and what the head office holds for it; for a head office, what it holds for each branch.
      */
-    public function open(BusAgency $agency, array $data, string $userId): BusAccDocument
+    public function open(BusAgency|BusCompany $agency, array $data, string $userId): BusAccDocument
     {
+        $company = $agency instanceof BusCompany;
         if ($this->ledger->books($agency)) {
-            throw ValidationException::withMessages(['books' => translate('The books of this branch are already open.')]);
+            throw ValidationException::withMessages(['books' => $company ? translate('The head office books are already open.') : translate('The books of this branch are already open.')]);
         }
         $v = Validator::make($data, [
             'starts_on' => ['required', 'date', 'before_or_equal:today', 'after_or_equal:' . today()->subDays(92)->toDateString()],
             'balances' => ['array'],
             'balances.*' => ['nullable', 'numeric', 'min:0', 'max:9999999999'],
             'suppliers_owed' => ['nullable', 'numeric', 'min:0', 'max:9999999999'],
+            'loans' => ['nullable', 'numeric', 'min:0', 'max:9999999999'],
             'refunds_from' => ['nullable', Rule::in(['mtn', 'orange', 'bank', 'safe', 'fapshi'])],
             'eride_from' => ['nullable', Rule::in(['mtn', 'orange', 'bank', 'safe', 'fapshi'])],
         ], [], ['starts_on' => translate('start date')]);
         $v->validate();
         $start = Carbon::parse($data['starts_on'])->startOfDay();
 
-        return DB::transaction(function () use ($agency, $data, $userId, $start) {
+        return DB::transaction(function () use ($agency, $data, $userId, $start, $company) {
             BusAccBook::create([
-                'agency_id' => (string)$agency->id, 'starts_on' => $start->toDateString(), 'opened_by' => $userId,
-                'settings' => ['refunds_from' => $data['refunds_from'] ?? 'mtn', 'eride_from' => $data['eride_from'] ?? 'mtn'],
+                'agency_id' => (string)$agency->id, 'kind' => $company ? 'company' : 'branch', 'starts_on' => $start->toDateString(), 'opened_by' => $userId,
+                'settings' => $company ? ['eride_from' => $data['eride_from'] ?? 'bank']
+                    : ['refunds_from' => $data['refunds_from'] ?? 'mtn', 'eride_from' => $data['eride_from'] ?? 'mtn'],
             ]);
             $this->ledger->seedChart($agency);
             $acc = fn(string $role) => $this->ledger->account($agency, $role);
             $lines = [];
             $debits = 0.0;
             $credits = 0.0;
-            foreach (AccChart::OPENING_MONEY as $role) {
+            $records = $company ? $this->companyOpening($agency, $start) : $this->openingFromRecords($agency, $start);
+            $fromRecords = collect($records)->map(fn($l) => (string)$l[0]->id)->all();
+            foreach ($company ? AccChart::COMPANY_OPENING_MONEY : AccChart::OPENING_MONEY as $role) {
                 $amount = round((float)($data['balances'][$role] ?? 0), 2);
-                if ($amount > 0) {
+                // What the head office holds for the branch comes from the head office books when they exist.
+                if ($amount > 0 && !in_array((string)$acc($role)->id, $fromRecords, true)) {
                     $lines[] = [$acc($role), $amount, 0];
                     $debits += $amount;
                 }
             }
-            $owed = round((float)($data['suppliers_owed'] ?? 0), 2);
-            if ($owed > 0) {
-                $lines[] = [$acc('suppliers'), 0, $owed, 'memo' => translate('Owed to suppliers at the start')];
-                $credits += $owed;
+            foreach (['suppliers_owed' => ['suppliers', 'Owed to suppliers at the start'], 'loans' => ['loans', 'Loans at the start']] as $field => [$role, $memo]) {
+                $owed = round((float)($data[$field] ?? 0), 2);
+                if ($owed > 0) {
+                    $lines[] = [$acc($role), 0, $owed, 'memo' => translate($memo)];
+                    $credits += $owed;
+                }
             }
-            // From the records: what was already paid or owed before the start.
-            foreach ($this->openingFromRecords($agency, $start) as $l) {
+            foreach ($records as $l) {
                 $lines[] = $l;
                 $debits += $l[1];
                 $credits += $l[2];
@@ -103,6 +114,23 @@ class AccountingService
             $this->sync->sync($agency);
             return $doc->fresh();
         });
+    }
+
+    /** A head office's opening from the records: what it holds for each branch that already keeps books (the mirror of the branch's 1811). */
+    public function companyOpening(BusCompany $company, Carbon $start): array
+    {
+        $lines = [];
+        foreach (BusAgency::where('company_id', $company->id)->get() as $branch) {
+            if (!$this->ledger->books($branch)) {
+                continue;
+            }
+            $held = $this->ledger->balance($this->ledger->account($branch, 'head_office'), $start->copy()->subDay()->toDateString());
+            if (abs($held) >= 0.005) {
+                $acc = $this->ledger->branchAccount($company, $branch);
+                $lines[] = $held > 0 ? [$acc, 0, $held, 'memo' => translate('Held for the branch at the start')] : [$acc, -$held, 0, 'memo' => translate('Held for the branch at the start')];
+            }
+        }
+        return $lines;
     }
 
     /**
@@ -166,13 +194,21 @@ class AccountingService
         if ((float)$unpaid > 0.004) {
             $lines[] = [$acc('eride'), 0, round((float)$unpaid, 2), 'memo' => translate('E-Ride statements not paid at the start')];
         }
+        // What the head office holds for the branch, when the head office already keeps books: the same figure on both sides.
+        if ($agency->company_id && ($company = BusCompany::find($agency->company_id)) && $this->ledger->books($company)) {
+            $held = $this->ledger->balance($this->ledger->branchAccount($company, $agency), $start->copy()->subDay()->toDateString());
+            if (abs($held) >= 0.005) {
+                $lines[] = $held > 0 ? [$acc('head_office'), $held, 0, 'memo' => translate('Held by the head office at the start')]
+                    : [$acc('head_office'), 0, -$held, 'memo' => translate('Held by the head office at the start')];
+            }
+        }
         return $lines;
     }
 
     // ------------------------------------------------------------------ spending and income
 
     /** An expense, paid now from a money account, or a supplier bill to pay later. */
-    public function expense(BusAgency $agency, array $data, string $userId): BusAccDocument
+    public function expense(BusAgency|BusCompany $agency, array $data, string $userId): BusAccDocument
     {
         $this->needBooks($agency);
         $data = $this->validate($agency, $data, [
@@ -204,14 +240,14 @@ class AccountingService
                 'staff_user_id' => $credit['staff_user_id'] ?? null,
                 'supplier' => $data['supplier'] ?? null, 'owed' => $later ? $amount : 0, 'due_on' => $later ? ($data['due_on'] ?? null) : null,
             ] + $tags);
-            $memo = translate($category->name) . ($data['supplier'] ?? null ? ' · ' . $data['supplier'] : '') . ($data['note'] ?? null ? ' · ' . $data['note'] : '');
+            $memo = $category->displayName() . ($data['supplier'] ?? null ? ' · ' . $data['supplier'] : '') . ($data['note'] ?? null ? ' · ' . $data['note'] : '');
             $this->postDocument($agency, $doc, $later ? 'purchase' : 'cash', $memo, [[$category, $amount, 0] + $tags, $credit], $userId);
             return $doc->fresh();
         });
     }
 
     /** Pays a supplier bill (all or part of what is owed on it). */
-    public function payBill(BusAgency $agency, BusAccDocument $bill, array $data, string $userId): BusAccDocument
+    public function payBill(BusAgency|BusCompany $agency, BusAccDocument $bill, array $data, string $userId): BusAccDocument
     {
         $this->needBooks($agency);
         $this->own($agency, $bill);
@@ -248,7 +284,7 @@ class AccountingService
     }
 
     /** Other income (parcels, luggage, bus hire...), received into a money account. */
-    public function income(BusAgency $agency, array $data, string $userId): BusAccDocument
+    public function income(BusAgency|BusCompany $agency, array $data, string $userId): BusAccDocument
     {
         $this->needBooks($agency);
         $data = $this->validate($agency, $data, [
@@ -272,14 +308,14 @@ class AccountingService
             $doc = $this->document($agency, BusAccDocument::INCOME, $data, $userId, [
                 'amount' => $amount, 'account_id' => (string)$category->id, 'money_account_id' => (string)$debit[0]->id, 'staff_user_id' => $debit['staff_user_id'] ?? null,
             ] + $tags);
-            $this->postDocument($agency, $doc, 'cash', translate($category->name) . ($data['note'] ?? null ? ' · ' . $data['note'] : ''),
+            $this->postDocument($agency, $doc, 'cash', $category->displayName() . ($data['note'] ?? null ? ' · ' . $data['note'] : ''),
                 [$debit, [$category, 0, $amount] + $tags], $userId);
             return $doc->fresh();
         });
     }
 
     /** Money moved between two of the branch's money accounts (cash to the bank, Mobile Money withdrawn...), with any charge taken. */
-    public function transfer(BusAgency $agency, array $data, string $userId): BusAccDocument
+    public function transfer(BusAgency|BusCompany $agency, array $data, string $userId): BusAccDocument
     {
         $this->needBooks($agency);
         $data = $this->validate($agency, $data, [
@@ -307,7 +343,7 @@ class AccountingService
             if ($fee > 0) {
                 $lines[] = [$this->ledger->account($agency, 'charges'), $fee, 0, 'memo' => translate('Charge on the transfer')];
             }
-            $this->postDocument($agency, $doc, 'cash', translate('Money moved') . ' · ' . translate($from->name) . ' → ' . translate($to->name), $lines, $userId);
+            $this->postDocument($agency, $doc, 'cash', translate('Money moved') . ' · ' . $from->displayName() . ' → ' . $to->displayName(), $lines, $userId);
             return $doc->fresh();
         });
     }
@@ -315,14 +351,14 @@ class AccountingService
     // ------------------------------------------------------------------ counter cash
 
     /** What a counter agent holds now: the counter cash posted to their name (sales in, refunds and counts out). */
-    public function agentCash(BusAgency $agency, string $userId): float
+    public function agentCash(BusAgency|BusCompany $agency, string $userId): float
     {
         $this->sync->sync($agency);
         return $this->ledger->balance($this->ledger->account($agency, 'counter_cash'), null, ['staff_user_id' => $userId]);
     }
 
     /** Every agent holding counter cash, with what they hold. */
-    public function agentsHolding(BusAgency $agency): array
+    public function agentsHolding(BusAgency|BusCompany $agency): array
     {
         $acc = BusAccAccount::where('agency_id', $agency->id)->where('role', 'counter_cash')->first();
         if (!$acc) {
@@ -345,7 +381,7 @@ class AccountingService
      * An agent's cash counted (end of a shift or a day): the counted cash goes to the safe or the
      * bank; a difference with what the agent should hold is posted as cash short or cash over.
      */
-    public function cashCount(BusAgency $agency, array $data, string $userId): BusAccDocument
+    public function cashCount(BusAgency|BusCompany $agency, array $data, string $userId): BusAccDocument
     {
         $this->needBooks($agency);
         $data = $this->validate($agency, $data, [
@@ -411,7 +447,7 @@ class AccountingService
      * It completes only when that agrees with the books, after posting any charges or interest the
      * statement shows (that posting is matched at once).
      */
-    public function check(BusAgency $agency, array $data, string $userId): BusAccDocument
+    public function check(BusAgency|BusCompany $agency, array $data, string $userId): BusAccDocument
     {
         $this->needBooks($agency);
         $data = $this->validate($agency, $data, [
@@ -452,7 +488,7 @@ class AccountingService
                 $lines = $data['post_as'] === 'charges'
                     ? [[$this->ledger->account($agency, 'charges'), -$diff, 0], [$account, 0, -$diff]]
                     : [[$account, $diff, 0], [$this->ledger->account($agency, 'other_income'), 0, $diff]];
-                $entry = $this->postDocument($agency, $doc, 'cash', translate('Statement reconciled') . ' · ' . translate($account->name), $lines, $userId);
+                $entry = $this->postDocument($agency, $doc, 'cash', translate('Statement reconciled') . ' · ' . $account->displayName(), $lines, $userId);
                 // The charge or interest is on the statement: matched at once.
                 $cleared[] = (int)BusAccLine::where('entry_id', $entry->id)->where('account_id', $account->id)->value('id');
             }
@@ -483,7 +519,7 @@ class AccountingService
     // ------------------------------------------------------------------ journal entries
 
     /** A journal entry by hand (corrections, accruals). It can reverse itself on a later date (the 1st of next month for an accrual). */
-    public function journal(BusAgency $agency, array $data, string $userId): BusAccDocument
+    public function journal(BusAgency|BusCompany $agency, array $data, string $userId): BusAccDocument
     {
         $this->needBooks($agency);
         $data = $this->validate($agency, $data, [
@@ -524,7 +560,7 @@ class AccountingService
     // ------------------------------------------------------------------ void
 
     /** Voids a document: its entry is reversed (in its month if open, else today). The document stays, marked void. */
-    public function void(BusAgency $agency, BusAccDocument $doc, string $reason, string $userId): BusAccDocument
+    public function void(BusAgency|BusCompany $agency, BusAccDocument $doc, string $reason, string $userId): BusAccDocument
     {
         $this->needBooks($agency);
         $this->own($agency, $doc);
@@ -539,6 +575,29 @@ class AccountingService
             }
             if ($doc->type === BusAccDocument::OPENING) {
                 throw ValidationException::withMessages(['document' => translate('Opening balances are corrected with a journal entry.')]);
+            }
+            $asset = in_array($doc->type, [BusAccDocument::ASSET, BusAccDocument::DISPOSAL], true)
+                ? BusAccAsset::where($doc->type === BusAccDocument::ASSET ? 'document_id' : 'disposal_document_id', $doc->id)->lockForUpdate()->first() : null;
+            if ($doc->type === BusAccDocument::ASSET && $asset) {
+                if ($asset->status !== 'active') {
+                    throw ValidationException::withMessages(['document' => translate('This bus was sold or retired: void that first.')]);
+                }
+                if ($this->wornSoFar($asset) >= 0.005) {
+                    throw ValidationException::withMessages(['document' => translate('Its wear is already posted: sell or retire the bus instead, or correct it with a journal entry.')]);
+                }
+                $asset->update(['status' => 'void']);
+            }
+            if ($doc->type === BusAccDocument::DISPOSAL && $asset) {
+                $asset->update(['status' => 'active', 'disposed_on' => null, 'sale_price' => null, 'disposal_document_id' => null]);
+            }
+            if ($doc->type === BusAccDocument::BRANCH_MONEY && $doc->parent_id) {
+                // Both sides go together: the other book's document is voided with it.
+                $other = BusAccDocument::whereKey($doc->parent_id)->lockForUpdate()->first();
+                if ($other && $other->status === 'posted') {
+                    $memo2 = translate('Void') . ' · ' . $other->number . ' · ' . $reason;
+                    $rev2 = $other->entry_id ? $this->ledger->reverse(BusAccEntry::find($other->entry_id), $memo2, $userId, null, 'void:' . $other->id) : null;
+                    $other->update(['status' => 'void', 'void_entry_id' => $rev2 ? (string)$rev2->id : null, 'void_reason' => mb_substr($reason, 0, 300), 'voided_by' => $userId, 'voided_at' => now()]);
+                }
             }
             if ($doc->type === BusAccDocument::EXPENSE && BusAccDocument::where('parent_id', $doc->id)->where('status', 'posted')->exists()) {
                 throw ValidationException::withMessages(['document' => translate('Payments were made on this bill: void them first.')]);
@@ -575,7 +634,7 @@ class AccountingService
      * Closes a month: nothing more posts into it (automatic postings land in the next open month).
      * Months close in order, and only once they are over.
      */
-    public function closeMonth(BusAgency $agency, string $month, string $userId): array
+    public function closeMonth(BusAgency|BusCompany $agency, string $month, string $userId): array
     {
         $books = $this->needBooks($agency);
         $m = Carbon::parse($month)->startOfMonth();
@@ -614,7 +673,7 @@ class AccountingService
     }
 
     /** Reopens the last closed month, with the reason (kept). Only the manager. */
-    public function reopenMonth(BusAgency $agency, string $month, string $reason, string $userId): array
+    public function reopenMonth(BusAgency|BusCompany $agency, string $month, string $reason, string $userId): array
     {
         $this->needBooks($agency);
         $m = Carbon::parse($month)->startOfMonth();
@@ -634,7 +693,7 @@ class AccountingService
 
     // ------------------------------------------------------------------ chart of accounts
 
-    public function saveAccount(BusAgency $agency, array $data, ?BusAccAccount $account = null): BusAccAccount
+    public function saveAccount(BusAgency|BusCompany $agency, array $data, ?BusAccAccount $account = null): BusAccAccount
     {
         $this->needBooks($agency);
         if ($account) {
@@ -671,20 +730,346 @@ class AccountingService
         ]);
     }
 
-    public function saveSettings(BusAgency $agency, array $data): BusAccBook
+    public function saveSettings(BusAgency|BusCompany $agency, array $data): BusAccBook
     {
         $books = $this->needBooks($agency);
         Validator::make($data, [
-            'refunds_from' => ['required', Rule::in(['mtn', 'orange', 'bank', 'safe', 'fapshi'])],
+            'refunds_from' => [$agency instanceof BusCompany ? 'nullable' : 'required', Rule::in(['mtn', 'orange', 'bank', 'safe', 'fapshi'])],
             'eride_from' => ['required', Rule::in(['mtn', 'orange', 'bank', 'safe', 'fapshi'])],
         ])->validate();
-        $books->update(['settings' => array_merge($books->settings ?? [], ['refunds_from' => $data['refunds_from'], 'eride_from' => $data['eride_from']])]);
+        $books->update(['settings' => array_merge($books->settings ?? [], array_filter(['refunds_from' => $data['refunds_from'] ?? null, 'eride_from' => $data['eride_from']]))]);
         return $books;
+    }
+
+    // ------------------------------------------------------------------ buses as assets
+
+    /** Where a bus's value is kept: the head office's books for a company, the agency's own books otherwise. */
+    public function assetOwner(BusAgency|BusCompany $owner): void
+    {
+        if ($owner instanceof BusAgency && $owner->company_id) {
+            throw ValidationException::withMessages(['vehicle_id' => translate('The buses of a company are carried in the head office books.')]);
+        }
+    }
+
+    /**
+     * A bus comes into the books as an asset: its value, the date its wear starts (that month), how
+     * long it runs and what it is worth at the end. Brought in by the owner (Cr capital), paid from
+     * a money account, or owed (to a supplier or a lender).
+     */
+    public function addAsset(BusAgency|BusCompany $agency, array $data, string $userId): BusAccDocument
+    {
+        $this->needBooks($agency);
+        $this->assetOwner($agency);
+        $data = $this->validate($agency, $data, [
+            'date' => ['required', 'date'],
+            'vehicle_id' => ['required', 'string'],
+            'value' => ['required', 'numeric', 'min:1', 'max:9999999999'],
+            'end_value' => ['nullable', 'numeric', 'min:0', 'lt:value'],
+            'years' => ['required', 'numeric', 'min:0.5', 'max:40'],
+            'funded_by' => ['required', Rule::in(['owner', 'paid', 'owed'])],
+            'money_account_id' => ['required_if:funded_by,paid', 'nullable', 'string'],
+            'staff_user_id' => ['nullable', 'string'],
+            'owed_to' => ['required_if:funded_by,owed', 'nullable', Rule::in(['supplier', 'loan'])],
+            'supplier' => ['nullable', 'string', 'max:120'],
+            'reference' => ['nullable', 'string', 'max:100'],
+            'note' => ['nullable', 'string', 'max:500'],
+        ], ['vehicle_id' => translate('bus'), 'value' => translate('value'), 'end_value' => translate('value at the end'), 'years' => translate('years')]);
+        $bus = $this->ownBus($agency, $data['vehicle_id']);
+        if (BusAccAsset::where('vehicle_id', $bus->id)->where('status', 'active')->exists()) {
+            throw ValidationException::withMessages(['vehicle_id' => translate('This bus is already in the books.')]);
+        }
+        $value = round((float)$data['value'], 2);
+        $end = round((float)($data['end_value'] ?? 0), 2);
+        $months = max(1, (int)round((float)$data['years'] * 12));
+
+        return DB::transaction(function () use ($agency, $data, $userId, $bus, $value, $end, $months) {
+            $credit = match ($data['funded_by']) {
+                'owner' => [$this->ledger->account($agency, 'capital'), 0, $value, 'memo' => translate('Bus brought in by the owner')],
+                'paid' => $this->moneyLine($agency, $data, 0, $value),
+                default => [$this->ledger->account($agency, ($data['owed_to'] ?? 'supplier') === 'loan' ? 'loans' : 'suppliers'), 0, $value, 'memo' => $data['supplier'] ?? null],
+            };
+            $doc = $this->document($agency, BusAccDocument::ASSET, $data, $userId, [
+                'amount' => $value, 'account_id' => (string)$this->ledger->account($agency, 'buses')->id, 'vehicle_id' => (string)$bus->id,
+                'money_account_id' => $data['funded_by'] === 'paid' ? (string)$credit[0]->id : null, 'staff_user_id' => $credit['staff_user_id'] ?? null,
+                'supplier' => $data['funded_by'] === 'owed' ? ($data['supplier'] ?? null) : null,
+                'owed' => $data['funded_by'] === 'owed' && ($data['owed_to'] ?? 'supplier') === 'supplier' ? $value : 0,
+                'lines' => ['end_value' => $end, 'life_months' => $months, 'funded_by' => $data['funded_by'], 'owed_to' => $data['owed_to'] ?? null],
+            ]);
+            BusAccAsset::create([
+                'agency_id' => (string)$agency->id, 'vehicle_id' => (string)$bus->id, 'name' => $bus->registration . ($bus->name ? ' · ' . $bus->name : ''),
+                'value' => $value, 'end_value' => $end, 'life_months' => $months, 'starts_on' => $doc->date->toDateString(),
+                'funded_by' => $data['funded_by'], 'status' => 'active', 'document_id' => (string)$doc->id,
+            ]);
+            $this->postDocument($agency, $doc, 'general', translate('Bus added to the books') . ' · ' . $bus->registration,
+                [[$this->ledger->account($agency, 'buses'), $value, 0, 'vehicle_id' => (string)$bus->id], $credit], $userId);
+            return $doc->fresh();
+        });
+    }
+
+    /** How much of a bus's value has worn off in the books (its share of 2845). */
+    public function wornSoFar(BusAccAsset $asset): float
+    {
+        return -$this->ledger->balance($this->ledger->account($asset->agency_id, 'bus_wear'), null, ['vehicle_id' => (string)$asset->vehicle_id]);
+    }
+
+    /**
+     * A bus leaves the books: sold (price received into a money account) or retired. Its wear is
+     * brought up to date first (every month ended before), then its cost and wear come off: the
+     * value left is charged (8120) and the sale price is income (8220).
+     */
+    public function disposeAsset(BusAgency|BusCompany $agency, BusAccAsset $asset, array $data, string $userId): BusAccDocument
+    {
+        $this->needBooks($agency);
+        $this->own($agency, $asset);
+        $data = $this->validate($agency, $data, [
+            'date' => ['required', 'date'],
+            'how' => ['required', Rule::in(['sold', 'retired'])],
+            'price' => ['required_if:how,sold', 'nullable', 'numeric', 'min:0', 'max:9999999999'],
+            'money_account_id' => ['required_if:how,sold', 'nullable', 'string'],
+            'staff_user_id' => ['nullable', 'string'],
+            'reference' => ['nullable', 'string', 'max:100'],
+            'note' => ['nullable', 'string', 'max:500'],
+        ], ['price' => translate('sale price')]);
+        if ($asset->status !== 'active') {
+            throw ValidationException::withMessages(['asset' => translate('This bus already left the books.')]);
+        }
+        $date = Carbon::parse($data['date']);
+        if ($date->lt($asset->starts_on)) {
+            throw ValidationException::withMessages(['date' => translate('A bus cannot leave the books before it came in.')]);
+        }
+
+        return DB::transaction(function () use ($agency, $asset, $data, $userId, $date) {
+            // The wear of every month ended before the sale.
+            $this->sync->depreciate($this->ledger->books($agency), $date->copy()->startOfMonth()->subDay());
+            $worn = round($this->wornSoFar($asset), 2);
+            $left = round($asset->value - $worn, 2);
+            $price = $data['how'] === 'sold' ? round((float)($data['price'] ?? 0), 2) : 0.0;
+            $tag = ['vehicle_id' => (string)$asset->vehicle_id];
+            $lines = [
+                [$this->ledger->account($agency, 'bus_wear'), $worn, 0] + $tag,
+                [$this->ledger->account($agency, 'disposal_value'), $left, 0] + $tag,
+                [$this->ledger->account($agency, 'buses'), 0, $asset->value] + $tag,
+            ];
+            $money = null;
+            if ($price > 0) {
+                $money = $this->moneyLine($agency, $data, $price, 0);
+                $lines[] = $money;
+                $lines[] = [$this->ledger->account($agency, 'disposal_price'), 0, $price] + $tag;
+            }
+            $doc = $this->document($agency, BusAccDocument::DISPOSAL, $data, $userId, [
+                'amount' => $price, 'vehicle_id' => (string)$asset->vehicle_id, 'parent_id' => (string)$asset->document_id,
+                'money_account_id' => $money ? (string)$money[0]->id : null, 'staff_user_id' => $money['staff_user_id'] ?? null,
+                'expected' => $left, 'counted' => $price, 'lines' => ['how' => $data['how'], 'worn' => $worn, 'value' => $asset->value, 'asset_id' => (string)$asset->id],
+            ]);
+            $this->postDocument($agency, $doc, 'general', ($data['how'] === 'sold' ? translate('Bus sold') : translate('Bus retired')) . ' · ' . $asset->name, $lines, $userId);
+            $asset->update(['status' => $data['how'], 'disposed_on' => $date->toDateString(), 'sale_price' => $price, 'disposal_document_id' => (string)$doc->id]);
+            return $doc->fresh();
+        });
+    }
+
+    protected function ownBus(BusAgency|BusCompany $agency, string $id): BusVehicle
+    {
+        $bus = $agency instanceof BusCompany
+            ? BusVehicle::where('company_id', $agency->id)->find($id)
+            : BusVehicle::usableByAgency($agency)->where('bus_vehicles.id', $id)->first();
+        if (!$bus) {
+            throw ValidationException::withMessages(['vehicle_id' => translate('Choose a bus from the list.')]);
+        }
+        return $bus;
+    }
+
+    // ------------------------------------------------------------------ head office and branches
+
+    /**
+     * Money between the head office and a branch (takings handed in, cash sent to a branch). Posted
+     * in both books at once, so the head office's account of the branch and the branch's 1811 agree.
+     */
+    public function branchMoney(BusCompany $company, array $data, string $userId): BusAccDocument
+    {
+        $this->needBooks($company);
+        $data = $this->validate($company, $data, [
+            'date' => ['required', 'date'],
+            'branch_id' => ['required', 'string'],
+            'direction' => ['required', Rule::in(['from_branch', 'to_branch'])],
+            'amount' => ['required', 'numeric', 'min:1', 'max:9999999999'],
+            'money_account_id' => ['required', 'string'],
+            'branch_account_id' => ['required', 'string'],
+            'reference' => ['nullable', 'string', 'max:100'],
+            'note' => ['nullable', 'string', 'max:500'],
+        ], ['branch_id' => translate('branch'), 'money_account_id' => translate('head office account'), 'branch_account_id' => translate('branch account')]);
+        $branch = BusAgency::where('company_id', $company->id)->find($data['branch_id']);
+        if (!$branch) {
+            throw ValidationException::withMessages(['branch_id' => translate('Choose a branch from the list.')]);
+        }
+        if (!$this->ledger->books($branch)) {
+            throw ValidationException::withMessages(['branch_id' => translate('This branch has not opened its books yet.')]);
+        }
+        $hoMoney = $this->ownAccount($company, $data['money_account_id'], 'money');
+        $brMoney = $this->ownAccount($branch, $data['branch_account_id'], 'money');
+        if ($brMoney->role === 'counter_cash') {
+            throw ValidationException::withMessages(['branch_account_id' => translate('Count the agent cash into the safe first: counter cash moves only through a count.')]);
+        }
+        $amount = round((float)$data['amount'], 2);
+        $in = $data['direction'] === 'from_branch';
+
+        return DB::transaction(function () use ($company, $branch, $data, $userId, $hoMoney, $brMoney, $amount, $in) {
+            $liaison = $this->ledger->branchAccount($company, $branch);
+            $hoDoc = $this->document($company, BusAccDocument::BRANCH_MONEY, $data, $userId, [
+                'amount' => $amount, 'account_id' => (string)$liaison->id, 'money_account_id' => (string)$hoMoney->id, 'destination_id' => null,
+                'lines' => ['branch_id' => (string)$branch->id, 'direction' => $data['direction']],
+            ]);
+            $brDoc = $this->document($branch, BusAccDocument::BRANCH_MONEY, $data, $userId, [
+                'amount' => $amount, 'account_id' => (string)$this->ledger->account($branch, 'head_office')->id, 'money_account_id' => (string)$brMoney->id,
+                'parent_id' => (string)$hoDoc->id, 'lines' => ['company_id' => (string)$company->id, 'direction' => $data['direction']],
+            ]);
+            $hoDoc->update(['parent_id' => (string)$brDoc->id]);
+            $memo = $in ? translate('Money handed in by the branch') . ' · ' . $branch->branchLabel() : translate('Money sent to the branch') . ' · ' . $branch->branchLabel();
+            $this->postDocument($company, $hoDoc, 'cash', $memo, $in ? [[$hoMoney, $amount, 0], [$liaison, 0, $amount]] : [[$liaison, $amount, 0], [$hoMoney, 0, $amount]], $userId);
+            $ho = $this->ledger->account($branch, 'head_office');
+            $memoBr = $in ? translate('Money handed in to the head office') : translate('Money received from the head office');
+            $this->postDocument($branch, $brDoc, 'cash', $memoBr, $in ? [[$ho, $amount, 0], [$brMoney, 0, $amount]] : [[$brMoney, $amount, 0], [$ho, 0, $amount]], $userId);
+            return $hoDoc->fresh();
+        });
+    }
+
+    // ------------------------------------------------------------------ years
+
+    /** The books a year-end touches: a head office closes itself and all its branches together. */
+    public function yearBooks(BusAgency|BusCompany $owner): array
+    {
+        if ($owner instanceof BusAgency && $owner->company_id) {
+            throw ValidationException::withMessages(['year' => translate('The head office closes the year for all its branches.')]);
+        }
+        $all = [$owner];
+        if ($owner instanceof BusCompany) {
+            foreach (BusAgency::where('company_id', $owner->id)->get() as $b) {
+                if ($this->ledger->books($b)) {
+                    $all[] = $b;
+                }
+            }
+        }
+        return $all;
+    }
+
+    /**
+     * Closes a financial year (OHADA: 1 January to 31 December). Every month of it must be closed and
+     * the year over. The closing entry, dated 31 December, brings every income and spending account
+     * to zero and puts the result on 1301 "Result of the year". Nothing can be dated in a closed year.
+     */
+    public function closeYear(BusAgency|BusCompany $owner, int $year, string $userId): array
+    {
+        $this->needBooks($owner);
+        $books = $this->yearBooks($owner);
+        $end = Carbon::create($year, 12, 31)->startOfDay();
+        $problems = [];
+        if ($end->gte(today())) {
+            $problems[] = translate('A year closes once it is over.');
+        }
+        foreach ($books as $o) {
+            $b = $this->ledger->books($o);
+            $name = $o instanceof BusCompany ? translate('Head office') : $o->branchLabel();
+            if ($b->starts_on->year > $year) {
+                continue;
+            }
+            if ($this->ledger->yearClosed((string)$o->id, $end)) {
+                $problems[] = translate(key: '{books}: this year is already closed.', replace: ['books' => $name]);
+                continue;
+            }
+            $m = $b->starts_on->copy()->startOfMonth()->max(Carbon::create($year, 1, 1));
+            while ($m->lte($end)) {
+                if (!DB::table('bus_acc_months')->where('agency_id', $o->id)->where('month', $m->toDateString())->whereNotNull('closed_at')->exists()) {
+                    $problems[] = translate(key: '{books}: close {month} first.', replace: ['books' => $name, 'month' => $m->translatedFormat('F Y')]);
+                    break;
+                }
+                $m->addMonth();
+            }
+            if (DB::table('bus_acc_years')->where('agency_id', $o->id)->where('year', $year - 1)->whereNull('closed_at')->exists()
+                || ($b->starts_on->year < $year && !$this->ledger->yearClosed((string)$o->id, Carbon::create($year - 1, 12, 31)))) {
+                $problems[] = translate(key: '{books}: close {year} first.', replace: ['books' => $name, 'year' => $year - 1]);
+            }
+        }
+        if ($problems) {
+            throw ValidationException::withMessages(['year' => $problems]);
+        }
+        return DB::transaction(function () use ($books, $year, $end, $userId) {
+            $results = [];
+            foreach ($books as $o) {
+                $b = $this->ledger->books($o);
+                if ($b->starts_on->year > $year) {
+                    continue;
+                }
+                $sums = BusAccLine::query()->from('bus_acc_lines as l')->join('bus_acc_accounts as a', 'a.id', '=', 'l.account_id')
+                    ->where('l.agency_id', $o->id)->whereBetween('l.date', [Carbon::create($year, 1, 1)->toDateString(), $end->toDateString()])
+                    ->whereIn('a.type', ['revenue', 'expense'])->groupBy('l.account_id')->selectRaw('l.account_id, sum(l.debit) - sum(l.credit) as net')->get();
+                $lines = [];
+                $result = 0.0;
+                foreach ($sums as $s) {
+                    $net = round((float)$s->net, 2);
+                    if (abs($net) < 0.005) {
+                        continue;
+                    }
+                    $lines[] = $net > 0 ? [$s->account_id, 0, $net] : [$s->account_id, -$net, 0];
+                    $result -= $net;
+                }
+                $result = round($result, 2);
+                $resultAcc = $this->ledger->account($o, 'result');
+                if (abs($result) >= 0.005) {
+                    $lines[] = $result > 0 ? [$resultAcc, 0, $result] : [$resultAcc, -$result, 0];
+                }
+                $entry = null;
+                if (count($lines) >= 2) {
+                    $entry = $this->ledger->post($o, [
+                        'date' => $end, 'journal' => 'closing', 'closing' => true, 'lines' => $lines, 'created_by' => $userId,
+                        'memo' => translate(key: 'Year {year} closed: its result goes to the result of the year', replace: ['year' => $year]),
+                        'source_type' => 'year', 'source_id' => (string)$year, 'source_key' => 'year:' . $year . ':' . (DB::table('bus_acc_years')->where('agency_id', $o->id)->where('year', $year)->value('id') ? 'again' . now()->timestamp : 'first'),
+                    ]);
+                }
+                DB::table('bus_acc_years')->updateOrInsert(['agency_id' => (string)$o->id, 'year' => $year],
+                    ['closed_at' => now(), 'closed_by' => $userId, 'entry_id' => $entry ? (string)$entry->id : null, 'result' => $result, 'updated_at' => now(), 'created_at' => now()]);
+                $results[] = ['books' => $o instanceof BusCompany ? translate('Head office') : $o->branchLabel(), 'result' => $result];
+            }
+            return ['year' => $year, 'results' => $results];
+        });
+    }
+
+    /** Reopens a closed year (with the reason): the closing entry is mirrored on 31 December. Only the last closed year. */
+    public function reopenYear(BusAgency|BusCompany $owner, int $year, string $reason, string $userId): array
+    {
+        $this->needBooks($owner);
+        if (mb_strlen(trim($reason)) < 5) {
+            throw ValidationException::withMessages(['reason' => translate('Say why the year is reopened.')]);
+        }
+        $books = $this->yearBooks($owner);
+        foreach ($books as $o) {
+            if (DB::table('bus_acc_years')->where('agency_id', $o->id)->where('year', '>', $year)->whereNotNull('closed_at')->exists()) {
+                throw ValidationException::withMessages(['year' => translate('Reopen the later years first.')]);
+            }
+        }
+        return DB::transaction(function () use ($books, $year, $reason, $userId) {
+            foreach ($books as $o) {
+                $row = DB::table('bus_acc_years')->where('agency_id', $o->id)->where('year', $year)->whereNotNull('closed_at')->first();
+                if (!$row) {
+                    continue;
+                }
+                DB::table('bus_acc_years')->where('id', $row->id)->update(['closed_at' => null, 'reopened_at' => now(), 'reopened_by' => $userId,
+                    'reopen_reason' => mb_substr(trim($reason), 0, 300), 'updated_at' => now()]);
+                if ($row->entry_id && ($entry = BusAccEntry::with('lines')->find($row->entry_id))) {
+                    $mirror = $this->ledger->post($o, [
+                        'date' => $entry->date, 'journal' => 'closing', 'closing' => true, 'created_by' => $userId, 'reverses_id' => (string)$entry->id,
+                        'memo' => translate(key: 'Year {year} reopened', replace: ['year' => $year]) . ' · ' . $reason,
+                        'lines' => $entry->lines->map(fn($l) => [$l->account_id, $l->credit, $l->debit])->all(),
+                        'source_type' => 'year', 'source_id' => (string)$year, 'source_key' => 'yearopen:' . $entry->id,
+                    ]);
+                    $entry->update(['reversed_by_id' => (string)$mirror->id]);
+                }
+            }
+            return ['year' => $year];
+        });
     }
 
     // ------------------------------------------------------------------ helpers
 
-    public function needBooks(BusAgency $agency): BusAccBook
+    public function needBooks(BusAgency|BusCompany $agency): BusAccBook
     {
         $books = $this->ledger->books($agency);
         if (!$books) {
@@ -693,13 +1078,13 @@ class AccountingService
         return $books;
     }
 
-    protected function validate(BusAgency $agency, array $data, array $rules, array $names = []): array
+    protected function validate(BusAgency|BusCompany $agency, array $data, array $rules, array $names = []): array
     {
         return Validator::make($data, $rules, [], $names + ['date' => translate('date'), 'amount' => translate('amount')])->validate();
     }
 
     /** An account of this branch, active, of the kind asked (expense / revenue category, money, any). */
-    protected function ownAccount(BusAgency $agency, string $id, string $kind): BusAccAccount
+    protected function ownAccount(BusAgency|BusCompany $agency, string $id, string $kind): BusAccAccount
     {
         $a = BusAccAccount::where('agency_id', $agency->id)->where('id', $id)->first();
         $ok = $a && $a->active && match ($kind) {
@@ -715,7 +1100,7 @@ class AccountingService
     }
 
     /** The money line of a payment or receipt; counter cash needs the agent whose cash it is. */
-    protected function moneyLine(BusAgency $agency, array $data, float $debit, float $credit): array
+    protected function moneyLine(BusAgency|BusCompany $agency, array $data, float $debit, float $credit): array
     {
         $acc = $this->ownAccount($agency, (string)($data['money_account_id'] ?? ''), 'money');
         $line = [$acc, $debit, $credit];
@@ -730,9 +1115,15 @@ class AccountingService
     }
 
     /** Tags given by hand (a bus, a route, a trip of this branch or its company). */
-    protected function tags(BusAgency $agency, array $data): array
+    protected function tags(BusAgency|BusCompany $agency, array $data): array
     {
         $tags = ['vehicle_id' => null, 'destination_id' => null, 'departure_id' => null];
+        if ($agency instanceof BusCompany) {
+            if (filled($data['vehicle_id'] ?? null)) {
+                $tags['vehicle_id'] = (string)$this->ownBus($agency, (string)$data['vehicle_id'])->id;
+            }
+            return $tags;
+        }
         if (filled($data['departure_id'] ?? null)) {
             $d = BusDeparture::where('agency_id', $agency->id)->where('id', $data['departure_id'])->first();
             if (!$d) {
@@ -756,7 +1147,7 @@ class AccountingService
         return $tags;
     }
 
-    protected function document(BusAgency $agency, string $type, array $data, string $userId, array $fields): BusAccDocument
+    protected function document(BusAgency|BusCompany $agency, string $type, array $data, string $userId, array $fields): BusAccDocument
     {
         return BusAccDocument::create($fields + [
             'agency_id' => (string)$agency->id,
@@ -770,7 +1161,7 @@ class AccountingService
         ]);
     }
 
-    protected function postDocument(BusAgency $agency, BusAccDocument $doc, string $journal, string $memo, array $lines, string $userId): BusAccEntry
+    protected function postDocument(BusAgency|BusCompany $agency, BusAccDocument $doc, string $journal, string $memo, array $lines, string $userId): BusAccEntry
     {
         $entry = $this->ledger->post($agency, [
             'date' => $doc->date, 'journal' => $journal, 'memo' => $doc->number . ' · ' . $memo, 'lines' => $lines,
@@ -780,7 +1171,7 @@ class AccountingService
         return $entry;
     }
 
-    protected function own(BusAgency $agency, $model): void
+    protected function own(BusAgency|BusCompany $agency, $model): void
     {
         abort_unless((string)$model->agency_id === (string)$agency->id, 404);
     }

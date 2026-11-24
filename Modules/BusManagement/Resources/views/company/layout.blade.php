@@ -54,13 +54,14 @@
         </div>
         <nav class="b-nav" aria-label="{{ translate('Head office menu') }}">
             @foreach($nav as [$routeName, $icon, $label])
-                <a href="{{ route($routeName) }}" class="{{ request()->routeIs($routeName . '*') ? 'active' : '' }}"><i class="bi {{ $icon }}" aria-hidden="true"></i>{{ $label }}</a>
+                <a href="{{ route($routeName) }}" class="{{ request()->routeIs($routeName . '*') || ($routeName === 'bus-company.accounts' && request()->routeIs('bus-company.books*')) ? 'active' : '' }}"><i class="bi {{ $icon }}" aria-hidden="true"></i>{{ $label }}</a>
             @endforeach
         </nav>
     </div>
 </header>
 
 <main class="b-main">
+    @if(session('success'))<div class="alert alert-success">{{ session('success') }}</div>@endif
     @if ($errors->any())
         <div class="alert alert-danger"><ul class="mb-0 ps-3">@foreach ($errors->all() as $error)<li>{{ $error }}</li>@endforeach</ul></div>
     @endif

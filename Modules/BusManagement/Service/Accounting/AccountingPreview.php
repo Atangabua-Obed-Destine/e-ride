@@ -11,6 +11,7 @@ use Modules\BusManagement\Entities\BusAccDocument;
 use Modules\BusManagement\Entities\BusAccEntry;
 use Modules\BusManagement\Entities\BusAccLine;
 use Modules\BusManagement\Entities\BusAgency;
+use Modules\BusManagement\Entities\BusCompany;
 use Modules\BusManagement\Entities\BusDeparture;
 use Modules\BusManagement\Entities\BusDestination;
 use Modules\BusManagement\Entities\BusVehicle;
@@ -32,7 +33,7 @@ class AccountingPreview
     }
 
     /** Runs $action rolled back. $action returns the document (or an array for month actions). */
-    public function run(BusAgency $agency, string $title, callable $action, ?callable $extra = null): array
+    public function run(BusAgency|BusCompany $agency, string $title, callable $action, ?callable $extra = null): array
     {
         $out = ['ok' => true, 'title' => $title, 'problems' => [], 'warnings' => [], 'notes' => [], 'summary' => [], 'entries' => [], 'effects' => []];
         // Automatic postings first, for real, so the preview shows only this action.
@@ -90,7 +91,7 @@ class AccountingPreview
     }
 
     /** Balances of the branch's accounts (normal direction). */
-    public function balances(BusAgency $agency): array
+    public function balances(BusAgency|BusCompany $agency): array
     {
         $types = BusAccAccount::where('agency_id', $agency->id)->pluck('type', 'id');
         return BusAccLine::where('agency_id', $agency->id)->groupBy('account_id')->selectRaw('account_id, sum(debit) - sum(credit) as net')->pluck('net', 'account_id')
@@ -184,6 +185,32 @@ class AccountingPreview
                 $add(translate('Total'), $this->money($d->amount));
                 $add(translate('Reverses itself on'), $d->reverse_on?->format('d/m/Y'));
                 break;
+            case BusAccDocument::ASSET:
+                $add(translate('Value'), $this->money($d->amount));
+                $add(translate('Value at the end'), $this->money((float)($d->lines['end_value'] ?? 0)));
+                $add(translate('Runs for'), translate(key: '{n} months', replace: ['n' => (int)($d->lines['life_months'] ?? 0)]));
+                $add(translate('Came in'), match ($d->lines['funded_by'] ?? '') {
+                    'owner' => translate('Brought in by the owner'),
+                    'paid' => translate('Paid from') . ' ' . $acc($d->money_account_id),
+                    default => (($d->lines['owed_to'] ?? '') === 'loan' ? translate('On a loan') : translate('Owed to the supplier')) . ($d->supplier ? ' · ' . $d->supplier : ''),
+                });
+                break;
+            case BusAccDocument::DISPOSAL:
+                $add(translate('How'), ($d->lines['how'] ?? '') === 'sold' ? translate('Sold') : translate('Retired'));
+                $add(translate('Value'), $this->money((float)($d->lines['value'] ?? 0)));
+                $add(translate('Worn so far'), $this->money((float)($d->lines['worn'] ?? 0)));
+                $add(translate('Value left'), $this->money($d->expected));
+                $add(translate('Sale price'), $this->money($d->counted));
+                $add(translate('Gain or loss'), $this->money($d->counted - $d->expected));
+                $add(translate('Received into'), $acc($d->money_account_id));
+                break;
+            case BusAccDocument::BRANCH_MONEY:
+                $branch = isset($d->lines['branch_id']) ? \Modules\BusManagement\Entities\BusAgency::find($d->lines['branch_id']) : null;
+                $add(translate('Branch'), $branch?->branchLabel());
+                $add(translate('Direction'), ($d->lines['direction'] ?? '') === 'from_branch' ? translate('Handed in by the branch') : translate('Sent to the branch'));
+                $add(translate('Amount'), $this->money($d->amount));
+                $add(translate('Head office account'), $acc($d->money_account_id));
+                break;
             case BusAccDocument::OPENING:
                 $add(translate('Books start on'), $d->date->format('d/m/Y'));
                 break;
@@ -202,7 +229,7 @@ class AccountingPreview
         return $rows;
     }
 
-    protected function warnings(BusAgency $agency, BusAccDocument $d, array &$out): void
+    protected function warnings(BusAgency|BusCompany $agency, BusAccDocument $d, array &$out): void
     {
         if (in_array($d->type, [BusAccDocument::EXPENSE, BusAccDocument::INCOME], true)) {
             $same = BusAccDocument::where('agency_id', $agency->id)->where('type', $d->type)->where('status', 'posted')->where('id', '!=', $d->id)

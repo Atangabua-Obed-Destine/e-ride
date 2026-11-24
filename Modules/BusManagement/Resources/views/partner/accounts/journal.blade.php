@@ -1,4 +1,4 @@
-@extends('busmanagement::partner.layout')
+@extends($accLayout)
 
 @section('title', translate('Journal'))
 
@@ -55,7 +55,7 @@
             <div class="rv-entry">
                 <div class="d-flex flex-wrap justify-content-between gap-2 mb-1">
                     <div><b>{{ $e->number }}</b> · {{ $e->memo }}
-                        @if($e->source_type === 'document' && isset($docs[$e->source_id]))<a class="acc-tag ms-1" href="{{ route('bus-partner.accounts.document', $e->source_id) }}">{{ $docs[$e->source_id]->number }}</a>@endif
+                        @if($e->source_type === 'document' && isset($docs[$e->source_id]))<a class="acc-tag ms-1" href="{{ route($acc . '.document', $e->source_id) }}">{{ $docs[$e->source_id]->number }}</a>@endif
                         @if($e->reverses_id)<span class="b-tag mute ms-1">{{ translate('Reversal') }}</span>@endif
                         @if($e->reversed_by_id)<span class="b-tag warn ms-1">{{ translate('Reversed') }}</span>@endif</div>
                     <span class="acc-tag text-nowrap">{{ $e->date->format('d/m/Y') }}</span>

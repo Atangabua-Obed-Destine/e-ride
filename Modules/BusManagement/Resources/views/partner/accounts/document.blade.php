@@ -1,4 +1,4 @@
-@extends('busmanagement::partner.layout')
+@extends($accLayout)
 
 @section('title', $doc->number)
 
@@ -28,7 +28,7 @@
                 @if($doc->supplier)<tr><td>{{ translate('Supplier') }}</td><td>{{ $doc->supplier }}</td></tr>@endif
                 @if($doc->type === 'expense' && !$doc->money_account_id)<tr><td>{{ translate('Still owed') }}</td><td class="fw-bold">{{ F::n($doc->owed) }}</td></tr>@endif
                 @if($doc->due_on)<tr><td>{{ translate('Due on') }}</td><td>{{ $doc->due_on->format('d/m/Y') }}</td></tr>@endif
-                @if($doc->parent)<tr><td>{{ translate('Bill') }}</td><td><a href="{{ route('bus-partner.accounts.document', $doc->parent->id) }}">{{ $doc->parent->number }}</a></td></tr>@endif
+                @if($doc->parent)<tr><td>{{ translate('Bill') }}</td><td><a href="{{ route($acc . '.document', $doc->parent->id) }}">{{ $doc->parent->number }}</a></td></tr>@endif
                 @if($doc->staffUser)<tr><td>{{ translate('Agent') }}</td><td>{{ trim($doc->staffUser->first_name . ' ' . $doc->staffUser->last_name) }}</td></tr>@endif
                 @if($doc->type === 'cash_count')
                     <tr><td>{{ translate('Should hold') }}</td><td>{{ F::n($doc->expected) }}</td></tr>
@@ -43,7 +43,7 @@
                     <tr><td>{{ translate('Movements matched') }}</td><td>{{ count($doc->lines['cleared'] ?? []) }}</td></tr>
                 @endif
                 @if($doc->vehicle)<tr><td>{{ translate('Bus') }}</td><td>{{ $doc->vehicle->registration }}</td></tr>@endif
-                @if($doc->destination)<tr><td>{{ translate('Route') }}</td><td>{{ $busAgency->origin_city }} → {{ $doc->destination->city }}</td></tr>@endif
+                @if($doc->destination)<tr><td>{{ translate('Route') }}</td><td>{{ $doc->destination->city }}</td></tr>@endif
                 @if($doc->reverse_on)<tr><td>{{ translate('Reverses itself on') }}</td><td>{{ $doc->reverse_on->format('d/m/Y') }}</td></tr>@endif
                 @if($doc->reference)<tr><td>{{ translate('Reference') }}</td><td>{{ $doc->reference }}</td></tr>@endif
                 @if($doc->note)<tr><td>{{ translate('Note') }}</td><td>{{ $doc->note }}</td></tr>@endif
@@ -57,8 +57,8 @@
                 <h2 class="acc-h">{{ translate('Payments') }}</h2>
                 <table class="acc-t"><tbody>
                     @foreach($payments as $p)
-                        <tr class="{{ $p->status === 'void' ? 'void' : '' }}"><td>{{ $p->date->format('d/m/Y') }}</td><td><a href="{{ route('bus-partner.accounts.document', $p->id) }}">{{ $p->number }}</a></td>
-                            <td>{{ translate($p->moneyAccount?->name ?? '') }}</td><td class="n">{{ F::n($p->amount) }}</td></tr>
+                        <tr class="{{ $p->status === 'void' ? 'void' : '' }}"><td>{{ $p->date->format('d/m/Y') }}</td><td><a href="{{ route($acc . '.document', $p->id) }}">{{ $p->number }}</a></td>
+                            <td>{{ ($p->moneyAccount?->displayName() ?? '') }}</td><td class="n">{{ F::n($p->amount) }}</td></tr>
                     @endforeach
                 </tbody></table>
             </div>

@@ -33,7 +33,7 @@
         failed: @json(translate('Could not check it. Try again.')),
         none: @json(translate('Nothing is posted: it is only recorded.'))
     };
-    var base = {preview: {!! json_encode(route('bus-partner.accounts.preview', ['action' => '__A__'])) !!}, act: {!! json_encode(route('bus-partner.accounts.do', ['action' => '__A__'])) !!}};
+    var base = {preview: {!! json_encode(route($acc . '.preview', ['action' => '__A__'])) !!}, act: {!! json_encode(route($acc . '.do', ['action' => '__A__'])) !!}};
     var modalEl = document.getElementById('rvModal'), modal = new bootstrap.Modal(modalEl), body = document.getElementById('rvBody'), btn = document.getElementById('rvConfirm');
     var current = null;
     function esc(s) { return String(s == null ? '' : s).replace(/[&<>"']/g, function (c) { return {'&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;'}[c]; }); }

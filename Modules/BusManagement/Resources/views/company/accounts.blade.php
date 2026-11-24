@@ -9,7 +9,13 @@
 @endpush
 
 @section('content')
-<h1 class="fs-5 fw-bold mb-1">{{ translate('Accounts') }}</h1>
+<div class="d-flex flex-wrap align-items-center gap-2 mb-1">
+    <h1 class="fs-5 fw-bold m-0">{{ translate('Accounts') }}</h1>
+    <span class="ms-auto d-flex flex-wrap gap-2">
+        <a class="btn btn-dark btn-sm" href="{{ route('bus-company.books') }}">{{ translate('Head office books') }}</a>
+        <a class="btn btn-soft btn-sm" href="{{ route('bus-company.books.reports', ['scope' => 'all']) }}">{{ translate('The whole company (head office and branches)') }}</a>
+    </span>
+</div>
 <p class="b-hint mb-3">{{ translate('Each branch keeps its own books. Here they are side by side, for the period chosen. Ticket sales count when the bus leaves.') }}</p>
 @include('busmanagement::company._filters')
 

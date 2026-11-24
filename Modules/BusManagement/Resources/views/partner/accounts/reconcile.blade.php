@@ -1,4 +1,4 @@
-@extends('busmanagement::partner.layout')
+@extends($accLayout)
 
 @section('title', translate('Reconcile'))
 
@@ -11,7 +11,7 @@
 @section('content')
 @include('busmanagement::partner.accounts._nav')
 
-<form class="acc-form" id="recForm" data-acc-action="check" data-acc-title="{{ translate('Reconcile') }} · {{ translate($account->name) }}">
+<form class="acc-form" id="recForm" data-acc-action="check" data-acc-title="{{ translate('Reconcile') }} · {{ $account->displayName() }}">
     <input type="hidden" name="account_id" value="{{ $account->id }}">
     <input type="hidden" name="date" value="{{ $date }}">
     <div class="row g-3">
@@ -59,7 +59,7 @@
                 <label class="form-label mt-2" for="recRef">{{ translate('Statement reference (optional)') }}</label>
                 <input type="text" class="form-control" id="recRef" name="reference" maxlength="100">
                 <button type="submit" class="btn btn-primary mt-3 w-100">{{ translate('Check and reconcile') }}</button>
-                <a class="btn btn-light btn-sm mt-2 w-100" href="{{ route('bus-partner.accounts.money') }}">{{ translate('Back') }}</a>
+                <a class="btn btn-light btn-sm mt-2 w-100" href="{{ route($acc . '.money') }}">{{ translate('Back') }}</a>
             </div>
         </div>
     </div>

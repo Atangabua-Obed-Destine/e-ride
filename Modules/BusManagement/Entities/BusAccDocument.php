@@ -20,10 +20,14 @@ class BusAccDocument extends Model
     public const CHECK = 'check';
     public const JOURNAL = 'journal';
     public const OPENING = 'opening';
+    public const ASSET = 'asset';
+    public const DISPOSAL = 'disposal';
+    public const BRANCH_MONEY = 'branch_money';
 
     public const PREFIX = [
         self::EXPENSE => 'EXP', self::BILL_PAYMENT => 'PAY', self::INCOME => 'INC', self::TRANSFER => 'TRF',
         self::CASH_COUNT => 'CNT', self::CHECK => 'CHK', self::JOURNAL => 'JNL', self::OPENING => 'OPN',
+        self::ASSET => 'BUS', self::DISPOSAL => 'DSP', self::BRANCH_MONEY => 'HOB',
     ];
 
     protected $table = 'bus_acc_documents';
@@ -89,6 +93,9 @@ class BusAccDocument extends Model
             self::CASH_COUNT => 'Cash count',
             self::CHECK => 'Reconciliation',
             self::JOURNAL => 'Journal entry',
+            self::ASSET => 'Bus added',
+            self::DISPOSAL => 'Bus sold or retired',
+            self::BRANCH_MONEY => 'Money with a branch',
             default => 'Opening balances',
         });
     }

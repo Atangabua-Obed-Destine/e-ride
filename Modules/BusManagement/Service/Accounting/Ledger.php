@@ -11,6 +11,7 @@ use Modules\BusManagement\Entities\BusAccBook;
 use Modules\BusManagement\Entities\BusAccEntry;
 use Modules\BusManagement\Entities\BusAccLine;
 use Modules\BusManagement\Entities\BusAgency;
+use Modules\BusManagement\Entities\BusCompany;
 use Modules\BusManagement\Lib\AccChart;
 
 /**
@@ -28,12 +29,12 @@ class Ledger
 {
     public const TAGS = ['departure_id', 'vehicle_id', 'destination_id', 'channel', 'staff_user_id'];
 
-    public function books(BusAgency|string $agency): ?BusAccBook
+    public function books(BusAgency|BusCompany|string $agency): ?BusAccBook
     {
         return BusAccBook::where('agency_id', $this->id($agency))->first();
     }
 
-    public function account(BusAgency|string $agency, string $role): BusAccAccount
+    public function account(BusAgency|BusCompany|string $agency, string $role): BusAccAccount
     {
         $a = BusAccAccount::where('agency_id', $this->id($agency))->where('role', $role)->first();
         if (!$a) {
@@ -42,26 +43,56 @@ class Ledger
         return $a;
     }
 
-    /** Creates the branch's chart of accounts (on opening the books). */
-    public function seedChart(BusAgency $agency): void
+    /** Creates the chart of accounts (on opening the books, and when new accounts join the standard chart). */
+    public function seedChart(BusAgency|BusCompany $owner): void
     {
-        foreach (AccChart::ACCOUNTS as [$code, $name, $class, $type, $money, $role, $category]) {
-            BusAccAccount::firstOrCreate(['agency_id' => $agency->id, 'code' => $code],
+        $chart = $owner instanceof BusCompany ? AccChart::COMPANY_ACCOUNTS : AccChart::ACCOUNTS;
+        foreach ($chart as [$code, $name, $class, $type, $money, $role, $category]) {
+            BusAccAccount::firstOrCreate(['agency_id' => (string)$owner->id, 'code' => $code],
                 ['name' => $name, 'class' => $class, 'type' => $type, 'money' => $money, 'role' => $role, 'category' => $category, 'active' => true]);
         }
+        if ($owner instanceof BusCompany) {
+            foreach (BusAgency::where('company_id', $owner->id)->orderBy('created_at')->get() as $branch) {
+                $this->branchAccount($owner, $branch);
+            }
+        }
+    }
+
+    /**
+     * On a head office's books, the account of one branch (OHADA 18, liaison): what the head office
+     * holds for that branch. It mirrors the branch's own 1811, so the two always agree.
+     */
+    public function branchAccount(BusCompany|string $company, BusAgency $branch): BusAccAccount
+    {
+        $companyId = $company instanceof BusCompany ? (string)$company->id : $company;
+        $a = BusAccAccount::where('agency_id', $companyId)->where('role', 'branch')->where('link_id', $branch->id)->first();
+        if ($a) {
+            return $a;
+        }
+        $n = BusAccAccount::where('agency_id', $companyId)->where('role', 'branch')->count() + 1;
+        return BusAccAccount::create(['agency_id' => $companyId, 'code' => '181' . str_pad((string)$n, 2, '0', STR_PAD_LEFT), 'name' => $branch->branchLabel(),
+            'class' => 1, 'type' => 'liability', 'money' => false, 'role' => 'branch', 'link_id' => (string)$branch->id, 'category' => false, 'active' => true]);
     }
 
     public function monthClosed(string $agencyId, CarbonInterface|string $date): bool
     {
+        if ($this->yearClosed($agencyId, $date)) {
+            return true;
+        }
         $month = Carbon::parse($date)->startOfMonth()->toDateString();
         return DB::table('bus_acc_months')->where('agency_id', $agencyId)->where('month', $month)->whereNotNull('closed_at')->exists();
+    }
+
+    public function yearClosed(string $agencyId, CarbonInterface|string $date): bool
+    {
+        return DB::table('bus_acc_years')->where('agency_id', $agencyId)->where('year', Carbon::parse($date)->year)->whereNotNull('closed_at')->exists();
     }
 
     /**
      * Posts an entry. $e: date, journal, memo, lines [[account, debit, credit, memo?, tags...]],
      * source_type?, source_id?, source_key?, created_by?, auto (bool: a closed month lands today), reverses_id?
      */
-    public function post(BusAgency|string $agency, array $e): BusAccEntry
+    public function post(BusAgency|BusCompany|string $agency, array $e): BusAccEntry
     {
         $agencyId = $this->id($agency);
         return DB::transaction(function () use ($agencyId, $e) {
@@ -78,7 +109,12 @@ class Ledger
             if ($date->gt(today())) {
                 throw ValidationException::withMessages(['date' => translate('The date cannot be in the future.')]);
             }
-            if ($this->monthClosed($agencyId, $date)) {
+            if (!empty($e['closing'])) {
+                // The year-end closing entry: dated the last day of a year whose months are all closed.
+                if ($this->yearClosed($agencyId, $date)) {
+                    throw ValidationException::withMessages(['date' => translate('This year is already closed.')]);
+                }
+            } elseif ($this->monthClosed($agencyId, $date)) {
                 if (!$auto) {
                     throw ValidationException::withMessages(['date' => translate(key: '{month} is closed. Date it in an open month, or reopen the month first.', replace: ['month' => $date->translatedFormat('F Y')])]);
                 }
@@ -196,8 +232,8 @@ class Ledger
         return \Modules\BusManagement\Entities\BusAccDocument::PREFIX[$type] . '-' . str_pad((string)$n, 5, '0', STR_PAD_LEFT);
     }
 
-    protected function id(BusAgency|string $agency): string
+    protected function id(BusAgency|BusCompany|string $agency): string
     {
-        return $agency instanceof BusAgency ? (string)$agency->id : (string)$agency;
+        return is_string($agency) ? $agency : (string)$agency->id;
     }
 }
