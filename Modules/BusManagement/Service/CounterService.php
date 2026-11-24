@@ -80,6 +80,7 @@ class CounterService
             'passengers.*.name.required' => $payerOnly ? translate('Add the name of the person paying.') : translate('Add the name of every passenger.'),
             'passengers.*.name.min' => $payerOnly ? translate('Add the name of the person paying.') : translate('Add the name of every passenger.'),
             'seats.required' => translate('Choose the seats on the plan.'),
+            'seats.*.distinct' => translate('The same seat is chosen twice.'),
         ])->validate();
 
         $planSeats = array_map('strval', $departure->seat_plan['seats']);

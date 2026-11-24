@@ -24,9 +24,18 @@
     .idbox { border-radius: 12px; padding: 10px; margin: 4px 0 8px; background: #f4f6f6; }
     .idbox.is-check { background: #fff4e5; }
     .idbox img { height: 110px; max-width: 100%; border-radius: 8px; border: 1px solid var(--line); object-fit: cover; cursor: zoom-in; }
-    .paperbox { border: 2px solid #f59e0b; background: #fffaf0; border-radius: 12px; padding: 10px 12px; }
-    .paperbox .form-check-input { width: 1.4em; height: 1.4em; margin-top: .1em; }
-    .paperbox .form-check-label { font-weight: 700; padding-left: 4px; }
+    .cf-ticket { border: 2px dashed #1d2d2b; border-radius: 8px; padding: 10px 12px; margin-bottom: 10px; background: #fff; }
+    .cf-ticket .ag { font-weight: 800; text-align: center; }
+    .cf-ticket .rt { text-align: center; font-weight: 700; color: #333; }
+    .cf-ticket .st { text-align: center; font-size: 22px; font-weight: 900; margin: 2px 0 6px; }
+    .cf-ticket table { width: 100%; font-size: 13px; }
+    .cf-ticket td { padding: 2px 0; vertical-align: top; }
+    .cf-ticket td:first-child { color: #555; width: 42%; }
+    .cf-ticket td:last-child { font-weight: 700; }
+    .cf-sum { display: flex; justify-content: space-between; align-items: baseline; border-top: 1px solid var(--line); padding-top: 10px; margin-top: 4px; }
+    .cf-tick { display: flex; gap: 10px; align-items: center; padding: 10px; border-radius: 8px; margin-top: 10px; cursor: pointer; font-weight: 700; font-size: 14px; background: #fffaf0; border: 2px solid #f59e0b; }
+    .cf-tick input { width: 1.5em; height: 1.5em; margin: 0; flex: none; }
+    .cf-left { font-weight: 800; }
     .empty i { font-size: 34px; display: block; margin-bottom: 6px; color: #c3cbca; }
 </style>
 @endpush
@@ -82,6 +91,33 @@
         <div id="departures"></div>
     </section>
 </div>
+<div class="modal fade" id="cfModal" tabindex="-1" aria-labelledby="cfTitle" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-scrollable modal-fullscreen-sm-down">
+        <div class="modal-content">
+            <div class="modal-header">
+                <div class="flex-grow-1" style="min-width:0">
+                    <h2 class="modal-title fs-5 fw-bold" id="cfTitle">{{ translate('Check the request before you accept') }}</h2>
+                    <div class="small"><span id="cfWho"></span> · <span class="cf-left text-danger" id="cfLeft"></span></div>
+                </div>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="{{ translate('Close') }}"></button>
+            </div>
+            <div class="modal-body">
+                <div id="cfTickets"></div>
+                <div id="cfId"></div>
+                <div class="cf-sum"><span class="fw-semibold" id="cfCount"></span><span class="fs-4 fw-bold" id="cfTotal"></span></div>
+                <div class="b-hint mt-2" id="cfPay"></div>
+                <label class="cf-tick" for="cfPaper" id="cfPaperBox">
+                    <input class="form-check-input" type="checkbox" id="cfPaper">
+                    <span><i class="bi bi-pencil-fill" aria-hidden="true"></i> <span id="cfPaperText"></span></span>
+                </label>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-light" data-bs-dismiss="modal">{{ translate('Back') }}</button>
+                <button type="button" class="btn btn-primary btn-lg" id="cfGo" disabled>{{ translate('Accept') }}</button>
+            </div>
+        </div>
+    </div>
+</div>
 @endsection
 
 @push('script')
@@ -100,9 +136,15 @@
         newReq: @json(translate('New seat request')), confirmCancel: @json(translate('This cancels the booking and frees its seats.')),
         status: {scheduled: @json(translate('Scheduled')), boarding: @json(translate('Boarding')), departed: @json(translate('Departed'))},
         delayed: @json(translate('Delayed')),
-        pencilOn: @json(translate(key: 'Pencil seat {seats} on the sheet of the {departure} bus.', replace: ['seats' => '{seats}', 'departure' => '{departure}'])),
-        pencilDone: @json(translate('Done, the seats are pencilled on the sheet')), back: @json(translate('Back')),
+        back: @json(translate('Back')),
+        seat: @json(translate('Seat')), passenger: @json(translate('Passenger')), phoneL: @json(translate('Phone')), leaves: @json(translate('Leaves')),
+        getsOff: @json(translate('Gets off at')), busL: @json(translate('Bus')), bags: @json(translate('Bags')), fareL: @json(translate('Fare')),
+        tickets: @json(translate(key: '{n} ticket(s)', replace: ['n' => '{n}'])),
+        pencil: @json(translate(key: 'Seats {seats} are pencilled on the paper sheet', replace: ['seats' => '{seats}'])),
+        payAfter: @json(translate(key: 'After you accept, the passenger has {n} minutes to pay in the app (Mobile Money). The seats stay held for them until they pay or the time runs out.', replace: ['n' => '{n}'])),
+        gone: @json(translate('This request is no longer waiting.')), leftT: @json(translate(key: '{t} left to answer', replace: ['t' => '{t}'])),
     };
+    var payMinutes = @json(\Modules\BusManagement\Lib\BusSettings::all()['pay_minutes']);
     var REASONS = [@json(translate('The bus is full')), @json(translate('This departure changed')), @json(translate('We could not reach you'))];
     var urls = {
         feed: @json(route('bus-partner.today.feed')),
@@ -171,11 +213,6 @@
                 '<div class="d-flex flex-wrap gap-2 align-items-baseline"><b class="fs-6">' + esc(b.name) + '</b>' + (b.phone ? '<a class="small" href="tel:' + esc(b.phone) + '">' + esc(b.phone) + '</a>' : '') + '<span class="ms-auto fw-bold">' + esc(b.amount) + '</span></div>' +
                 '<div class="small mb-2">' + esc(b.departure) + ' · ' + T.to + ' ' + esc(b.drop_point) + '</div>' + seatChips(b) + idBox(b) +
                 '<div class="d-flex flex-wrap gap-2 mt-1" data-actions><button class="btn btn-primary" data-accept>' + (b.booker && b.booker.check ? T.acceptChecked : T.accept) + '</button><button class="btn btn-soft" data-decline>' + T.decline + '</button></div>' +
-                // Keeping a paper copy: the seats are pencilled before the accept goes through.
-                '<div class="paperbox mt-2" data-paperbox hidden><div class="fw-bold"><i class="bi bi-pencil-fill"></i> ' +
-                esc(T.pencilOn.replace('{seats}', b.seats.map(function (s) { return s.seat; }).join(', ')).replace('{departure}', b.departure)) + '</div>' +
-                '<div class="form-check mt-2"><input class="form-check-input" type="checkbox" id="pp_' + b.id + '" data-paper-ok><label class="form-check-label" for="pp_' + b.id + '">' + T.pencilDone + '</label></div>' +
-                '<div class="d-flex gap-2 mt-2"><button class="btn btn-primary" data-accept-go disabled>' + (b.booker && b.booker.check ? T.acceptChecked : T.accept) + '</button><button class="btn btn-soft" data-paper-back>' + T.back + '</button></div></div>' +
                 '<div class="reasons mt-2" data-reasons hidden><div class="small fw-semibold mb-1">' + T.why + '</div>' +
                 REASONS.map(function (r) { return '<button class="btn btn-soft btn-sm" data-reason="' + esc(r) + '">' + esc(r) + '</button>'; }).join('') +
                 '<div class="d-flex gap-2"><input class="form-control form-control-sm" maxlength="200" placeholder="' + T.other + '" aria-label="' + T.other + '" data-other><button class="btn btn-dark btn-sm" data-reason-other>' + T.decline + '</button></div></div>' +
@@ -239,7 +276,58 @@
             if (s === 0) el.style.opacity = .5;
         });
         document.querySelectorAll('[data-countdown]').forEach(function (el) { el.textContent = T.payBy.replace('{t}', mmss(left(el.dataset.countdown))); });
+        if (cfBooking) {
+            var s = left(cfBooking.deadline);
+            document.getElementById('cfLeft').textContent = T.leftT.replace('{t}', mmss(s));
+            if (s === 0) document.getElementById('cfGo').disabled = true;
+        }
     }, 1000);
+
+    // Accept: the tickets as they will be, then (with a paper copy) the pencil tick, then Accept.
+    var cfModalEl = document.getElementById('cfModal'), cfModal = new bootstrap.Modal(cfModalEl), cfBooking = null, cfPaper = document.getElementById('cfPaper');
+    function cfReady() { document.getElementById('cfGo').disabled = !cfBooking || left(cfBooking.deadline) === 0 || (data.paper && !cfPaper.checked); }
+    function openPreview(id) {
+        var b = (data.requests || []).find(function (x) { return x.id === id; });
+        if (!b) { busToast(T.gone); return; }
+        cfBooking = b;
+        var t = b.ticket || {};
+        document.getElementById('cfWho').textContent = b.name + (b.phone ? ' · ' + b.phone : '');
+        document.getElementById('cfTickets').innerHTML = b.seats.map(function (s) {
+            return '<div class="cf-ticket"><div class="ag">' + esc(t.agency) + '</div><div class="rt">' + esc(t.route) + '</div>' +
+                '<div class="st">' + T.seat + ' ' + esc(s.seat) + '</div><table>' +
+                '<tr><td>' + T.passenger + '</td><td>' + esc(s.name) + '</td></tr>' +
+                (s.phone ? '<tr><td>' + T.phoneL + '</td><td>' + esc(s.phone) + '</td></tr>' : '') +
+                '<tr><td>' + T.leaves + '</td><td>' + esc(t.when) + '</td></tr>' +
+                '<tr><td>' + T.getsOff + '</td><td>' + esc(b.drop_point) + '</td></tr>' +
+                '<tr><td>' + T.busL + '</td><td>' + esc(t.bus) + '</td></tr>' +
+                '<tr><td>' + T.bags + '</td><td>' + esc(s.bags) + '</td></tr>' +
+                '<tr><td>' + T.fareL + '</td><td>' + esc(s.fare) + '</td></tr></table></div>';
+        }).join('');
+        document.getElementById('cfId').innerHTML = idBox(b);
+        document.getElementById('cfCount').textContent = T.tickets.replace('{n}', b.seats.length);
+        document.getElementById('cfTotal').textContent = b.amount;
+        document.getElementById('cfPay').textContent = T.payAfter.replace('{n}', payMinutes);
+        document.getElementById('cfPaperBox').hidden = !data.paper;
+        cfPaper.checked = false;
+        document.getElementById('cfPaperText').textContent = T.pencil.replace('{seats}', b.seats.map(function (s) { return s.seat; }).join(', '));
+        document.getElementById('cfGo').textContent = b.booker && b.booker.check ? T.acceptChecked : T.accept;
+        document.getElementById('cfLeft').textContent = T.leftT.replace('{t}', mmss(left(b.deadline)));
+        cfReady();
+        cfModal.show();
+    }
+    cfPaper.addEventListener('change', cfReady);
+    cfModalEl.addEventListener('hidden.bs.modal', function () { cfBooking = null; });
+    document.getElementById('cfGo').addEventListener('click', function () {
+        if (!cfBooking) return;
+        var id = cfBooking.id, btn = this, card = document.querySelector('.req[data-id="' + id + '"]');
+        btn.disabled = true;
+        busy[id] = true;
+        busPost(urls.accept.replace('__', id), {paper: data.paper ? cfPaper.checked : false}).then(function (d) {
+            busToast(d.message);
+            if (d.ok !== false) cfModal.hide(); else btn.disabled = false;
+            if (window.busPaperRefresh) window.busPaperRefresh();
+        }).catch(function () { btn.disabled = false; }).finally(function () { delete busy[id]; load(); });
+    });
 
     function act(url, id, body, el) {
         busy[id] = true;
@@ -251,20 +339,7 @@
         var card = e.target.closest('.req');
         if (card) {
             var id = card.dataset.id;
-            if (e.target.closest('[data-accept]')) {
-                if (data && data.paper) {
-                    busy[id] = true;
-                    card.querySelector('[data-actions]').hidden = true;
-                    card.querySelector('[data-paperbox]').hidden = false;
-                    card.querySelector('[data-paper-ok]').focus();
-                } else act(urls.accept, id, {}, card);
-            }
-            if (e.target.closest('[data-accept-go]')) act(urls.accept, id, {paper: true}, card);
-            if (e.target.closest('[data-paper-back]')) {
-                delete busy[id];
-                card.querySelector('[data-actions]').hidden = false;
-                card.querySelector('[data-paperbox]').hidden = true;
-            }
+            if (e.target.closest('[data-accept]')) openPreview(id);
             if (e.target.closest('[data-decline]')) { busy[id] = true; card.querySelector('[data-reasons]').hidden = false; card.querySelector('[data-actions]').hidden = true; card.querySelector('[data-reason]').focus(); }
             var r = e.target.closest('[data-reason]');
             if (r) act(urls.decline, id, {reason: r.dataset.reason}, card);
@@ -272,10 +347,6 @@
         }
         var c = e.target.closest('[data-cancel]');
         if (c && confirm(T.confirmCancel)) act(urls.cancel, c.dataset.cancel, {reason: ''}, c.parentNode);
-    });
-    document.addEventListener('change', function (e) {
-        if (!e.target.matches('[data-paper-ok]')) return;
-        e.target.closest('[data-paperbox]').querySelector('[data-accept-go]').disabled = !e.target.checked;
     });
     document.addEventListener('submit', function (e) {
         var f = e.target.closest('[data-refund]');

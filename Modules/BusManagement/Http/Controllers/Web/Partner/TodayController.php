@@ -38,7 +38,7 @@ class TodayController extends Controller
     public function feed(Request $request): JsonResponse
     {
         $agency = $request->attributes->get('busAgency');
-        $requests = BusBooking::with(['tickets', 'dropPoint', 'departure.destination', 'customer'])->where('agency_id', $agency->id)
+        $requests = BusBooking::with(['tickets', 'dropPoint', 'departure.destination', 'departure.vehicle', 'customer'])->where('agency_id', $agency->id)
             ->where('status', BusBooking::REQUESTED)->where('respond_by', '>', now())->orderBy('respond_by')->get();
         if ($request->boolean('count')) {
             return response()->json(['count' => $requests->count()]);
@@ -66,7 +66,15 @@ class TodayController extends Controller
             'refund' => ($owed = $b->refund_status === 'due' ? ((float)$b->refund_owed ?: (float)$b->refund_amount) : (float)$b->refund_amount + (float)$b->extra_refund) > 0
                 ? getCurrencyFormat($owed) : null,
             'seats' => $b->tickets->whereIn('status', [BusTicket::HELD, BusTicket::VALID, BusTicket::CANCELLED])->sortBy(fn($t) => (int)$t->seat)
-                ->map(fn($t) => ['seat' => $t->seat, 'name' => $t->passenger_name, 'id_number' => $t->id_number, 'bags' => $t->bags])->values(),
+                ->map(fn($t) => ['seat' => $t->seat, 'name' => $t->passenger_name, 'id_number' => $t->id_number, 'bags' => $t->bags,
+                    'phone' => $t->phone, 'fare' => getCurrencyFormat($t->fare)])->values(),
+            // For the ticket preview shown before accepting.
+            'ticket' => $b->status === BusBooking::REQUESTED && $b->departure ? [
+                'agency' => $agency->name,
+                'route' => $agency->origin_city . ' → ' . $b->departure->destination?->city,
+                'when' => $b->departure->leavesAt()->translatedFormat('l j F Y, H:i'),
+                'bus' => ScheduleService::classLabel($b->departure->class) . ($b->departure->vehicle ? ' · ' . $b->departure->vehicle->registration : ''),
+            ] : null,
             'asked_at' => $b->created_at?->toIso8601String(),
             'deadline' => ($b->status === BusBooking::REQUESTED ? $b->respond_by : ($b->status === BusBooking::ACCEPTED ? $b->pay_by : $b->refund_due_by))?->toIso8601String(),
             'source' => $b->source,
