@@ -244,16 +244,17 @@ return new class extends Migration {
                     $base = ['agency_id' => $b->agency_id, 'booking_id' => $b->id, 'departure_id' => $b->departure_id, 'channel' => $channel,
                         'backfilled' => true, 'created_at' => now(), 'from_departure_id' => null, 'staff_user_id' => null];
                     if ($b->paid_at) {
-                        $moves[] = $base + ['kind' => 'sale', 'method' => $counter ? ($b->payment_method ?: 'cash') : $online,
-                            'amount' => $b->amount, 'at' => $b->paid_at, 'staff_user_id' => $counter ? $b->staff_user_id : null];
+                        // The specific values first: in a PHP array union the left side wins.
+                        $moves[] = ['kind' => 'sale', 'method' => $counter ? ($b->payment_method ?: 'cash') : $online,
+                            'amount' => $b->amount, 'at' => $b->paid_at, 'staff_user_id' => $counter ? $b->staff_user_id : null] + $base;
                     }
                     if ((float)$b->extra_refund > 0) {
                         $moves[] = $base + ['kind' => 'extra', 'method' => $online, 'amount' => $b->extra_refund, 'at' => $b->updated_at ?? $b->created_at];
                     }
                     if ((float)$b->refund_amount > 0 && $b->paid_at) {
                         $cash = $counter && $b->cancelled_by && !in_array($b->cancelled_by, ['passenger', 'closure'], true);
-                        $moves[] = $base + ['kind' => $cash ? 'cash_refund' : 'refund_owed', 'method' => $cash ? ($b->payment_method ?: 'cash') : null,
-                            'amount' => $b->refund_amount, 'at' => $b->cancelled_at ?? $b->updated_at];
+                        $moves[] = ['kind' => $cash ? 'cash_refund' : 'refund_owed', 'method' => $cash ? ($b->payment_method ?: 'cash') : null,
+                            'amount' => $b->refund_amount, 'at' => $b->cancelled_at ?? $b->updated_at, 'staff_user_id' => $cash ? $b->staff_user_id : null] + $base;
                     }
                     $sent = ((float)$b->refund_amount + (float)$b->extra_refund) - ($b->refund_status === 'due' ? (float)$b->refund_owed : 0);
                     $cashPart = $counter && $b->cancelled_by && !in_array($b->cancelled_by, ['passenger', 'closure'], true) ? (float)$b->refund_amount : 0;
