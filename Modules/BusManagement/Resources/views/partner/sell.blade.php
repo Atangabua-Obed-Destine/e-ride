@@ -31,7 +31,11 @@
     .ps .sp-cell b { font-size: 13px; }
     .ps .sp-cell small { font-size: 9px; line-height: 1.1; overflow: hidden; max-height: 20px; max-width: 100%; background: rgba(255, 255, 255, .85); padding: 0 2px; text-align: left; }
     .ps .sp-aisle { width: 16px; border: 0; }
-    .ps .sp-driver { border-radius: 50%; width: 44px; align-items: center; justify-content: center; font-size: 9px; background: #fff; color: #111; }
+    .ps .sp-driver { border-radius: 22px; align-items: center; justify-content: center; font-size: 10px; font-weight: 700; background: #fff; color: #111; }
+    .ps .sp-empty { border-color: transparent; background: none; }
+    /* The back row spans the whole bus, aisle included, like in the real bus. */
+    .ps .sp-row-back { contain: inline-size; width: 100%; }
+    .ps .sp-row-back .sp-cell { flex: 1 1 0; width: auto; min-width: 0; }
     .ps .sp-door { border-style: dashed; align-items: center; justify-content: center; font-size: 9px; background: #fff; color: #111; }
     .ps .sp-cabin { background: none; color: #111; padding: 0 2px; }
     .ps .sp-cabin b { color: #111; }

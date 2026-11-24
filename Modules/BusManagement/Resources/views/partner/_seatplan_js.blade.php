@@ -92,7 +92,7 @@
             }
             d.rows.forEach(function (r) {
                 var row = document.createElement('div');
-                row.className = 'sp-row';
+                row.className = 'sp-row' + (r.some(function (c) { return c.back; }) ? ' sp-row-back' : '');
                 r.forEach(function (c) {
                     var cell;
                     if (c.t === 'seat') {
@@ -105,7 +105,7 @@
                         if (opts.seat) opts.seat(c, cell);
                     } else {
                         cell = document.createElement('div');
-                        cell.className = 'sp-cell ' + (c.t === 'aisle' ? 'sp-aisle' : c.t === 'driver' ? 'sp-driver' : c.t === 'door' ? 'sp-door' : '');
+                        cell.className = 'sp-cell ' + (c.t === 'aisle' ? 'sp-aisle' : c.t === 'driver' ? 'sp-driver' : c.t === 'door' ? 'sp-door' : 'sp-empty');
                         if (c.t === 'driver') { cell.textContent = @json(translate('Drv')); cell.setAttribute('aria-label', @json(translate('Driver'))); }
                         if (c.t === 'door') {
                             cell.textContent = @json(translate('Door'));

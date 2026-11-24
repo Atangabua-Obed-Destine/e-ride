@@ -6,6 +6,7 @@
     <meta name="robots" content="noindex">
     <title>{{ translate('Seat sheet') }} · {{ $d->leavesAt()->format('d/m H:i') }} · {{ $d->destination?->city }}</title>
     <style>
+        *, *::before, *::after { box-sizing: border-box; }
         body { margin: 0; padding: 12mm; font: 12px/1.35 -apple-system, "Segoe UI", Roboto, sans-serif; color: #111; }
         .bar { margin-bottom: 10px; } .bar button { font: inherit; font-weight: 700; padding: 8px 18px; border-radius: 8px; border: 0; background: #e02020; color: #fff; cursor: pointer; }
         h1 { font-size: 18px; margin: 0; } .meta { display: flex; flex-wrap: wrap; gap: 4px 18px; margin: 6px 0 8px; color: #333; }
@@ -19,7 +20,10 @@
         .sp-cell b { font-size: 13px; }
         .sp-cell small { font-size: 9px; line-height: 1.1; overflow: hidden; max-height: 22px; }
         .sp-aisle { width: 18px; border: 0; }
-        .sp-driver { border-radius: 50%; width: 48px; align-items: center; justify-content: center; font-size: 9px; }
+        .sp-driver { border-radius: 24px; align-items: center; justify-content: center; font-size: 10px; font-weight: 700; }
+        .sp-empty { border-color: transparent; background: none; }
+        .sp-row-back { contain: inline-size; width: 100%; }
+        .sp-row-back .sp-cell { flex: 1 1 0; width: auto; min-width: 0; }
         .sp-door { border-style: dashed; align-items: center; justify-content: center; font-size: 9px; }
         .sp-cabin, .sp-deck { font-weight: 700; text-align: center; margin: 2px 0; }
         .sp-cabin { display: flex; justify-content: space-between; }
