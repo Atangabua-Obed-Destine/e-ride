@@ -1,0 +1,442 @@
+<?php
+
+namespace Modules\BusManagement\Http\Controllers\Web\Partner;
+
+use Illuminate\Http\Request;
+use Illuminate\Routing\Controller;
+use Illuminate\Support\Carbon;
+use Illuminate\Support\Facades\DB;
+use Illuminate\Validation\ValidationException;
+use Modules\BusManagement\Entities\BusAccAccount;
+use Modules\BusManagement\Entities\BusAccDocument;
+use Modules\BusManagement\Entities\BusAccEntry;
+use Modules\BusManagement\Entities\BusAccLine;
+use Modules\BusManagement\Entities\BusAgency;
+use Modules\BusManagement\Entities\BusDeparture;
+use Modules\BusManagement\Entities\BusDestination;
+use Modules\BusManagement\Entities\BusStaff;
+use Modules\BusManagement\Entities\BusVehicle;
+use Modules\BusManagement\Service\Accounting\AccountingPreview;
+use Modules\BusManagement\Service\Accounting\AccountingService;
+use Modules\BusManagement\Service\Accounting\AccReports;
+use Modules\BusManagement\Service\Accounting\Ledger;
+use Modules\BusManagement\Service\Accounting\LedgerSync;
+use Symfony\Component\HttpFoundation\StreamedResponse;
+
+/**
+ * The branch's accounts (manager and accountant). Every action that posts shows its preview first
+ * (the real action, rolled back) and is refused unless the preview was reviewed and ticked.
+ */
+class AccountsController extends Controller
+{
+    public function __construct(protected Ledger $ledger, protected LedgerSync $sync, protected AccountingService $service,
+                                protected AccountingPreview $preview, protected AccReports $reports)
+    {
+    }
+
+    protected function agency(Request $r): BusAgency
+    {
+        return $r->attributes->get('busAgency');
+    }
+
+    protected function role(Request $r): string
+    {
+        return $r->attributes->get('busStaff')->role;
+    }
+
+    /** The books must be open; otherwise the setup page. */
+    protected function books(Request $r)
+    {
+        $books = $this->ledger->books($this->agency($r));
+        if ($books) {
+            $this->sync->sync($this->agency($r));
+        }
+        return $books;
+    }
+
+    public function index(Request $r)
+    {
+        $agency = $this->agency($r);
+        if (!$books = $this->books($r)) {
+            return redirect()->route('bus-partner.accounts.setup');
+        }
+        return view('busmanagement::partner.accounts.overview', ['books' => $books, 'o' => $this->reports->overview($agency)] + $this->formData($agency));
+    }
+
+    public function setup(Request $r)
+    {
+        $agency = $this->agency($r);
+        if ($this->ledger->books($agency)) {
+            return redirect()->route('bus-partner.accounts');
+        }
+        return view('busmanagement::partner.accounts.setup', ['company' => $agency->company]);
+    }
+
+    public function spending(Request $r)
+    {
+        $agency = $this->agency($r);
+        if (!$books = $this->books($r)) {
+            return redirect()->route('bus-partner.accounts.setup');
+        }
+        [$from, $to] = $this->period($r);
+        $q = BusAccDocument::with(['account', 'moneyAccount', 'vehicle'])->where('agency_id', $agency->id)->where('type', BusAccDocument::EXPENSE)
+            ->whereBetween('date', [$from, $to]);
+        if ($r->filled('category')) {
+            $q->where('account_id', $r->input('category'));
+        }
+        if ($r->filled('bus')) {
+            $q->where('vehicle_id', $r->input('bus'));
+        }
+        $expenses = $q->orderByDesc('date')->orderByDesc('number')->paginate(40)->withQueryString();
+        $bills = BusAccDocument::with('account')->where('agency_id', $agency->id)->where('type', BusAccDocument::EXPENSE)->where('status', 'posted')
+            ->where('owed', '>', 0)->orderByRaw('due_on is null')->orderBy('due_on')->get();
+        $payments = BusAccDocument::with(['moneyAccount', 'parent'])->where('agency_id', $agency->id)->where('type', BusAccDocument::BILL_PAYMENT)
+            ->orderByDesc('date')->orderByDesc('number')->limit(20)->get();
+        return view('busmanagement::partner.accounts.spending', compact('books', 'expenses', 'bills', 'payments', 'from', 'to') + $this->formData($agency));
+    }
+
+    public function money(Request $r)
+    {
+        $agency = $this->agency($r);
+        if (!$books = $this->books($r)) {
+            return redirect()->route('bus-partner.accounts.setup');
+        }
+        $o = $this->reports->overview($agency);
+        $docs = BusAccDocument::with(['account', 'moneyAccount', 'toAccount'])->where('agency_id', $agency->id)
+            ->whereIn('type', [BusAccDocument::TRANSFER, BusAccDocument::INCOME, BusAccDocument::CHECK])
+            ->orderByDesc('date')->orderByDesc('created_at')->paginate(30)->withQueryString();
+        return view('busmanagement::partner.accounts.money', compact('books', 'o', 'docs') + $this->formData($agency));
+    }
+
+    /** Reconcile a bank or Mobile Money account: the movements not matched yet, to tick against the statement. */
+    public function reconcile(Request $r)
+    {
+        $agency = $this->agency($r);
+        if (!$books = $this->books($r)) {
+            return redirect()->route('bus-partner.accounts.setup');
+        }
+        $account = BusAccAccount::where('agency_id', $agency->id)->where('money', true)->where('role', '!=', 'counter_cash')->find((string)$r->input('account'));
+        if (!$account) {
+            return redirect()->route('bus-partner.accounts.money')->withErrors(['account' => translate('Choose an account from the list.')]);
+        }
+        try {
+            $date = Carbon::parse($r->input('date', today()->toDateString()))->min(today())->toDateString();
+        } catch (\Throwable) {
+            $date = today()->toDateString();
+        }
+        $lines = $this->service->unmatched($account, $date);
+        $book = $this->ledger->balance($account, $date);
+        $last = BusAccDocument::where('agency_id', $agency->id)->where('type', BusAccDocument::CHECK)->where('status', 'posted')
+            ->where('account_id', $account->id)->orderByDesc('date')->orderByDesc('created_at')->first();
+        $statement = $r->filled('counted') ? (float)$r->input('counted') : null;
+        return view('busmanagement::partner.accounts.reconcile', compact('books', 'account', 'date', 'lines', 'book', 'last', 'statement'));
+    }
+
+    public function cash(Request $r)
+    {
+        $agency = $this->agency($r);
+        if (!$books = $this->books($r)) {
+            return redirect()->route('bus-partner.accounts.setup');
+        }
+        $holding = $this->service->agentsHolding($agency);
+        $counts = BusAccDocument::with(['toAccount', 'staffUser', 'creator'])->where('agency_id', $agency->id)->where('type', BusAccDocument::CASH_COUNT)
+            ->orderByDesc('created_at')->paginate(30);
+        return view('busmanagement::partner.accounts.cash', compact('books', 'holding', 'counts') + $this->formData($agency));
+    }
+
+    public function reports(Request $r)
+    {
+        $agency = $this->agency($r);
+        if (!$books = $this->books($r)) {
+            return redirect()->route('bus-partner.accounts.setup');
+        }
+        [$from, $to] = $this->period($r);
+        $tab = in_array($r->input('tab'), ['income', 'profit', 'cash', 'trial', 'balance'], true) ? $r->input('tab') : 'income';
+        $by = in_array($r->input('by'), ['bus', 'route', 'trip'], true) ? $r->input('by') : 'bus';
+        $data = match ($tab) {
+            'income' => $this->reports->incomeStatement($agency, $from, $to),
+            'profit' => $this->reports->profit($agency, $from, $to, $by),
+            'cash' => $this->reports->cashFlow($agency, $from, $to),
+            'trial' => $this->reports->trialBalance($agency, $from, $to),
+            'balance' => $this->reports->balanceSheet($agency, $to),
+        };
+        if ($r->boolean('csv')) {
+            return $this->csv($agency, $tab, $data, $from, $to, $by);
+        }
+        return view('busmanagement::partner.accounts.reports', compact('books', 'tab', 'by', 'data', 'from', 'to'));
+    }
+
+    public function journal(Request $r)
+    {
+        $agency = $this->agency($r);
+        if (!$books = $this->books($r)) {
+            return redirect()->route('bus-partner.accounts.setup');
+        }
+        [$from, $to] = $this->period($r);
+        $accounts = $this->reports->accounts($agency);
+        $account = $r->filled('account') ? $accounts->first(fn($a) => (string)$a->id === (string)$r->input('account')) : null;
+        $agent = $r->filled('agent') ? (string)$r->input('agent') : null;
+        $ledger = $account ? $this->reports->ledger($account, $from, $to, $agent) : null;
+        $entries = null;
+        if (!$account) {
+            $q = BusAccEntry::with('lines.account')->where('agency_id', $agency->id)->whereBetween('date', [$from, $to]);
+            if ($r->filled('q')) {
+                $s = '%' . str_replace(['%', '_'], ['\%', '\_'], $r->input('q')) . '%';
+                $q->where(fn($w) => $w->where('memo', 'like', $s)->orWhere('number', 'like', $s));
+            }
+            if ($r->filled('journal')) {
+                $q->where('journal', $r->input('journal'));
+            }
+            $entries = $q->orderByDesc('date')->orderByDesc('number')->paginate(30)->withQueryString();
+        }
+        $docs = BusAccDocument::where('agency_id', $agency->id)->whereIn('id', collect($entries?->items() ?? [])->where('source_type', 'document')->pluck('source_id'))
+            ->get()->keyBy(fn($d) => (string)$d->id);
+        return view('busmanagement::partner.accounts.journal', compact('books', 'from', 'to', 'accounts', 'account', 'ledger', 'entries', 'agent', 'docs') + $this->formData($agency));
+    }
+
+    public function document(Request $r, string $document)
+    {
+        $agency = $this->agency($r);
+        if (!$books = $this->books($r)) {
+            return redirect()->route('bus-partner.accounts.setup');
+        }
+        $doc = BusAccDocument::with(['account', 'moneyAccount', 'toAccount', 'parent', 'vehicle', 'destination', 'staffUser', 'creator'])
+            ->where('agency_id', $agency->id)->findOrFail($document);
+        $accounts = $this->reports->accounts($agency)->keyBy(fn($a) => (string)$a->id);
+        $entries = BusAccEntry::with('lines')->whereIn('id', array_filter([$doc->entry_id, $doc->void_entry_id, $doc->auto_reverse_entry_id]))->orderBy('number')->get()
+            ->map(fn($e) => $this->preview->entry($e, $accounts));
+        $payments = $doc->type === BusAccDocument::EXPENSE ? BusAccDocument::with('moneyAccount')->where('parent_id', $doc->id)->orderBy('date')->get() : collect();
+        return view('busmanagement::partner.accounts.document', compact('books', 'doc', 'entries', 'payments') + $this->formData($agency));
+    }
+
+    public function settings(Request $r)
+    {
+        $agency = $this->agency($r);
+        if (!$books = $this->books($r)) {
+            return redirect()->route('bus-partner.accounts.setup');
+        }
+        $accounts = $this->reports->accounts($agency);
+        $balances = $this->preview->balances($agency);
+        $months = [];
+        $m = $books->starts_on->copy()->startOfMonth();
+        $rows = DB::table('bus_acc_months')->where('agency_id', $agency->id)->get()->keyBy(fn($x) => Carbon::parse($x->month)->format('Y-m'));
+        while ($m->lte(today())) {
+            $months[] = ['month' => $m->copy(), 'row' => $rows[$m->format('Y-m')] ?? null, 'over' => $m->copy()->endOfMonth()->lt(today())];
+            $m->addMonth();
+        }
+        $months = array_reverse($months);
+        return view('busmanagement::partner.accounts.settings', compact('books', 'accounts', 'balances', 'months'));
+    }
+
+    public function saveAccount(Request $r, ?string $account = null)
+    {
+        $agency = $this->agency($r);
+        $model = $account ? BusAccAccount::where('agency_id', $agency->id)->findOrFail($account) : null;
+        $this->service->saveAccount($agency, $r->only(['code', 'name', 'type', 'money', 'active']), $model);
+        return back()->with('success', $model ? translate('Account saved.') : translate('Account added.'));
+    }
+
+    public function saveSettings(Request $r)
+    {
+        $this->service->saveSettings($this->agency($r), $r->only(['refunds_from', 'eride_from']));
+        return back()->with('success', translate('Saved.'));
+    }
+
+    // ------------------------------------------------------------------ preview and confirm
+
+    public const ACTIONS = ['open', 'expense', 'pay', 'income', 'transfer', 'count', 'check', 'journal', 'void', 'close', 'reopen'];
+
+    public function previewAction(Request $r, string $action)
+    {
+        abort_unless(in_array($action, self::ACTIONS, true), 404);
+        $agency = $this->agency($r);
+        [$title, $confirm, $run, $extra] = $this->action($r, $agency, $action);
+        $out = $this->preview->run($agency, $title, $run, $extra);
+        $out['confirm'] = $confirm;
+        return response()->json($out);
+    }
+
+    public function doAction(Request $r, string $action)
+    {
+        abort_unless(in_array($action, self::ACTIONS, true), 404);
+        $agency = $this->agency($r);
+        if (!$r->boolean('reviewed')) {
+            return response()->json(['message' => translate('Look at the preview and tick it first.')], 422);
+        }
+        [$title, , $run] = $this->action($r, $agency, $action);
+        try {
+            $result = DB::transaction(fn() => $run());
+        } catch (ValidationException $e) {
+            return response()->json(['message' => collect($e->errors())->flatten()->first(), 'errors' => $e->errors()], 422);
+        }
+        $redirect = $result instanceof BusAccDocument && !in_array($action, ['open'], true)
+            ? route('bus-partner.accounts.document', $result->id) : null;
+        $message = match ($action) {
+            'open' => translate('The books are open.'),
+            'void' => translate('Voided: the entry was reversed.'),
+            'close' => translate('The month is closed.'),
+            'reopen' => translate('The month is open again.'),
+            default => translate('Recorded and posted.'),
+        };
+        return response()->json(['ok' => true, 'message' => $message, 'redirect' => $redirect]);
+    }
+
+    /** [title, tick text, the action, extra preview] for each action. */
+    protected function action(Request $r, BusAgency $agency, string $action): array
+    {
+        $uid = (string)auth()->id();
+        $data = $r->except(['_token', 'reviewed']);
+        $doc = fn() => BusAccDocument::where('agency_id', $agency->id)->findOrFail((string)$r->input('document'));
+        return match ($action) {
+            'open' => [translate('Open the books'), translate('The start date and the balances match what the branch really has on that day.'),
+                fn() => $this->service->open($agency, $data, $uid), function (&$out) {
+                    $out['notes'][] = translate('Tickets already paid for trips still ahead, refunds owed and E-Ride statements not paid are added from the bus records. The rest balances against Owner capital.');
+                }],
+            'expense' => [translate('Record an expense'), translate('I checked the amount, the category and where it was paid from against the receipt.'),
+                fn() => $this->service->expense($agency, $data, $uid), null],
+            'pay' => [translate('Pay a bill'), translate('I checked the bill and the amount paid against the payment proof.'),
+                fn() => $this->service->payBill($agency, $doc(), $data, $uid), null],
+            'income' => [translate('Record other income'), translate('I checked the amount, the category and where the money came in.'),
+                fn() => $this->service->income($agency, $data, $uid), null],
+            'transfer' => [translate('Move money'), translate('The money left the first account and reached the second, for this amount.'),
+                fn() => $this->service->transfer($agency, $data, $uid), null],
+            'count' => [translate('Count an agent cash'), translate('I counted the cash myself, with the agent, and put it where it says.'),
+                fn() => $this->service->cashCount($agency, $data, $uid), null],
+            'check' => [translate('Check a statement'), translate('The balance is the one printed on the statement for this date.'),
+                fn() => $this->service->check($agency, $data, $uid), null],
+            'journal' => [translate('Journal entry'), translate('I checked every line, and the debits equal the credits.'),
+                fn() => $this->service->journal($agency, $data, $uid), null],
+            'void' => [translate('Void'), translate('I understand: the entry is reversed and the document stays, marked void.'),
+                fn() => $this->service->void($agency, $doc(), (string)$r->input('reason'), $uid), null],
+            'close' => [translate('Close the month'), translate('I checked this month. Nothing more can be posted in it once closed.'),
+                fn() => $this->service->closeMonth($agency, (string)$r->input('month'), $uid), fn(&$out) => $this->closePreview($agency, (string)$r->input('month'), $out)],
+            'reopen' => [translate('Reopen the month'), translate('I know why it must be reopened, and I will close it again after the correction.'),
+                function () use ($agency, $r, $uid) {
+                    if ($this->role($r) !== BusStaff::MANAGER) {
+                        throw ValidationException::withMessages(['month' => translate('Only the manager reopens a month.')]);
+                    }
+                    return $this->service->reopenMonth($agency, (string)$r->input('month'), (string)$r->input('reason'), $uid);
+                }, null],
+        };
+    }
+
+    /** The month at a glance in the close preview, and what is worth a look before closing. */
+    protected function closePreview(BusAgency $agency, string $month, array &$out): void
+    {
+        $m = Carbon::parse($month)->startOfMonth();
+        $is = $this->reports->incomeStatement($agency, $m->toDateString(), $m->copy()->endOfMonth()->toDateString());
+        $out['summary'] = [
+            [translate('Month'), $m->translatedFormat('F Y')],
+            [translate('Income'), \Modules\BusManagement\Lib\AccFormat::n($is['total_income']) . ' FCFA'],
+            [translate('Spending'), \Modules\BusManagement\Lib\AccFormat::n($is['total_spending']) . ' FCFA'],
+            [translate('Result'), \Modules\BusManagement\Lib\AccFormat::n($is['result']) . ' FCFA'],
+        ];
+        $holding = collect($this->service->agentsHolding($agency))->where('held', '>', 0);
+        if ($holding->isNotEmpty()) {
+            $out['warnings'][] = translate(key: 'Counter agents still hold cash not counted: {list}. Count it first if it belongs to this month.',
+                replace: ['list' => $holding->map(fn($h) => $h['name'] . ' ' . \Modules\BusManagement\Lib\AccFormat::n($h['held']))->implode(', ')]);
+        }
+        $checked = BusAccDocument::where('agency_id', $agency->id)->where('type', BusAccDocument::CHECK)->where('status', 'posted')
+            ->whereBetween('date', [$m->toDateString(), $m->copy()->endOfMonth()->toDateString()])->pluck('account_id')->map(fn($id) => (string)$id);
+        $moved = BusAccLine::query()->from('bus_acc_lines as l')->join('bus_acc_accounts as a', 'a.id', '=', 'l.account_id')
+            ->where('l.agency_id', $agency->id)->where('a.money', true)->where('a.role', '!=', 'counter_cash')
+            ->whereBetween('l.date', [$m->toDateString(), $m->copy()->endOfMonth()->toDateString()])->distinct()->pluck('a.id')->map(fn($id) => (string)$id);
+        $unchecked = BusAccAccount::whereIn('id', $moved->diff($checked))->get();
+        if ($unchecked->isNotEmpty()) {
+            $out['warnings'][] = translate(key: 'Not reconciled with a statement this month: {list}.', replace: ['list' => $unchecked->map->label()->implode(', ')]);
+        }
+        $open = BusDeparture::where('agency_id', $agency->id)->whereBetween('date', [$m->toDateString(), $m->copy()->endOfMonth()->toDateString()])
+            ->whereIn('status', BusDeparture::OPEN)->count();
+        if ($open > 0) {
+            $out['notes'][] = translate(key: '{n} trips of this month are not marked departed yet: their tickets become sales when they are.', replace: ['n' => $open]);
+        }
+    }
+
+    // ------------------------------------------------------------------ helpers
+
+    /** Lists for the forms: categories, money accounts, buses, routes, agents, recent trips. */
+    protected function formData(BusAgency $agency): array
+    {
+        $accounts = BusAccAccount::where('agency_id', $agency->id)->where('active', true)->orderBy('code')->get();
+        return [
+            'expenseCats' => $accounts->filter(fn($a) => $a->type === 'expense' && $a->category)->values(),
+            'incomeCats' => $accounts->filter(fn($a) => $a->type === 'revenue' && $a->category)->values(),
+            'moneyAccounts' => $accounts->filter(fn($a) => $a->money)->values(),
+            'allAccounts' => $accounts,
+            'buses' => BusVehicle::usableByAgency($agency)->orderBy('registration')->get(['bus_vehicles.id', 'registration', 'name']),
+            'routes' => BusDestination::where('agency_id', $agency->id)->orderBy('city')->get(['id', 'city']),
+            'agents' => BusStaff::with('user')->where('agency_id', $agency->id)->get()->filter(fn($s) => $s->user)
+                ->map(fn($s) => ['id' => (string)$s->user_id, 'name' => trim($s->user->first_name . ' ' . $s->user->last_name), 'role' => $s->role, 'active' => $s->active])->values(),
+            'trips' => BusDeparture::with('destination')->where('agency_id', $agency->id)->whereBetween('date', [today()->subDays(14)->toDateString(), today()->addDays(3)->toDateString()])
+                ->where('status', '!=', BusDeparture::CANCELLED)->orderByDesc('date')->orderByDesc('time')->limit(80)->get(),
+        ];
+    }
+
+    /** The period asked (from, to), this month by default. */
+    protected function period(Request $r): array
+    {
+        try {
+            $from = $r->filled('from') ? Carbon::parse($r->input('from'))->toDateString() : today()->startOfMonth()->toDateString();
+            $to = $r->filled('to') ? Carbon::parse($r->input('to'))->toDateString() : today()->toDateString();
+        } catch (\Throwable) {
+            [$from, $to] = [today()->startOfMonth()->toDateString(), today()->toDateString()];
+        }
+        return $from <= $to ? [$from, $to] : [$to, $from];
+    }
+
+    protected function csv(BusAgency $agency, string $tab, array $data, string $from, string $to, string $by): StreamedResponse
+    {
+        $name = 'accounts-' . $tab . '-' . $from . '-' . $to . '.csv';
+        return response()->streamDownload(function () use ($tab, $data, $by) {
+            $out = fopen('php://output', 'w');
+            fwrite($out, "\xEF\xBB\xBF");
+            $n = fn($v) => number_format((float)$v, 2, '.', '');
+            switch ($tab) {
+                case 'income':
+                    fputcsv($out, [translate('Account'), translate('Name'), translate('Amount')]);
+                    foreach ($data['income'] as $row) {
+                        fputcsv($out, [$row['account']->code, translate($row['account']->name), $n($row['amount'])]);
+                    }
+                    fputcsv($out, ['', translate('Total income'), $n($data['total_income'])]);
+                    foreach ($data['spending'] as $row) {
+                        fputcsv($out, [$row['account']->code, translate($row['account']->name), $n(-$row['amount'])]);
+                    }
+                    fputcsv($out, ['', translate('Total spending'), $n(-$data['total_spending'])]);
+                    fputcsv($out, ['', translate('Result'), $n($data['result'])]);
+                    break;
+                case 'profit':
+                    fputcsv($out, [translate($by === 'bus' ? 'Bus' : ($by === 'route' ? 'Route' : 'Trip')), translate('Ticket and other income'), translate('Fuel'), translate('Other spending'), translate('E-Ride commission'), translate('Profit')]);
+                    foreach ($data as $row) {
+                        fputcsv($out, [$row['label'] ?? translate('Not linked'), $n($row['income']), $n($row['fuel']), $n($row['other']), $n($row['commission']), $n($row['profit'])]);
+                    }
+                    break;
+                case 'cash':
+                    fputcsv($out, ['', translate('Amount')]);
+                    fputcsv($out, [translate('Money at the start'), $n($data['opening'])]);
+                    foreach ($data['rows'] as $row) {
+                        fputcsv($out, [translate($row['label']), $n($row['amount'])]);
+                    }
+                    fputcsv($out, [translate('Money at the end'), $n($data['closing'])]);
+                    break;
+                case 'trial':
+                    fputcsv($out, [translate('Account'), translate('Name'), translate('Opening debit'), translate('Opening credit'), translate('Debit'), translate('Credit'), translate('Closing debit'), translate('Closing credit')]);
+                    foreach ($data['rows'] as $row) {
+                        fputcsv($out, [$row['account']->code, translate($row['account']->name), $n($row['od']), $n($row['oc']), $n($row['d']), $n($row['c']), $n($row['cd']), $n($row['cc'])]);
+                    }
+                    $t = $data['totals'];
+                    fputcsv($out, ['', translate('Total'), $n($t['od']), $n($t['oc']), $n($t['d']), $n($t['c']), $n($t['cd']), $n($t['cc'])]);
+                    break;
+                case 'balance':
+                    fputcsv($out, [translate('Section'), translate('Account'), translate('Name'), translate('Amount')]);
+                    foreach ([['has', 'What the branch has'], ['owes', 'What the branch owes'], ['equity', 'Owner']] as [$k, $label]) {
+                        foreach ($data[$k] as $row) {
+                            fputcsv($out, [translate($label), $row['account']->code, translate($row['account']->name), $n($row['amount'])]);
+                        }
+                    }
+                    fputcsv($out, [translate('Owner'), '', translate('Result since the start'), $n($data['result'])]);
+                    break;
+            }
+            fclose($out);
+        }, $name, ['Content-Type' => 'text/csv; charset=UTF-8']);
+    }
+}

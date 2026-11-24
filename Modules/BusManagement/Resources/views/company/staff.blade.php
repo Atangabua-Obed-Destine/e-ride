@@ -8,7 +8,7 @@
     use Modules\BusManagement\Service\AgencyService;
     $canAct = $busCompanyStaff->canAct();
     $isDirector = $busCompanyStaff->isDirector();
-    $roleLabel = fn($r) => match ($r) { BusStaff::MANAGER => translate('Manager'), BusStaff::COUNTER => translate('Counter agent'), default => translate('Boarding agent') };
+    $roleLabel = fn($r) => match ($r) { BusStaff::MANAGER => translate('Manager'), BusStaff::COUNTER => translate('Counter agent'), BusStaff::ACCOUNTANT => translate('Accountant'), default => translate('Boarding agent') };
 @endphp
 
 @section('content')

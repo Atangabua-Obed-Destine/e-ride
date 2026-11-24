@@ -15,6 +15,8 @@ class BusManagementServiceProvider extends ServiceProvider
         $this->mergeConfigFrom(module_path($this->moduleName, 'Config/config.php'), $this->moduleNameLower);
         $this->loadViewsFrom(module_path($this->moduleName, 'Resources/views'), $this->moduleNameLower);
         $this->loadMigrationsFrom(module_path($this->moduleName, 'Database/Migrations'));
+        // Every money movement on a booking is written down for the branch books.
+        \Modules\BusManagement\Entities\BusBooking::observe(\Modules\BusManagement\Observers\BusBookingMoneyObserver::class);
 
         if ($this->app->runningInConsole()) {
             $this->commands([\Modules\BusManagement\Console\BusTick::class]);

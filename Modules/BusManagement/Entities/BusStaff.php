@@ -6,13 +6,14 @@ use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 use Modules\UserManagement\Entities\User;
-/** Someone who works in an agency's portal: the manager, a counter agent, a boarding agent. */
+/** Someone who works in an agency's portal: the manager, a counter agent, a boarding agent, the accountant. */
 class BusStaff extends Model
 {
     public const MANAGER = 'manager';
     public const COUNTER = 'counter';
     public const BOARDING = 'boarding';
-    public const ROLES = [self::MANAGER, self::COUNTER, self::BOARDING];
+    public const ACCOUNTANT = 'accountant';
+    public const ROLES = [self::MANAGER, self::COUNTER, self::BOARDING, self::ACCOUNTANT];
 
     protected $table = 'bus_staff';
 

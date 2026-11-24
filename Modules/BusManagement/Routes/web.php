@@ -74,6 +74,25 @@ Route::group(['prefix' => 'partner/bus-agency', 'as' => 'bus-partner.'], functio
     });
 
     // The manager only.
+    // Accounts (one set of books per branch): the manager and the accountant.
+    Route::middleware(BusPartner::class . ':manager,accountant')->prefix('accounts')->name('accounts')->group(function () {
+        $acc = \Modules\BusManagement\Http\Controllers\Web\Partner\AccountsController::class;
+        Route::get('/', [$acc, 'index'])->name('');
+        Route::get('setup', [$acc, 'setup'])->name('.setup');
+        Route::get('spending', [$acc, 'spending'])->name('.spending');
+        Route::get('money', [$acc, 'money'])->name('.money');
+        Route::get('cash', [$acc, 'cash'])->name('.cash');
+        Route::get('reconcile', [$acc, 'reconcile'])->name('.reconcile');
+        Route::get('reports', [$acc, 'reports'])->name('.reports');
+        Route::get('journal', [$acc, 'journal'])->name('.journal');
+        Route::get('settings', [$acc, 'settings'])->name('.settings');
+        Route::get('documents/{document}', [$acc, 'document'])->name('.document')->whereUuid('document');
+        Route::post('accounts/{account?}', [$acc, 'saveAccount'])->name('.account')->whereUuid('account');
+        Route::post('settings', [$acc, 'saveSettings'])->name('.settings.save');
+        Route::post('preview/{action}', [$acc, 'previewAction'])->name('.preview')->where('action', '[a-z]+')->middleware('throttle:120,1,bus-acc-preview');
+        Route::post('do/{action}', [$acc, 'doAction'])->name('.do')->where('action', '[a-z]+')->middleware('throttle:60,1,bus-acc-do');
+    });
+
     Route::middleware(BusPartner::class . ':manager')->group(function () {
         Route::get('fleet', [FleetController::class, 'index'])->name('fleet');
         Route::post('fleet/{bus?}', [FleetController::class, 'save'])->name('fleet.save')->whereUuid('bus');
@@ -197,6 +216,7 @@ Route::group(['prefix' => 'partner/bus-company', 'as' => 'bus-company.'], functi
         Route::get('buses', [$c, 'buses'])->name('buses');
         Route::get('rules', [$c, 'rules'])->name('rules');
         Route::get('money', [$c, 'money'])->name('money');
+        Route::get('accounts', [$c, 'accounts'])->name('accounts');
     });
     // The director and regional managers act.
     Route::middleware($mw . ':act')->group(function () use ($c) {

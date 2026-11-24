@@ -2,20 +2,23 @@
     use Modules\BusManagement\Entities\BusAgency;
     use Modules\BusManagement\Entities\BusStaff;
     $role = $busStaff->role;
-    $paperOn = $role !== BusStaff::BOARDING && Route::has('bus-partner.paper') && \Modules\BusManagement\Service\PaperService::on($busAgency);
+    // Counter screens: the manager and counter agents (not boarding agents, not the accountant).
+    $desk = in_array($role, [BusStaff::MANAGER, BusStaff::COUNTER], true);
+    $paperOn = $desk && Route::has('bus-partner.paper') && \Modules\BusManagement\Service\PaperService::on($busAgency);
     $nav = array_values(array_filter([
-        Route::has('bus-partner.today') && $role !== BusStaff::BOARDING ? ['bus-partner.today', 'bi-bell', translate('Today')] : null,
-        Route::has('bus-partner.sell') && $role !== BusStaff::BOARDING ? ['bus-partner.sell', 'bi-ticket-perforated', translate('Quick sell')] : null,
-        Route::has('bus-partner.collect') && $role !== BusStaff::BOARDING && \Modules\BusManagement\Lib\BusSettings::rules($busAgency->rules)['tickets'] === 'collect'
+        Route::has('bus-partner.today') && $desk ? ['bus-partner.today', 'bi-bell', translate('Today')] : null,
+        Route::has('bus-partner.sell') && $desk ? ['bus-partner.sell', 'bi-ticket-perforated', translate('Quick sell')] : null,
+        Route::has('bus-partner.collect') && $desk && \Modules\BusManagement\Lib\BusSettings::rules($busAgency->rules)['tickets'] === 'collect'
             ? ['bus-partner.collect', 'bi-printer', translate('Collect')] : null,
         $paperOn ? ['bus-partner.paper', 'bi-journal-check', translate('Paper sheets')] : null,
-        Route::has('bus-partner.boarding') ? ['bus-partner.boarding', 'bi-qr-code-scan', translate('Boarding')] : null,
+        Route::has('bus-partner.boarding') && $role !== BusStaff::ACCOUNTANT ? ['bus-partner.boarding', 'bi-qr-code-scan', translate('Boarding')] : null,
         ['bus-partner.departures', 'bi-calendar-week', translate('Departures')],
         $role === BusStaff::MANAGER ? ['bus-partner.destinations', 'bi-signpost-split', translate('Destinations')] : null,
         $role === BusStaff::MANAGER ? ['bus-partner.fleet', 'bi-bus-front', translate('Fleet')] : null,
         $role === BusStaff::MANAGER ? ['bus-partner.payments', 'bi-wallet2', translate('Payments')] : null,
+        in_array($role, [BusStaff::MANAGER, BusStaff::ACCOUNTANT], true) && Route::has('bus-partner.accounts') ? ['bus-partner.accounts', 'bi-journal-text', translate('Accounts')] : null,
         $role === BusStaff::MANAGER ? ['bus-partner.staff', 'bi-people', translate('Staff')] : null,
-        $role !== BusStaff::BOARDING ? ['bus-partner.share', 'bi-share', translate('Share')] : null,
+        $desk ? ['bus-partner.share', 'bi-share', translate('Share')] : null,
     ]));
     $statusLabel = match (true) {
         $busAgency->status === BusAgency::LIVE && $busAgency->online_paused_at !== null => [translate('App sales paused'), 'is-paused'],
@@ -73,7 +76,7 @@
     @if ($errors->any())
         <div class="alert alert-danger"><ul class="mb-0 ps-3">@foreach ($errors->all() as $error)<li>{{ $error }}</li>@endforeach</ul></div>
     @endif
-    @if($role !== BusStaff::BOARDING && Route::has('bus-partner.paper'))
+    @if($desk && Route::has('bus-partner.paper'))
         @include('busmanagement::partner._paper_alarm')
     @endif
     @yield('content')
@@ -82,7 +85,7 @@
 <script src="{{ dynamicAsset('public/assets/admin-module/js/bootstrap.bundle.min.js') }}"></script>
 @include('busmanagement::partner._portal_js')
 @include('busmanagement::partner._seatplan_js')
-@if(Route::has('bus-partner.today') && $busStaff->role !== \Modules\BusManagement\Entities\BusStaff::BOARDING)
+@if(Route::has('bus-partner.today') && $desk)
 <script>
     // The menu badge: seat requests waiting for an answer (Today refreshes it faster itself).
     window.busSetBadge = function (n) {

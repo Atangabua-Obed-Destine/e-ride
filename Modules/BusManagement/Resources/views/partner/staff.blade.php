@@ -4,8 +4,8 @@
 
 @php
     use Modules\BusManagement\Service\AgencyService;
-    $roleLabel = ['manager' => translate('Manager'), 'counter' => translate('Counter agent'), 'boarding' => translate('Boarding agent')];
-    $roleHint = ['manager' => translate('Everything, including fares, buses, payments and staff.'), 'counter' => translate('Seat requests, quick sell, boarding, and seeing departures.'), 'boarding' => translate('Boarding only: scanning tickets and the passenger list.')];
+    $roleLabel = ['manager' => translate('Manager'), 'counter' => translate('Counter agent'), 'boarding' => translate('Boarding agent'), 'accountant' => translate('Accountant')];
+    $roleHint = ['manager' => translate('Everything, including fares, buses, payments and staff.'), 'counter' => translate('Seat requests, quick sell, boarding, and seeing departures.'), 'boarding' => translate('Boarding only: scanning tickets and the passenger list.'), 'accountant' => translate('Accounts only: spending, agent cash counts, statements and reports.')];
 @endphp
 
 @section('content')

@@ -9,6 +9,7 @@
         ['bus-company.staff', 'bi-people', translate('Staff')],
         ['bus-company.rules', 'bi-card-checklist', translate('Booking rules')],
         $isDirector || $busCompanyStaff->role === BusCompanyStaff::ACCOUNTANT ? ['bus-company.money', 'bi-wallet2', translate('Money')] : null,
+        $isDirector || $busCompanyStaff->role === BusCompanyStaff::ACCOUNTANT ? ['bus-company.accounts', 'bi-journal-text', translate('Accounts')] : null,
     ]));
 @endphp
 <!DOCTYPE html>

@@ -49,6 +49,7 @@ class BusPartner
     {
         return match ($role) {
             BusStaff::MANAGER, BusStaff::COUNTER => 'bus-partner.today',
+            BusStaff::ACCOUNTANT => 'bus-partner.accounts',
             default => 'bus-partner.boarding',
         };
     }
