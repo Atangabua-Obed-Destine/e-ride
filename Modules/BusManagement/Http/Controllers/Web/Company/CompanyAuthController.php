@@ -19,6 +19,12 @@ class CompanyAuthController extends Controller
             return redirect()->route('bus-company.overview');
         }
         return view('busmanagement::partner.login', [
+            'portal' => 'company',
+            'features' => [
+                translate('Every branch live: departures, seats, requests and money taken today'),
+                translate('Reports by branch, route, agent and day'),
+                translate('Head office books, and the whole company statements'),
+            ],
             'heading' => translate('E-Ride for bus companies'),
             'sub' => translate('Your head office: every branch, its departures, sales and agents, in one place.'),
             'action' => route('bus-company.login.submit'),
