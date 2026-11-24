@@ -27,17 +27,21 @@ class CounterService
 {
     public const METHODS = ['cash', 'momo', 'orange'];
 
-    /** Ways to take money at the counter: cash only while the admin's cash switch is on. */
+    /** Ways to take money at the counter. Cash is always there: the agency takes it in person (unlike app payments). */
     public static function methods(): array
     {
-        return \Modules\TripManagement\Lib\PaymentWays::cash() ? self::METHODS : array_values(array_diff(self::METHODS, ['cash']));
+        return self::METHODS;
     }
 
     public function __construct(protected BookingService $bookings)
     {
     }
 
-    /** input: seats[], drop_point_id, passengers[] {name, phone?, id_number?, bags?}, method */
+    /**
+     * input: seats[], drop_point_id, passengers[] {name, phone?, id_number?, bags?}, method, payer_only?
+     * payer_only: the agency took only the details of the person paying, so every ticket carries their name
+     * (from the first passenger) and says so.
+     */
     public function sell(BusAgency $agency, BusStaff $staff, BusDeparture $departure, array $input): BusBooking
     {
         if ((string)$departure->agency_id !== (string)$agency->id) {
@@ -55,6 +59,12 @@ class CounterService
             throw ValidationException::withMessages(['departure' => translate('Put a bus on this departure first (Departures).')]);
         }
         $rules = BusSettings::rules($agency->rules);
+        $payerOnly = !empty($input['payer_only']);
+        if ($payerOnly && is_array($input['passengers'] ?? null) && $input['passengers']) {
+            $first = (array)reset($input['passengers']);
+            $input['passengers'] = array_map(fn($p) => ['name' => $first['name'] ?? null, 'phone' => $first['phone'] ?? null, 'id_number' => null, 'bags' => ((array)$p)['bags'] ?? null],
+                array_values($input['passengers']));
+        }
         $data = Validator::make($input, [
             'seats' => 'required|array|min:1|max:20',
             'seats.*' => 'required|distinct',
@@ -67,8 +77,8 @@ class CounterService
             'method' => ['required', Rule::in(self::methods())],
             'booker_id_number' => ['nullable', 'string', 'max:40', 'regex:/^[A-Za-z0-9 \-\/]+$/'],
         ], [
-            'passengers.*.name.required' => translate('Add the name of every passenger.'),
-            'passengers.*.name.min' => translate('Add the name of every passenger.'),
+            'passengers.*.name.required' => $payerOnly ? translate('Add the name of the person paying.') : translate('Add the name of every passenger.'),
+            'passengers.*.name.min' => $payerOnly ? translate('Add the name of the person paying.') : translate('Add the name of every passenger.'),
             'seats.required' => translate('Choose the seats on the plan.'),
         ])->validate();
 
@@ -84,7 +94,7 @@ class CounterService
         $passengers = array_values($data['passengers']);
 
         $paperSale = $late || !empty($input['paper_sale']);
-        return DB::transaction(function () use ($agency, $staff, $departure, $data, $seats, $passengers, $fare, $rules, $late, $paperSale) {
+        return DB::transaction(function () use ($agency, $staff, $departure, $data, $seats, $passengers, $fare, $rules, $late, $paperSale, $payerOnly) {
             $locked = BusDeparture::whereKey($departure->id)->lockForUpdate()->first();
             if ((!$locked->isOpen() && !($late && self::lateEntryOk($locked))) || (string)$locked->vehicle_id !== (string)$departure->vehicle_id) {
                 throw ValidationException::withMessages(['departure' => translate('This departure just changed. Look at it again.')]);
@@ -118,6 +128,7 @@ class CounterService
                 'booker_id_type' => filled($data['booker_id_number'] ?? null) ? 'id_card' : null,
                 'booker_id_number' => filled($data['booker_id_number'] ?? null) ? Str::upper(preg_replace('/\s+/', '', $data['booker_id_number'])) : null,
                 'paper_sale' => $paperSale,
+                'payer_only' => $payerOnly && count($lines) > 0,
             ]);
             foreach ($lines as $line) {
                 $ticket = BusTicket::create([

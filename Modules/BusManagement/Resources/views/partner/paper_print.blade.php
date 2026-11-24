@@ -12,9 +12,9 @@
         .rules { border: 2px solid #111; border-radius: 6px; padding: 6px 10px; margin-bottom: 10px; font-weight: 700; }
         .legend { display: flex; flex-wrap: wrap; gap: 14px; margin-bottom: 10px; font-size: 11px; }
         .legend i { display: inline-block; width: 16px; height: 12px; border: 1px solid #333; vertical-align: -2px; margin-right: 4px; }
-        .sp { display: inline-flex; flex-direction: column; gap: 4px; border: 2px solid #333; border-radius: 6px; padding: 8px; }
+        .sp { --sp-w: 76px; display: inline-flex; flex-direction: column; gap: 4px; border: 2px solid #333; border-radius: 6px; padding: 8px; }
         .sp-row { display: flex; gap: 4px; justify-content: center; }
-        .sp-cell { width: 76px; height: 48px; border: 1px solid #333; border-radius: 4px; background: #fff; font: inherit; color: #111; padding: 2px 4px;
+        .sp-cell { width: var(--sp-w); height: 48px; border: 1px solid #333; border-radius: 4px; background: #fff; font: inherit; color: #111; padding: 2px 4px;
             display: flex; flex-direction: column; align-items: flex-start; justify-content: flex-start; position: relative; flex: none; }
         .sp-cell b { font-size: 13px; }
         .sp-cell small { font-size: 9px; line-height: 1.1; overflow: hidden; max-height: 22px; }

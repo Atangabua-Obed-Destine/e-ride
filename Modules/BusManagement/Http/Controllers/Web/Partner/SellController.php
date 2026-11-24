@@ -37,7 +37,7 @@ class SellController extends Controller
     public function seats(Request $request, string $departure): JsonResponse
     {
         $agency = $request->attributes->get('busAgency');
-        $d = BusDeparture::with('destination.dropPoints')->where('agency_id', $agency->id)->findOrFail($departure);
+        $d = BusDeparture::with(['destination.dropPoints', 'vehicle'])->where('agency_id', $agency->id)->findOrFail($departure);
         return response()->json([
             'plan' => $d->seat_plan,
             'taken' => BookingService::seatStates($d),
@@ -48,6 +48,15 @@ class SellController extends Controller
             'online_closed' => now()->gte(BookingService::onlineClosesAt($d, $agency->rules)),
             'drop_points' => $d->destination?->dropPoints->where('active', true)->map(fn($p) => ['id' => $p->id, 'name' => $p->name, 'fare' => $p->fareFor($d->class)])
                 ->filter(fn($p) => $p['fare'] !== null)->values(),
+            // The paper sheet of this bus, shown under the sale and printed from here.
+            'sheet' => [
+                'agency' => $agency->name,
+                'route' => $agency->origin_city . ' → ' . $d->destination?->city,
+                'when' => $d->leavesAt()->translatedFormat('l j F Y, H:i'),
+                'class' => \Modules\BusManagement\Service\ScheduleService::classLabel($d->class),
+                'bus' => $d->vehicle?->registration,
+                'checked' => $d->paper_checked_at?->format('d/m H:i'),
+            ],
         ]);
     }
 
@@ -61,7 +70,7 @@ class SellController extends Controller
             return response()->json(['ok' => false, 'message' => translate('Pencil the seats on the paper sheet and tick it first.')], 422);
         }
         try {
-            $booking = $this->counter->sell($agency, $request->attributes->get('busStaff'), $d, $request->only(['seats', 'drop_point_id', 'passengers', 'method', 'booker_id_number', 'paper_sale']));
+            $booking = $this->counter->sell($agency, $request->attributes->get('busStaff'), $d, $request->only(['seats', 'drop_point_id', 'passengers', 'method', 'booker_id_number', 'paper_sale', 'payer_only']));
         } catch (ValidationException $e) {
             return response()->json(['ok' => false, 'message' => collect($e->errors())->flatten()->first()], 422);
         }

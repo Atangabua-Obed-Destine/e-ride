@@ -16,6 +16,42 @@
     .total { font-size: 26px; font-weight: 800; }
     .done { text-align: center; padding: 22px 10px; }
     .done .bi { font-size: 44px; color: var(--ok); }
+    .payer { background: #f4f6f5; border-radius: 10px; padding: 10px; margin: 6px 0 4px; }
+    .payer-why { font-size: 12px; color: var(--muted); }
+    /* The paper sheet of the chosen bus: what a new sheet looks like now, printed from here. */
+    .ps { color: #111; font-size: 12px; line-height: 1.35; }
+    .ps-scroll { overflow-x: auto; padding-bottom: 4px; }
+    .ps-meta { display: flex; flex-wrap: wrap; gap: 2px 14px; margin: 2px 0 8px; color: #333; }
+    .ps-rules { border: 2px solid #111; border-radius: 6px; padding: 6px 10px; margin-bottom: 8px; font-weight: 700; }
+    .ps-legend { display: flex; flex-wrap: wrap; gap: 12px; margin-bottom: 8px; font-size: 11px; }
+    .ps-legend i { display: inline-block; width: 16px; height: 12px; border: 1px solid #333; vertical-align: -2px; margin-right: 4px; background: #fff; }
+    .ps .sp { --sp-w: 62px; display: inline-flex; flex-direction: column; gap: 4px; border: 2px solid #333; border-radius: 6px; padding: 8px; background: #fff; }
+    .ps .sp-cell { height: 44px; border: 1px solid #333; border-radius: 4px; background: #fff; color: #111; padding: 2px 4px; font-weight: 400; font-size: 12px;
+        flex-direction: column; align-items: flex-start; justify-content: flex-start; position: relative; opacity: 1; }
+    .ps .sp-cell b { font-size: 13px; }
+    .ps .sp-cell small { font-size: 9px; line-height: 1.1; overflow: hidden; max-height: 20px; max-width: 100%; background: rgba(255, 255, 255, .85); padding: 0 2px; text-align: left; }
+    .ps .sp-aisle { width: 16px; border: 0; }
+    .ps .sp-driver { border-radius: 50%; width: 44px; align-items: center; justify-content: center; font-size: 9px; background: #fff; color: #111; }
+    .ps .sp-door { border-style: dashed; align-items: center; justify-content: center; font-size: 9px; background: #fff; color: #111; }
+    .ps .sp-cabin { background: none; color: #111; padding: 0 2px; }
+    .ps .sp-cabin b { color: #111; }
+    .ps .sold, .ps-legend .sold { background: repeating-linear-gradient(135deg, #fff 0 6px, #d1d5db 6px 7px); }
+    .ps .sp-cell.sold::after { content: "\2715"; position: absolute; top: 1px; right: 4px; font-size: 14px; font-weight: 800; }
+    .ps .kept, .ps-legend .kept { background: #e5e7eb; }
+    .ps-held { margin-top: 8px; border: 2px dashed #9a4a06; border-radius: 6px; padding: 6px 10px; }
+    .ps-foot { margin-top: 8px; font-size: 11px; color: #333; }
+    #psPrint { display: none; }
+    @media print {
+        body.ps-printing > *:not(#psPrint) { display: none !important; }
+        body.ps-printing #psPrint { display: block; padding: 0; }
+        body.ps-printing { background: #fff !important; padding: 0 !important; }
+        #psPrint .ps-scroll { overflow: visible; }
+        #psPrint .sp { --sp-w: 76px; }
+        #psPrint .sp-cell { height: 48px; }
+        #psPrint .ps-head { font-size: 18px !important; }
+        @page { margin: 8mm; }
+        * { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+    }
 </style>
 @endpush
 
@@ -64,13 +100,17 @@
         <div id="saleForm">
             <h2 class="b-h mb-1" id="saleTitle">{{ translate('Passengers') }}</h2>
             <div class="b-hint mb-2" id="pickHint">{{ translate('Choose one or more seats on the plan.') }}</div>
+            <div class="form-check form-switch mb-1">
+                <input class="form-check-input" type="checkbox" role="switch" id="payerOnly">
+                <label class="form-check-label small fw-semibold" for="payerOnly">{{ translate('Take only the details of the person paying') }}</label>
+                <div class="payer-why">{{ translate('All the tickets carry their name, and say the passenger names were not taken.') }}</div>
+            </div>
             <div id="paxList"></div>
             <div class="row g-2 mt-1">
                 <div class="col-12"><label class="form-label small fw-semibold" for="bookerId">{{ translate('ID number of the person paying (optional)') }}</label><input id="bookerId" class="form-control text-uppercase" maxlength="40" autocomplete="off"></div>
                 <div class="col-sm-7"><label class="form-label small fw-semibold" for="drop">{{ translate('Gets off at') }}</label><select id="drop" class="form-select"></select></div>
                 <div class="col-sm-5"><span class="form-label small fw-semibold d-block">{{ translate('Paid by') }}</span>
-                    @php($counterCash = \Modules\TripManagement\Lib\PaymentWays::cash())
-                    <div class="seg">@if($counterCash)<input type="radio" name="method" id="m_cash" value="cash" checked><label for="m_cash">{{ translate('Cash') }}</label>@endif<input type="radio" name="method" id="m_momo" value="momo" {{ $counterCash ? '' : 'checked' }}><label for="m_momo">MoMo</label><input type="radio" name="method" id="m_orange" value="orange"><label for="m_orange">Orange</label></div></div>
+                    <div class="seg"><input type="radio" name="method" id="m_cash" value="cash" checked><label for="m_cash">{{ translate('Cash') }}</label><input type="radio" name="method" id="m_momo" value="momo"><label for="m_momo">MoMo</label><input type="radio" name="method" id="m_orange" value="orange"><label for="m_orange">Orange</label></div></div>
             </div>
             <div class="form-check form-switch mt-3">
                 <input class="form-check-input" type="checkbox" role="switch" id="paperSale">
@@ -95,6 +135,16 @@
         </div>
     </section>
 </div>
+
+<section class="b-card p-3 mt-3" aria-labelledby="psTitle">
+    <div class="d-flex flex-wrap align-items-center gap-2 mb-1">
+        <h2 class="b-h mb-0 flex-grow-1" id="psTitle"><i class="bi bi-file-earmark-text" aria-hidden="true"></i> {{ translate('Paper sheet of this bus') }}</h2>
+        <a class="btn btn-outline-dark btn-sm" id="psCheck" href="#"><i class="bi bi-list-check"></i> {{ translate('Check it') }}</a>
+        <button type="button" class="btn btn-dark btn-sm" id="psPrintBtn"><i class="bi bi-printer"></i> {{ translate('Print the sheet') }}</button>
+    </div>
+    <div class="b-hint mb-2">{{ translate('What a new sheet looks like now. Printing starts a fresh sheet: E-Ride counts the sold seats as pencilled.') }} <span id="psChecked"></span></div>
+    <div id="psSheet" class="ps"></div>
+</section>
 @endif
 @endsection
 
@@ -107,7 +157,15 @@
         seat: @json(translate('Seat')), held: @json(translate('Held for an app request')), sold: @json(translate('Sold')),
         gone: @json(translate(key: 'Seat {seat} was just taken. Choose another one.', replace: ['seat' => '{seat}'])), pick: @json(translate('Choose one or more seats on the plan.')),
         n: @json(translate(key: '{n} seat(s)', replace: ['n' => '{n}'])), closedDep: @json(translate('This departure has left or was cancelled.')), board: @json(translate('On board')),
+        payer: @json(translate('Person paying')), payerName: @json(translate('Name of the person paying')), inPayer: @json(translate('In the name of the person paying')),
+        sheet: @json(translate('Seat sheet')), bus: @json(translate('Bus')), printedAt: @json(translate('Printed')), checkedAt: @json(translate('Last checked')),
+        rulesTxt: @json(translate('Mark in pencil. Erase when E-Ride frees a seat. Check this sheet against E-Ride before selling on paper.')),
+        lSold: @json(translate('Sold in E-Ride when printed')), lKept: @json(translate('Kept for the counter')), lFree: @json(translate('Free when printed')),
+        pencilNow: @json(translate('Pencil these seats now')), heldWhy: @json(translate('Accepted, waiting for payment. Erase them if E-Ride frees them.')),
+        foot: @json(translate('Paper sales: write the name and phone in the seat box. Type them into E-Ride as soon as it is back (Quick sell).')),
     };
+    var printedUrl = @json(url('partner/bus-agency/paper/__/printed')), checkUrl = @json(url('partner/bus-agency/paper/__'));
+    var payerOnly = false, payer = {};
     var seatsUrl = @json(url('partner/bus-agency/sell/__/seats')), sellUrl = @json(url('partner/bus-agency/sell/__'));
     var rules = @json(\Modules\BusManagement\Lib\BusSettings::rules($busAgency->rules));
     var dep = document.getElementById('depPick').value, state = null, picked = [], pax = {}, timer = null;
@@ -142,6 +200,19 @@
     function drawPax() {
         var box = document.getElementById('paxList');
         document.getElementById('pickHint').textContent = picked.length ? T.n.replace('{n}', picked.length) : T.pick;
+        if (payerOnly) {
+            box.innerHTML = !picked.length ? '' : '<div class="payer"><div class="small fw-bold mb-1">' + T.payer + '</div><div class="row g-2">' +
+                '<div class="col-sm-6"><input class="form-control" data-p="name" required maxlength="120" placeholder="' + T.payerName + '" aria-label="' + T.payerName + '" value="' + esc(payer.name) + '"></div>' +
+                '<div class="col-sm-6"><input class="form-control" data-p="phone" inputmode="tel" maxlength="20" placeholder="' + T.phone + '" aria-label="' + T.phone + '" value="' + esc(payer.phone) + '"></div></div></div>' +
+                picked.map(function (s) {
+                    var p = pax[s] || {};
+                    return '<div class="pax d-flex gap-2 align-items-center" data-seat="' + esc(s) + '"><div class="pax-seat" aria-label="' + T.seat + ' ' + esc(s) + '">' + esc(s) + '</div>' +
+                        '<div class="flex-grow-1 small text-truncate" data-payer-name>' + esc(payer.name || T.inPayer) + '</div>' +
+                        '<input class="form-control" style="width:80px" data-f="bags" type="number" min="0" max="9" aria-label="' + T.bags + ', ' + T.seat + ' ' + esc(s) + '" title="' + T.bags + '" value="' + esc(p.bags != null ? p.bags : rules.free_bags) + '"></div>';
+                }).join('');
+            refresh();
+            return;
+        }
         box.innerHTML = picked.map(function (s, i) {
             var p = pax[s] || {};
             return '<div class="pax d-flex gap-2 align-items-start" data-seat="' + esc(s) + '"><div class="pax-seat" aria-label="' + T.seat + ' ' + esc(s) + '">' + esc(s) + '</div><div class="row g-2 flex-grow-1">' +
@@ -157,7 +228,8 @@
     function refresh() {
         document.getElementById('total').textContent = money(total());
         var paperOk = document.getElementById('paperOk');
-        var ready = picked.length && picked.every(function (s) { return pax[s] && (pax[s].name || '').trim().length >= 2; }) && fare() > 0 && (!paperOk || paperOk.checked);
+        var named = payerOnly ? (payer.name || '').trim().length >= 2 : picked.every(function (s) { return pax[s] && (pax[s].name || '').trim().length >= 2; });
+        var ready = picked.length && named && fare() > 0 && (!paperOk || paperOk.checked);
         document.getElementById('sellBtn').disabled = !ready;
     }
     function toggle(n) {
@@ -183,12 +255,73 @@
             picked.slice().forEach(function (s) {
                 if (d.taken[s]) { picked.splice(picked.indexOf(s), 1); delete pax[s]; busToast(T.gone.replace('{seat}', s)); drawPax(); }
             });
-            drawMap(); refresh();
+            drawMap(); refresh(); drawSheet();
         });
     }
+
+    // ---- The paper sheet of this bus (the same as Paper sheets > Print), drawn from the live seats.
+    function stamp() {
+        var d = new Date(), p = function (n) { return (n < 10 ? '0' : '') + n; };
+        return p(d.getDate()) + '/' + p(d.getMonth() + 1) + '/' + d.getFullYear() + ' ' + p(d.getHours()) + ':' + p(d.getMinutes());
+    }
+    function sheetHtml(withPrinted) {
+        var sh = state.sheet || {}, held = [];
+        Object.keys(state.taken).forEach(function (n) { if (state.taken[n].state === 'held') held.push(n); });
+        held.sort(function (a, b) { return a - b; });
+        return '<div class="ps-head fw-bold" style="font-size:15px">' + esc(sh.agency) + ' · ' + T.sheet + '</div>' +
+            '<div class="ps-meta"><b>' + esc(sh.route) + '</b><span>' + esc(sh.when) + '</span><span>' + esc(sh.class) + ' · ' + T.bus + ': <b>' + esc(sh.bus) + '</b></span>' +
+            (withPrinted ? '<span>' + T.printedAt + ': ' + stamp() + '</span>' : '') + '</div>' +
+            '<div class="ps-rules">' + T.rulesTxt + '</div>' +
+            '<div class="ps-legend"><span><i class="sold"></i>' + T.lSold + '</span><span><i class="kept"></i>' + T.lKept + '</span><span><i></i>' + T.lFree + '</span></div>' +
+            '<div class="ps-scroll"><div data-ps-map></div></div>' +
+            (held.length ? '<div class="ps-held"><b>' + T.pencilNow + ':</b> ' + held.map(esc).join(', ') + ' · ' + T.heldWhy + '</div>' : '') +
+            '<div class="ps-foot">' + T.foot + '</div>';
+    }
+    function fillSheet(root) {
+        var sold = {}, kept = {};
+        Object.keys(state.taken).forEach(function (n) { var t = state.taken[n]; if (t.state !== 'held') sold[n] = t.name || ''; });
+        state.counter_kept.forEach(function (s) { kept[s] = true; });
+        busSeatPlanRender(root.querySelector('[data-ps-map]'), state.plan, {seat: function (c, el) {
+            el.innerHTML = '<b>' + esc(c.n) + '</b>' + (sold[c.n] !== undefined ? '<small>' + esc(sold[c.n]) + '</small>' : '');
+            el.tabIndex = -1; el.disabled = true;
+            if (sold[c.n] !== undefined) el.classList.add('sold'); else if (kept[c.n]) el.classList.add('kept');
+        }});
+    }
+    var sheetSig = null;
+    function drawSheet() {
+        var box = document.getElementById('psSheet');
+        if (!state || !state.plan || !state.plan.decks) { box.innerHTML = ''; return; }
+        var sig = dep + JSON.stringify(state.taken) + JSON.stringify(state.counter_kept) + JSON.stringify(state.sheet);
+        if (sig === sheetSig) return;
+        sheetSig = sig;
+        box.innerHTML = sheetHtml(false);
+        fillSheet(box);
+        document.getElementById('psCheck').href = checkUrl.replace('__', dep);
+        document.getElementById('psChecked').textContent = state.sheet && state.sheet.checked ? T.checkedAt + ': ' + state.sheet.checked : '';
+    }
+    function printSheet() {
+        var btn = document.getElementById('psPrintBtn'); btn.disabled = true;
+        busPost(printedUrl.replace('__', dep), {}).then(function () { return load(false); }).then(function () {
+            var root = document.getElementById('psPrint');
+            if (!root) { root = document.createElement('div'); root.id = 'psPrint'; root.className = 'ps'; document.body.appendChild(root); }
+            root.innerHTML = sheetHtml(true);
+            fillSheet(root);
+            document.body.classList.add('ps-printing');
+            window.print();
+            if (window.busPaperRefresh) window.busPaperRefresh();
+        }).finally(function () { btn.disabled = false; });
+    }
+    window.addEventListener('afterprint', function () { document.body.classList.remove('ps-printing'); });
+    document.getElementById('psPrintBtn').addEventListener('click', printSheet);
     function poll() { clearTimeout(timer); timer = setTimeout(function () { load(false).finally(poll); }, 5000); }
 
+    document.getElementById('payerOnly').addEventListener('change', function () { payerOnly = this.checked; drawPax(); });
     document.getElementById('paxList').addEventListener('input', function (e) {
+        if (e.target.dataset.p) {
+            payer[e.target.dataset.p] = e.target.value;
+            document.querySelectorAll('#paxList [data-payer-name]').forEach(function (el) { el.textContent = payer.name || T.inPayer; });
+            refresh(); return;
+        }
         var row = e.target.closest('[data-seat]'); if (!row) return;
         pax[row.dataset.seat] = pax[row.dataset.seat] || {};
         pax[row.dataset.seat][e.target.dataset.f] = e.target.value;
@@ -209,7 +342,11 @@
             booker_id_number: document.getElementById('bookerId').value.trim() || null,
             paper: !!(document.getElementById('paperOk') && document.getElementById('paperOk').checked),
             paper_sale: document.getElementById('paperSale').checked,
-            passengers: picked.map(function (s) { return {name: pax[s].name, phone: pax[s].phone || null, bags: pax[s].bags != null && pax[s].bags !== '' ? +pax[s].bags : null}; }),
+            payer_only: payerOnly,
+            passengers: picked.map(function (s) {
+                var bags = pax[s].bags != null && pax[s].bags !== '' ? +pax[s].bags : null;
+                return payerOnly ? {name: payer.name, phone: payer.phone || null, bags: bags} : {name: pax[s].name, phone: pax[s].phone || null, bags: bags};
+            }),
         }).then(function (d) {
             if (!d.ok) { busToast(d.message); load(false); btn.disabled = false; return; }
             document.getElementById('saleForm').hidden = true;
@@ -217,7 +354,7 @@
             document.getElementById('doneText').textContent = d.message;
             document.getElementById('doneCode').textContent = d.code;
             document.getElementById('printBtn').href = d.print;
-            picked = []; pax = {}; drawPax(); load(false); document.getElementById('bookerId').value = '';
+            picked = []; pax = {}; payer = {}; drawPax(); load(false); document.getElementById('bookerId').value = '';
             if (document.getElementById('paperOk')) document.getElementById('paperOk').checked = false;
             if (!document.getElementById('paperSale').disabled) document.getElementById('paperSale').checked = false;
             document.getElementById('printBtn').focus();

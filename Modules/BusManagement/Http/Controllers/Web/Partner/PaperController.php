@@ -137,6 +137,14 @@ class PaperController extends Controller
         ]);
     }
 
+    /** Printed from Quick sell: the new sheet shows the seats sold, so E-Ride counts them as pencilled. */
+    public function printed(Request $request, string $departure): JsonResponse
+    {
+        $agency = $request->attributes->get('busAgency');
+        $this->paper->printed($this->departure($agency, $departure), auth()->id());
+        return response()->json(['ok' => true]);
+    }
+
     public function pause(Request $request): JsonResponse
     {
         $agency = $request->attributes->get('busAgency');

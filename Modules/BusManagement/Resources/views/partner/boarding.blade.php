@@ -111,7 +111,7 @@
     var base = @json(url('partner/bus-agency/boarding')) + '/' + dep;
     var T = {
         boarded: @json(translate('On board')), waiting: @json(translate('Not yet')), noShow: @json(translate('Not on board')),
-        app: @json(translate('App')), counter: @json(translate('Counter')), undo: @json(translate('Undo')),
+        app: @json(translate('App')), counter: @json(translate('Counter')), undo: @json(translate('Undo')), payerOnly: @json(translate('Name of the person paying')),
         empty: @json(translate('No passenger yet.')), noCam: @json(translate('This phone cannot scan here. Type the code under the QR instead.')),
         stop: @json(translate('Stop the camera')), cam: @json(translate('Scan with the camera')),
         delayAsk: @json(translate('New departure time (HH:MM)')), departAsk: @json(translate(key: 'Mark the bus as departed. {n} passenger(s) not scanned will be marked not on board.', replace: ['n' => '{n}'])),
@@ -138,7 +138,7 @@
         });
         document.getElementById('manifest').innerHTML = rows.length ? rows.map(function (t) {
             var st = t.status === 'boarded' ? '<span class="b-tag ok">' + T.boarded + ' ' + esc(t.boarded_at || '') + '</span>' : t.status === 'no_show' ? '<span class="b-tag bad">' + T.noShow + '</span>' : '<span class="b-tag mute">' + T.waiting + '</span>';
-            return '<div class="m-row is-' + t.status + '"><div class="m-seat">' + esc(t.seat) + '</div><div style="min-width:0"><div class="fw-bold text-truncate">' + esc(t.name) + '</div>' +
+            return '<div class="m-row is-' + t.status + '"><div class="m-seat">' + esc(t.seat) + '</div><div style="min-width:0"><div class="fw-bold text-truncate">' + esc(t.name) + (t.payer_only ? ' <span class="b-tag mute">' + T.payerOnly + '</span>' : '') + '</div>' +
                 '<div class="b-hint">' + (t.booker_id ? T.bookerId + ' ' + esc(t.booker_id) + ' · ' : '') + esc(t.drop_point || '') + ' · ' + (t.source === 'app' ? T.app : T.counter) + (t.bags > 1 ? ' · ' + t.bags + ' ' + T.bags : '') +
                 (!t.collected && t.status === 'valid' && collectMode ? ' · <span class="text-warning fw-bold">' + T.notCollected + '</span>' : '') + '</div></div>' +
                 '<div class="d-flex flex-column align-items-end gap-1">' + st + (t.status === 'boarded' && open ? '<button class="btn btn-link btn-sm p-0" data-undo="' + esc(t.code) + '">' + T.undo + '</button>' : '') +

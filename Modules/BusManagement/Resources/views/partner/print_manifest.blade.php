@@ -28,7 +28,7 @@
     <thead><tr><th>{{ translate('Seat') }}</th><th>{{ translate('Name') }}</th><th>{{ translate('ID number') }}</th><th>{{ translate('Phone') }}</th><th>{{ translate('Gets off at') }}</th><th>{{ translate('Bags') }}</th><th>{{ translate('On board') }}</th></tr></thead>
     <tbody>
     @forelse($data['tickets'] as $t)
-        <tr><td class="n">{{ $t['seat'] }}</td><td>{{ $t['name'] }}</td><td>{{ $t['id_number'] ?: ($t['booker_id'] ? $t['booker_id'] . ' (' . translate('booker') . ')' : '') }}</td><td>{{ $t['phone'] }}</td><td>{{ $t['drop_point'] }}</td><td>{{ $t['bags'] }}</td>
+        <tr><td class="n">{{ $t['seat'] }}</td><td>{{ $t['name'] }}@if($t['payer_only'] ?? false) <small>({{ translate('person paying') }})</small>@endif</td><td>{{ $t['id_number'] ?: ($t['booker_id'] ? $t['booker_id'] . ' (' . translate('booker') . ')' : '') }}</td><td>{{ $t['phone'] }}</td><td>{{ $t['drop_point'] }}</td><td>{{ $t['bags'] }}</td>
             <td>{{ $t['status'] === 'boarded' ? '✓ ' . $t['boarded_at'] : ($t['status'] === 'no_show' ? translate('No') : '') }}</td></tr>
     @empty
         <tr><td colspan="7">{{ translate('No passenger yet.') }}</td></tr>

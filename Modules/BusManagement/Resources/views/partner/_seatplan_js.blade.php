@@ -109,7 +109,7 @@
                         if (c.t === 'driver') { cell.textContent = @json(translate('Drv')); cell.setAttribute('aria-label', @json(translate('Driver'))); }
                         if (c.t === 'door') {
                             cell.textContent = @json(translate('Door'));
-                            cell.style.width = (c.span * 34 + (c.span - 1) * 4) + 'px';
+                            cell.style.width = 'calc(' + c.span + ' * var(--sp-w, 34px) + ' + ((c.span - 1) * 4) + 'px)';
                         }
                     }
                     row.appendChild(cell);

@@ -64,6 +64,7 @@ Route::group(['prefix' => 'partner/bus-agency', 'as' => 'bus-partner.'], functio
         Route::get('paper/{departure}/seats', [PaperController::class, 'seats'])->name('paper.seats')->whereUuid('departure');
         Route::get('paper/{departure}/print', [PaperController::class, 'print'])->name('paper.print')->whereUuid('departure');
         Route::post('paper/{departure}/tick', [PaperController::class, 'tick'])->name('paper.tick')->whereUuid('departure')->middleware('throttle:240,1,bus-paper');
+        Route::post('paper/{departure}/printed', [PaperController::class, 'printed'])->name('paper.printed')->whereUuid('departure');
         Route::post('paper/{departure}/matches', [PaperController::class, 'matches'])->name('paper.matches')->whereUuid('departure');
         Route::get('share', [\Modules\BusManagement\Http\Controllers\Web\Partner\ShareController::class, 'index'])->name('share');
         Route::get('collect', [CollectController::class, 'index'])->name('collect');

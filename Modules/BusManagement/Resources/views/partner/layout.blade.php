@@ -87,7 +87,8 @@
         /* Seat plans (shared by Fleet, Quick sell and Boarding) */
         .sp { display: inline-flex; flex-direction: column; gap: 4px; border: 2px solid #e3e8e7; border-radius: 26px 26px 12px 12px; padding: 10px; background: #fbfcfc; }
         .sp-row { display: flex; gap: 4px; justify-content: center; }
-        .sp-cell { width: 34px; height: 32px; border-radius: 7px 7px 5px 5px; display: flex; align-items: center; justify-content: center; font-size: 11.5px; font-weight: 700; flex: none; border: 0; padding: 0; }
+        .sp { --sp-w: 34px; }
+        .sp-cell { width: var(--sp-w); height: 32px; border-radius: 7px 7px 5px 5px; display: flex; align-items: center; justify-content: center; font-size: 11.5px; font-weight: 700; flex: none; border: 0; padding: 0; }
         .sp-seat { background: #22c55e; color: #fff; }
         .sp-aisle { width: 14px; }
         .sp-driver { background: #48615e; color: #fff; border-radius: 50%; font-size: 9.5px; }
@@ -106,7 +107,7 @@
         button.sp-seat:focus-visible { outline: 3px solid #111; outline-offset: 1px; }
         .sp-legend { display: flex; flex-wrap: wrap; gap: 10px; font-size: 12px; color: var(--muted); }
         .sp-legend i { display: inline-block; width: 14px; height: 14px; border-radius: 4px; vertical-align: -2px; margin-right: 4px; }
-        @media (max-width: 575px) { .sp-cell { width: 30px; height: 28px; } }
+        @media (max-width: 575px) { .sp { --sp-w: 30px; } .sp-cell { height: 28px; } }
     </style>
     @stack('head')
 </head>

@@ -38,7 +38,8 @@
         <div class="route"><span>{{ $busAgency->origin_city }}</span><span>&rarr;</span><span>{{ $d->destination?->city }}</span></div>
         <div class="seat">{{ translate('Seat') }} {{ $t->seat }}</div>
         <table>
-            <tr><td>{{ translate('Passenger') }}</td><td>{{ $t->passenger_name }}</td></tr>
+            <tr><td>{{ $booking->payer_only ? translate('Paid by') : translate('Passenger') }}</td><td>{{ $t->passenger_name }}</td></tr>
+            @if($booking->payer_only)<tr><td colspan="2" style="font-size:10.5px">{{ translate(key: 'Name of the person who paid for {n} seat(s). The passenger names were not taken.', replace: ['n' => $booking->tickets->whereIn('status', ['valid', 'boarded'])->count()]) }}</td></tr>@endif
             @if($t->id_number)<tr><td>{{ translate('ID') }}</td><td>{{ $t->id_number }}</td></tr>@endif
             @if($booking->booker_id_number)<tr><td>{{ translate('Booked by (ID)') }}</td><td>{{ $booking->booker_id_number }}</td></tr>@endif
             <tr><td>{{ translate('Leaves') }}</td><td>{{ $d->leavesAt()->translatedFormat('D j M, H:i') }}</td></tr>

@@ -115,6 +115,8 @@ class BoardingController extends Controller
                 'code' => $t->code,
                 'seat' => $t->seat,
                 'name' => $t->passenger_name,
+                // A counter sale that took only the payer's details: the name is theirs, not the passenger's.
+                'payer_only' => (bool)$t->booking?->payer_only,
                 'id_number' => $t->id_number,
                 'booker_id' => $t->booking?->booker_id_number,
                 'booking' => $t->booking?->code,
