@@ -496,7 +496,8 @@ class LedgerHealth
             $records = 0.0;
             if (class_exists(SupplierPayables::class) && \Illuminate\Support\Facades\Schema::hasTable('supplier_bills')) {
                 try {
-                    $records += (float) (new SupplierPayables())->owedQuery()->get()->sum(fn ($r) => (float) ($r->owed ?? $r->balance ?? 0));
+                    // what each approved bill still owes: its total less its live payments (owedQuery's rows carry total and paid)
+                    $records += (float) (new SupplierPayables())->owedQuery()->get()->sum(fn ($r) => round((float) $r->total - (float) ($r->paid ?? 0), 2));
                 } catch (\Throwable $e) {
                     // the bills' own screens show their state
                 }

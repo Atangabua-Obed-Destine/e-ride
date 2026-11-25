@@ -176,6 +176,8 @@ try {
     $ok(!$in(fn() => SupplierPayment::exists()), 'payment without the review tick is refused');
     $call('POST', $P . 'account/supplier-payments', $pay1 + ['reviewed' => 1], $mgrA);
     $ok($eq($bal('401'), -31550) && $eq($bal('571'), 65000) && $book('Main till') == 65000, 'first part: Dr 401 / Cr 571 (40 000), till book 65 000');
+    $tie = collect($in(fn() => (new \App\Ledger\Services\LedgerHealth())->checks()))->firstWhere('key', 'suppliers_tie_out');
+    $ok($tie && (int)$tie['count'] === 0, 'Ledger health: a part-paid bill (31 550 still owed) agrees with 401 (' . json_encode($tie['rows'] ?? null) . ')');
     $call('POST', $P . 'account/supplier-payments', ['supplier_id' => $supId, 'payment_date' => today()->toDateString(), 'amount' => 31550, 'payment_method' => 'momo',
         'payment_account_id' => $mtnId, 'cash_account_id' => $acc('5521'), 'allocations' => [$bill->id => 31550], 'reviewed' => 1], $mgrA);
     $ok($eq($bal('401'), 0) && $eq($bal('5521'), 28450) && $book('MTN agency line') == 28450, 'second part: Dr 401 / Cr 5521 (31 550), 401 settled');
