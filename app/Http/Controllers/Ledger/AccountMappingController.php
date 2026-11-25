@@ -334,10 +334,15 @@ class AccountMappingController extends LedgerController
             ->where(fn ($w) => $w->whereNull('r.reference_type')->orWhere('r.reference_type', 'opening_balance'))
             ->select(array_merge([DB::raw('CAST(r.id AS CHAR) as id'), DB::raw("'".PostingRules::PAYMENT_ACCOUNT_TXN."' as type"),
                 'r.transaction_date as date', 'r.amount', 'r.title as number', 'r.transaction_type as doc_status', DB::raw('NULL as contact_id'), DB::raw('NULL as on_id')], $cols));
-        // E-Ride: paxhitestbed's payroll and tax (a payroll is listed once paid, or while its entry stands)
-        $parts[PostingRules::PAYROLL] = $own('payrolls', PostingRules::PAYROLL)->where(fn ($w) => $w->where('r.status', 1)->orWhereNotNull('m.id'))
+        // E-Ride: paxhitestbed's payroll and tax (a payroll's accrual is listed once approved or paid, its payment once paid, or while its entry stands)
+        $parts[PostingRules::PAYROLL] = $own('payrolls', PostingRules::PAYROLL)->where(fn ($w) => $w->where('r.status', 1)->orWhereNotNull('r.approved_at')->orWhereNotNull('m.id'))
             ->leftJoin('ledger_staff as st', 'st.id', '=', 'r.staff_id')
             ->select(array_merge([DB::raw('CAST(r.id AS CHAR) as id'), DB::raw("'".PostingRules::PAYROLL."' as type"),
+                DB::raw('COALESCE(DATE(r.approved_at), r.pay_date, r.salary_month) as date'), 'r.net_salary as amount', DB::raw("CONCAT(COALESCE(st.staff_no, ''), ' ', DATE_FORMAT(r.salary_month, '%m/%Y')) as number"),
+                DB::raw('NULL as doc_status'), DB::raw('NULL as contact_id'), 'r.payment_method as on_id'], $cols));
+        $parts[PostingRules::PAYROLL_PAYMENT] = $own('payrolls', PostingRules::PAYROLL_PAYMENT)->where(fn ($w) => $w->where('r.status', 1)->orWhereNotNull('m.id'))
+            ->leftJoin('ledger_staff as st', 'st.id', '=', 'r.staff_id')
+            ->select(array_merge([DB::raw('CAST(r.id AS CHAR) as id'), DB::raw("'".PostingRules::PAYROLL_PAYMENT."' as type"),
                 DB::raw('COALESCE(r.pay_date, r.salary_month) as date'), 'r.net_salary as amount', DB::raw("CONCAT(COALESCE(st.staff_no, ''), ' ', DATE_FORMAT(r.salary_month, '%m/%Y')) as number"),
                 DB::raw('NULL as doc_status'), DB::raw('NULL as contact_id'), 'r.payment_method as on_id'], $cols));
         $parts[PostingRules::STAFF_LOAN] = $own('staff_loans', PostingRules::STAFF_LOAN)

@@ -19,7 +19,7 @@ class Payroll extends Model
 
     protected $fillable = [
         'business_id', 'staff_id', 'basic_salary', 'salary_type', 'total_earning', 'total_allowance', 'bonus', 'total_deduction',
-        'gross_salary', 'taxable_salary', 'paid_days', 'period_days', 'tax', 'employer_tax', 'net_salary', 'total_cost',
+        'gross_salary', 'taxable_salary', 'hours_worked', 'paid_days', 'period_days', 'tax', 'employer_tax', 'net_salary', 'total_cost',
         'salary_month', 'pay_date', 'payment_method', 'payment_account_id', 'note', 'status', 'approved_by', 'approved_at',
         'created_by', 'updated_by',
     ];

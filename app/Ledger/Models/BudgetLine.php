@@ -61,12 +61,12 @@ class BudgetLine extends Model
 
     public function expenseCategory()
     {
-        return $this->belongsTo(\App\ExpenseCategory::class, 'expense_category_id');
+        return $this->belongsTo(ExpenseCategory::class, 'expense_category_id'); // E-Ride: the Income & Expense categories (posinnova: POS's)
     }
 
     public function location()
     {
-        return $this->belongsTo(\App\BusinessLocation::class, 'location_id');
+        return $this->belongsTo(\App\Ledger\ERide\BudgetDepartment::class, 'location_id'); // E-Ride: the payroll's departments (posinnova: business locations)
     }
 
     public function scopeActive($q)

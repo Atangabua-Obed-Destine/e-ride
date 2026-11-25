@@ -205,6 +205,8 @@ abstract class IncomeExpenseController extends LedgerController
             'invoice_id' => 'nullable|string|max:191',
             'reference' => 'nullable|string|max:191',
             'note' => 'nullable|string|max:5000',
+            // E-Ride: an expense may say its department (the payroll's), for departmental budgets
+            'department_id' => ['nullable', \Illuminate\Validation\Rule::exists('departments', 'id')->where('business_id', $bid)],
             'attach' => 'nullable|file|mimes:jpg,jpeg,png,pdf,doc,docx,zip,rar,csv,xls,xlsx,ppt,pptx|max:20480',
         ], [], ['category' => __('ledger_accounts.field_category'), 'title' => __('ledger_accounts.field_title'), 'amount' => __('ledger_accounts.field_amount')]);
         // money out of an account needs the money to be there (paxhitestbed: insufficient_balance_in_account)
@@ -230,6 +232,9 @@ abstract class IncomeExpenseController extends LedgerController
             'payment_method' => $request->payment_method,
             'payment_account_id' => $request->payment_account_id ?: null,
         ]);
+        if ($this->side() === 'expense') {
+            $row->department_id = $request->department_id ?: null; // E-Ride: departmental budgets
+        }
     }
 
     /** The payment account's book, then the ledger (at once, so the review dialog shows the entry). */
@@ -268,6 +273,8 @@ abstract class IncomeExpenseController extends LedgerController
             'methods' => PaymentBook::methods(),
             'payment_accounts' => PaymentAccount::where('status', 1)->orderBy('title')->get(),
             'account_help' => 'payment_account_help_text_'.$this->side(),
+            // E-Ride: the departments an expense may be spent for (none: the field is not shown)
+            'departments' => $this->side() === 'expense' ? \App\Ledger\Services\BudgetLineChoices::locations() : collect(),
         ];
     }
 

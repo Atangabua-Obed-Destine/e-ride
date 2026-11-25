@@ -20,6 +20,19 @@ class Staff extends Model
 
     public const SALARY_FIXED = 1;
 
+    /** Paid by the hour: basic_salary is the rate per hour, the hours come from the hourly attendance. */
+    public const SALARY_HOURLY = 2;
+
+    public function hourlyAttendances()
+    {
+        return $this->hasMany(StaffHourlyAttendance::class, 'staff_id');
+    }
+
+    public function isHourly(): bool
+    {
+        return (int) $this->salary_type === self::SALARY_HOURLY;
+    }
+
     public const PAY_CHANNELS = ['bank', 'mobile_money', 'cash'];
 
     public const MOMO_PROVIDERS = ['mtn', 'orange'];

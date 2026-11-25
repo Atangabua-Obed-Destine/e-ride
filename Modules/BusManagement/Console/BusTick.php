@@ -33,8 +33,6 @@ class BusTick extends Command
         $counts['web_reminders'] = $bookings->webReminders();
         // Lockdowns "at risk" not decided by their deadline: passengers are moved.
         $counts['closures_decided'] = app(\Modules\BusManagement\Service\ClosureService::class)->tick();
-        // Branch books: tickets, refunds, trips that left and statements post as they happen.
-        $counts['posted'] = app(\Modules\BusManagement\Service\Accounting\LedgerSync::class)->syncAll();
         if ($this->option('open') || now()->minute % 15 === 0) {
             $counts['opened'] = $schedule->openAhead();
             BusAgency::where('status', BusAgency::SETUP)->get()->filter(fn($a) => $a->paymentsReady())->each(fn($a) => $agencies->refreshStatus($a));

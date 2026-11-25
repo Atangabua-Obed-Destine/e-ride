@@ -16,7 +16,7 @@
                     </div>
                     <div class="col-md-6">
                         <p><mark class="text-primary">@lang('ledger_payroll.field_name'):</mark> {{ $row->name }}</p><hr/>
-                        <p><mark class="text-primary">@lang('ledger_payroll.field_basic_salary'):</mark> {{ \App\Ledger\Ledger::money($row->basic_salary) }} FCFA / @lang('ledger_payroll.salary_type_fixed')</p><hr/>
+                        <p><mark class="text-primary">@lang('ledger_payroll.field_basic_salary'):</mark> {{ \App\Ledger\Ledger::money($row->basic_salary) }} FCFA / {{ $row->isHourly() ? __('ledger_payroll.salary_type_hourly') : __('ledger_payroll.salary_type_fixed') }}</p><hr/>
                     </div>
                 </div>
                 <div class="row">

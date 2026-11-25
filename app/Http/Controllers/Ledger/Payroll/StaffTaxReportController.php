@@ -104,7 +104,8 @@ class StaffTaxReportController extends LedgerController
             $columns[] = ['type' => 'standalone', 'id' => $t->id, 'title' => $t->title, 'dependent' => (bool) $t->is_dependent];
         }
 
-        $q = Staff::with(['department', 'designation'])->where('status', 1)->where('basic_salary', '>', 0);
+        // monthly staff: an hourly staff member's basic salary is a rate per hour, not a month's pay
+        $q = Staff::with(['department', 'designation'])->where('status', 1)->where('salary_type', Staff::SALARY_FIXED)->where('basic_salary', '>', 0);
         if ($request->department_id) {
             $q->where('department_id', $request->department_id);
         }

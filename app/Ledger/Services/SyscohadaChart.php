@@ -258,6 +258,7 @@ class SyscohadaChart
             'payroll_tax' => '447',        // taxes withheld for the State (IRPP, CAC, CFC, CRTV, TDL)
             'payroll_social' => '431',     // CNPS (both shares) and the employment fund
             'staff_advances' => '421',     // loans and salary advances to staff
+            'salaries_payable' => '422',   // net pay owed from approval until it is paid
         ];
     }
 

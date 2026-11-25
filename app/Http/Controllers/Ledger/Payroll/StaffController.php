@@ -149,6 +149,7 @@ class StaffController extends LedgerController
             'designation_id' => ['nullable', Rule::exists('designations', 'id')->where('business_id', $bid)],
             'department_id' => ['nullable', Rule::exists('departments', 'id')->where('business_id', $bid)],
             'contract_type' => 'nullable|in:1,2',
+            'salary_type' => 'nullable|in:1,2',
             'basic_salary' => 'required|numeric|min:0',
             'joining_date' => 'nullable|date',
             'ending_date' => 'nullable|date|after_or_equal:joining_date',
@@ -178,7 +179,7 @@ class StaffController extends LedgerController
             'contract_type', 'joining_date', 'ending_date', 'pay_channel', 'bank_name', 'bank_branch', 'account_name', 'account_number', 'bank_code',
             'momo_provider', 'momo_number', 'cnps_no', 'niu', 'user_id', 'note']));
         $staff->basic_salary = round((float) $request->basic_salary, 2);
-        $staff->salary_type = Staff::SALARY_FIXED;
+        $staff->salary_type = (int) $request->input('salary_type', $staff->salary_type ?: Staff::SALARY_FIXED) === Staff::SALARY_HOURLY ? Staff::SALARY_HOURLY : Staff::SALARY_FIXED;
         $staff->status = $request->has('status') ? $request->boolean('status') : ($staff->exists ? $staff->status : 1);
         foreach (['designation_id', 'department_id', 'contract_type', 'gender', 'user_id', 'pay_channel'] as $k) {
             $staff->{$k} = $staff->{$k} ?: null;

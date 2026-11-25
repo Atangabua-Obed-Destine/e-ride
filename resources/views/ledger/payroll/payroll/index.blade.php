@@ -27,7 +27,8 @@
                     <div class="col-md-2">
                         <label class="form-label" for="salary_type">@lang('ledger_payroll.field_salary_type') <span class="text-danger">*</span></label>
                         <select class="form-select" name="salary_type" id="salary_type" required>
-                            <option value="1" selected>@lang('ledger_payroll.salary_type_fixed')</option>
+                            <option value="1" @selected($selected_salary_type != 2)>@lang('ledger_payroll.salary_type_fixed')</option>
+                            <option value="2" @selected($selected_salary_type == 2)>@lang('ledger_payroll.salary_type_hourly')</option>
                         </select>
                     </div>
                     <div class="col-md-2">
@@ -85,6 +86,12 @@
                 <input type="hidden" name="month" value="{{ $selected_month }}">
                 <input type="hidden" name="year" value="{{ $selected_year }}">
             </form>
+            <form id="payrollBulkApproveForm" action="{{ route($route.'.bulk-approve') }}" method="post" class="d-none"
+                  data-review="@lang('ledger_payroll.review_bulk_approve')" data-review-label="@lang('ledger_payroll.approve_and_post')">
+                @csrf
+                <input type="hidden" name="month" value="{{ $selected_month }}">
+                <input type="hidden" name="year" value="{{ $selected_year }}">
+            </form>
             <form id="payrollBulkPayForm" action="{{ route($route.'.bulk-pay') }}" method="post" class="d-none"
                   data-review="@lang('ledger_payroll.review_bulk_pay')" data-review-label="@lang('ledger_payroll.pay_and_post')">
                 @csrf
@@ -98,7 +105,7 @@
                 </button>
                 @if($settings->require_approval)
                 @can('payroll-approve')
-                <button type="button" class="btn btn-sm btn-info" data-needs-pick data-bulk-action="approve" data-confirm="@lang('ledger_payroll.confirm_approve_ticked')">
+                <button type="button" class="btn btn-sm btn-info" data-needs-pick data-bulk-review="payrollBulkApproveForm">
                     <i class="fas fa-check-double"></i> @lang('ledger_payroll.approve_ticked')
                 </button>
                 @endcan
@@ -163,7 +170,7 @@
                             <td>{{ $row->name }}</td>
                             <td>{{ $row->department->title ?? '' }}</td>
                             <td>{{ $row->designation->title ?? '' }}</td>
-                            <td>@lang('ledger_payroll.salary_type_fixed')</td>
+                            <td>{{ $row->isHourly() ? __('ledger_payroll.salary_type_hourly') : __('ledger_payroll.salary_type_fixed') }}</td>
                             <td class="ap-num">{{ $payroll_data ? $money($payroll_data->net_salary) : '' }}</td>
                             <td>
                                 @if($payroll_data)
@@ -188,7 +195,8 @@
                                 @elseif(! $payroll_data->isPaid())
                                     @if($settings->require_approval && ! $payroll_data->approved_at)
                                         @can('payroll-approve')
-                                        <form action="{{ route($route.'.approve', $payroll_data->id) }}" method="post" class="d-inline">
+                                        <form action="{{ route($route.'.approve', $payroll_data->id) }}" method="post" class="d-inline"
+                                              data-review="@lang('ledger_payroll.review_approve')" data-review-label="@lang('ledger_payroll.approve_and_post')">
                                             @csrf
                                             <button type="submit" class="btn btn-info btn-sm"><i class="fas fa-check-double"></i> @lang('ledger_payroll.btn_approve')</button>
                                         </form>
@@ -198,6 +206,15 @@
                                         <button type="button" class="btn btn-success btn-sm" data-bs-toggle="modal" data-bs-target="#payModal-{{ $row->id }}"><i class="fas fa-money-check"></i> @lang('ledger_payroll.btn_pay')</button>
                                         @include('ledger.payroll.payroll.pay')
                                         @endcan
+                                        @if($payroll_data->approved_at)
+                                        @can('payroll-approve')
+                                        <form action="{{ route($route.'.unapprove', $payroll_data->id) }}" method="post" class="d-inline"
+                                              data-review="@lang('ledger_payroll.review_unapprove')" data-review-label="@lang('ledger_payroll.unapprove')" data-review-class="btn-danger">
+                                            @csrf
+                                            <button type="submit" class="btn btn-icon btn-outline-danger btn-sm" title="@lang('ledger_payroll.unapprove')"><i class="fas fa-times"></i></button>
+                                        </form>
+                                        @endcan
+                                        @endif
                                     @endif
                                     @can('payroll-action')
                                     <a href="{{ route($route.'.generate', ['id' => $row->id, 'month' => $selected_month, 'year' => $selected_year]) }}" class="btn btn-icon btn-primary btn-sm" title="@lang('ledger_payroll.modal_edit')"><i class="far fa-edit"></i></a>
@@ -276,9 +293,9 @@
             HTMLFormElement.prototype.submit.call(form);
         });
     });
-    document.querySelectorAll('[data-bulk-pay]').forEach(function (b) {
+    document.querySelectorAll('[data-bulk-pay], [data-bulk-review]').forEach(function (b) {
         b.addEventListener('click', function () {
-            var form = document.getElementById('payrollBulkPayForm');
+            var form = document.getElementById(b.getAttribute('data-bulk-review') || 'payrollBulkPayForm');
             fill(form);
             form.removeAttribute('data-reviewed');
             // paying posts money, so it goes through the review dialog (requestSubmit fires the submit event it listens for)

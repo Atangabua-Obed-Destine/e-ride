@@ -13,6 +13,8 @@
     $groups = [
         [__('ledger.menu_payroll_group'), [
             ['ledger.staff.index', 'ledger.menu_staff', ['staff-view'], 'staff/register'],
+            ['ledger.staff-hourly-attendance.index', 'ledger.menu_hourly_attendance', ['staff-hourly-attendance-action'], 'attendance/staff-hourly-attendance'],
+            ['ledger.staff-hourly-attendance.report', 'ledger.menu_hourly_attendance_report', ['staff-hourly-attendance-report'], null],
             ['ledger.payroll.index', 'ledger.menu_payroll', ['payroll-view', 'payroll-action', 'payroll-print'], 'staff/payroll/'],
             ['ledger.payroll.report', 'ledger.menu_payroll_report', ['payroll-report'], null],
             ['ledger.staff-loan.index', 'ledger.menu_staff_loans', ['staff-loan-view'], 'staff/staff-loan'],
@@ -76,6 +78,7 @@
         ]],
         [__('ledger.menu_accounting_reports'), [
             ['ledger.accounting-reports.index', 'ledger.menu_reports_dashboard', ['accounting-report-view'], null],
+            ['ledger.combined.index', 'ledger.menu_combined', ['trial-balance-view'], 'combined'],
             ['ledger.accounting-reports.receivables-aging', 'ledger.menu_receivables_aging', ['accounting-report-view'], 'accounting-reports/receivables-aging'],
             ['ledger.accounting-reports.payables-aging', 'ledger.menu_payables_aging', ['accounting-report-view'], 'accounting-reports/payables-aging'],
             ['ledger.accounting-reports.cash-flow-statement', 'ledger.menu_cash_flow_statement', ['accounting-report-view', 'cash-flow-view'], 'accounting-reports/cash-flow'],
@@ -92,6 +95,9 @@
         foreach ($items as [$route, $label, $perms, $prefix]) {
             if (!Route::has($route) || !in_array($route, $ready, true) || !Permissions::can(...$perms)) {
                 continue;
+            }
+            if ($route === 'ledger.combined.index' && ($books['type'] ?? null) !== \App\Ledger\ERide\Books::COMPANY) {
+                continue; // combined statements: a head office's books only
             }
             $active = request()->routeIs($route) || ($prefix && str_starts_with($path, 'partner/accounting/' . $prefix));
             $allowed[] = [route($route), __($label), $active];

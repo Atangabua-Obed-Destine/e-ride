@@ -19,7 +19,7 @@ use App\Ledger\Services\SyscohadaChart;
  */
 class PayrollAccounts
 {
-    public const TYPES = ['payroll', 'payroll_employer', 'payroll_tax', 'payroll_social', 'staff_advances'];
+    public const TYPES = ['payroll', 'payroll_employer', 'payroll_tax', 'payroll_social', 'staff_advances', 'salaries_payable'];
 
     public static function id(string $type): ?int
     {

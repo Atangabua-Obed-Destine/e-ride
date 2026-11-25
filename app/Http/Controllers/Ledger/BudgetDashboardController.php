@@ -88,17 +88,17 @@ class BudgetDashboardController extends LedgerController
         $bid = Ledger::businessId();
         $rows = DB::table('budget_allocations as a')
             ->join('budgets as b', 'b.id', '=', 'a.budget_id')
-            ->join('business_locations as l', 'l.id', '=', DB::raw('COALESCE(a.location_id, b.location_id)'))
+            ->join('departments as l', 'l.id', '=', DB::raw('COALESCE(a.location_id, b.location_id)')) // E-Ride: departments (posinnova: business_locations)
             ->where('a.business_id', $bid)->where('b.business_id', $bid)
             ->where('b.is_institutional', 0)->whereIn('b.status', ['active', 'approved'])
-            ->groupBy('l.id', 'l.name')->havingRaw('SUM(a.spent_amount) > 0')
+            ->groupBy('l.id', 'l.title')->havingRaw('SUM(a.spent_amount) > 0')
             ->orderByDesc(DB::raw('SUM(a.spent_amount)'))->limit(10)
-            ->selectRaw('l.name as department, SUM(a.spent_amount) as total_spent')->get();
+            ->selectRaw('l.title as department, SUM(a.spent_amount) as total_spent')->get();
         if ($rows->isEmpty()) {
-            $rows = DB::table('budgets as b')->join('business_locations as l', 'l.id', '=', 'b.location_id')
+            $rows = DB::table('budgets as b')->join('departments as l', 'l.id', '=', 'b.location_id') // E-Ride: departments
                 ->where('b.business_id', $bid)->where('b.status', 'active')->where('b.spent_amount', '>', 0)
-                ->groupBy('l.id', 'l.name')->orderByDesc(DB::raw('SUM(b.spent_amount)'))->limit(10)
-                ->selectRaw('l.name as department, SUM(b.spent_amount) as total_spent')->get();
+                ->groupBy('l.id', 'l.title')->orderByDesc(DB::raw('SUM(b.spent_amount)'))->limit(10)
+                ->selectRaw('l.title as department, SUM(b.spent_amount) as total_spent')->get();
         }
 
         return ['labels' => $rows->pluck('department')->all(), 'values' => $rows->pluck('total_spent')->map(fn ($v) => (float) $v)->all()];

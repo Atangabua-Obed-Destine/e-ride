@@ -54,6 +54,9 @@ class AccountsObserver
                 return; // it posts through the income, expense, transfer or payment it belongs to
             }
             LedgerSync::queue($kind, (int) $model->id, (int) $model->business_id);
+            if ($model instanceof \App\Ledger\Models\Payroll) {
+                LedgerSync::queue(PostingRules::PAYROLL_PAYMENT, (int) $model->id, (int) $model->business_id); // its payment, beside its accrual
+            }
         } catch (\Throwable $e) {
             \Log::error('Ledger accounts observer: '.$e->getMessage());
         }

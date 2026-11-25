@@ -55,7 +55,7 @@
         </div>
         <nav class="b-nav" aria-label="{{ translate('Head office menu') }}">
             @foreach($nav as [$routeName, $icon, $label])
-                <a href="{{ route($routeName) }}" class="{{ request()->routeIs($routeName . '*') || ($routeName === 'bus-company.accounts' && request()->routeIs('bus-company.books*')) ? 'active' : '' }}"><i class="bi {{ $icon }}" aria-hidden="true"></i>{{ $label }}</a>
+                <a href="{{ route($routeName) }}" class="{{ request()->routeIs($routeName . '*') ? 'active' : '' }}"><i class="bi {{ $icon }}" aria-hidden="true"></i>{{ $label }}</a>
             @endforeach
         </nav>
     </div>

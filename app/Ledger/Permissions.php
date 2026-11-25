@@ -37,7 +37,8 @@ class Permissions
             'payment-account-report-statement', 'payment-account-report-summary', 'payment-account-report-link'],
         // paxhitestbed's Human Resource: payroll and tax (PermissionSeeder names; the staff register is E-Ride's, staff-*)
         'payroll' => ['payroll-view', 'payroll-action', 'payroll-approve', 'payroll-report', 'payroll-print', 'payroll-setting',
-            'staff-loan-view', 'staff-loan-action', 'pay-slip-setting-view'],
+            'staff-loan-view', 'staff-loan-action', 'pay-slip-setting-view',
+            'staff-hourly-attendance-action', 'staff-hourly-attendance-report'],
         'payroll_lists' => ['staff-view', 'staff-create', 'staff-edit', 'staff-delete',
             'designation-view', 'designation-create', 'designation-edit', 'designation-delete',
             'department-view', 'department-create', 'department-edit', 'department-delete',

@@ -61,10 +61,11 @@ class PostingRules
     const PAYROLL = 'payroll';
     const STAFF_LOAN = 'staff_loan';
     const TAX_REMITTANCE = 'tax_remittance';
-    const PAYROLL_TYPES = [self::PAYROLL, self::STAFF_LOAN, self::TAX_REMITTANCE];
+    const PAYROLL_PAYMENT = 'payroll_payment'; // the payment of an accrued payroll (Dr 422 / Cr the money)
+    const PAYROLL_TYPES = [self::PAYROLL, self::PAYROLL_PAYMENT, self::STAFF_LOAN, self::TAX_REMITTANCE];
     const TYPES = [self::MOVE, self::DEPARTURE, self::STATEMENT, self::STATEMENT_PAID,
         self::INCOME, self::EXPENSE, self::SUPPLIER_BILL, self::SUPPLIER_PAYMENT, self::PAYMENT_TRANSFER, self::PAYMENT_ACCOUNT_TXN,
-        self::PAYROLL, self::STAFF_LOAN, self::TAX_REMITTANCE];
+        self::PAYROLL, self::STAFF_LOAN, self::TAX_REMITTANCE, self::PAYROLL_PAYMENT];
 
     private $codes;
 
@@ -487,19 +488,26 @@ class PostingRules
     //
     // paxhitestbed's PayrollAccountingService, StaffLoanAccounting and TaxRemittanceService, on the sync:
     //
-    //   payroll paid               Dr 661 salaries (gross + loan repayments)   Cr each tax's liability (431 CNPS, 447 State)
-    //                              Dr 664 employer charges (employer side)     Cr 421 staff advances (loan repayments)
-    //                                                                          Cr the payment account it was paid from (net)
+    //   payroll approved           Dr 661 salaries (gross + loan repayments)   Cr each tax's liability (431 CNPS, 447 State)
+    //   (or paid unapproved)       Dr 664 employer charges (employer side)     Cr 421 staff advances (loan repayments)
+    //                                                                          Cr 422 salaries payable (net)
+    //                              (unapproved: reversed; dated the approval day, or the pay date when paid unapproved)
+    //   payroll paid               Dr 422 salaries payable (net)               Cr the payment account it was paid from
     //                              (unpaid: reversed)
     //   loan or advance given      Dr 421 staff advances                       Cr the payment account it was paid from (cancelled: reversed)
     //   tax remittance             Dr the liability (431 / 447)                Cr the payment account it was paid from (voided: reversed)
     //
     // The accounts come from Mapping settings, group "Payroll and tax" (App\Ledger\Payroll\PayrollAccounts).
 
-    /** A paid payroll's entry, on its pay date. An unpaid one has none. */
+    /**
+     * The payroll's accrual (the user's rule, 2026-11-25: a payroll posts when it is approved): the
+     * cost, what is withheld and the net pay owed (422). Approved payrolls have it from the approval
+     * day; a payroll paid without approval (approval not required) has it on its pay date.
+     */
     public function forPayroll(\App\Ledger\Models\Payroll $p): ?array
     {
-        if (! $p->isPaid() || ! $p->pay_date) {
+        $on = $p->approved_at ? \Carbon\Carbon::parse($p->approved_at) : ($p->isPaid() && $p->pay_date ? $p->pay_date : null);
+        if (! $on) {
             return null;
         }
         $p->loadMissing('staff', 'details');
@@ -520,15 +528,38 @@ class PostingRules
         if ($loans > 0) {
             $lines[] = ['account_id' => $accounts::need('staff_advances'), 'debit' => 0, 'credit' => $loans, 'description' => __('ledger_payroll.l_loan_repaid', ['name' => $name])];
         }
-        $lines[] = ['account_id' => $this->moneyAccount($p->payment_account_id, $p->payment_method), 'debit' => 0, 'credit' => round((float) $p->net_salary, 2),
-            'description' => __('ledger_payroll.l_net', ['name' => $name])];
+        $lines[] = ['account_id' => $accounts::need('salaries_payable'), 'debit' => 0, 'credit' => round((float) $p->net_salary, 2),
+            'description' => __('ledger_payroll.l_net_owed', ['name' => $name])];
+
+        return [
+            'date' => $on->toDateString(),
+            'description' => $desc,
+            'reference' => $p->staff->staff_no ?? null,
+            'journal_type' => 'payroll',
+            'lines' => $lines,
+        ];
+    }
+
+    /** A paid payroll's payment: Dr 422 the net owed / Cr the payment account, on its pay date. An unpaid one has none. */
+    public function forPayrollPayment(\App\Ledger\Models\Payroll $p): ?array
+    {
+        $net = round((float) $p->net_salary, 2);
+        if (! $p->isPaid() || ! $p->pay_date || $net <= 0) {
+            return null;
+        }
+        $p->loadMissing('staff');
+        $name = $p->staff ? $p->staff->name : '#'.$p->staff_id;
+        $desc = __('ledger_payroll.l_salary_paid', ['name' => $name, 'month' => $p->salary_month->translatedFormat('F Y')]);
 
         return [
             'date' => $p->pay_date->toDateString(),
             'description' => $desc,
             'reference' => $p->staff->staff_no ?? null,
             'journal_type' => 'payroll',
-            'lines' => $lines,
+            'lines' => [
+                ['account_id' => \App\Ledger\Payroll\PayrollAccounts::need('salaries_payable'), 'debit' => $net, 'credit' => 0, 'description' => __('ledger_payroll.l_net_owed', ['name' => $name])],
+                ['account_id' => $this->moneyAccount($p->payment_account_id, $p->payment_method), 'debit' => 0, 'credit' => $net, 'description' => __('ledger_payroll.l_net', ['name' => $name])],
+            ],
         ];
     }
 

@@ -37,6 +37,7 @@ class PayrollWriter
                 'basic_salary' => $calc['basic_salary'],
                 'salary_type' => $calc['salary_type'],
                 'total_earning' => $calc['total_earning'],
+                'hours_worked' => $calc['hours_worked'] ?? null,
                 'paid_days' => $calc['paid_days'] ?? null,
                 'period_days' => $calc['period_days'] ?? null,
                 'total_allowance' => $calc['total_allowance'],
@@ -73,6 +74,9 @@ class PayrollWriter
                 throw new \RuntimeException(__('ledger_payroll.err_breakdown', ['lines' => \App\Ledger\Ledger::money($breakdown->totals($recorded['lines'])['employee']),
                     'tax' => \App\Ledger\Ledger::money($payroll->tax)]));
             }
+
+            // a payroll approved before this save is not approved any more: its accrual is reversed
+            (new \App\Ledger\Services\LedgerSync())->record(\App\Ledger\Services\PostingRules::PAYROLL, $payroll->id);
 
             return $payroll->fresh();
         });

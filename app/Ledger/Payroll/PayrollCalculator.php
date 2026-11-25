@@ -41,14 +41,24 @@ class PayrollCalculator
 
         $salaryType = (int) ($staff->salary_type ?: Staff::SALARY_FIXED);
         $basic = round((float) ($staff->basic_salary ?? 0), 2);
-        $earning = $basic;
-        [$paidDays, $periodDays, $prorationNote] = $this->proration($staff, $month);
-        if ($paidDays !== null) {
-            $earning = $periodDays > 0 ? round($basic * $paidDays / $periodDays) : 0.0;
-            $notes[] = $prorationNote;
-        }
-        if ($salaryType !== Staff::SALARY_FIXED) {
-            $problems[] = __('ledger_payroll.err_hourly');
+        $hours = null;
+        $withoutTimes = 0;
+        $paidDays = null;
+        $periodDays = null;
+        if ($salaryType === Staff::SALARY_HOURLY) {
+            // paid for the hours present (paxhitestbed: the rate times the hours, never the rate as the month's pay)
+            [$hours, $withoutTimes] = $this->hoursWorked($staff->id, $month);
+            $earning = round($basic * $hours);
+            if ($withoutTimes > 0) {
+                $notes[] = trans_choice('ledger_payroll.note_without_times', $withoutTimes, ['count' => $withoutTimes]);
+            }
+        } else {
+            $earning = $basic;
+            [$paidDays, $periodDays, $prorationNote] = $this->proration($staff, $month);
+            if ($paidDays !== null) {
+                $earning = $periodDays > 0 ? round($basic * $paidDays / $periodDays) : 0.0;
+                $notes[] = $prorationNote;
+            }
         }
         if ($basic <= 0) {
             $problems[] = __('ledger_payroll.err_no_salary');
@@ -115,6 +125,8 @@ class PayrollCalculator
         return [
             'salary_type' => $salaryType,
             'basic_salary' => $basic,
+            'hours_worked' => $hours,
+            'sessions_without_times' => $withoutTimes,
             'paid_days' => $paidDays,
             'period_days' => $periodDays,
             'total_earning' => $earning,
@@ -158,6 +170,31 @@ class PayrollCalculator
     }
 
     /** paxhitestbed: the share of a part month paid (joining / leaving date), when the books prorate. */
+    /**
+     * paxhitestbed hoursWorked(): the hours an hourly staff member was present in a month, and how
+     * many present sessions could not be counted (a time missing, or the end not after the start).
+     *
+     * @return array{0: float, 1: int}
+     */
+    public function hoursWorked(int $staffId, Carbon $month): array
+    {
+        $minutes = 0;
+        $withoutTimes = 0;
+        $sessions = \App\Ledger\Models\StaffHourlyAttendance::where('staff_id', $staffId)
+            ->whereBetween('date', [$month->copy()->startOfMonth()->toDateString(), $month->copy()->endOfMonth()->toDateString()])
+            ->where('attendance', \App\Ledger\Models\StaffHourlyAttendance::PRESENT)->get();
+        foreach ($sessions as $s) {
+            $h = $s->hours();
+            if ($h === null) {
+                $withoutTimes++;
+                continue;
+            }
+            $minutes += (int) round($h * 60);
+        }
+
+        return [round($minutes / 60, 2), $withoutTimes];
+    }
+
     public function proration(Staff $staff, Carbon $month): array
     {
         $settings = PayrollSetting::current();

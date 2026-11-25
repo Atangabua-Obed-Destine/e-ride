@@ -164,7 +164,7 @@ try {
 
     // ---- 6. The accountant cannot do the manager's things.
     $call('GET', '/partner/bus-agency/accounting', [], $accA);
-    $r = $call('POST', $P . "staff/payroll-approve/{$pa->id}", [], $accA);
+    $r = $call('POST', $P . "staff/payroll-approve/{$pa->id}", ['reviewed' => 1], $accA);
     $ok($r->getStatusCode() === 403 && !$in(fn() => Payroll::find($pa->id)->approved_at), 'the accountant cannot approve a payroll (403)');
     $r = $call('POST', $P . 'staff/payroll-setting', ['require_approval' => 1], $accA);
     $ok($r->getStatusCode() === 403, 'the accountant cannot change the payroll settings (403)');
@@ -177,26 +177,35 @@ try {
     \App\Ledger\Models\PayrollSetting::flush();
     $ok($in(fn() => \App\Ledger\Models\PayrollSetting::current()->require_approval), 'the manager turns approval on');
 
-    // ---- 7. Pay Alice: refused unapproved, refused without the review, then posted.
+    // ---- 7. Approve (posts the accrual), then pay (Dr 422 / Cr the till), each through the review.
     $pay = ['pay_date' => today()->toDateString(), 'payment_method' => 'cash', 'payment_account_id' => $tillId, 'note' => 'November pay'];
     $call('POST', $P . "staff/payroll-pay/{$pa->id}", $pay + ['reviewed' => 1], $mgrA);
     $ok($in(fn() => Payroll::find($pa->id)->status) === 0 && str_contains($flash(), 'approved'), 'an unapproved payroll is not paid when approval is required');
     $call('POST', $P . "staff/payroll-approve/{$pa->id}", [], $mgrA);
-    $call('POST', $P . "staff/payroll-approve/{$pb->id}", [], $mgrA);
+    $ok(!$in(fn() => Payroll::find($pa->id)->approved_at) && $eq($bal('661'), 0), 'approving without the review tick is refused');
+    $r = $call('POST', $P . 'review/dry-run', ['_token' => 'tok', '_review_target' => $P . "staff/payroll-approve/{$pa->id}", '_review_method' => 'POST'], $mgrA, true);
+    $html = $r->getContent();
+    $ok($r->getStatusCode() === 200 && str_contains($html, 'ap-preview') && str_contains($html, '661') && str_contains($html, '431') && str_contains($html, '447') && str_contains($html, '422'),
+        'review dialog shows the accrual (661, 431, 447, 422)');
+    $ok(!$in(fn() => Payroll::find($pa->id)->approved_at) && $eq($bal('661'), 0), 'the review approved and posted nothing');
+    $call('POST', $P . "staff/payroll-approve/{$pa->id}", ['reviewed' => 1], $mgrA);
     $ok((bool)$in(fn() => Payroll::find($pa->id)->approved_at), 'the manager approves');
+    // 447: IRPP 7 677 + CAC 768 + CFC 1 800 + 2 700 + CRTV 1 950 + TDL 1 250 = 16 145; 431: CNPS 7 560 x 2 + FNE 1 800 = 16 920
+    $ok($eq($bal('661'), 200000) && $eq($bal('664'), 12060) && $eq($bal('447'), -16145) && $eq($bal('431'), -16920) && $eq($bal('422'), -178995) && $eq($bal('571'), 2000000),
+        'approved, accrual posted: Dr 661 200 000, Dr 664 12 060 / Cr 447 16 145, Cr 431 16 920, Cr 422 178 995 (no money moved)');
+    $call('POST', $P . "staff/payroll-approve/{$pb->id}", ['reviewed' => 1], $mgrA);
     $call('POST', $P . "staff/payroll-pay/{$pa->id}", $pay, $mgrA);
     $ok($in(fn() => Payroll::find($pa->id)->status) === 0, 'paying without the review tick is refused');
     $r = $call('POST', $P . 'review/dry-run', $pay + ['_token' => 'tok', '_review_target' => $P . "staff/payroll-pay/{$pa->id}", '_review_method' => 'POST'], $mgrA, true);
     $html = $r->getContent();
-    $ok($r->getStatusCode() === 200 && str_contains($html, 'ap-preview') && str_contains($html, '661') && str_contains($html, '431') && str_contains($html, '447') && str_contains($html, '571'),
-        'review dialog shows the salary entry (661, 431, 447, 571)');
-    $ok($in(fn() => Payroll::find($pa->id)->status) === 0 && $eq($bal('661'), 0), 'the review paid and posted nothing');
+    $ok($r->getStatusCode() === 200 && str_contains($html, '422') && str_contains($html, '571'), 'review dialog shows the payment (422, 571)');
     $call('POST', $P . "staff/payroll-pay/{$pa->id}", $pay + ['reviewed' => 1], $mgrA);
     $ok($in(fn() => Payroll::find($pa->id)->status) === 1, 'Alice paid through the review');
-    // 447: IRPP 7 677 + CAC 768 + CFC 1 800 + 2 700 + CRTV 1 950 + TDL 1 250 = 16 145; 431: CNPS 7 560 x 2 + FNE 1 800 = 16 920
-    $ok($eq($bal('661'), 200000) && $eq($bal('664'), 12060) && $eq($bal('447'), -16145) && $eq($bal('431'), -16920) && $eq($bal('571'), 2000000 - 178995),
-        'posted: Dr 661 200 000, Dr 664 12 060 / Cr 447 16 145, Cr 431 16 920, Cr 571 178 995');
+    $ok($eq($bal('422'), -(500000 - 76450)) && $eq($bal('571'), 2000000 - 178995) && $eq($bal('661'), 700000),
+        'paid: Dr 422 / Cr 571 178 995; 422 now holds only Bob\'s approved net (423 550)');
     $ok($in(fn() => PaymentAccount::find($tillId)->current_balance) == 2000000 - 178995, 'and the till\'s book moved by the net pay');
+    $call('POST', $P . "staff/payroll-unapprove/{$pa->id}", ['reviewed' => 1], $mgrA);
+    $ok((bool)$in(fn() => Payroll::find($pa->id)->approved_at) && str_contains($flash(), 'reverse the payment'), 'a paid payroll\'s approval cannot be taken back');
 
     // ---- 8. A loan to Bob, repaid from next month's payroll.
     $N = $M->copy()->addMonthNoOverflow();
@@ -210,16 +219,18 @@ try {
     $r = $call('GET', $P . 'staff/staff-loan', [], $mgrA);
     $ok($r->getStatusCode() === 200 && str_contains($r->getContent(), 'Salary advance'), 'loans page lists it');
     $call('POST', $P . "staff/payroll-pay/{$pb->id}", $pay + ['reviewed' => 1], $mgrA);
-    $ok($in(fn() => Payroll::find($pb->id)->status) === 1, 'Bob\'s month paid (no repayment due before the start month)');
+    $ok($in(fn() => Payroll::find($pb->id)->status) === 1 && $eq($bal('422'), 0), 'Bob\'s month paid (no repayment due before the start month): 422 back to 0');
     $call('POST', $P . 'staff/payroll-bulk', ['action' => 'generate', 'month' => $N->month, 'year' => $N->year, 'staff' => [$bob->id]], $mgrA);
     $pn = $in(fn() => Payroll::with('details')->where('staff_id', $bob->id)->whereDate('salary_month', $N)->first());
     $rep = $pn ? $pn->details->firstWhere('staff_loan_id', $loan->id) : null;
     $ok($pn && $rep && $eq($rep->amount, 40000) && $eq($pn->gross_salary, 460000) && $eq($pn->tax, 76450), 'next month starts with the 40 000 repayment (gross 460 000, tax still on 500 000)');
-    $call('POST', $P . "staff/payroll-approve/{$pn->id}", [], $mgrA);
     $before421 = $bal('421'); $before661 = $bal('661');
+    $call('POST', $P . "staff/payroll-approve/{$pn->id}", ['reviewed' => 1], $mgrA);
+    $netN = 460000 - 76450;
+    $ok($eq($bal('421'), $before421 - 40000) && $eq($bal('661') - $before661, 500000) && $eq($bal('422'), -$netN),
+        'approved: Cr 421 40 000 taken back, Dr 661 the full 500 000, Cr 422 the net 383 550');
     $call('POST', $P . "staff/payroll-pay/{$pn->id}", $pay + ['reviewed' => 1], $mgrA);
-    $ok($in(fn() => Payroll::find($pn->id)->status) === 1 && $eq($bal('421'), $before421 - 40000) && $eq($bal('661') - $before661, 500000),
-        'paid: Cr 421 40 000 taken back, Dr 661 the full 500 000');
+    $ok($in(fn() => Payroll::find($pn->id)->status) === 1 && $eq($bal('422'), 0), 'paid: 422 = 0');
     $ok($in(fn() => StaffLoan::find($loan->id)->repaid()) == 40000 && $in(fn() => StaffLoan::find($loan->id)->balance()) == 60000, 'the loan shows 40 000 repaid, 60 000 still owed');
     $call('POST', $P . "staff/staff-loan/{$loan->id}/cancel", ['reviewed' => 1], $mgrA);
     $ok($in(fn() => StaffLoan::find($loan->id)->status) === 'active', 'a loan already on a payroll cannot be cancelled');
@@ -229,11 +240,29 @@ try {
     $call('POST', $P . "staff/payroll-unpay/{$pn->id}", [], $mgrA);
     $ok($in(fn() => Payroll::find($pn->id)->status) === 1, 'unpay without the review tick is refused');
     $call('POST', $P . "staff/payroll-unpay/{$pn->id}", ['reviewed' => 1], $mgrA);
-    $map = $in(fn() => TransactionMapping::where('transaction_type', 'payroll')->where('transaction_id', (string)$pn->id)->first());
-    $ok($in(fn() => Payroll::find($pn->id)->status) === 0 && $eq($bal('421'), $before421) && $eq($bal('661'), $before661) && $in(fn() => JournalEntry::count()) === $entries + 1,
-        'unpaid: one reversing entry, 421 and 661 back where they were');
-    $ok($map && $map->status === 'none' && $in(fn() => JournalEntry::where('reference_type', 'payroll')->where('is_reversed', true)->count()) === 1, 'the original entry is marked reversed, not deleted');
-    $ok($in(fn() => \App\Ledger\Models\PayrollTaxLine::where('payroll_id', $pn->id)->count()) === 0 && $in(fn() => StaffLoan::find($loan->id)->repaid()) == 0, 'its withholdings and the repayment no longer count');
+    $map = $in(fn() => TransactionMapping::where('transaction_type', 'payroll_payment')->where('transaction_id', (string)$pn->id)->first());
+    $ok($in(fn() => Payroll::find($pn->id)->status) === 0 && $eq($bal('422'), -$netN) && $eq($bal('421'), $before421 - 40000) && $in(fn() => JournalEntry::count()) === $entries + 1,
+        'unpaid: one reversing entry, the net is owed again (422), the approved accrual stays');
+    $ok($map && $map->status === 'none' && $in(fn() => JournalEntry::where('reference_type', 'payroll_payment')->where('is_reversed', true)->count()) === 1, 'the payment entry is marked reversed, not deleted');
+    $ok($in(fn() => StaffLoan::find($loan->id)->repaid()) == 0, 'the repayment no longer counts as repaid');
+    $call('POST', $P . "staff/payroll-unapprove/{$pn->id}", [], $mgrA);
+    $ok((bool)$in(fn() => Payroll::find($pn->id)->approved_at), 'taking back an approval without the review tick is refused');
+    $call('POST', $P . "staff/payroll-unapprove/{$pn->id}", ['reviewed' => 1], $mgrA);
+    $ok(!$in(fn() => Payroll::find($pn->id)->approved_at) && $eq($bal('421'), $before421) && $eq($bal('661'), $before661) && $eq($bal('422'), 0) && $in(fn() => JournalEntry::count()) === $entries + 2,
+        'approval taken back: the accrual reversed, 421, 661 and 422 back where they were');
+    $owedN = collect($in(fn() => app(\App\Ledger\Payroll\TaxRemittanceService::class)->outstanding()))->first(fn($r) => $r['month'] === $N->toDateString());
+    $ok($owedN === null, 'and its withholdings are no longer owed');
+
+    // ---- 9b. Approval not required: paying posts both steps.
+    $call('POST', $P . 'staff/payroll-setting', ['require_approval' => 0, 'carry_over_lines' => 1, 'prorate_partial_months' => 0, 'proration_basis' => 'calendar_days',
+        'bank_file_columns' => ['staff_id', 'name', 'mobile_money', 'account_number', 'amount'], 'bank_file_delimiter' => ';', 'bank_file_header' => 1,
+        'bank_file_reference' => 'SALARY {MONTH} {YEAR}', 'bank_file_decimals' => 0, 'advance_payment_account_id' => $tillId], $mgrA);
+    \App\Ledger\Models\PayrollSetting::flush();
+    $call('POST', $P . "staff/payroll-pay/{$pn->id}", $pay + ['reviewed' => 1], $mgrA);
+    $ok($in(fn() => Payroll::find($pn->id)->status) === 1 && $eq($bal('421'), $before421 - 40000) && $eq($bal('661') - $before661, 500000) && $eq($bal('422'), 0),
+        'paid without approval: accrual and payment both posted, 422 = 0');
+    $ok($in(fn() => TransactionMapping::whereIn('transaction_type', ['payroll', 'payroll_payment'])->where('transaction_id', (string)$pn->id)->where('status', 'posted')->count()) === 2,
+        'two entries for it: the accrual and the payment');
 
     // ---- 10. Tax remittance to the CNPS for this month, with the receipt number.
     $cnps = $acc('431');
@@ -248,16 +277,52 @@ try {
     $ok(!$in(fn() => TaxRemittance::exists()), 'a remittance without the review tick is refused');
     $call('POST', $P . 'staff/tax-remittance', ['amount' => 70000] + $remit + ['reviewed' => 1], $mgrA);
     $ok(!$in(fn() => TaxRemittance::exists()), 'paying more than is owed is refused without the overpayment tick');
+    $b431 = $bal('431'); // this month's 63 920 and next month's Bob (paid in 9b)
     $call('POST', $P . 'staff/tax-remittance', $remit + ['reviewed' => 1], $mgrA);
     $rm = $in(fn() => TaxRemittance::first());
     $ok($rm && $rm->reference === 'CNPS-4471', 'remittance recorded with its receipt number');
-    $ok($eq($bal('431'), 0), 'Dr 431 63 920: nothing left owed to the CNPS');
+    $ok($eq($bal('431'), $b431 + 63920), 'Dr 431 63 920: nothing left owed to the CNPS for the month');
     $call('POST', $P . "staff/tax-remittance/{$rm->id}/void", ['void_reason' => 'Wrong receipt', 'reviewed' => 1], $mgrA);
-    $ok($in(fn() => TaxRemittance::find($rm->id)->isVoided()) && $eq($bal('431'), -63920), 'voided: reversed, the CNPS is owed again, the row kept');
+    $ok($in(fn() => TaxRemittance::find($rm->id)->isVoided()) && $eq($bal('431'), $b431), 'voided: reversed, the CNPS is owed again, the row kept');
     $call('POST', $P . 'staff/tax-remittance', ['reference' => 'CNPS-4472'] + $remit + ['reviewed' => 1], $mgrA);
-    $ok($eq($bal('431'), 0) && $in(fn() => TaxRemittance::whereNull('voided_at')->count()) === 1, 'recorded again: settled');
+    $ok($eq($bal('431'), $b431 + 63920) && $in(fn() => TaxRemittance::whereNull('voided_at')->count()) === 1, 'recorded again: settled');
     $owed = collect($in(fn() => app(\App\Ledger\Payroll\TaxRemittanceService::class)->outstanding()))->first(fn($r) => $r['account_id'] === $cnps && $r['month'] === $M->toDateString());
     $ok($owed && $owed['status'] === 'settled', 'the month shows settled');
+
+    // ---- 10b. Hourly pay: Carol at 2 500 an hour, paid for her present sessions with times.
+    $call('POST', $P . 'staff/register', ['staff_no' => 'LDR01', 'first_name' => 'Carol', 'last_name' => 'Ngwa', 'salary_type' => 2, 'basic_salary' => 2500,
+        'pay_channel' => 'cash'], $mgrA);
+    $carol = $in(fn() => Staff::where('staff_no', 'LDR01')->first());
+    $ok($carol && $carol->isHourly(), 'an hourly staff member registered (rate 2 500 an hour)');
+    $r = $call('GET', $P . 'attendance/staff-hourly-attendance', [], $mgrA);
+    $ok($r->getStatusCode() === 200 && str_contains($r->getContent(), 'LDR01'), 'hourly attendance page opens and offers her');
+    $d1 = $M->copy()->addDay()->toDateString(); $d2 = $M->copy()->addDays(2)->toDateString();
+    $call('POST', $P . 'attendance/staff-hourly-attendance', ['staff_id' => $carol->id, 'date' => $d1, 'tasks' => ['Loading Douala bus', 'Counter shift'],
+        'start_time' => ['08:00', '13:00'], 'end_time' => ['12:00', '17:30'], 'attendance' => [1, 1], 'notes' => ['', '']], $mgrA);
+    $call('POST', $P . 'attendance/staff-hourly-attendance', ['staff_id' => $carol->id, 'date' => $d2, 'tasks' => ['Loading Kumba bus', 'Night loading'],
+        'start_time' => ['', '20:00'], 'end_time' => ['', '21:00'], 'attendance' => [1, 2], 'notes' => ['forgot the times', 'did not come']], $mgrA);
+    $ok($in(fn() => \App\Ledger\Models\StaffHourlyAttendance::where('staff_id', $carol->id)->count()) === 4, 'four sessions recorded over two days');
+    $r = $call('GET', $P . "attendance/staff-hourly-attendance?staff={$carol->id}&date=$d1", [], $mgrA);
+    $ok($r->getStatusCode() === 200 && str_contains($r->getContent(), 'Counter shift'), 'the day\'s sessions show again');
+    $r = $call('GET', $P . "staff/payroll?salary_type=2&month={$M->month}&year={$M->year}", [], $mgrA);
+    $ok($r->getStatusCode() === 200 && str_contains($r->getContent(), 'LDR01') && !str_contains($r->getContent(), 'DRV01'), 'the payroll list for hourly staff');
+    $r = $call('GET', $P . "staff/payroll-generate/{$carol->id}/{$M->month}/{$M->year}", [], $mgrA);
+    $ok($r->getStatusCode() === 200 && str_contains($r->getContent(), '8,5') && str_contains($r->getContent(), 'attendance-stat'), 'generate screen shows her attendance section and 8.5 hours');
+    $call('POST', $P . 'staff/payroll', ['staff_id' => $carol->id, 'salary_month' => $M->toDateString()], $mgrA);
+    $pc = $in(fn() => Payroll::where('staff_id', $carol->id)->first());
+    // 8.5 h x 2 500 = 21 250: CNPS 893 (4.2%), nothing else below the thresholds; employer CNPS 893 + FNE 213
+    $ok($pc && $eq($pc->total_earning, 21250) && $eq($pc->hours_worked, 8.5) && $eq($pc->tax, 893) && $eq($pc->employer_tax, 1106) && $eq($pc->net_salary, 20357),
+        'hourly payroll: 8.5 h x 2 500 = 21 250, CNPS 893, employer 1 106, net 20 357 (' . ($pc->total_earning ?? '-') . ')');
+    $calcC = $in(fn() => app(PayrollCalculator::class)->calculate(Staff::find($carol->id), $M->toDateString()));
+    $ok(count($calcC['notes']) === 1 && str_contains($calcC['notes'][0], '1'), 'it notes the present session with no times');
+    $call('POST', $P . "staff/payroll-pay/{$pc->id}", $pay + ['reviewed' => 1], $mgrA);
+    $ok($in(fn() => Payroll::find($pc->id)->status) === 1 && $eq($bal('422'), 0), 'paid (both steps, approval not required)');
+    $call('POST', $P . 'attendance/staff-hourly-attendance', ['staff_id' => $carol->id, 'date' => $d1, 'tasks' => ['Loading'], 'start_time' => ['06:00'], 'end_time' => ['18:00'], 'attendance' => [1]], $mgrA);
+    $ok($in(fn() => \App\Ledger\Models\StaffHourlyAttendance::where('staff_id', $carol->id)->whereDate('date', $d1)->count()) === 2, 'a paid month\'s hours cannot be changed');
+    foreach (['attendance/staff-hourly-report', "attendance/staff-hourly-report/{$carol->id}?month={$M->month}&year={$M->year}", "staff/payroll-print/{$pc->id}"] as $p) {
+        $r = $call('GET', $P . $p, [], $mgrA);
+        $ok($r->getStatusCode() === 200 && str_contains($r->getContent(), 'Carol'), "page $p opens");
+    }
 
     // ---- 11. Payslip, PDF, report, staff tax report, bank file.
     $r = $call('GET', $P . "staff/payroll-print/{$pa->id}", [], $mgrA);

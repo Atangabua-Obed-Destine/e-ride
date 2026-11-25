@@ -37,6 +37,11 @@ class Screens
         'ledger.department.index', 'ledger.allowance-type.index', 'ledger.deduction-type.index', 'ledger.tax-group.index',
         'ledger.tax-setting.index', 'ledger.staff-tax-report.index', 'ledger.tax-remittance.index', 'ledger.pay-slip-setting.index',
         'ledger.payroll-setting.index',
+        'ledger.staff-hourly-attendance.index', 'ledger.staff-hourly-attendance.report',
+        'ledger.combined.index',
+        // budgets
+        'ledger.budget.dashboard', 'ledger.budget-sheet.index', 'ledger.budget.index', 'ledger.budget-line.index',
+        'ledger.budget.reports.performance', 'ledger.budget.reports.variance', 'ledger.budget.reports.department', 'ledger.budget.reports.cashflow',
     ];
 
     public static function ready(): array
@@ -55,8 +60,10 @@ class Screens
      * instead of an error page.
      */
     public const PENDING = [
-        'ledger.ledger-health', 'ledger.budget.', 'ledger.budget-line.', 'ledger.budget-sheet.',
+        'ledger.ledger-health',
         'ledger.fixed-assets.', 'ledger.fixed-asset-categories.',
+        // E-Ride: the budgets (ledger.budget.*, ledger.budget-line.*, ledger.budget-sheet.*) work on the bus books, the
+        // "department" being the payroll's departments (tests/Ledger/budget_test.php).
         // E-Ride: the Daybook (ledger.daybook.*) and the Accounting reports (ledger.accounting-reports.*) read the
         // bus books (payment accounts, bus money, supplier bills, the posted ledger): tests/Ledger/daybook_reports_test.php.
         // E-Ride: bank reconciliation, recurring entries and year-end closing work on the bus books

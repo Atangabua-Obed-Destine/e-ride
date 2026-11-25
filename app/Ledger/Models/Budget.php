@@ -55,7 +55,7 @@ class Budget extends Model
 
     public function location()
     {
-        return $this->belongsTo(\App\BusinessLocation::class, 'location_id');
+        return $this->belongsTo(\App\Ledger\ERide\BudgetDepartment::class, 'location_id'); // E-Ride: the payroll's departments (posinnova: business locations)
     }
 
     public function allocations()

@@ -88,11 +88,14 @@
                     </div>
                     <div class="col-md-3 mb-3">
                         <label class="form-label" for="salary_type">@lang('ledger_payroll.field_salary_type')</label>
-                        <select class="form-select" id="salary_type" disabled><option>@lang('ledger_payroll.salary_type_fixed')</option></select>
-                        <small class="text-muted">@lang('ledger_payroll.hourly_not_here')</small>
+                        <select class="form-select" name="salary_type" id="salary_type">
+                            <option value="1" @selected((string) $v('salary_type', 1) === '1')>@lang('ledger_payroll.salary_type_fixed')</option>
+                            <option value="2" @selected((string) $v('salary_type', 1) === '2')>@lang('ledger_payroll.salary_type_hourly')</option>
+                        </select>
+                        <small class="text-muted">@lang('ledger_payroll.hourly_help')</small>
                     </div>
                     <div class="col-md-3 mb-3">
-                        <label class="form-label" for="basic_salary">@lang('ledger_payroll.field_basic_salary') (FCFA) <span class="text-danger">*</span></label>
+                        <label class="form-label" for="basic_salary">@lang('ledger_payroll.field_basic_salary') (FCFA <span id="salaryUnit">/ {{ (string) $v('salary_type', 1) === '2' ? __('ledger_payroll.hour') : __('ledger_payroll.month') }}</span>) <span class="text-danger">*</span></label>
                         <input type="number" class="form-control" name="basic_salary" id="basic_salary" value="{{ $v('basic_salary') !== null ? round((float) $v('basic_salary')) : '' }}" min="0" step="1" required>
                     </div>
                     <div class="col-md-3 mb-3">
@@ -180,4 +183,14 @@
         </div>
     </form>
 </section>
+@endsection
+
+@section('javascript')
+<script>
+(function () {
+    var t = document.getElementById('salary_type'), u = document.getElementById('salaryUnit');
+    var L = {!! json_encode(['1' => '/ '.__('ledger_payroll.month'), '2' => '/ '.__('ledger_payroll.hour')], JSON_HEX_TAG | JSON_HEX_APOS | JSON_HEX_QUOT | JSON_HEX_AMP) !!};
+    if (t && u) { t.addEventListener('change', function () { u.textContent = L[t.value] || ''; }); }
+})();
+</script>
 @endsection

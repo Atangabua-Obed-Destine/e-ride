@@ -18,7 +18,8 @@ class Expense extends Model
     protected $table = 'expenses';
 
     protected $fillable = ['business_id', 'category_id', 'title', 'invoice_id', 'amount', 'date', 'reference', 'payment_method',
-        'payment_account_id', 'note', 'attach', 'status', 'created_by', 'updated_by'];
+        'payment_account_id', 'note', 'attach', 'status', 'created_by', 'updated_by',
+        'department_id']; // E-Ride: the department it is spent for, for departmental budgets
 
     protected $casts = ['amount' => 'float', 'date' => 'date', 'status' => 'boolean'];
 

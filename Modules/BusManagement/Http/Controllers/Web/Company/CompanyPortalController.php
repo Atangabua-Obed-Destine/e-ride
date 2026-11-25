@@ -353,44 +353,6 @@ class CompanyPortalController extends Controller
 
     // ------------------------------------------------------------- money and E-Ride bill (director)
 
-    /**
-     * Every branch's books side by side (director and accountant): ticket sales of trips that left,
-     * other income, spending, result, money held, agents' cash, what is owed. One branch's reports
-     * can be opened read-only.
-     */
-    public function accounts(Request $request): View
-    {
-        abort_if($request->attributes->get('busCompanyStaff')->role === BusCompanyStaff::REGIONAL, 403);
-        [$from, $to] = $this->period($request);
-        $accReports = app(\Modules\BusManagement\Service\Accounting\AccReports::class);
-        $sync = app(\Modules\BusManagement\Service\Accounting\LedgerSync::class);
-        $rows = [];
-        foreach ($this->scope($request) as $b) {
-            $sync->sync($b);
-            $rows[] = ['branch' => $b, 'f' => $accReports->branchFigures($b, $from->toDateString(), $to->toDateString())];
-        }
-        $open = collect($rows)->filter(fn($r) => $r['f']);
-        $totals = [];
-        foreach (['tickets', 'other_income', 'fuel', 'spending', 'result', 'money', 'agents', 'held', 'owes', 'cash_short'] as $k) {
-            $totals[$k] = round($open->sum(fn($r) => $r['f'][$k]), 2);
-        }
-        $tab = in_array($request->query('tab'), ['income', 'profit', 'cash', 'balance'], true) ? $request->query('tab') : null;
-        $by = in_array($request->query('by'), ['bus', 'route', 'trip'], true) ? $request->query('by') : 'bus';
-        $detail = null;
-        $one = $request->query('branch') ? $open->first(fn($r) => (string)$r['branch']->id === (string)$request->query('branch')) : null;
-        if ($tab && $one) {
-            $f = $from->toDateString();
-            $t = $to->toDateString();
-            $detail = match ($tab) {
-                'income' => $accReports->incomeStatement($one['branch'], $f, $t),
-                'profit' => $accReports->profit($one['branch'], $f, $t, $by),
-                'cash' => $accReports->cashFlow($one['branch'], $f, $t),
-                'balance' => $accReports->balanceSheet($one['branch'], $t),
-            };
-        }
-        return view('busmanagement::company.accounts', compact('rows', 'totals', 'from', 'to', 'tab', 'by', 'detail', 'one') + $this->filters($request));
-    }
-
     public function money(Request $request): View
     {
         // Money is for the director and the accountant, not regional managers.

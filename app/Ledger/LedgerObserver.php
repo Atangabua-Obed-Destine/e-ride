@@ -40,6 +40,13 @@ class LedgerObserver
             if (empty($model->id) || empty($model->agency_id)) {
                 return;
             }
+            // the company's head office books: ticket money it collects, E-Ride bills it pays
+            if (($model instanceof BusMoneyMove && $model->method === 'company') || ($model instanceof BusStatement && $model->company_statement_id)) {
+                if ($ho = \App\Ledger\ERide\HeadOffice::booksOfBranch((string) $model->agency_id)) {
+                    LedgerSync::queue($model instanceof BusMoneyMove ? \App\Ledger\ERide\HeadOffice::MOVE : \App\Ledger\ERide\HeadOffice::STATEMENT_PAID,
+                        $model instanceof BusMoneyMove ? (int) $model->id : (string) $model->id, $ho);
+                }
+            }
             $bid = $this->businessOf((string) $model->agency_id);
             if (! $bid) {
                 return;

@@ -71,25 +71,29 @@ class BudgetActualsService
     private function readMovements(int $bid, ?string $from, ?string $to, bool $byMonth): Collection
     {
         $month = $byMonth ? "DATE_FORMAT(je.entry_date, '%Y-%m')" : 'NULL';
-        // E-Ride: the expense category of a line comes from the Income & Expense expense behind its
-        // entry (through its mapping row; a reversal points at the same row); there are no business
-        // locations, so location_id is always null. (posinnova: the POS transaction behind the entry,
-        // through transaction_payments / transactions, gave the location and the expense category.)
+        // E-Ride: what posinnova read from the POS transaction behind an entry (through
+        // transaction_payments / transactions: its location and expense category) comes from the
+        // record behind the entry's mapping row (a reversal points at the same row): an expense gives
+        // its category and its department, a payroll the department of the staff member. The
+        // "location" is the payroll's department; anything else has none.
         $rows = DB::select("
-            SELECT l.account_id, a.account_code, a.class_number, NULL AS location_id, x.category_id AS expense_category_id,
+            SELECT l.account_id, a.account_code, a.class_number, COALESCE(x.department_id, st.department_id) AS location_id,
+                   x.category_id AS expense_category_id,
                    {$month} AS month, SUM(l.debit) AS debit, SUM(l.credit) AS credit
             FROM journal_entry_lines l
             JOIN journal_entries je ON je.id = l.journal_entry_id
             JOIN chart_of_accounts a ON a.id = l.account_id
             LEFT JOIN transaction_mappings tm ON tm.id = je.reference_id AND tm.business_id = ?
-                   AND tm.transaction_type = 'expense' AND je.reference_type IN ('expense', 'transaction_mapping')
-            LEFT JOIN expenses x ON x.business_id = ? AND CAST(x.id AS CHAR) = tm.transaction_id
+                   AND tm.transaction_type IN ('expense', 'payroll') AND (je.reference_type = tm.transaction_type OR je.reference_type = 'transaction_mapping')
+            LEFT JOIN expenses x ON tm.transaction_type = 'expense' AND x.business_id = ? AND CAST(x.id AS CHAR) = tm.transaction_id
+            LEFT JOIN payrolls p ON tm.transaction_type = 'payroll' AND p.business_id = ? AND CAST(p.id AS CHAR) = tm.transaction_id
+            LEFT JOIN ledger_staff st ON st.id = p.staff_id
             WHERE l.business_id = ? AND je.business_id = ? AND a.business_id = ?
               AND je.is_posted = 1 AND je.deleted_at IS NULL AND je.journal_type <> 'closing'
               AND (a.class_number IN (6, 7) OR (a.class_number = 2 AND a.account_code NOT LIKE '28%' AND a.account_code NOT LIKE '29%'))
               AND je.entry_date >= ? AND je.entry_date <= ?
-            GROUP BY l.account_id, a.account_code, a.class_number, x.category_id".($byMonth ? ', month' : ''),
-            [$bid, $bid, $bid, $bid, $bid, $from ?: '0001-01-01', $to ?: '9999-12-31']);
+            GROUP BY l.account_id, a.account_code, a.class_number, COALESCE(x.department_id, st.department_id), x.category_id".($byMonth ? ', month' : ''),
+            [$bid, $bid, $bid, $bid, $bid, $bid, $from ?: '0001-01-01', $to ?: '9999-12-31']);
 
         return collect($rows)->map(function ($r) {
             $class = (int) $r->class_number;

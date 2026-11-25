@@ -32,7 +32,9 @@ Route::post('staff/payroll-preview', $NS.'PayrollController@preview')->name('pay
 Route::get('staff/payroll-generate/{id}/{month}/{year}', $NS.'PayrollController@generate')->name('payroll.generate')->whereNumber(['id', 'month', 'year']);
 Route::post('staff/payroll-pay/{id}', $NS.'PayrollController@pay')->name('payroll.pay')->middleware($R)->whereNumber('id');
 Route::post('staff/payroll-unpay/{id}', $NS.'PayrollController@unpay')->name('payroll.unpay')->middleware($R)->whereNumber('id');
-Route::post('staff/payroll-approve/{id}', $NS.'PayrollController@approve')->name('payroll.approve')->whereNumber('id');
+Route::post('staff/payroll-approve/{id}', $NS.'PayrollController@approve')->name('payroll.approve')->middleware($R)->whereNumber('id');
+Route::post('staff/payroll-unapprove/{id}', $NS.'PayrollController@unapprove')->name('payroll.unapprove')->middleware($R)->whereNumber('id');
+Route::post('staff/payroll-bulk-approve', $NS.'PayrollController@bulkApprove')->name('payroll.bulk-approve')->middleware($R);
 Route::post('staff/payroll-bulk', $NS.'PayrollController@bulk')->name('payroll.bulk');
 Route::post('staff/payroll-bulk-pay', $NS.'PayrollController@bulkPay')->name('payroll.bulk-pay')->middleware($R);
 Route::get('staff/payroll-bank-file', $NS.'PayrollController@bankFile')->name('payroll.bank-file');
@@ -41,6 +43,12 @@ Route::get('staff/payroll-print/{id}', $NS.'PayrollController@print')->name('pay
 Route::get('staff/payroll-pdf/{id}', $NS.'PayrollController@pdf')->name('payroll.pdf')->whereNumber('id');
 Route::get('staff/payroll-setting', $NS.'PayrollSettingController@index')->name('payroll-setting.index');
 Route::post('staff/payroll-setting', $NS.'PayrollSettingController@update')->name('payroll-setting.update');
+
+// ---- hourly attendance (paxhitestbed attendance/staff-hourly-*: what hourly pay reads; posts nothing)
+Route::get('attendance/staff-hourly-attendance', $NS.'StaffHourlyAttendanceController@index')->name('staff-hourly-attendance.index');
+Route::post('attendance/staff-hourly-attendance', $NS.'StaffHourlyAttendanceController@store')->name('staff-hourly-attendance.store');
+Route::get('attendance/staff-hourly-report', $NS.'StaffHourlyAttendanceController@report')->name('staff-hourly-attendance.report');
+Route::get('attendance/staff-hourly-report/{id}', $NS.'StaffHourlyAttendanceController@reportDetails')->name('staff-hourly-attendance.report.details')->whereNumber('id');
 
 // ---- loans and advances
 Route::get('staff/staff-loan', $NS.'StaffLoanController@index')->name('staff-loan.index');

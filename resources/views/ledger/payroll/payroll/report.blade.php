@@ -15,7 +15,11 @@
                 <div class="row g-2 align-items-end">
                     <div class="col-md-2">
                         <label class="form-label" for="salary_type">@lang('ledger_payroll.field_salary_type')</label>
-                        <select class="form-select" name="salary_type" id="salary_type"><option value="1">@lang('ledger_payroll.salary_type_fixed')</option></select>
+                        <select class="form-select" name="salary_type" id="salary_type">
+                            <option value="">@lang('ledger_payroll.all')</option>
+                            <option value="1" @selected($selected_salary_type == 1)>@lang('ledger_payroll.salary_type_fixed')</option>
+                            <option value="2" @selected($selected_salary_type == 2)>@lang('ledger_payroll.salary_type_hourly')</option>
+                        </select>
                     </div>
                     <div class="col-md-2">
                         <label class="form-label" for="department">@lang('ledger_payroll.field_department')</label>
@@ -77,7 +81,7 @@
                             <td>{{ $print->prefix ?? '' }}{{ str_pad($row->id, 6, '0', STR_PAD_LEFT) }}</td>
                             <td>#{{ $row->staff->staff_no ?? '' }}</td>
                             <td>{{ $row->staff->name ?? '' }}</td>
-                            <td class="ap-num">{{ $money($row->basic_salary) }} <small>/ @lang('ledger_payroll.salary_type_fixed')</small></td>
+                            <td class="ap-num">{{ $money($row->basic_salary) }} <small>/ {{ $row->salary_type == 2 ? __('ledger_payroll.hour') : __('ledger_payroll.month') }}</small>@if($row->hours_worked !== null)<br><small class="text-muted">{{ rtrim(rtrim(number_format((float) $row->hours_worked, 2, ',', ''), '0'), ',') }} h</small>@endif</td>
                             <td class="ap-num">{{ $money($row->total_earning) }}</td>
                             <td class="ap-num">{{ $money($row->total_allowance) }}</td>
                             <td class="ap-num">{{ $money($row->total_deduction) }}</td>

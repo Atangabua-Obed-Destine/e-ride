@@ -74,11 +74,11 @@ class BudgetLineChoices
             ->orderBy('name')->get(['id', 'name']);
     }
 
-    /** This business's locations (the departments, profit centres). */
+    /** This business's locations (the departments, profit centres). E-Ride: the payroll's departments (posinnova: business_locations). */
     public static function locations()
     {
-        return DB::table('business_locations')->where('business_id', Ledger::businessId())->whereNull('deleted_at')
-            ->orderBy('name')->get(['id', 'name']);
+        return DB::table('departments')->where('business_id', Ledger::businessId())->where('status', 1)
+            ->orderBy('title')->get(['id', 'title as name']);
     }
 
     public static function categoryBelongs($id): bool
@@ -88,6 +88,6 @@ class BudgetLineChoices
 
     public static function locationBelongs($id): bool
     {
-        return ! $id || DB::table('business_locations')->where('business_id', Ledger::businessId())->where('id', $id)->exists();
+        return ! $id || DB::table('departments')->where('business_id', Ledger::businessId())->where('id', $id)->exists(); // E-Ride: departments
     }
 }

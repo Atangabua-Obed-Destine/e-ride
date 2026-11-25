@@ -60,7 +60,8 @@ class TaxRemittanceService
 
         $composition = PayrollTaxLine::query()
             ->join('payrolls as p', 'p.id', '=', 'payroll_tax_lines.payroll_id')
-            ->where('p.status', 1)->whereNotNull('payroll_tax_lines.liability_account_id')
+            ->where(fn ($w) => $w->where('p.status', 1)->orWhereNotNull('p.approved_at')) // accrued: approved or paid
+           ->whereNotNull('payroll_tax_lines.liability_account_id')
             ->groupBy('payroll_tax_lines.liability_account_id', 'payroll_tax_lines.salary_month')
             ->selectRaw('payroll_tax_lines.liability_account_id as account_id, payroll_tax_lines.salary_month as month,
                          SUM(payroll_tax_lines.employee_amount) as employee, SUM(payroll_tax_lines.employer_amount) as employer,
@@ -126,7 +127,8 @@ class TaxRemittanceService
     {
         return PayrollTaxLine::query()
             ->join('payrolls as p', 'p.id', '=', 'payroll_tax_lines.payroll_id')
-            ->where('p.status', 1)
+            ->where(fn ($w) => $w->where('p.status', 1)->orWhereNotNull('p.approved_at')) // accrued: approved or paid
+           
             ->where('payroll_tax_lines.liability_account_id', $accountId)
             ->whereDate('payroll_tax_lines.salary_month', $month)
             ->groupBy('payroll_tax_lines.label')

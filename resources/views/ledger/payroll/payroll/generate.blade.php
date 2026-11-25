@@ -4,6 +4,17 @@
 @include('ledger.partials.style')
 <style>
     /* paxhitestbed admin/payroll/generate styles */
+    .attendance-stat { text-align: center; padding: 12px 8px; border-radius: 8px; }
+    .attendance-stat .stat-icon { font-size: 20px; margin-bottom: 4px; }
+    .attendance-stat .stat-value { font-size: 22px; font-weight: 700; display: block; }
+    .attendance-stat .stat-label { font-size: 11px; color: #6c757d; text-transform: uppercase; letter-spacing: .3px; }
+    .att-present { background: #e6f9f0; } .att-present .stat-icon, .att-present .stat-value { color: #1cc88a; }
+    .att-absent { background: #fde8e5; } .att-absent .stat-icon, .att-absent .stat-value { color: #e74a3b; }
+    .att-leave { background: #fff8e1; } .att-leave .stat-icon, .att-leave .stat-value { color: #d48806; }
+    .att-paid-leave { background: #e8ecf6; } .att-paid-leave .stat-icon, .att-paid-leave .stat-value { color: #4e73df; }
+    .att-holiday { background: #d4edda; } .att-holiday .stat-icon, .att-holiday .stat-value { color: #155724; }
+    .attendance-summary-bar { height: 8px; border-radius: 4px; overflow: hidden; background: #e9ecef; display: flex; }
+    .attendance-summary-bar .bar-segment { height: 100%; }
     .payroll-header-card { background: linear-gradient(135deg, #4e73df 0%, #224abe 100%); border-radius: 10px; color: #fff; position: relative; overflow: hidden; }
     .payroll-header-card .staff-avatar { width: 70px; height: 70px; border-radius: 50%; background: rgba(255,255,255,0.2); display: flex; align-items: center; justify-content: center; font-size: 28px; font-weight: 700; border: 3px solid rgba(255,255,255,0.4); flex-shrink: 0; }
     .payroll-header-card .staff-meta dt { font-size: 11px; opacity: 0.7; margin-bottom: 1px; text-transform: uppercase; letter-spacing: .5px; }
@@ -111,7 +122,7 @@
                         <dt>@lang('ledger_payroll.field_contract_type')</dt>
                         <dd>{{ $row->contract_type == 1 ? __('ledger_payroll.contract_type_full_time') : ($row->contract_type == 2 ? __('ledger_payroll.contract_type_part_time') : '-') }}</dd>
                         <dt>@lang('ledger_payroll.field_salary_type')</dt>
-                        <dd><i class="fas fa-calendar-alt me-1" style="opacity: 0.7;"></i>@lang('ledger_payroll.salary_type_fixed')</dd>
+                        <dd>@if($row->isHourly())<i class="fas fa-hourglass-half me-1" style="opacity: 0.7;"></i>@lang('ledger_payroll.salary_type_hourly')@else<i class="fas fa-calendar-alt me-1" style="opacity: 0.7;"></i>@lang('ledger_payroll.salary_type_fixed')@endif</dd>
                     </dl>
                 </div>
                 <div class="col-lg-4 col-md-12">
@@ -124,13 +135,52 @@
                         <div class="col-6"><div class="salary-highlight">
                             <div class="sal-label">@lang('ledger_payroll.field_basic_salary')</div>
                             <div class="sal-value">{{ $money($calc['basic_salary']) }}</div>
-                            <div style="font-size: 11px; opacity: 0.7;">FCFA / @lang('ledger_payroll.month')</div>
+                            <div style="font-size: 11px; opacity: 0.7;">FCFA / {{ $row->isHourly() ? __('ledger_payroll.hour') : __('ledger_payroll.month') }}</div>
                         </div></div>
                     </div>
                 </div>
             </div>
         </div>
     </div>
+
+    @if($attendances !== null)
+    @php
+        $present = $attendances->where('attendance', 1)->count();
+        $absent = $attendances->where('attendance', 2)->count();
+        $leave = $attendances->where('attendance', 3)->count();
+        $holiday = $attendances->where('attendance', 4)->count();
+        $sessions = max(1, $attendances->count());
+    @endphp
+    {{-- paxhitestbed's attendance section (hourly staff): the month's sessions from the hourly attendance. --}}
+    <div class="card attendance-card section-card mb-3">
+        <div class="card-header">
+            <div>
+                <h5><i class="fas fa-calendar-check text-primary me-2"></i>@lang('ledger_payroll.field_attendance')</h5>
+                <p class="section-desc mb-0">{{ $period->translatedFormat('F Y') }} · {{ $total_days }} @lang('ledger_payroll.calendar_days') · {{ $present }} @lang('ledger_payroll.payable_sessions'), {{ $absent + $leave + $holiday }} @lang('ledger_payroll.unpayable_sessions')</p>
+            </div>
+            @can('staff-hourly-attendance-action')
+            <a href="{{ route('ledger.staff-hourly-attendance.index', ['staff' => $row->id]) }}" class="btn btn-outline-primary btn-sm"><i class="fas fa-clock me-1"></i> @lang('ledger_payroll.hourly_attendance')</a>
+            @endcan
+        </div>
+        <div class="card-body px-4 pb-3 pt-2">
+            <div class="attendance-summary-bar mb-3">
+                <div class="bar-segment" style="width: {{ $present / $sessions * 100 }}%; background: #1cc88a;"></div>
+                <div class="bar-segment" style="width: {{ $holiday / $sessions * 100 }}%; background: #28a745;"></div>
+                <div class="bar-segment" style="width: {{ $leave / $sessions * 100 }}%; background: #f6c23e;"></div>
+                <div class="bar-segment" style="width: {{ $absent / $sessions * 100 }}%; background: #dc3545;"></div>
+            </div>
+            <div class="row">
+                @foreach([['att-present', 'fa-check-circle', $present, 'attendance_present'], ['att-absent', 'fa-times-circle', $absent, 'attendance_absent'],
+                    ['att-leave', 'fa-paper-plane', $leave, 'attendance_leave'], ['att-holiday', 'fa-flag', $holiday, 'attendance_holiday'],
+                    ['att-paid-leave', 'fa-hourglass-half', rtrim(rtrim(number_format((float) $calc['hours_worked'], 2, ',', ''), '0'), ','), 'hours_present']] as [$cls, $icon, $value, $label])
+                <div class="col-4 col-md mb-2">
+                    <div class="attendance-stat {{ $cls }}"><div class="stat-icon"><i class="fas {{ $icon }}"></i></div><span class="stat-value">{{ $value }}</span><span class="stat-label">@lang('ledger_payroll.'.$label)</span></div>
+                </div>
+                @endforeach
+            </div>
+        </div>
+    </div>
+    @endif
 
     <form id="payrollForm" action="{{ route($route.'.store') }}" method="post">
         @csrf
@@ -227,7 +277,7 @@
                         <div class="calc-field-group highlight-earning">
                             <label>@lang('ledger_payroll.field_total_earning') (FCFA)</label>
                             <input type="text" class="form-control" name="total_earning" value="{{ round($calc['total_earning']) }}" readonly>
-                            <div class="field-desc">@lang('ledger_payroll.earning_desc')</div>
+                            <div class="field-desc">@if($row->isHourly())@lang('ledger_payroll.hours_present_desc', ['hours' => rtrim(rtrim(number_format((float) $calc['hours_worked'], 2, ',', ''), '0'), ','), 'rate' => $money($calc['basic_salary'])])@else @lang('ledger_payroll.earning_desc')@endif</div>
                             @foreach($calc['notes'] as $note)<div class="field-desc text-warning"><i class="fas fa-exclamation-triangle"></i> {{ $note }}</div>@endforeach
                         </div>
                         <div class="calc-field-group">

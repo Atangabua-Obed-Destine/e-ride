@@ -59,7 +59,8 @@ class PayrollController extends LedgerController
         $data['payment_accounts'] = PaymentAccount::where('status', 1)->orderBy('title')->get();
         $data['methods'] = PaymentBook::methods();
 
-        $staff = Staff::with(['designation', 'department'])->where('status', 1)->where('salary_type', Staff::SALARY_FIXED);
+        $staff = Staff::with(['designation', 'department'])->where('status', 1)
+            ->where('salary_type', (int) $data['selected_salary_type'] === Staff::SALARY_HOURLY ? Staff::SALARY_HOURLY : Staff::SALARY_FIXED);
         if ($request->filled('department')) {
             $staff->where('department_id', $request->department);
         }
@@ -115,6 +116,10 @@ class PayrollController extends LedgerController
         $data['allowance_types'] = AllowanceType::where('status', 1)->orderBy('title')->get();
         $data['deduction_types'] = DeductionType::where('status', 1)->orderBy('title')->get();
         $data['salary_month'] = $salaryMonth;
+        // paxhitestbed's attendance section: hourly staff only (daily attendance for monthly staff is not ported)
+        $data['attendances'] = $staff->isHourly() ? \App\Ledger\Models\StaffHourlyAttendance::where('staff_id', $staff->id)
+            ->whereYear('date', (int) $year)->whereMonth('date', (int) $month)->get() : null;
+        $data['total_days'] = Carbon::createFromDate((int) $year, (int) $month, 1)->daysInMonth;
 
         return view('ledger.payroll.payroll.generate', $data);
     }
@@ -176,7 +181,7 @@ class PayrollController extends LedgerController
             return $this->err(back(), $e->getMessage());
         }
 
-        return $this->ok(route('ledger.payroll.index', ['salary_type' => 1, 'month' => Carbon::parse($salaryMonth)->format('m'),
+        return $this->ok(route('ledger.payroll.index', ['salary_type' => $staff->salary_type ?: 1, 'month' => Carbon::parse($salaryMonth)->format('m'),
             'year' => Carbon::parse($salaryMonth)->format('Y')]), __('ledger_payroll.created'));
     }
 
@@ -214,53 +219,86 @@ class PayrollController extends LedgerController
         return $this->ok(back(), __('ledger_payroll.unpaid_reversed'));
     }
 
-    /** Approve a generated payroll (when the books require approval before paying): the manager's. */
-    public function approve($id)
+    /**
+     * Approve a generated payroll (when the books require approval before paying): the manager's.
+     * Approving posts the accrual (Dr 661 / 664, Cr the withholdings, 421 and 422), so it goes
+     * through the review dialog.
+     */
+    public function approve(Request $request, $id)
     {
         $this->allow('payroll-approve');
-        $payroll = Payroll::findOrFail($id);
-        if ($payroll->isPaid()) {
-            return $this->err(back(), __('ledger_payroll.err_already_paid'));
+        if (! $this->reviewed($request)) {
+            return $this->needReview();
         }
-        if (! $payroll->isApproved()) {
-            $payroll->forceFill(['approved_by' => auth()->id(), 'approved_at' => now()])->save();
+        try {
+            app(PayrollPayer::class)->approve(Payroll::findOrFail($id), auth()->id());
+        } catch (\RuntimeException $e) {
+            return $this->err(back(), $e->getMessage());
         }
 
         return $this->ok(back(), __('ledger_payroll.approved_msg'));
     }
 
-    /** Generate or approve several at once (each as the single screen would, one refusal leaves the others done). */
-    public function bulk(Request $request)
+    /** Take an approval back (reverses the accrual). Only while the payroll is not paid: unpay it first. */
+    public function unapprove(Request $request, $id)
     {
-        $this->allow('payroll-action');
+        $this->allow('payroll-approve');
+        if (! $this->reviewed($request)) {
+            return $this->needReview();
+        }
+        try {
+            app(PayrollPayer::class)->unapprove(Payroll::findOrFail($id), auth()->id());
+        } catch (\RuntimeException $e) {
+            return $this->err(back(), $e->getMessage());
+        }
+
+        return $this->ok(back(), __('ledger_payroll.unapproved_msg'));
+    }
+
+    /** Approve several at once (posts each accrual: through the review). */
+    public function bulkApprove(Request $request)
+    {
+        $this->allow('payroll-approve');
         $request->validate([
-            'action' => 'required|in:generate,approve',
             'month' => 'required|integer|between:1,12',
             'year' => 'required|integer|min:2000|max:2100',
             'staff' => 'required|array|min:1',
             'staff.*' => 'integer',
         ], ['staff.required' => __('ledger_payroll.tick_first')]);
-        if ($request->action === 'approve') {
-            $this->allow('payroll-approve');
+        if (! $this->reviewed($request)) {
+            return $this->needReview();
         }
+        $request->merge(['action' => 'approve']);
 
-        return $this->runBulk($request, function (Staff $staff, ?Payroll $payroll, string $salaryMonth) use ($request) {
-            if ($request->action === 'generate') {
-                if ($payroll) {
-                    return __($payroll->isPaid() ? 'ledger_payroll.already_paid' : 'ledger_payroll.already_generated');
-                }
-                $result = app(PayrollWriter::class)->generateFromStartingLines($staff, $salaryMonth, auth()->id());
-
-                return $result['payroll'] ? null : implode(' ', $result['calc']['problems']);
-            }
+        return $this->runBulk($request, function (Staff $staff, ?Payroll $payroll) {
             if (! $payroll || $payroll->isPaid()) {
                 return __(! $payroll ? 'ledger_payroll.not_generated' : 'ledger_payroll.already_paid');
             }
-            if (! $payroll->isApproved()) {
-                $payroll->forceFill(['approved_by' => auth()->id(), 'approved_at' => now()])->save();
-            }
+            app(PayrollPayer::class)->approve($payroll, auth()->id());
 
             return null;
+        });
+    }
+
+    /** Generate several at once (each as the single screen would, one refusal leaves the others done). Posts nothing. */
+    public function bulk(Request $request)
+    {
+        $this->allow('payroll-action');
+        $request->validate([
+            'action' => 'required|in:generate',
+            'month' => 'required|integer|between:1,12',
+            'year' => 'required|integer|min:2000|max:2100',
+            'staff' => 'required|array|min:1',
+            'staff.*' => 'integer',
+        ], ['staff.required' => __('ledger_payroll.tick_first')]);
+
+        return $this->runBulk($request, function (Staff $staff, ?Payroll $payroll, string $salaryMonth) {
+            if ($payroll) {
+                return __($payroll->isPaid() ? 'ledger_payroll.already_paid' : 'ledger_payroll.already_generated');
+            }
+            $result = app(PayrollWriter::class)->generateFromStartingLines($staff, $salaryMonth, auth()->id());
+
+            return $result['payroll'] ? null : implode(' ', $result['calc']['problems']);
         });
     }
 
@@ -374,6 +412,10 @@ class PayrollController extends LedgerController
         }
         if ($request->filled('designation')) {
             $q->whereHas('staff', fn ($s) => $s->where('designation_id', $request->designation));
+        }
+        $data['selected_salary_type'] = $request->salary_type ?: '';
+        if ($request->filled('salary_type')) {
+            $q->where('salary_type', (int) $request->salary_type);
         }
         $data['rows'] = $q->orderBy('id')->get();
         $data['methods'] = PaymentBook::methods();

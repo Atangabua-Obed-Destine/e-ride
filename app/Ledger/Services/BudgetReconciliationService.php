@@ -145,14 +145,13 @@ class BudgetReconciliationService
         $bid = Ledger::businessId();
         $out = [];
 
+        // E-Ride: the records that failed to post are the mapping rows marked failed (bus records, income,
+        // expenses, bills, payroll...), dated and valued by the mapping when it knows (posinnova: POS transactions)
         $failed = DB::table('transaction_mappings as m')
-            ->join('transactions as t', function ($j) {
-                $j->on('t.id', '=', 'm.transaction_id')->whereColumn('t.type', 'm.transaction_type');
-            })
-            ->where('m.business_id', $bid)->where('t.business_id', $bid)->where('m.status', 'failed')
-            ->when($from, fn ($q) => $q->whereDate('t.transaction_date', '>=', $from))
-            ->when($to, fn ($q) => $q->whereDate('t.transaction_date', '<=', $to))
-            ->selectRaw('COUNT(*) as n, COALESCE(SUM(t.final_total), 0) as total')->first();
+            ->where('m.business_id', $bid)->where('m.status', 'failed')
+            ->when($from, fn ($q) => $q->where(fn ($w) => $w->whereNull('m.transaction_date')->orWhereDate('m.transaction_date', '>=', $from)))
+            ->when($to, fn ($q) => $q->where(fn ($w) => $w->whereNull('m.transaction_date')->orWhereDate('m.transaction_date', '<=', $to)))
+            ->selectRaw('COUNT(*) as n, COALESCE(SUM(m.amount), 0) as total')->first();
         if ($failed && (int) $failed->n > 0) {
             $out[] = ['section' => null, 'amount' => (float) $failed->total,
                 'detail' => __('ledger_budget.known_failed', ['count' => (int) $failed->n, 'amount' => Ledger::money($failed->total)])];

@@ -70,6 +70,18 @@
                                     <input type="date" class="form-control" name="date" id="date" max="{{ now()->toDateString() }}"
                                            value="{{ old('date', $row ? $row->date->format('Y-m-d') : date('Y-m-d')) }}" required>
                                 </div>
+                                {{-- E-Ride: the department an expense is spent for, for departmental budgets --}}
+                                @if(! empty($departments) && count($departments))
+                                <div class="form-group col-md-4 mb-3">
+                                    <label for="department_id">@lang('ledger_budget.department')</label>
+                                    <select class="form-control" name="department_id" id="department_id">
+                                        <option value="">@lang('ledger_accounts.select')</option>
+                                        @foreach($departments as $d)
+                                        <option value="{{ $d->id }}" @selected((string) old('department_id', $row->department_id ?? '') === (string) $d->id)>{{ $d->name }}</option>
+                                        @endforeach
+                                    </select>
+                                </div>
+                                @endif
                             </div>
                         </div>
 

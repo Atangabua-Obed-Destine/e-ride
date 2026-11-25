@@ -645,6 +645,9 @@ class LedgerHealth
         'payment_transfer' => ['payment_account_transfers', 'id'],
         'payment_account_txn' => ['payment_account_transactions', 'id'],
         'payroll' => ['payrolls', 'id'],
+        'payroll_payment' => ['payrolls', 'id'],
+        'ho_move' => ['bus_money_moves', 'id'],
+        'ho_statement_paid' => ['bus_statements', 'id'],
         'staff_loan' => ['staff_loans', 'id'],
         'tax_remittance' => ['tax_remittances', 'id'],
     ];

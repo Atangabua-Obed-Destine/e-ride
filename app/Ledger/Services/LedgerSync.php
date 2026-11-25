@@ -107,9 +107,16 @@ class LedgerSync
             PostingRules::STATEMENT, PostingRules::STATEMENT_PAID => $this->statement((string) $id, $kind),
             PostingRules::INCOME, PostingRules::EXPENSE, PostingRules::SUPPLIER_BILL, PostingRules::SUPPLIER_PAYMENT,
             PostingRules::PAYMENT_TRANSFER, PostingRules::PAYMENT_ACCOUNT_TXN,
-            PostingRules::PAYROLL, PostingRules::STAFF_LOAN, PostingRules::TAX_REMITTANCE => $this->accountsRecord($kind, (int) $id),
+            PostingRules::PAYROLL, PostingRules::PAYROLL_PAYMENT, PostingRules::STAFF_LOAN, PostingRules::TAX_REMITTANCE => $this->accountsRecord($kind, (int) $id),
+            \App\Ledger\ERide\HeadOffice::MOVE, \App\Ledger\ERide\HeadOffice::STATEMENT_PAID => \App\Ledger\ERide\HeadOffice::record($this, $kind, $id),
             default => 'none',
         };
+    }
+
+    /** posinnova's apply(), for the E-Ride rules kept outside this file (App\Ledger\ERide\HeadOffice). */
+    public function applyFor(TransactionMapping $map, ?callable $expected, string $kind, int|string $id): string
+    {
+        return $this->apply($map, $expected, $kind, $id);
     }
 
     /** The bus branch whose books are open. */
@@ -196,7 +203,8 @@ class LedgerSync
         PostingRules::PAYMENT_TRANSFER => [\App\Ledger\Models\PaymentAccountTransfer::class, 'transfer_date', 'payment_account_transfers'],
         PostingRules::PAYMENT_ACCOUNT_TXN => [\App\Ledger\Models\PaymentAccountTransaction::class, 'transaction_date', 'payment_account_transactions'],
         // paxhitestbed's payroll and tax (App\Ledger\Payroll): a payroll posts when paid (pay_date), a loan when given, a remittance when paid
-        PostingRules::PAYROLL => [\App\Ledger\Models\Payroll::class, 'pay_date', 'payrolls'],
+        PostingRules::PAYROLL => [\App\Ledger\Models\Payroll::class, 'approved_at', 'payrolls'],
+        PostingRules::PAYROLL_PAYMENT => [\App\Ledger\Models\Payroll::class, 'pay_date', 'payrolls'],
         PostingRules::STAFF_LOAN => [\App\Ledger\Models\StaffLoan::class, 'given_on', 'staff_loans'],
         PostingRules::TAX_REMITTANCE => [\App\Ledger\Models\TaxRemittance::class, 'payment_date', 'tax_remittances'],
     ];
@@ -217,7 +225,7 @@ class LedgerSync
         $method = [PostingRules::INCOME => 'forIncome', PostingRules::EXPENSE => 'forExpense', PostingRules::SUPPLIER_BILL => 'forSupplierBill',
             PostingRules::SUPPLIER_PAYMENT => 'forSupplierPayment', PostingRules::PAYMENT_TRANSFER => 'forPaymentAccountTransfer',
             PostingRules::PAYMENT_ACCOUNT_TXN => 'forPaymentAccountTransaction',
-            PostingRules::PAYROLL => 'forPayroll', PostingRules::STAFF_LOAN => 'forStaffLoan', PostingRules::TAX_REMITTANCE => 'forTaxRemittance'][$kind];
+            PostingRules::PAYROLL => 'forPayroll', PostingRules::PAYROLL_PAYMENT => 'forPayrollPayment', PostingRules::STAFF_LOAN => 'forStaffLoan', PostingRules::TAX_REMITTANCE => 'forTaxRemittance'][$kind];
 
         return $this->apply($map, fn () => $this->rules->{$method}($model), $kind, $id);
     }
@@ -417,7 +425,12 @@ class LedgerSync
             $stats[$r] = ($stats[$r] ?? 0) + $n;
         }
         if (! $agency) {
-            return $stats; // a head office's own books: nothing comes from the bus records here (yet)
+            // a head office's own books: what it collects and pays for its branches (App\Ledger\ERide\HeadOffice)
+            foreach (\App\Ledger\ERide\HeadOffice::sweep($this) as $r => $n) {
+                $stats[$r] = ($stats[$r] ?? 0) + $n;
+            }
+
+            return $stats;
         }
         $since = AccountingSetting::getValue('last_sweep_at');
         $since = $since ? Carbon::parse($since)->subMinutes(10) : null;

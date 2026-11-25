@@ -42,7 +42,7 @@
             <td><span class="lbl">@lang('ledger_payroll.field_designation')</span><br>{{ $s->designation->title ?? '-' }}</td>
         </tr>
         <tr>
-            <td><span class="lbl">@lang('ledger_payroll.field_salary_type')</span><br>@lang('ledger_payroll.salary_type_fixed')</td>
+            <td><span class="lbl">@lang('ledger_payroll.field_salary_type')</span><br>{{ $row->salary_type == 2 ? __('ledger_payroll.salary_type_hourly') : __('ledger_payroll.salary_type_fixed') }}</td>
             <td><span class="lbl">@lang('ledger_payroll.field_basic_salary')</span><br><strong>{{ $money($row->basic_salary) }} FCFA</strong></td>
             <td><span class="lbl">@lang('ledger_payroll.field_cnps_no')</span><br>{{ $s->cnps_no ?: '-' }}</td>
             <td><span class="lbl">@lang('ledger_payroll.field_niu')</span><br>{{ $s->niu ?: '-' }}</td>
@@ -63,7 +63,7 @@
                 <table width="100%" class="ps-table">
                     <tr><th colspan="2" class="earn">@lang('ledger_payroll.earnings')</th></tr>
                     <tr>
-                        <td>@if($row->paid_days !== null) @lang('ledger_payroll.basic_prorated', ['paid' => (float) $row->paid_days + 0, 'period' => (float) $row->period_days + 0]) @else @lang('ledger_payroll.basic_total_earning') @endif</td>
+                        <td>@if($row->salary_type == 2 && $row->hours_worked !== null) @lang('ledger_payroll.hours_worked_line', ['hours' => rtrim(rtrim(number_format((float) $row->hours_worked, 2, ',', ''), '0'), ','), 'rate' => $money($row->basic_salary)]) @elseif($row->paid_days !== null) @lang('ledger_payroll.basic_prorated', ['paid' => (float) $row->paid_days + 0, 'period' => (float) $row->period_days + 0]) @else @lang('ledger_payroll.basic_total_earning') @endif</td>
                         <td align="right">{{ $money($row->total_earning) }}</td>
                     </tr>
                     @forelse($allowances as $d)

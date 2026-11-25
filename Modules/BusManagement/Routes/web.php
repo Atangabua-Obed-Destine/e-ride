@@ -78,31 +78,6 @@ Route::group(['prefix' => 'partner/bus-agency', 'as' => 'bus-partner.'], functio
     Route::middleware(BusPartner::class . ':manager,accountant')
         ->get('accounting', [\Modules\BusManagement\Http\Controllers\Web\Partner\LedgerEntryController::class, 'branch'])->name('accounting');
 
-    // Accounts (one set of books per branch): the manager and the accountant.
-    Route::middleware(BusPartner::class . ':manager,accountant')->prefix('accounts')->name('accounts')->group(function () {
-        $acc = \Modules\BusManagement\Http\Controllers\Web\Partner\AccountsController::class;
-        Route::get('/', [$acc, 'index'])->name('');
-        Route::get('setup', [$acc, 'setup'])->name('.setup');
-        Route::get('spending', [$acc, 'spending'])->name('.spending');
-        Route::get('money', [$acc, 'money'])->name('.money');
-        Route::get('cash', [$acc, 'cash'])->name('.cash');
-        Route::get('reconcile', [$acc, 'reconcile'])->name('.reconcile');
-        Route::get('buses', [$acc, 'buses'])->name('.buses');
-        Route::get('staff-pay', [$acc, 'staffPay'])->name('.pay');
-        Route::post('staff-pay/people/{employee?}', [$acc, 'saveEmployee'])->name('.employee')->whereUuid('employee');
-        Route::get('payslips/{payslip}', [$acc, 'payslip'])->name('.payslip')->whereNumber('payslip');
-        Route::get('budget', [$acc, 'budget'])->name('.budget');
-        Route::post('budget', [$acc, 'saveBudget'])->name('.budget.save');
-        Route::get('reports', [$acc, 'reports'])->name('.reports');
-        Route::get('journal', [$acc, 'journal'])->name('.journal');
-        Route::get('settings', [$acc, 'settings'])->name('.settings');
-        Route::get('documents/{document}', [$acc, 'document'])->name('.document')->whereUuid('document');
-        Route::post('accounts/{account?}', [$acc, 'saveAccount'])->name('.account')->whereUuid('account');
-        Route::post('settings', [$acc, 'saveSettings'])->name('.settings.save');
-        Route::post('preview/{action}', [$acc, 'previewAction'])->name('.preview')->where('action', '[a-z]+')->middleware('throttle:120,1,bus-acc-preview');
-        Route::post('do/{action}', [$acc, 'doAction'])->name('.do')->where('action', '[a-z]+')->middleware('throttle:60,1,bus-acc-do');
-    });
-
     Route::middleware(BusPartner::class . ':manager')->group(function () {
         Route::get('fleet', [FleetController::class, 'index'])->name('fleet');
         Route::post('fleet/{bus?}', [FleetController::class, 'save'])->name('fleet.save')->whereUuid('bus');
@@ -226,34 +201,10 @@ Route::group(['prefix' => 'partner/bus-company', 'as' => 'bus-company.'], functi
         Route::get('buses', [$c, 'buses'])->name('buses');
         Route::get('rules', [$c, 'rules'])->name('rules');
         Route::get('money', [$c, 'money'])->name('money');
-        Route::get('accounts', [$c, 'accounts'])->name('accounts');
     });
     // Accounting (the accounting module of all our systems): opens the head office's own books.
     Route::middleware($mw)->get('accounting', [\Modules\BusManagement\Http\Controllers\Web\Partner\LedgerEntryController::class, 'company'])->name('accounting');
 
-    // The head office's own books (director and accountant; regional managers are refused in the controller).
-    Route::middleware($mw)->prefix('books')->name('books')->group(function () {
-        $acc = \Modules\BusManagement\Http\Controllers\Web\Partner\AccountsController::class;
-        Route::get('/', [$acc, 'index'])->name('');
-        Route::get('setup', [$acc, 'setup'])->name('.setup');
-        Route::get('spending', [$acc, 'spending'])->name('.spending');
-        Route::get('money', [$acc, 'money'])->name('.money');
-        Route::get('reconcile', [$acc, 'reconcile'])->name('.reconcile');
-        Route::get('buses', [$acc, 'buses'])->name('.buses');
-        Route::get('staff-pay', [$acc, 'staffPay'])->name('.pay');
-        Route::post('staff-pay/people/{employee?}', [$acc, 'saveEmployee'])->name('.employee')->whereUuid('employee');
-        Route::get('payslips/{payslip}', [$acc, 'payslip'])->name('.payslip')->whereNumber('payslip');
-        Route::get('budget', [$acc, 'budget'])->name('.budget');
-        Route::post('budget', [$acc, 'saveBudget'])->name('.budget.save');
-        Route::get('reports', [$acc, 'reports'])->name('.reports');
-        Route::get('journal', [$acc, 'journal'])->name('.journal');
-        Route::get('settings', [$acc, 'settings'])->name('.settings');
-        Route::get('documents/{document}', [$acc, 'document'])->name('.document')->whereUuid('document');
-        Route::post('accounts/{account?}', [$acc, 'saveAccount'])->name('.account')->whereUuid('account');
-        Route::post('settings', [$acc, 'saveSettings'])->name('.settings.save');
-        Route::post('preview/{action}', [$acc, 'previewAction'])->name('.preview')->where('action', '[a-z]+')->middleware('throttle:120,1,bus-acc-preview');
-        Route::post('do/{action}', [$acc, 'doAction'])->name('.do')->where('action', '[a-z]+')->middleware('throttle:60,1,bus-acc-do');
-    });
     // The director and regional managers act.
     Route::middleware($mw . ':act')->group(function () use ($c) {
         Route::post('branches/{branch}/pause', [$c, 'pause'])->name('branches.pause')->whereUuid('branch');
