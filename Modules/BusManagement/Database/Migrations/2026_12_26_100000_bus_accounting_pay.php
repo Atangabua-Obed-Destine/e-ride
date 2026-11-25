@@ -70,6 +70,9 @@ return new class extends Migration {
         }
         // Staff salaries (6611) is what a payroll charges: give it its role in the charts already made.
         \Illuminate\Support\Facades\DB::table('bus_acc_accounts')->where('code', '6611')->whereNull('role')->update(['role' => 'salaries']);
+        if (!class_exists(\Modules\BusManagement\Entities\BusAccBook::class)) {
+            return; // the first accounting build is gone
+        }
         $ledger = app(\Modules\BusManagement\Service\Accounting\Ledger::class);
         foreach (\Modules\BusManagement\Entities\BusAccBook::all() as $books) {
             if ($owner = $books->owner()) {

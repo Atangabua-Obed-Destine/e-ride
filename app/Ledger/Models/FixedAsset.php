@@ -116,6 +116,20 @@ class FixedAsset extends Model
         return $this->hasMany(DepreciationSchedule::class)->orderBy('depreciation_date');
     }
 
+    /** E-Ride: the bus of the fleet this asset is, when it is one. */
+    public function vehicle()
+    {
+        return $this->belongsTo(\Modules\BusManagement\Entities\BusVehicle::class, 'vehicle_id');
+    }
+
+    /** E-Ride: "registration · name" of the bus, or null. */
+    public function getBusLabelAttribute(): ?string
+    {
+        $v = $this->vehicle_id ? $this->vehicle : null;
+
+        return $v ? trim($v->registration.' · '.$v->name, ' ·') : null;
+    }
+
     public function custodian()
     {
         return $this->belongsTo(\App\User::class, 'custodian_id');

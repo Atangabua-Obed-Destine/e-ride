@@ -42,6 +42,8 @@ class Screens
         // budgets
         'ledger.budget.dashboard', 'ledger.budget-sheet.index', 'ledger.budget.index', 'ledger.budget-line.index',
         'ledger.budget.reports.performance', 'ledger.budget.reports.variance', 'ledger.budget.reports.department', 'ledger.budget.reports.cashflow',
+        // fixed assets: a bus of the fleet as an asset, its monthly wear tagged with the bus (tests/Ledger/fixed_assets_test.php)
+        'ledger.fixed-assets.index', 'ledger.fixed-asset-categories.index', 'ledger.fixed-assets.register', 'ledger.fixed-assets.depreciation-report',
     ];
 
     public static function ready(): array
@@ -61,7 +63,8 @@ class Screens
      */
     public const PENDING = [
         'ledger.ledger-health',
-        'ledger.fixed-assets.', 'ledger.fixed-asset-categories.',
+        // E-Ride: the fixed assets (ledger.fixed-assets.*, ledger.fixed-asset-categories.*) work on the bus books
+        // (tests/Ledger/fixed_assets_test.php); their menu entries come with STAGE_1.
         // E-Ride: the budgets (ledger.budget.*, ledger.budget-line.*, ledger.budget-sheet.*) work on the bus books, the
         // "department" being the payroll's departments (tests/Ledger/budget_test.php).
         // E-Ride: the Daybook (ledger.daybook.*) and the Accounting reports (ledger.accounting-reports.*) read the

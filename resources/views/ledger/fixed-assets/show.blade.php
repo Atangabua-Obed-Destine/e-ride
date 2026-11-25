@@ -48,6 +48,10 @@
                                 <dt>@lang('ledger_assets.asset_name_fr')</dt><dd>{{ $asset->name_fr }}</dd>
                                 @endif
                                 <dt>@lang('ledger_assets.category')</dt><dd><span class="ap-chip draft">{{ $asset->category->name ?? '—' }}</span></dd>
+                                @if($asset->bus_label)
+                                {{-- E-Ride: the bus of the fleet --}}
+                                <dt>@lang('ledger_assets.bus_of_fleet')</dt><dd>{{ $asset->bus_label }}</dd>
+                                @endif
                                 <dt>@lang('ledger_assets.serial_number')</dt><dd>{{ $asset->serial_number ?: '-' }}</dd>
                                 <dt>@lang('ledger_assets.location')</dt><dd>{{ $asset->location ?: '-' }}</dd>
                                 <dt>@lang('ledger_assets.vendor')</dt><dd>{{ $asset->vendor ?: '-' }}</dd>

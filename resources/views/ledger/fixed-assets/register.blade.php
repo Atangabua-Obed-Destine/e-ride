@@ -84,7 +84,8 @@
                         @forelse($assets as $asset)
                         <tr>
                             <td><strong><a href="{{ route('ledger.fixed-assets.show', $asset->id) }}">{{ $asset->asset_code }}</a></strong></td>
-                            <td>{{ $asset->name }}@if($asset->serial_number)<br><small class="ap-muted">S/N: {{ $asset->serial_number }}</small>@endif</td>
+                            <td>{{ $asset->name }}@if($asset->serial_number)<br><small class="ap-muted">S/N: {{ $asset->serial_number }}</small>@endif
+                                @if($asset->bus_label)<br><small class="ap-muted"><i class="fa fa-bus"></i> {{ $asset->bus_label }}</small>@endif{{-- E-Ride: the bus --}}</td>
                             <td><span class="ap-chip draft">{{ $asset->category->name ?? '—' }}</span></td>
                             <td>{{ $asset->acquisition_date->format('d/m/Y') }}</td>
                             <td class="ap-num">{{ $money($asset->acquisition_cost) }}</td>

@@ -19,6 +19,13 @@ return new class extends Migration {
             ->where('m.backfilled', true)->where('m.channel', 'counter')->whereIn('m.kind', ['sale', 'cash_refund'])->where('m.method', 'cash')
             ->whereNull('m.staff_user_id')->whereNotNull('b.staff_user_id')
             ->select('m.id', 'm.agency_id', 'm.kind', 'm.amount', 'm.entry_id', 'b.staff_user_id as agent', 'b.code')->get();
+        if (!class_exists(Ledger::class)) {
+            // The first accounting build is gone: only the agent is put back on the moves.
+            foreach ($moves as $m) {
+                DB::table('bus_money_moves')->where('id', $m->id)->update(['staff_user_id' => $m->agent]);
+            }
+            return;
+        }
         $ledger = app(Ledger::class);
         foreach ($moves as $m) {
             DB::transaction(function () use ($m, $ledger) {

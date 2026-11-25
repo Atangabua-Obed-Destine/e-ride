@@ -349,7 +349,7 @@ class DepreciationService
 
     public function getAssetRegister(array $filters = [])
     {
-        $query = FixedAsset::with('category');
+        $query = FixedAsset::with(['category', 'vehicle']); // E-Ride: and the bus
         if (! empty($filters['category_id'])) {
             $query->where('category_id', $filters['category_id']);
         }

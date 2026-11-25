@@ -41,7 +41,7 @@ class FixedAssetController extends LedgerController
     public function index(Request $request)
     {
         $this->allow('fixed-asset-list');
-        $query = FixedAsset::with('category');
+        $query = FixedAsset::with(['category', 'vehicle']); // E-Ride: and the bus
 
         if ($request->filled('category_id')) {
             $query->where('category_id', $request->category_id);

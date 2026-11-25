@@ -71,6 +71,9 @@ return new class extends Migration {
             DB::statement('ALTER TABLE bus_money_moves MODIFY `at` DATETIME NOT NULL');
         }
         // Branches that already have books get the new accounts (buses, result of the year, loans).
+        if (!class_exists(\Modules\BusManagement\Entities\BusAccBook::class)) {
+            return; // the first accounting build is gone
+        }
         foreach (\Modules\BusManagement\Entities\BusAccBook::where('kind', 'branch')->get() as $books) {
             $agency = \Modules\BusManagement\Entities\BusAgency::find($books->agency_id);
             if ($agency) {
