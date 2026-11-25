@@ -79,6 +79,16 @@ return [
     'src_account_opening_balance' => 'Payment account opening balance',
     'src_manual' => 'Journal entry',
     'src_other' => 'Other entry',
+    // E-Ride: the bus books' documents
+    'src_bus_move_counter' => 'Ticket money, counter',
+    'src_bus_move_app' => 'Ticket money, app',
+    'src_bus_departure' => 'Trip left',
+    'src_bus_statement' => 'E-Ride statement',
+    'src_bus_statement_paid' => 'E-Ride statement paid',
+    'src_income' => 'Income',
+    'src_supplier_bill' => 'Supplier bill',
+    'src_supplier_payment' => 'Supplier payment',
+    'src_account_withdrawal' => 'Withdrawal',
 
     // the summary
     'guide_columns_title' => 'What each column means',

@@ -71,33 +71,25 @@ class BudgetActualsService
     private function readMovements(int $bid, ?string $from, ?string $to, bool $byMonth): Collection
     {
         $month = $byMonth ? "DATE_FORMAT(je.entry_date, '%Y-%m')" : 'NULL';
+        // E-Ride: the expense category of a line comes from the Income & Expense expense behind its
+        // entry (through its mapping row; a reversal points at the same row); there are no business
+        // locations, so location_id is always null. (posinnova: the POS transaction behind the entry,
+        // through transaction_payments / transactions, gave the location and the expense category.)
         $rows = DB::select("
-            SELECT l.account_id, a.account_code, a.class_number, t.location_id, t.expense_category_id,
+            SELECT l.account_id, a.account_code, a.class_number, NULL AS location_id, x.category_id AS expense_category_id,
                    {$month} AS month, SUM(l.debit) AS debit, SUM(l.credit) AS credit
             FROM journal_entry_lines l
             JOIN journal_entries je ON je.id = l.journal_entry_id
             JOIN chart_of_accounts a ON a.id = l.account_id
-            LEFT JOIN (SELECT journal_entry_id, MIN(id) AS id FROM transaction_mappings
-                       WHERE business_id = ? AND journal_entry_id IS NOT NULL GROUP BY journal_entry_id) tmx
-                   ON tmx.journal_entry_id = je.id
-            LEFT JOIN transaction_mappings tm1 ON tm1.id = tmx.id
-            LEFT JOIN transaction_mappings tm2 ON je.reference_type = 'transaction_mapping'
-                   AND tm2.id = je.reference_id AND tm2.business_id = ?
-            LEFT JOIN transaction_payments tp ON tp.id = (CASE
-                   WHEN COALESCE(tm1.transaction_type, tm2.transaction_type) = 'payment' THEN COALESCE(tm1.transaction_id, tm2.transaction_id)
-                   WHEN tm1.id IS NULL AND tm2.id IS NULL AND je.reference_type = 'payment' THEN je.reference_id END)
-            LEFT JOIN transactions t ON t.business_id = ? AND t.id = (CASE
-                   WHEN COALESCE(tm1.transaction_type, tm2.transaction_type) = 'payment' THEN tp.transaction_id
-                   WHEN COALESCE(tm1.transaction_type, tm2.transaction_type) = 'account_transaction' THEN NULL
-                   WHEN COALESCE(tm1.transaction_type, tm2.transaction_type) IS NOT NULL THEN COALESCE(tm1.transaction_id, tm2.transaction_id)
-                   WHEN je.reference_type = 'transaction' THEN je.reference_id
-                   WHEN je.reference_type = 'payment' THEN tp.transaction_id END)
+            LEFT JOIN transaction_mappings tm ON tm.id = je.reference_id AND tm.business_id = ?
+                   AND tm.transaction_type = 'expense' AND je.reference_type IN ('expense', 'transaction_mapping')
+            LEFT JOIN expenses x ON x.business_id = ? AND CAST(x.id AS CHAR) = tm.transaction_id
             WHERE l.business_id = ? AND je.business_id = ? AND a.business_id = ?
               AND je.is_posted = 1 AND je.deleted_at IS NULL AND je.journal_type <> 'closing'
               AND (a.class_number IN (6, 7) OR (a.class_number = 2 AND a.account_code NOT LIKE '28%' AND a.account_code NOT LIKE '29%'))
               AND je.entry_date >= ? AND je.entry_date <= ?
-            GROUP BY l.account_id, a.account_code, a.class_number, t.location_id, t.expense_category_id".($byMonth ? ', month' : ''),
-            [$bid, $bid, $bid, $bid, $bid, $bid, $from ?: '0001-01-01', $to ?: '9999-12-31']);
+            GROUP BY l.account_id, a.account_code, a.class_number, x.category_id".($byMonth ? ', month' : ''),
+            [$bid, $bid, $bid, $bid, $bid, $from ?: '0001-01-01', $to ?: '9999-12-31']);
 
         return collect($rows)->map(function ($r) {
             $class = (int) $r->class_number;

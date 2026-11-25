@@ -28,6 +28,15 @@ class Screens
         'ledger.supplier-bill.index', 'ledger.supplier-payment.index', 'ledger.supplier-bill.aging',
         'ledger.payment-account.index', 'ledger.payment-account-transfer.index',
         'ledger.payment-account-report.cashflow', 'ledger.payment-account-report.unlinked',
+        'ledger.ledger-health',
+        'ledger.daybook.index', 'ledger.daybook.summary', 'ledger.daybook.analysis',
+        'ledger.accounting-reports.index', 'ledger.accounting-reports.financial-health', 'ledger.accounting-reports.receivables-aging',
+        'ledger.accounting-reports.payables-aging', 'ledger.accounting-reports.cash-flow-statement', 'ledger.accounting-reports.budget-vs-actual',
+        // payroll and tax (paxhitestbed's HR payroll area)
+        'ledger.staff.index', 'ledger.payroll.index', 'ledger.payroll.report', 'ledger.staff-loan.index', 'ledger.designation.index',
+        'ledger.department.index', 'ledger.allowance-type.index', 'ledger.deduction-type.index', 'ledger.tax-group.index',
+        'ledger.tax-setting.index', 'ledger.staff-tax-report.index', 'ledger.tax-remittance.index', 'ledger.pay-slip-setting.index',
+        'ledger.payroll-setting.index',
     ];
 
     public static function ready(): array
@@ -46,8 +55,10 @@ class Screens
      * instead of an error page.
      */
     public const PENDING = [
-        'ledger.ledger-health', 'ledger.daybook.', 'ledger.budget.', 'ledger.budget-line.', 'ledger.budget-sheet.',
-        'ledger.accounting-reports.', 'ledger.fixed-assets.', 'ledger.fixed-asset-categories.',
+        'ledger.ledger-health', 'ledger.budget.', 'ledger.budget-line.', 'ledger.budget-sheet.',
+        'ledger.fixed-assets.', 'ledger.fixed-asset-categories.',
+        // E-Ride: the Daybook (ledger.daybook.*) and the Accounting reports (ledger.accounting-reports.*) read the
+        // bus books (payment accounts, bus money, supplier bills, the posted ledger): tests/Ledger/daybook_reports_test.php.
         // E-Ride: bank reconciliation, recurring entries and year-end closing work on the bus books
         // (tests/Ledger/periodend_test.php); their menu entries come with STAGE_1.
     ];

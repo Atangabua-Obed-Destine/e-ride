@@ -217,4 +217,6 @@ return [
     'reverse_check' => 'Je comprends que cela valide une écriture inverse à la date indiquée, qui annule cette écriture à compter de cette date. Rien n\'est supprimé.',
     'p_post_note' => 'Une écriture validée met à jour les soldes des comptes. Une fois validée, elle ne peut être changée qu\'en la dévalidant tant que son mois est ouvert, ou en la contre-passant.',
     'post_check' => 'J\'ai vérifié les lignes et je comprends que cela valide l\'écriture à la date indiquée et met à jour les soldes des comptes.',
+    'type_payroll' => 'Paie',
+    'type_remittance' => 'Reversement',
 ];

@@ -106,7 +106,8 @@ class LedgerSync
             PostingRules::DEPARTURE => $this->departure((string) $id),
             PostingRules::STATEMENT, PostingRules::STATEMENT_PAID => $this->statement((string) $id, $kind),
             PostingRules::INCOME, PostingRules::EXPENSE, PostingRules::SUPPLIER_BILL, PostingRules::SUPPLIER_PAYMENT,
-            PostingRules::PAYMENT_TRANSFER, PostingRules::PAYMENT_ACCOUNT_TXN => $this->accountsRecord($kind, (int) $id),
+            PostingRules::PAYMENT_TRANSFER, PostingRules::PAYMENT_ACCOUNT_TXN,
+            PostingRules::PAYROLL, PostingRules::STAFF_LOAN, PostingRules::TAX_REMITTANCE => $this->accountsRecord($kind, (int) $id),
             default => 'none',
         };
     }
@@ -194,6 +195,10 @@ class LedgerSync
         PostingRules::SUPPLIER_PAYMENT => [\App\Ledger\Models\SupplierPayment::class, 'payment_date', 'supplier_payments'],
         PostingRules::PAYMENT_TRANSFER => [\App\Ledger\Models\PaymentAccountTransfer::class, 'transfer_date', 'payment_account_transfers'],
         PostingRules::PAYMENT_ACCOUNT_TXN => [\App\Ledger\Models\PaymentAccountTransaction::class, 'transaction_date', 'payment_account_transactions'],
+        // paxhitestbed's payroll and tax (App\Ledger\Payroll): a payroll posts when paid (pay_date), a loan when given, a remittance when paid
+        PostingRules::PAYROLL => [\App\Ledger\Models\Payroll::class, 'pay_date', 'payrolls'],
+        PostingRules::STAFF_LOAN => [\App\Ledger\Models\StaffLoan::class, 'given_on', 'staff_loans'],
+        PostingRules::TAX_REMITTANCE => [\App\Ledger\Models\TaxRemittance::class, 'payment_date', 'tax_remittances'],
     ];
 
     /** One record of paxhitestbed's Income & Expense / Payment Accounts (the models are scoped to the open books). */
@@ -211,7 +216,8 @@ class LedgerSync
         $map = $map ?: new TransactionMapping(['transaction_type' => $kind, 'transaction_id' => (string) $id]);
         $method = [PostingRules::INCOME => 'forIncome', PostingRules::EXPENSE => 'forExpense', PostingRules::SUPPLIER_BILL => 'forSupplierBill',
             PostingRules::SUPPLIER_PAYMENT => 'forSupplierPayment', PostingRules::PAYMENT_TRANSFER => 'forPaymentAccountTransfer',
-            PostingRules::PAYMENT_ACCOUNT_TXN => 'forPaymentAccountTransaction'][$kind];
+            PostingRules::PAYMENT_ACCOUNT_TXN => 'forPaymentAccountTransaction',
+            PostingRules::PAYROLL => 'forPayroll', PostingRules::STAFF_LOAN => 'forStaffLoan', PostingRules::TAX_REMITTANCE => 'forTaxRemittance'][$kind];
 
         return $this->apply($map, fn () => $this->rules->{$method}($model), $kind, $id);
     }

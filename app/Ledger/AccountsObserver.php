@@ -27,6 +27,10 @@ class AccountsObserver
         SupplierPayment::class => PostingRules::SUPPLIER_PAYMENT,
         PaymentAccountTransfer::class => PostingRules::PAYMENT_TRANSFER,
         PaymentAccountTransaction::class => PostingRules::PAYMENT_ACCOUNT_TXN,
+        // paxhitestbed payroll and tax
+        \App\Ledger\Models\Payroll::class => PostingRules::PAYROLL,
+        \App\Ledger\Models\StaffLoan::class => PostingRules::STAFF_LOAN,
+        \App\Ledger\Models\TaxRemittance::class => PostingRules::TAX_REMITTANCE,
     ];
 
     public function saved($model)

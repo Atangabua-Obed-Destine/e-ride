@@ -19,6 +19,8 @@ use Illuminate\Support\Facades\DB;
  * a class-5 account (cash, bank, mobile money; 59 provisions excluded), with
  * the document behind it (the payment and its sale, purchase or expense; a
  * Payment Accounts transfer or deposit; a journal entry typed by hand).
+ * E-Ride: the documents are the bus records (ticket money by channel, E-Ride's
+ * statement paid) and the Income & Expense / Payment Accounts records; see documents().
  *
  * The analysis column is the counter-account: the account on the other side
  * of the entry (411 customers, 401 suppliers, 4718, 701, ...). When the other
@@ -62,8 +64,9 @@ class DaybookService
     {
         $bid = Ledger::businessId();
         $withMoney = DB::table('journal_entry_lines')->where('business_id', $bid)->distinct()->pluck('account_id')->flip();
-        $links = DB::table('accounts')->where('business_id', $bid)->whereNull('deleted_at')->whereNotNull('chart_of_account_id')
-            ->orderBy('name')->get(['name', 'chart_of_account_id'])->groupBy('chart_of_account_id');
+        // E-Ride: the Payment Accounts are paxhitestbed's payment_accounts (title), not POS accounts (name)
+        $links = DB::table('payment_accounts')->where('business_id', $bid)->whereNotNull('chart_of_account_id')
+            ->orderBy('title')->get(['title as name', 'chart_of_account_id'])->groupBy('chart_of_account_id');
 
         return ChartOfAccount::where('account_code', 'like', '5%')->where('account_code', 'not like', '59%')
             ->where('account_category', 'detail')
@@ -259,102 +262,95 @@ class DaybookService
             return $e->reversed_entry_id && $originals->has($e->reversed_entry_id) ? $originals->get($e->reversed_entry_id) : $e;
         };
 
-        $payIds = [];
-        $txIds = [];
-        $atIds = [];
+        // E-Ride: an automatic entry's reference is its mapping row (reference_type = the record kind,
+        // reference_id = the mapping's id), and the records behind it are the bus money moves, E-Ride's
+        // statement and paxhitestbed's Income & Expense / Payment Accounts, where posinnova read POS
+        // payments, sales, purchases and account transactions. The book itself is unchanged.
+        $mapIds = [];
         foreach ($entries as $e) {
             $o = $origin($e);
-            if ($o->reference_type === 'payment' && $o->reference_id) {
-                $payIds[] = (int) $o->reference_id;
-            } elseif ($o->reference_type === 'transaction' && $o->reference_id) {
-                // LedgerSync posts Payment Accounts movements under 'transaction' too, in the cash journal;
-                // documents never post to the cash journal.
-                if ($o->journal_type === 'cash') {
-                    $atIds[] = (int) $o->reference_id;
-                } else {
-                    $txIds[] = (int) $o->reference_id;
-                }
+            if ($o->reference_id && in_array($o->reference_type, PostingRules::TYPES, true)) {
+                $mapIds[] = (int) $o->reference_id;
             }
         }
-
-        $payments = collect();
-        foreach (array_chunk(array_unique($payIds), 1000) as $chunk) {
-            $payments = $payments->merge(DB::table('transaction_payments')->where('business_id', $bid)->whereIn('id', $chunk)
-                ->get(['id', 'transaction_id', 'method', 'payment_ref_no', 'payment_for', 'is_return', 'is_advance', 'parent_id'])->keyBy('id'));
+        $maps = collect();
+        foreach (array_chunk(array_unique($mapIds), 1000) as $chunk) {
+            $maps = $maps->merge(DB::table('transaction_mappings')->where('business_id', $bid)->whereIn('id', $chunk)
+                ->get(['id', 'transaction_type', 'transaction_id']));
         }
-        $payments = $payments->keyBy('id');
-        $txIds = array_unique(array_merge($txIds, $payments->pluck('transaction_id')->filter()->map(fn ($v) => (int) $v)->all()));
-        $txs = collect();
-        foreach (array_chunk($txIds, 1000) as $chunk) {
-            $txs = $txs->merge(DB::table('transactions')->where('business_id', $bid)->whereIn('id', $chunk)
-                ->get(['id', 'type', 'invoice_no', 'ref_no', 'contact_id', 'expense_category_id']));
+        $maps = $maps->keyBy('id');
+        $ids = fn (string $kind) => $maps->where('transaction_type', $kind)->pluck('transaction_id')->unique()->values()->all();
+        $load = fn (string $kind, callable $query) => ($list = $ids($kind)) ? $query($list)->keyBy('id') : collect();
+
+        $moves = $load(PostingRules::MOVE, fn ($list) => DB::table('bus_money_moves as m')->leftJoin('bus_bookings as b', 'b.id', '=', 'm.booking_id')
+            ->whereIn('m.id', $list)->get(['m.id', 'm.kind', 'm.channel', 'm.method', 'b.code']));
+        $statements = collect();
+        foreach ([PostingRules::STATEMENT, PostingRules::STATEMENT_PAID] as $k) {
+            $statements = $statements->merge($load($k, fn ($list) => DB::table('bus_statements')->whereIn('id', $list)->get(['id', 'reference', 'month'])));
         }
-        $txs = $txs->keyBy('id');
-        $ats = collect();
-        foreach (array_chunk(array_unique($atIds), 1000) as $chunk) {
-            $ats = $ats->merge(DB::table('account_transactions as at')->join('accounts as a', 'a.id', '=', 'at.account_id')
-                ->where('a.business_id', $bid)->whereIn('at.id', $chunk)
-                ->get(['at.id', 'at.sub_type', 'at.reff_no', 'at.note', 'a.name as account_name']));
-        }
-        $ats = $ats->keyBy('id');
-
-        $contactIds = $txs->pluck('contact_id')->merge($payments->pluck('payment_for'))->filter()->unique()->values();
-        $contacts = $contactIds->isEmpty() ? collect() : DB::table('contacts')->where('business_id', $bid)->whereIn('id', $contactIds->all())
-            ->get(['id', 'name', 'supplier_business_name'])->keyBy('id')
-            ->map(fn ($c) => $c->supplier_business_name ?: $c->name);
-        $catIds = $txs->pluck('expense_category_id')->filter()->unique()->values();
-        $categories = $catIds->isEmpty() ? collect() : DB::table('expense_categories')->where('business_id', $bid)
-            ->whereIn('id', $catIds->all())->pluck('name', 'id');
-
-        $docName = function ($t) use ($categories) {
-            $name = trim(__('ledger.doc_'.$t->type).' '.($t->invoice_no ?: $t->ref_no));
-            if ($t->type === 'expense' && $t->expense_category_id && isset($categories[$t->expense_category_id])) {
-                $name .= ' — '.$categories[$t->expense_category_id];
-            }
-
-            return $name;
-        };
+        $statements = $statements->keyBy('id');
+        $incomes = $load(PostingRules::INCOME, fn ($list) => DB::table('incomes as r')->leftJoin('income_categories as c', 'c.id', '=', 'r.category_id')
+            ->where('r.business_id', $bid)->whereIn('r.id', $list)->get(['r.id', 'r.title', 'r.invoice_id', 'r.reference', 'c.name as category']));
+        $expenses = $load(PostingRules::EXPENSE, fn ($list) => DB::table('expenses as r')->leftJoin('expense_categories as c', 'c.id', '=', 'r.category_id')
+            ->where('r.business_id', $bid)->whereIn('r.id', $list)->get(['r.id', 'r.title', 'r.invoice_id', 'r.reference', 'c.name as category']));
+        $bills = $load(PostingRules::SUPPLIER_BILL, fn ($list) => DB::table('supplier_bills as r')->leftJoin('item_suppliers as s', 's.id', '=', 'r.supplier_id')
+            ->where('r.business_id', $bid)->whereIn('r.id', $list)->get(['r.id', 'r.number', 'r.supplier_reference as reference', 's.title as supplier']));
+        $payments = $load(PostingRules::SUPPLIER_PAYMENT, fn ($list) => DB::table('supplier_payments as r')->leftJoin('item_suppliers as s', 's.id', '=', 'r.supplier_id')
+            ->where('r.business_id', $bid)->whereIn('r.id', $list)->get(['r.id', 'r.number', 'r.reference', 's.title as supplier']));
+        $transfers = $load(PostingRules::PAYMENT_TRANSFER, fn ($list) => DB::table('payment_account_transfers as r')
+            ->leftJoin('payment_accounts as f', 'f.id', '=', 'r.from_account_id')->leftJoin('payment_accounts as t', 't.id', '=', 'r.to_account_id')
+            ->where('r.business_id', $bid)->whereIn('r.id', $list)->get(['r.id', 'r.note', 'f.title as from_title', 't.title as to_title']));
+        $accountTxns = $load(PostingRules::PAYMENT_ACCOUNT_TXN, fn ($list) => DB::table('payment_account_transactions as r')
+            ->leftJoin('payment_accounts as a', 'a.id', '=', 'r.payment_account_id')
+            ->where('r.business_id', $bid)->whereIn('r.id', $list)
+            ->get(['r.id', 'r.transaction_type', 'r.reference_type', 'r.title', 'r.payment_reference', 'a.title as account_name']));
 
         $out = [];
         foreach ($entries as $entryId => $e) {
             $o = $origin($e);
+            $map = in_array($o->reference_type, PostingRules::TYPES, true) ? $maps->get((int) $o->reference_id) : null;
             $doc = null;
-            if ($o->reference_type === 'payment' && $o->reference_id) {
-                $p = $payments->get((int) $o->reference_id);
-                $t = $p && $p->transaction_id ? $txs->get((int) $p->transaction_id) : null;
-                $who = $contacts[$t->contact_id ?? null] ?? ($p ? ($contacts[$p->payment_for] ?? null) : null);
-                if ($t) {
-                    $what = $docName($t);
-                    $source = $t->type;
-                } else {
-                    $what = __('ledger_daybook.advance');
-                    $source = 'advance';
+            if ($map) {
+                $kind = $map->transaction_type;
+                $rid = $map->transaction_id;
+                $dash = fn ($who, string $what) => trim(($who ? $who.' — ' : '').$what);
+                switch ($kind) {
+                    case PostingRules::MOVE:
+                        // posinnova's sales -> ticket money, by channel (counter or app)
+                        $mv = $moves->get((int) $rid);
+                        $doc = ['source' => 'bus_move_'.(($mv->channel ?? null) === 'counter' ? 'counter' : 'app'), 'ref' => $mv->code ?? null, 'description' => null];
+                        break;
+                    case PostingRules::STATEMENT:
+                    case PostingRules::STATEMENT_PAID:
+                        $doc = ['source' => $kind, 'ref' => $statements->get($rid)->reference ?? null, 'description' => null];
+                        break;
+                    case PostingRules::INCOME:
+                    case PostingRules::EXPENSE:
+                        $r = ($kind === PostingRules::INCOME ? $incomes : $expenses)->get((int) $rid);
+                        $doc = ['source' => $kind, 'ref' => $r ? ($r->invoice_id ?: $r->reference) : null,
+                            'description' => $r ? $dash($r->category, (string) $r->title) : null];
+                        break;
+                    case PostingRules::SUPPLIER_BILL:
+                    case PostingRules::SUPPLIER_PAYMENT:
+                        $r = ($kind === PostingRules::SUPPLIER_BILL ? $bills : $payments)->get((int) $rid);
+                        $doc = ['source' => $kind, 'ref' => $r ? ($r->reference ?: $r->number) : null,
+                            'description' => $r ? $dash($r->supplier, trim(__('ledger.doc_'.$kind).' '.$r->number)) : null];
+                        break;
+                    case PostingRules::PAYMENT_TRANSFER:
+                        $r = $transfers->get((int) $rid);
+                        $doc = ['source' => 'account_fund_transfer', 'ref' => null,
+                            'description' => $r ? trim(__('ledger.doc_account_fund_transfer').' — '.$r->from_title.' > '.$r->to_title.($r->note ? ' · '.mb_substr($r->note, 0, 80) : '')) : null];
+                        break;
+                    case PostingRules::PAYMENT_ACCOUNT_TXN:
+                        $r = $accountTxns->get((int) $rid);
+                        $sub = ! $r ? 'deposit' : ($r->reference_type === 'opening_balance' ? 'opening_balance' : ($r->transaction_type === 'debit' ? 'withdrawal' : 'deposit'));
+                        $doc = ['source' => 'account_'.$sub, 'ref' => $r->payment_reference ?? null,
+                            'description' => $r ? trim(__('ledger_daybook.src_account_'.$sub).' — '.$r->account_name.($r->title ? ' · '.mb_substr($r->title, 0, 80) : '')) : null];
+                        break;
+                    default: // a trip that left, E-Ride's statement: no money of their own, but named all the same
+                        $doc = ['source' => $kind, 'ref' => null, 'description' => null];
                 }
-                $doc = [
-                    'source' => $p ? $source : 'payment',
-                    'source_id' => (int) $o->reference_id,
-                    'ref' => $p->payment_ref_no ?? null,
-                    'description' => $p ? trim(($who ?: __('ledger_daybook.walk_in')).' — '.$what) : null,
-                    'link' => $p ? LedgerHealth::documentLink('payment', (int) $p->id) : null,
-                ];
-            } elseif ($o->reference_type === 'transaction' && $o->reference_id && $o->journal_type === 'cash') {
-                $a = $ats->get((int) $o->reference_id);
-                $doc = [
-                    'source' => 'account_'.(in_array($a->sub_type ?? '', ['fund_transfer', 'deposit', 'opening_balance'], true) ? $a->sub_type : 'deposit'),
-                    'source_id' => (int) $o->reference_id,
-                    'ref' => $a->reff_no ?? null,
-                    'description' => $a ? trim(__('ledger.doc_account_'.($a->sub_type ?: 'deposit')).' — '.$a->account_name.($a->note ? ' · '.mb_substr($a->note, 0, 80) : '')) : null,
-                    'link' => null,
-                ];
-            } elseif ($o->reference_type === 'transaction' && $o->reference_id) {
-                $t = $txs->get((int) $o->reference_id);
-                $doc = [
-                    'source' => $t->type ?? 'other',
-                    'source_id' => (int) $o->reference_id,
-                    'ref' => $t ? ($t->invoice_no ?: $t->ref_no) : null,
-                    'description' => $t ? trim((($contacts[$t->contact_id] ?? null) ? $contacts[$t->contact_id].' — ' : '').$docName($t)) : null,
-                    'link' => $t ? LedgerHealth::documentLink($t->type, (int) $t->id, $t->contact_id) : null,
-                ];
+                $doc += ['source_id' => is_numeric($rid) ? (int) $rid : null, 'link' => LedgerHealth::documentLink($kind, $rid)];
             } elseif (! (int) $o->is_system_generated) {
                 $doc = ['source' => 'manual', 'source_id' => (int) $entryId, 'ref' => null, 'description' => null, 'link' => null];
             }

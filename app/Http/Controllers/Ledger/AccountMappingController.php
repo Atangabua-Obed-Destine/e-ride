@@ -119,6 +119,10 @@ class AccountMappingController extends LedgerController
             $row('retained_earnings', '', __('ledger.map_retained_earnings'), $L('hint_retained_earnings')),
             $row('income_summary', '', __('ledger.map_income_summary'), $L('hint_income_summary')),
         ]];
+        // E-Ride: paxhitestbed's payroll and tax (App\Ledger\Payroll\PayrollAccounts; its mappings 'payroll' and 'payroll_tax')
+        $groups['payroll'] = ['title' => __('ledger_payroll.group_payroll'), 'icon' => 'fa-user-tie', 'color' => 'primary', 'rows' => array_map(
+            fn ($type) => $row($type, '', __('ledger_payroll.map_'.$type), __('ledger_payroll.hint_map_'.$type)),
+            \App\Ledger\Payroll\PayrollAccounts::TYPES)];
 
         return $groups;
     }
@@ -330,6 +334,18 @@ class AccountMappingController extends LedgerController
             ->where(fn ($w) => $w->whereNull('r.reference_type')->orWhere('r.reference_type', 'opening_balance'))
             ->select(array_merge([DB::raw('CAST(r.id AS CHAR) as id'), DB::raw("'".PostingRules::PAYMENT_ACCOUNT_TXN."' as type"),
                 'r.transaction_date as date', 'r.amount', 'r.title as number', 'r.transaction_type as doc_status', DB::raw('NULL as contact_id'), DB::raw('NULL as on_id')], $cols));
+        // E-Ride: paxhitestbed's payroll and tax (a payroll is listed once paid, or while its entry stands)
+        $parts[PostingRules::PAYROLL] = $own('payrolls', PostingRules::PAYROLL)->where(fn ($w) => $w->where('r.status', 1)->orWhereNotNull('m.id'))
+            ->leftJoin('ledger_staff as st', 'st.id', '=', 'r.staff_id')
+            ->select(array_merge([DB::raw('CAST(r.id AS CHAR) as id'), DB::raw("'".PostingRules::PAYROLL."' as type"),
+                DB::raw('COALESCE(r.pay_date, r.salary_month) as date'), 'r.net_salary as amount', DB::raw("CONCAT(COALESCE(st.staff_no, ''), ' ', DATE_FORMAT(r.salary_month, '%m/%Y')) as number"),
+                DB::raw('NULL as doc_status'), DB::raw('NULL as contact_id'), 'r.payment_method as on_id'], $cols));
+        $parts[PostingRules::STAFF_LOAN] = $own('staff_loans', PostingRules::STAFF_LOAN)
+            ->select(array_merge([DB::raw('CAST(r.id AS CHAR) as id'), DB::raw("'".PostingRules::STAFF_LOAN."' as type"),
+                'r.given_on as date', 'r.amount', 'r.title as number', DB::raw('NULL as doc_status'), DB::raw('NULL as contact_id'), DB::raw('NULL as on_id')], $cols));
+        $parts[PostingRules::TAX_REMITTANCE] = $own('tax_remittances', PostingRules::TAX_REMITTANCE)
+            ->select(array_merge([DB::raw('CAST(r.id AS CHAR) as id'), DB::raw("'".PostingRules::TAX_REMITTANCE."' as type"),
+                'r.payment_date as date', 'r.amount', 'r.reference as number', DB::raw('NULL as doc_status'), DB::raw('NULL as contact_id'), DB::raw('NULL as on_id')], $cols));
 
         if ($f['type'] !== 'all' && isset($parts[$f['type']])) {
             $union = $parts[$f['type']];

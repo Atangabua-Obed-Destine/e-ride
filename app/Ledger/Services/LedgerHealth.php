@@ -11,8 +11,11 @@ use Carbon\Carbon;
 use Illuminate\Support\Facades\DB;
 
 /**
- * Does every POS document still line up with its posting? (paxhitestbed's
- * App\Services\Accounting\LedgerHealth, for one business of PosInnova.)
+ * Does every record still line up with its posting? (paxhitestbed's
+ * App\Services\Accounting\LedgerHealth, as ported to posinnova; E-Ride: the
+ * records are the bus records and the Income & Expense / Payment Accounts ones,
+ * and the agreement checks are the bus tie-outs paxhitestbed asked for: ticket
+ * money held per trip, each agent's till, and what is owed to suppliers and E-Ride.)
  *
  * Three records describe the same money: the POS document (a sale, a
  * purchase, a payment...), the transaction_mappings row that says what it
@@ -166,20 +169,14 @@ class LedgerHealth
         $out[] = $this->check('mapping_at_reversed', 'mappings', $atReversed->count(), (float) $atReversed->sum('amount'),
             $this->mappingRows($atReversed), self::CRITICAL);
 
-        // The document is gone, its entry still counts
-        $goneDocs = DB::table('transaction_mappings as m')->where('m.business_id', $b)->where('m.status', 'posted')
-            ->whereNotIn('m.transaction_type', ['payment', 'account_transaction'])
-            ->leftJoin('transactions as t', 't.id', '=', 'm.transaction_id')->whereNull('t.id')
-            ->get(['m.transaction_type', 'm.transaction_id', 'm.transaction_date', 'm.amount', 'm.journal_entry_id as entry_id']);
-        $gonePays = DB::table('transaction_mappings as m')->where('m.business_id', $b)->where('m.status', 'posted')
-            ->where('m.transaction_type', 'payment')
-            ->leftJoin('transaction_payments as p', 'p.id', '=', 'm.transaction_id')->whereNull('p.id')
-            ->get(['m.transaction_type', 'm.transaction_id', 'm.transaction_date', 'm.amount', 'm.journal_entry_id as entry_id']);
-        $goneMoves = DB::table('transaction_mappings as m')->where('m.business_id', $b)->where('m.status', 'posted')
-            ->where('m.transaction_type', 'account_transaction')
-            ->leftJoin('account_transactions as at', 'at.id', '=', 'm.transaction_id')->whereNull('at.id')
-            ->get(['m.transaction_type', 'm.transaction_id', 'm.transaction_date', 'm.amount', 'm.journal_entry_id as entry_id']);
-        $orphans = $goneDocs->concat($gonePays)->concat($goneMoves);
+        // The record is gone, its entry still counts (E-Ride: each kind's own table)
+        $orphans = collect();
+        foreach (self::SOURCES as $kind => [$table, $col]) {
+            $orphans = $orphans->concat(DB::table('transaction_mappings as m')->where('m.business_id', $b)->where('m.status', 'posted')
+                ->where('m.transaction_type', $kind)
+                ->leftJoin($table.' as src', 'src.'.$col, '=', 'm.transaction_id')->whereNull('src.'.$col)
+                ->get(['m.transaction_type', 'm.transaction_id', 'm.transaction_date', 'm.amount', 'm.journal_entry_id as entry_id']));
+        }
         $out[] = $this->check('mapping_orphan', 'mappings', $orphans->count(), (float) $orphans->sum('amount'),
             $this->mappingRows($orphans, false), self::CRITICAL);
 
@@ -196,8 +193,9 @@ class LedgerHealth
         $postable = ChartOfAccount::postable()->pluck('id')->flip();
         $rows = DefaultAccountMapping::where('status', 1)->get()->keyBy(fn ($m) => $m->mapping_type.'|'.$m->category_key);
         $need = [];
-        foreach (['customers', 'sale_goods', 'sale_services', 'sale_other', 'vat_collected', 'customer_advances',
-            'suppliers', 'purchases', 'purchase_costs', 'vat_deductible', 'expense_category', 'expense_payable', 'opening_balance'] as $type) {
+        // E-Ride: what the bus records, tills and Income & Expense post to
+        foreach (['tickets_held', 'ticket_sales', 'refunds_owed', 'refunds_after_trip', 'gateway_fees', 'eride_commission', 'eride_payable',
+            'till_short', 'till_over', 'suppliers', 'vat_deductible', 'expense_category', 'opening_balance'] as $type) {
             $need[] = [$type, ''];
         }
         foreach (array_keys(self::paymentMethods()) as $method) {
@@ -255,15 +253,16 @@ class LedgerHealth
         $out[] = $this->check('reversed_without_reversal', 'entries', $noReversal->count(), (float) $noReversal->sum('total_debit'),
             $this->entryRows($noReversal, ['total_debit' => 'amount']), self::CRITICAL);
 
-        // One document or payment, more than one live entry
+        // One record (its mapping), more than one live entry
         $dupes = DB::table('journal_entries')->where('business_id', $b)->whereNull('deleted_at')
-            ->whereIn('reference_type', ['transaction', 'payment'])->where('is_posted', 1)->where('is_reversed', 0)
+            ->whereIn('reference_type', PostingRules::TYPES)->where('is_posted', 1)->where('is_reversed', 0)
             ->groupBy('reference_type', 'reference_id')->havingRaw('COUNT(*) > 1')
             ->get(['reference_type', 'reference_id', DB::raw('COUNT(*) as n'), DB::raw('SUM(total_debit) as total')]);
         $dupRows = [];
         foreach ($dupes->take(self::MAX_ROWS) as $d) {
-            $type = $d->reference_type === 'payment' ? 'payment' : (string) DB::table('transactions')->where('id', $d->reference_id)->value('type');
-            $dupRows[] = ['document' => $this->docCell($type ?: 'sell', (int) $d->reference_id, null), 'entries' => (int) $d->n, 'amount' => (float) $d->total];
+            $map = DB::table('transaction_mappings')->where('id', $d->reference_id)->first(['transaction_type', 'transaction_id']);
+            $dupRows[] = ['document' => $this->docCell($map->transaction_type ?? $d->reference_type, $map->transaction_id ?? $d->reference_id, null),
+                'entries' => (int) $d->n, 'amount' => (float) $d->total];
         }
         $out[] = $this->check('entry_duplicate', 'entries', $dupes->count(), (float) $dupes->sum('total'), $dupRows, self::CRITICAL);
 
@@ -302,93 +301,57 @@ class LedgerHealth
     {
         $b = $this->bid;
         $out = [];
+        $agency = $this->agency();
 
-        // Documents and payments since the books started that were never posted
+        // Bus records since the books started that were never posted (money moves, trips that left)
         $unposted = collect();
-        if ($this->postFrom) {
-            $docs = DB::table('transactions as t')->where('t.business_id', $b)->whereIn('t.type', PostingRules::TYPES)
-                ->where('t.transaction_date', '>=', $this->postFrom)
-                ->where(function ($w) {
-                    $w->where(fn ($q) => $q->where('t.type', 'sell')->where('t.status', 'final'))
-                        ->orWhere(fn ($q) => $q->where('t.type', 'purchase')->where('t.status', 'received'))
-                        ->orWhereIn('t.type', ['sell_return', 'purchase_return', 'expense', 'opening_balance', 'ledger_discount']);
-                })
-                ->where('t.final_total', '!=', 0)
+        if ($this->postFrom && $agency) {
+            $moves = DB::table('bus_money_moves as mv')->where('mv.agency_id', $agency)->whereNull('mv.skipped')
+                ->where('mv.at', '>=', $this->postFrom)->where('mv.amount', '>', 0)
                 ->whereNotExists(function ($q) use ($b) {
                     $q->select(DB::raw(1))->from('transaction_mappings as m')->where('m.business_id', $b)
-                        ->whereColumn('m.transaction_type', 't.type')->whereColumn('m.transaction_id', 't.id');
-                })->orderBy('t.transaction_date')
-                ->get(['t.type', 't.id', 't.transaction_date as date', 't.final_total as amount', 't.invoice_no', 't.ref_no', 't.contact_id']);
-            $pays = DB::table('transaction_payments as p')->where('p.business_id', $b)->where('p.paid_on', '>=', $this->postFrom)
-                ->where('p.amount', '>', 0)
+                        ->where('m.transaction_type', PostingRules::MOVE)->whereColumn('m.transaction_id', 'mv.id');
+                })->orderBy('mv.at')
+                ->get([DB::raw("'".PostingRules::MOVE."' as type"), 'mv.id', 'mv.at as date', 'mv.amount']);
+            $trips = DB::table('bus_departures as d')->where('d.agency_id', $agency)->where('d.status', \Modules\BusManagement\Entities\BusDeparture::DEPARTED)
+                ->where('d.date', '>=', $this->postFrom)
                 ->whereNotExists(function ($q) use ($b) {
                     $q->select(DB::raw(1))->from('transaction_mappings as m')->where('m.business_id', $b)
-                        ->where('m.transaction_type', 'payment')->whereColumn('m.transaction_id', 'p.id');
-                })->orderBy('p.paid_on')
-                ->get([DB::raw("'payment' as type"), 'p.id', 'p.paid_on as date', 'p.amount', DB::raw('p.payment_ref_no as invoice_no'), DB::raw('NULL as ref_no'), 'p.payment_for as contact_id']);
-            $unposted = $docs->concat($pays);
+                        ->where('m.transaction_type', PostingRules::DEPARTURE)->whereColumn('m.transaction_id', 'd.id');
+                })->orderBy('d.date')
+                ->get([DB::raw("'".PostingRules::DEPARTURE."' as type"), 'd.id', 'd.date as date', DB::raw('0 as amount')]);
+            $unposted = $moves->concat($trips);
         }
         $rows = $unposted->take(self::MAX_ROWS)->map(fn ($d) => [
-            'document' => $this->docCell($d->type, (int) $d->id, $d), 'date' => $this->date($d->date), 'amount' => (float) $d->amount,
+            'document' => $this->docCell($d->type, $d->id, null), 'date' => $this->date($d->date), 'amount' => (float) $d->amount,
         ])->all();
         $out[] = $this->check('source_unposted', 'agreement', $unposted->count(), (float) $unposted->sum(fn ($d) => abs((float) $d->amount)), $rows, self::WARNING);
 
-        // The entry says a different amount than the document
-        $amountDrift = DB::table('transaction_mappings as m')->where('m.business_id', $b)->where('m.status', 'posted')
-            ->where('m.transaction_type', '!=', 'payment')
-            ->join('journal_entries as j', 'j.id', '=', 'm.journal_entry_id')->where('j.is_reversed', 0)->whereNull('j.deleted_at')
-            ->join('transactions as t', function ($j) {
-                $j->on('t.id', '=', 'm.transaction_id')->on('t.type', '=', 'm.transaction_type');
-            })
-            ->whereRaw('ABS(j.total_debit - ABS(t.final_total)) > 0.009')
-            ->get(['m.transaction_type', 'm.transaction_id', 'j.id as entry_id', 'j.entry_number', 'j.total_debit', 't.final_total as doc_amount']);
-        $payDrift = DB::table('transaction_mappings as m')->where('m.business_id', $b)->where('m.status', 'posted')
-            ->where('m.transaction_type', 'payment')
-            ->join('journal_entries as j', 'j.id', '=', 'm.journal_entry_id')->where('j.is_reversed', 0)->whereNull('j.deleted_at')
-            ->join('transaction_payments as p', 'p.id', '=', 'm.transaction_id')
-            ->whereRaw('ABS(j.total_debit - p.amount) > 0.009')
-            ->get(['m.transaction_type', 'm.transaction_id', 'j.id as entry_id', 'j.entry_number', 'j.total_debit', 'p.amount as doc_amount']);
-        $drift = $amountDrift->concat($payDrift);
-        $rows = $drift->take(self::MAX_ROWS)->map(fn ($r) => [
-            'document' => $this->docCell($r->transaction_type, (int) $r->transaction_id, null),
-            'entry' => $this->entryCell($r->entry_id, $r->entry_number),
-            'document_amount' => (float) $r->doc_amount, 'entry_amount' => (float) $r->total_debit,
-        ])->all();
-        $out[] = $this->check('amount_drift', 'agreement', $drift->count(),
-            (float) $drift->sum(fn ($r) => abs(abs((float) $r->doc_amount) - (float) $r->total_debit)), $rows, self::WARNING);
-
-        // The entry is dated differently from its document although the document's month is open
+        // A money move's entry is dated differently from the move although its month is open
         $openMonth = function ($q, string $dateCol) use ($b) {
             $q->select(DB::raw(1))->from('accounting_periods as ap')->join('fiscal_years as fy', 'fy.id', '=', 'ap.fiscal_year_id')
                 ->where('ap.business_id', $b)->where('ap.is_closed', 0)->where('fy.is_closed', 0)
                 ->whereRaw("DATE($dateCol) BETWEEN ap.start_date AND ap.end_date");
         };
-        $dateDocs = DB::table('transaction_mappings as m')->where('m.business_id', $b)->where('m.status', 'posted')
-            ->where('m.transaction_type', '!=', 'payment')
-            ->join('journal_entries as j', 'j.id', '=', 'm.journal_entry_id')->where('j.is_reversed', 0)->whereNull('j.deleted_at')
-            ->join('transactions as t', function ($j) {
-                $j->on('t.id', '=', 'm.transaction_id')->on('t.type', '=', 'm.transaction_type');
-            })
-            ->whereRaw('DATE(t.transaction_date) <> j.entry_date')
-            ->whereExists(fn ($q) => $openMonth($q, 't.transaction_date'))
-            ->get(['m.transaction_type', 'm.transaction_id', 'j.id as entry_id', 'j.entry_number', 'j.entry_date', 't.transaction_date as doc_date']);
-        $datePays = DB::table('transaction_mappings as m')->where('m.business_id', $b)->where('m.status', 'posted')
-            ->where('m.transaction_type', 'payment')
-            ->join('journal_entries as j', 'j.id', '=', 'm.journal_entry_id')->where('j.is_reversed', 0)->whereNull('j.deleted_at')
-            ->join('transaction_payments as p', 'p.id', '=', 'm.transaction_id')
-            ->whereRaw('DATE(p.paid_on) <> j.entry_date')
-            ->whereExists(fn ($q) => $openMonth($q, 'p.paid_on'))
-            ->get(['m.transaction_type', 'm.transaction_id', 'j.id as entry_id', 'j.entry_number', 'j.entry_date', 'p.paid_on as doc_date']);
-        $dates = $dateDocs->concat($datePays);
+        $dates = collect();
+        if ($agency) {
+            $dates = DB::table('transaction_mappings as m')->where('m.business_id', $b)->where('m.status', 'posted')
+                ->where('m.transaction_type', PostingRules::MOVE)
+                ->join('journal_entries as j', 'j.id', '=', 'm.journal_entry_id')->where('j.is_reversed', 0)->whereNull('j.deleted_at')
+                ->join('bus_money_moves as mv', 'mv.id', '=', 'm.transaction_id')
+                ->whereRaw('DATE(mv.at) <> j.entry_date')
+                ->whereExists(fn ($q) => $openMonth($q, 'mv.at'))
+                ->get(['m.transaction_type', 'm.transaction_id', 'j.id as entry_id', 'j.entry_number', 'j.entry_date', 'mv.at as doc_date']);
+        }
         $rows = $dates->take(self::MAX_ROWS)->map(fn ($r) => [
-            'document' => $this->docCell($r->transaction_type, (int) $r->transaction_id, null),
+            'document' => $this->docCell($r->transaction_type, $r->transaction_id, null),
             'entry' => $this->entryCell($r->entry_id, $r->entry_number),
             'document_date' => $this->date($r->doc_date), 'entry_date' => $this->date($r->entry_date),
         ])->all();
         $out[] = $this->check('date_drift', 'agreement', $dates->count(), 0.0, $rows, self::CRITICAL);
 
-        // Customers (411) and suppliers (401) by contact, beside PosInnova's own figures
-        foreach (['customers', 'suppliers'] as $side) {
+        // The bus tie-outs: ticket money held per trip, each agent's till, what is owed to suppliers and E-Ride
+        foreach (['tickets_held', 'tills', 'suppliers'] as $side) {
             $rows = $this->tieOut($side);
             $out[] = $this->check($side.'_tie_out', 'agreement', count($rows),
                 array_sum(array_map(fn ($r) => abs($r['difference']), $rows)), array_slice($rows, 0, self::MAX_ROWS), self::WARNING);
@@ -421,7 +384,7 @@ class LedgerHealth
             // documents before the start date the rules could not read: left out of the opening balances
             $rows = [];
             foreach ((array) AccountingSetting::getValue('opening_skipped', []) as [$kind, $docId, $why]) {
-                $rows[] = ['entry' => __('ledger.doc_'.($kind === 'payment' ? 'payment' : 'sell')).' #'.$docId, 'date' => '', 'amount' => 0.0, 'why' => $why];
+                $rows[] = ['entry' => __('ledger.doc_'.PostingRules::MOVE).' #'.$docId, 'date' => '', 'amount' => 0.0, 'why' => $why];
             }
 
             return $this->check('opening_entry', 'agreement', $skipped, 0.0, $rows, self::WARNING,
@@ -440,67 +403,122 @@ class LedgerHealth
     }
 
     /**
-     * What each customer owes (or each supplier is owed) by PosInnova's documents and the
-     * payments on them (the "due" of the contact screens), beside the contact's balance on 411
-     * (401). Sales count once final and purchases once received, as the ledger posts them.
-     * Advances stay out of both sides: the ledger keeps them on 4191 / 409, and PosInnova's
-     * contacts.balance is not a reliable advance figure (imported businesses carry their old
-     * dues there, see MigrateMqscs).
+     * E-Ride's tie-outs, each comparing the ledger with an independent source (paxhitestbed's advice):
+     *  - tickets_held: per trip, what 477 holds against the bus records (tickets paid less refunds
+     *    and moves, for a trip that has not left; nothing once it has left);
+     *  - tills: per counter agent, the till (5712 tagged with the agent) against their cash sales less
+     *    cash refunds less what their counts took off, since the books started;
+     *  - suppliers: 401 against the approved supplier bills still unpaid and E-Ride's statements not
+     *    paid yet.
+     * A difference of less than 1 FCFA is ignored. Rows: [contact, records, ledger, difference].
      */
     private function tieOut(string $side): array
     {
         $b = $this->bid;
-        $pay = 'COALESCE((SELECT SUM(IF(p.is_return = 1, -p.amount, p.amount)) FROM transaction_payments p WHERE p.transaction_id = t.id), 0)';
-        if ($side === 'customers') {
-            $accounts = array_filter([DefaultAccount::id('customers')]);
-            $sql = "SUM(CASE WHEN t.type = 'sell' AND t.status = 'final' THEN t.final_total ELSE 0 END)
-                - SUM(CASE WHEN t.type = 'sell' THEN $pay ELSE 0 END)
-                + SUM(CASE WHEN t.type = 'opening_balance' AND c.type <> 'supplier' THEN t.final_total - $pay ELSE 0 END)
-                - SUM(CASE WHEN t.type = 'sell_return' THEN t.final_total - $pay ELSE 0 END)
-                - SUM(CASE WHEN t.type = 'ledger_discount' AND c.type <> 'supplier' AND COALESCE(t.sub_type, '') <> 'purchase_discount' THEN t.final_total ELSE 0 END)";
-            $types = ['sell', 'sell_return', 'opening_balance', 'ledger_discount'];
-            $ledgerSign = 1;
-        } else {
-            $accounts = array_filter([DefaultAccount::id('suppliers')]);
-            $sql = "SUM(CASE WHEN t.type = 'purchase' AND t.status = 'received' THEN t.final_total ELSE 0 END)
-                - SUM(CASE WHEN t.type = 'purchase' THEN $pay ELSE 0 END)
-                + SUM(CASE WHEN t.type = 'opening_balance' AND c.type = 'supplier' THEN t.final_total - $pay ELSE 0 END)
-                + SUM(CASE WHEN t.type = 'expense' THEN t.final_total - $pay ELSE 0 END)
-                - SUM(CASE WHEN t.type = 'purchase_return' THEN t.final_total - $pay ELSE 0 END)
-                - SUM(CASE WHEN t.type = 'ledger_discount' AND (c.type = 'supplier' OR t.sub_type = 'purchase_discount') THEN t.final_total ELSE 0 END)";
-            $types = ['purchase', 'purchase_return', 'opening_balance', 'expense', 'ledger_discount'];
-            $ledgerSign = -1;
-        }
-        $books = DB::table('transactions as t')->join('contacts as c', 'c.id', '=', 't.contact_id')
-            ->where('t.business_id', $b)->where('c.business_id', $b)->whereIn('t.type', $types)
-            ->groupBy('t.contact_id')->selectRaw("t.contact_id, $sql as due")->pluck('due', 'contact_id');
-        $ledger = empty($accounts) ? collect() : DB::table('journal_entry_lines as l')->join('journal_entries as j', 'j.id', '=', 'l.journal_entry_id')
-            ->where('j.business_id', $b)->whereNull('j.deleted_at')->where('j.is_posted', 1)
-            ->whereIn('l.account_id', $accounts)->whereNotNull('l.contact_id')
-            ->groupBy('l.contact_id')->selectRaw('l.contact_id, SUM(l.debit) - SUM(l.credit) as net')->pluck('net', 'contact_id');
+        $agency = $this->agency();
+        $ledgerBy = function (?int $account, string $col, ?callable $where = null) use ($b) {
+            if (! $account) {
+                return collect();
+            }
+            $q = DB::table('journal_entry_lines as l')->join('journal_entries as j', 'j.id', '=', 'l.journal_entry_id')
+                ->where('j.business_id', $b)->whereNull('j.deleted_at')->where('j.is_posted', 1)->where('l.account_id', $account);
+            if ($where) {
+                $where($q);
+            }
 
-        $ids = collect(array_keys($books->all()))->merge(array_keys($ledger->all()))->unique();
+            return $q->groupBy('l.'.$col)->selectRaw('l.'.$col.' as k, SUM(l.debit) - SUM(l.credit) as net')->pluck('net', 'k');
+        };
         $rows = [];
-        foreach ($ids as $id) {
-            $pos = round((float) ($books[$id] ?? 0), 2);
-            $led = round($ledgerSign * (float) ($ledger[$id] ?? 0), 2);
-            $diff = round($led - $pos, 2);
+        $add = function ($key, $cell, float $records, float $ledger) use (&$rows) {
+            $diff = round($ledger - $records, 2);
             if (abs($diff) >= 1) {
-                $rows[$id] = ['contact' => null, 'posinnova' => $pos, 'ledger' => $led, 'difference' => $diff];
+                $rows[$key] = ['contact' => $cell, 'records' => round($records, 2), 'ledger' => round($ledger, 2), 'difference' => $diff];
             }
-        }
-        if ($rows) {
-            $names = DB::table('contacts')->where('business_id', $b)->whereIn('id', array_keys($rows))
-                ->get(['id', 'name', 'supplier_business_name'])->keyBy('id');
-            foreach ($rows as $id => &$r) {
-                $c = $names[$id] ?? null;
-                $r['contact'] = ['text' => $c ? ($c->supplier_business_name ?: $c->name) : '#'.$id, 'url' => url('/contacts/'.$id)];
+        };
+
+        if ($side === 'tickets_held' && $agency) {
+            $held = DefaultAccount::id('tickets_held');
+            $ledger = $ledgerBy($held, 'departure_id', fn ($q) => $q->whereNotNull('l.departure_id'));
+            $rules = new PostingRules();
+            $records = [];
+            $moves = DB::table('bus_money_moves')->where('agency_id', $agency)->whereNull('skipped')
+                ->whereIn('kind', ['sale', 'refund_owed', 'cash_refund', 'rebook'])->get(['kind', 'amount', 'departure_id', 'from_departure_id']);
+            foreach ($moves as $m) {
+                if ($m->kind === 'rebook') {
+                    if ($m->departure_id === $m->from_departure_id) {
+                        continue;
+                    }
+                    $records[(string) $m->departure_id] = ($records[(string) $m->departure_id] ?? 0) + (float) $m->amount;
+                    $records[(string) $m->from_departure_id] = ($records[(string) $m->from_departure_id] ?? 0) - (float) $m->amount;
+                } elseif ($m->departure_id) {
+                    $records[(string) $m->departure_id] = ($records[(string) $m->departure_id] ?? 0) + ($m->kind === 'sale' ? 1 : -1) * (float) $m->amount;
+                }
             }
-            unset($r);
-            uasort($rows, fn ($x, $y) => abs($y['difference']) <=> abs($x['difference']));
+            $ids = collect(array_keys($records))->merge($ledger->keys())->filter()->unique();
+            $trips = \Modules\BusManagement\Entities\BusDeparture::with('destination')->whereIn('id', $ids)->get()->keyBy(fn ($d) => (string) $d->id);
+            $start = $this->postFrom ? Carbon::parse($this->postFrom)->startOfDay() : null;
+            foreach ($ids as $id) {
+                $d = $trips[(string) $id] ?? null;
+                $left = $rules->leftAt($d);
+                if ($left && $start && $left->lt($start)) {
+                    continue; // left before the books started: history
+                }
+                $expected = $left ? 0.0 : (float) ($records[(string) $id] ?? 0);
+                $cell = ['text' => $d ? __('ledger.doc_'.PostingRules::DEPARTURE).' '.$d->leavesAt()->format('d/m H:i').' '.($d->destination?->city ?? '') : '#'.$id, 'url' => null];
+                $add('t'.$id, $cell, $expected, -1 * (float) ($ledger[(string) $id] ?? 0));
+            }
+        } elseif ($side === 'tills' && $agency) {
+            $till = DefaultAccount::id('payment_method', 'cash');
+            $ledger = $ledgerBy($till, 'agent_id', fn ($q) => $q->whereNotNull('l.agent_id'));
+            $from = $this->postFrom ?: '1970-01-01';
+            $records = DB::table('bus_money_moves')->where('agency_id', $agency)->whereNull('skipped')->where('method', 'cash')
+                ->whereNotNull('staff_user_id')->where('at', '>=', $from)
+                ->groupBy('staff_user_id')->selectRaw("staff_user_id as k, SUM(CASE WHEN kind IN ('sale', 'extra') THEN amount WHEN kind = 'cash_refund' THEN -amount ELSE 0 END) as net")
+                ->pluck('net', 'k')->all();
+            if (\Illuminate\Support\Facades\Schema::hasTable('till_counts')) {
+                foreach (DB::table('till_counts')->where('business_id', $b)->where('status', 'posted')->groupBy('agent_id')
+                    ->selectRaw('agent_id as k, SUM(expected) as e')->pluck('e', 'k') as $agent => $cleared) {
+                    $records[$agent] = ($records[$agent] ?? 0) - (float) $cleared;
+                }
+            }
+            $ids = collect(array_keys($records))->merge($ledger->keys())->filter()->unique();
+            $names = \App\Ledger\ERide\Tills::names($ids->all());
+            foreach ($ids as $id) {
+                $add('a'.$id, ['text' => $names[(string) $id] ?? (string) $id, 'url' => route('ledger.tills.index')],
+                    (float) ($records[(string) $id] ?? 0), (float) ($ledger[(string) $id] ?? 0));
+            }
+        } elseif ($side === 'suppliers') {
+            $accounts = array_values(array_unique(array_filter([DefaultAccount::id('suppliers'), DefaultAccount::id('eride_payable')])));
+            $ledger = 0.0;
+            foreach ($accounts as $acc) {
+                $ledger += -1 * (float) $ledgerBy($acc, 'account_id')->sum();
+            }
+            $records = 0.0;
+            if (class_exists(SupplierPayables::class) && \Illuminate\Support\Facades\Schema::hasTable('supplier_bills')) {
+                try {
+                    $records += (float) (new SupplierPayables())->owedQuery()->get()->sum(fn ($r) => (float) ($r->owed ?? $r->balance ?? 0));
+                } catch (\Throwable $e) {
+                    // the bills' own screens show their state
+                }
+            }
+            if ($agency && in_array(DefaultAccount::id('eride_payable'), $accounts, true)) {
+                $from = $this->postFrom ? Carbon::parse($this->postFrom)->startOfMonth()->toDateString() : '1970-01-01';
+                $records += (float) DB::table('bus_statements')->where('agency_id', $agency)->where('total', '>', 0)
+                    ->where('month', '>=', $from)->where('status', '!=', \Modules\BusManagement\Entities\BusStatement::PAID)->sum('total');
+            }
+            $add('s', ['text' => __('ledger_map.h_suppliers_all'), 'url' => \Route::has('ledger.supplier-bill.aging') ? route('ledger.supplier-bill.aging') : null], $records, $ledger);
         }
+        uasort($rows, fn ($x, $y) => abs($y['difference']) <=> abs($x['difference']));
 
         return array_values($rows);
+    }
+
+    /** The bus branch whose books are open (null for a head office's own books). */
+    private function agency(): ?string
+    {
+        $row = DB::table('ledger_businesses')->where('id', $this->bid)->first();
+
+        return $row && $row->owner_type === \App\Ledger\ERide\Books::AGENCY ? (string) $row->owner_id : null;
     }
 
     // ===================================================================== D. placement
@@ -584,7 +602,7 @@ class LedgerHealth
     {
         return collect($rows)->take(self::MAX_ROWS)->map(function ($m) use ($withEntry) {
             $r = [
-                'document' => $this->docCell($m->transaction_type, (int) $m->transaction_id, null),
+                'document' => $this->docCell($m->transaction_type, $m->transaction_id, null),
                 'date' => $m->transaction_date ? $this->date($m->transaction_date) : '',
                 'amount' => (float) $m->amount,
             ];
@@ -614,46 +632,50 @@ class LedgerHealth
         return ['text' => $number ?: '#'.$id, 'url' => route('ledger.journal-entries.show', $id)];
     }
 
-    /** Document number, date and amount of transaction / payment mappings, in two queries. */
+    /** E-Ride: the table and key of each kind of record that posts (a mapping whose record is gone is an orphan). */
+    private const SOURCES = [
+        'bus_move' => ['bus_money_moves', 'id'],
+        'bus_departure' => ['bus_departures', 'id'],
+        'bus_statement' => ['bus_statements', 'id'],
+        'bus_statement_paid' => ['bus_statements', 'id'],
+        'income' => ['incomes', 'id'],
+        'expense' => ['expenses', 'id'],
+        'supplier_bill' => ['supplier_bills', 'id'],
+        'supplier_payment' => ['supplier_payments', 'id'],
+        'payment_transfer' => ['payment_account_transfers', 'id'],
+        'payment_account_txn' => ['payment_account_transactions', 'id'],
+        'payroll' => ['payrolls', 'id'],
+        'staff_loan' => ['staff_loans', 'id'],
+        'tax_remittance' => ['tax_remittances', 'id'],
+    ];
+
+    /** Date and amount of the mappings' records (E-Ride: from the mappings themselves). */
     private function documents($mappings): array
     {
         $out = [];
-        $tx = collect($mappings)->whereNotIn('transaction_type', ['payment', 'account_transaction'])->pluck('transaction_id')->unique()->all();
-        $pay = collect($mappings)->where('transaction_type', 'payment')->pluck('transaction_id')->unique()->all();
-        if ($tx) {
-            foreach (DB::table('transactions')->where('business_id', $this->bid)->whereIn('id', $tx)
-                ->get(['id', 'type', 'invoice_no', 'ref_no', 'transaction_date as date', 'final_total as amount', 'contact_id']) as $t) {
-                $out[$t->type.':'.$t->id] = $t;
-            }
+        $ids = collect($mappings)->map(fn ($m) => [$m->transaction_type, $m->transaction_id]);
+        if ($ids->isEmpty()) {
+            return $out;
         }
-        if ($pay) {
-            foreach (DB::table('transaction_payments')->where('business_id', $this->bid)->whereIn('id', $pay)
-                ->get(['id', 'payment_ref_no as invoice_no', DB::raw('NULL as ref_no'), 'paid_on as date', 'amount', 'payment_for as contact_id']) as $p) {
-                $out['payment:'.$p->id] = $p;
-            }
+        foreach (DB::table('transaction_mappings')->where('business_id', $this->bid)
+            ->whereIn('transaction_id', $ids->pluck(1)->unique()->all())
+            ->get(['transaction_type', 'transaction_id', 'transaction_date as date', 'amount']) as $m) {
+            $out[$m->transaction_type.':'.$m->transaction_id] = (object) ['date' => $m->date, 'amount' => $m->amount, 'invoice_no' => null, 'ref_no' => null, 'contact_id' => null];
         }
 
         return $out;
     }
 
-    private function docCell(string $type, int $id, $doc): array
+    private function docCell(string $type, $id, $doc): array
     {
-        $no = $doc ? ($doc->invoice_no ?: ($doc->ref_no ?? null)) : null;
-        if ($type === 'account_transaction') {
-            // a Payment Accounts movement: its own table, its own numbering
-            $m = DB::table('account_transactions')->where('id', $id)->first(['sub_type', 'reff_no']);
-            $kind = $m && $m->sub_type ? $m->sub_type : 'deposit';
-
-            return ['text' => trim(__('ledger.doc_account_'.$kind).' '.(($m->reff_no ?? null) ?: '#'.$id)), 'url' => url('/account/account'), 'modal' => false];
+        $no = null;
+        if ($type === PostingRules::MOVE) {
+            $no = DB::table('bus_money_moves as mv')->leftJoin('bus_bookings as bk', 'bk.id', '=', 'mv.booking_id')->where('mv.id', $id)->value('bk.code');
         }
-        if (! $doc) {
-            $no = $type === 'payment'
-                ? DB::table('transaction_payments')->where('id', $id)->value('payment_ref_no')
-                : DB::table('transactions')->where('id', $id)->value(DB::raw('COALESCE(invoice_no, ref_no)'));
-        }
-        $link = self::documentLink($type, $id, $doc->contact_id ?? null);
+        $label = \Lang::has('ledger.doc_'.$type) ? __('ledger.doc_'.$type) : (class_exists(PaymentBook::class) ? PaymentBook::docLabel($type) : $type);
+        $link = self::documentLink($type, $id);
 
-        return ['text' => trim(__('ledger.doc_'.$type).' '.($no ?: '#'.$id)), 'url' => $link['url'] ?? null, 'modal' => $link['modal'] ?? false];
+        return ['text' => trim($label.' '.($no ?: '#'.$id)), 'url' => $link['url'] ?? null, 'modal' => $link['modal'] ?? false];
     }
 
     private function date($d): string
@@ -663,23 +685,19 @@ class LedgerHealth
 
     // ===================================================================== shared with the screens
 
-    /**
-     * Where a POS document opens: sales, returns, purchases and payments in PosInnova's view
-     * dialog (modal => true), an expense on its edit page, an opening balance or a discount on
-     * its contact.
-     */
-    public static function documentLink(string $type, int $id, $contactId = null): ?array
+    /** Where a record opens (E-Ride: the bus records' and Income & Expense screens). */
+    public static function documentLink(string $type, $id, $contactId = null): ?array
     {
-        switch ($type) {
-            case 'sell': return ['url' => url('/sells/'.$id), 'modal' => true];
-            case 'sell_return': return ['url' => url('/sell-return/'.$id), 'modal' => true];
-            case 'purchase': return ['url' => url('/purchases/'.$id), 'modal' => true];
-            case 'purchase_return': return ['url' => url('/purchase-return/'.$id), 'modal' => true];
-            case 'payment': return ['url' => url('/payments/view-payment/'.$id), 'modal' => true];
-            case 'expense': return ['url' => url('/expenses/'.$id.'/edit'), 'modal' => false];
-            case 'opening_balance':
-            case 'ledger_discount':
-                return $contactId ? ['url' => url('/contacts/'.$contactId), 'modal' => false] : null;
+        $show = ['income' => 'ledger.income.show', 'expense' => 'ledger.expense.show',
+            'supplier_bill' => 'ledger.supplier-bill.show', 'supplier_payment' => 'ledger.supplier-payment.show'][$type] ?? null;
+        if ($show && \Route::has($show)) {
+            return ['url' => route($show, $id), 'modal' => false];
+        }
+        if ($type === 'payment_transfer' && \Route::has('ledger.payment-account-transfer.index')) {
+            return ['url' => route('ledger.payment-account-transfer.index'), 'modal' => false];
+        }
+        if ($type === PostingRules::DEPARTURE && \Route::has('bus-partner.departures')) {
+            return ['url' => route('bus-partner.departures'), 'modal' => false];
         }
 
         return null;

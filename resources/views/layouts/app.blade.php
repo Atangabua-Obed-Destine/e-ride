@@ -11,6 +11,22 @@
     $books = $ledgerBooks ?? \App\Ledger\ERide\Books::current();
     // [route, label, permissions (any), path prefix after partner/accounting/ that marks it active]
     $groups = [
+        [__('ledger.menu_payroll_group'), [
+            ['ledger.staff.index', 'ledger.menu_staff', ['staff-view'], 'staff/register'],
+            ['ledger.payroll.index', 'ledger.menu_payroll', ['payroll-view', 'payroll-action', 'payroll-print'], 'staff/payroll/'],
+            ['ledger.payroll.report', 'ledger.menu_payroll_report', ['payroll-report'], null],
+            ['ledger.staff-loan.index', 'ledger.menu_staff_loans', ['staff-loan-view'], 'staff/staff-loan'],
+            ['ledger.designation.index', 'ledger.menu_designations', ['designation-view'], 'staff/designation'],
+            ['ledger.department.index', 'ledger.menu_departments', ['department-view'], 'staff/department'],
+            ['ledger.allowance-type.index', 'ledger.menu_allowance_types', ['allowance-type-view'], 'staff/allowance-type'],
+            ['ledger.deduction-type.index', 'ledger.menu_deduction_types', ['deduction-type-view'], 'staff/deduction-type'],
+            ['ledger.tax-group.index', 'ledger.menu_tax_groups', ['tax-setting-view'], 'staff/tax-group'],
+            ['ledger.tax-setting.index', 'ledger.menu_tax_settings', ['tax-setting-view'], 'staff/tax-setting'],
+            ['ledger.staff-tax-report.index', 'ledger.menu_staff_tax_report', ['tax-setting-view', 'payroll-report'], 'staff/tax-report'],
+            ['ledger.tax-remittance.index', 'ledger.menu_tax_remittance', ['tax-remittance-view'], 'staff/tax-remittance'],
+            ['ledger.pay-slip-setting.index', 'ledger.menu_pay_slip_settings', ['pay-slip-setting-view'], 'staff/pay-slip-setting'],
+            ['ledger.payroll-setting.index', 'ledger.menu_payroll_settings', ['payroll-setting'], 'staff/payroll-setting'],
+        ]],
         [__('ledger.menu_income_expense'), [
             ['ledger.income.index', 'ledger.menu_income', ['income-view'], 'account/income'],
             ['ledger.income-category.index', 'ledger.menu_income_categories', ['income-category-view', 'income-view'], 'account/income-category'],

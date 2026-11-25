@@ -217,9 +217,25 @@ try {
         $ok($eq($tillBal(), $held) && $eq($bal('658'), 0) && Ledger::forBusiness($bidA, fn() => \App\Ledger\Models\TillCount::find($tc->id))->status === 'void', 'voiding reverses it: the till holds its cash again');
     }
 
+    // ---- 5d. Ledger health: the bus tie-outs agree, nothing critical; a record changed behind the books is caught.
+    $health = fn() => Ledger::forBusiness($bidA, fn() => collect((new \App\Ledger\Services\LedgerHealth())->checks())->keyBy('key'));
+    Ledger::forBusiness($bidA, fn() => (new LedgerSync())->sweep());
+    $h = $health();
+    foreach (['tickets_held_tie_out', 'tills_tie_out', 'suppliers_tie_out', 'failed', 'mapping_orphan', 'entry_unbalanced', 'books_unbalanced', 'source_unposted', 'date_drift', 'entry_duplicate'] as $k) {
+        $ok(isset($h[$k]) && $h[$k]['state'] === 'ok', "health: $k is clean" . (isset($h[$k]) && $h[$k]['state'] !== 'ok' ? ' (' . $h[$k]['count'] . ': ' . json_encode(array_slice($h[$k]['rows'], 0, 2)) . ')' : ''));
+    }
+    $ok($h->where('state', 'critical')->isEmpty(), 'health: nothing critical (' . $h->where('state', 'critical')->keys()->implode(', ') . ')');
+    $r = $call('GET', '/partner/accounting/ledger-health', [], $mgrA);
+    $ok($r->getStatusCode() === 200, 'Ledger health page opens (' . $r->getStatusCode() . ')');
+    // a cash sale's amount changed behind the books' back: the till tie-out sees it
+    DB::table('bus_money_moves')->where('id', $m1->id)->update(['amount' => 12000]);
+    $h = $health();
+    $ok($h['tills_tie_out']['state'] !== 'ok', 'health: a fare changed behind the books is caught by the till tie-out');
+    DB::table('bus_money_moves')->where('id', $m1->id)->update(['amount' => 10000]);
+
     // ---- 6. Every screen of the stage opens.
     $pages = ['chart-of-accounts', 'fiscal-years', 'journal-entries', 'general-ledger', 'general-ledger/trial-balance', 'general-ledger/balance-sheet',
-        'general-ledger/income-statement', 'mappings/settings', 'cash-accounts', 'mappings/transactions', 'general-ledger/account/' . $acc('5712'), 'tills'];
+        'general-ledger/income-statement', 'mappings/settings', 'cash-accounts', 'mappings/transactions', 'general-ledger/account/' . $acc('5712'), 'tills', 'ledger-health'];
     foreach ($pages as $p) {
         $r = $call('GET', '/partner/accounting/' . $p, [], $mgrA);
         $ok($r->getStatusCode() === 200, "page $p opens (" . $r->getStatusCode() . ')');

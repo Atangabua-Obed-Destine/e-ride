@@ -217,4 +217,6 @@ return [
     'reverse_check' => 'I understand this posts a mirror entry on the date shown, cancelling this entry from that date. Nothing is deleted.',
     'p_post_note' => 'Posted entries update account balances. Once posted, the entry can only be changed by un-posting it while its month is open, or by reversing it.',
     'post_check' => 'I have checked the lines and understand this posts the entry on the date shown and updates the account balances.',
+    'type_payroll' => 'Payroll',
+    'type_remittance' => 'Remittance',
 ];

@@ -252,6 +252,12 @@ class SyscohadaChart
             'transfers' => '585',
             'retained_earnings' => '121',
             'income_summary' => '130',
+            // paxhitestbed's payroll and tax (App\Ledger\Payroll\PayrollAccounts)
+            'payroll' => '661',            // salaries (gross pay)
+            'payroll_employer' => '664',   // employer social charges
+            'payroll_tax' => '447',        // taxes withheld for the State (IRPP, CAC, CFC, CRTV, TDL)
+            'payroll_social' => '431',     // CNPS (both shares) and the employment fund
+            'staff_advances' => '421',     // loans and salary advances to staff
         ];
     }
 

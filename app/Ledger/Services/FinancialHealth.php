@@ -101,7 +101,8 @@ class FinancialHealth
                 $income <= 0 ? self::WATCH : ($payroll / $income > 0.8 ? self::ACT : ($payroll / $income > 0.65 ? self::WATCH : self::OK)),
                 __('ledger_assets.fh_payroll_detail')),
             $this->indicator('collection', __('ledger_assets.fh_collection'), $sales['rate'], 'percent',
-                $sales['rate'] === null ? self::WATCH : ($sales['rate'] < 60 ? self::ACT : ($sales['rate'] < 80 ? self::WATCH : self::OK)),
+                // E-Ride: tickets are paid when sold, so nothing invoiced on 411 is nothing to chase (posinnova: WATCH)
+                $sales['rate'] === null ? self::OK : ($sales['rate'] < 60 ? self::ACT : ($sales['rate'] < 80 ? self::WATCH : self::OK)),
                 __('ledger_assets.fh_collection_detail', ['start' => $nice($from), 'owed' => $m($sales['owed']), 'billed' => $m($sales['billed']),
                     'date' => $nice($asOf), 'arrears' => $m($sales['arrears'])])),
             $this->indicator('payables', __('ledger_assets.fh_payables'), $payables['overdue'], 'money',
@@ -247,27 +248,23 @@ class FinancialHealth
     /**
      * Owed to suppliers: the credit balance of 40 (less 409, advances paid to
      * them) in the ledger; overdue: received purchases still unpaid after
-     * their payment term (no term: due on the purchase date).
+     * their payment term (no term: due on the purchase date). E-Ride: supplier
+     * bills and E-Ride's statements past their due date.
      */
     protected function payables(string $asOf): array
     {
         $owed = round(-$this->balance('40', $asOf, ['409']), 2);
-        $paid = DB::table('transaction_payments')->select('transaction_id', DB::raw('SUM(IF(is_return = 1, -amount, amount)) as paid'))
-            ->where('business_id', $this->bid)->groupBy('transaction_id');
-        $rows = DB::table('transactions as t')
-            ->leftJoinSub($paid, 'p', 'p.transaction_id', '=', 't.id')
-            ->where('t.business_id', $this->bid)->where('t.type', 'purchase')->where('t.status', 'received')
-            ->whereIn('t.payment_status', ['due', 'partial'])
-            ->whereDate('t.transaction_date', '<=', $asOf)
-            ->get(['t.transaction_date', 't.pay_term_number', 't.pay_term_type', 't.final_total', 'p.paid']);
+        // E-Ride: what is overdue are the supplier bills still owed past their due date, and E-Ride's
+        // statements (on 401 too) not paid by their due date (posinnova: received POS purchases past their pay term)
         $overdue = 0.0;
-        foreach ($rows as $r) {
-            $due = Carbon::parse($r->transaction_date)->startOfDay();
-            if ($r->pay_term_number) {
-                $r->pay_term_type === 'months' ? $due->addMonthsNoOverflow((int) $r->pay_term_number) : $due->addDays((int) $r->pay_term_number);
+        foreach (app(SupplierPayables::class)->openBills(null, $asOf) as $bill) {
+            if (substr((string) $bill->due_date, 0, 10) < $asOf) {
+                $overdue += max(0, (float) $bill->owed);
             }
-            if ($due->toDateString() < $asOf) {
-                $overdue += max(0, (float) $r->final_total - (float) $r->paid);
+        }
+        foreach (AgingReportService::erideStatementsOwed($asOf) as $s) {
+            if ($s['due_date'] < $asOf) {
+                $overdue += $s['owed'];
             }
         }
 

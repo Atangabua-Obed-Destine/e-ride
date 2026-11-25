@@ -35,6 +35,16 @@ class Permissions
             'payment-account-transfer-view', 'payment-account-transfer-create', 'payment-account-transfer-edit', 'payment-account-transfer-delete',
             'payment-account-report-view', 'payment-account-report-export', 'payment-account-report-cashflow',
             'payment-account-report-statement', 'payment-account-report-summary', 'payment-account-report-link'],
+        // paxhitestbed's Human Resource: payroll and tax (PermissionSeeder names; the staff register is E-Ride's, staff-*)
+        'payroll' => ['payroll-view', 'payroll-action', 'payroll-approve', 'payroll-report', 'payroll-print', 'payroll-setting',
+            'staff-loan-view', 'staff-loan-action', 'pay-slip-setting-view'],
+        'payroll_lists' => ['staff-view', 'staff-create', 'staff-edit', 'staff-delete',
+            'designation-view', 'designation-create', 'designation-edit', 'designation-delete',
+            'department-view', 'department-create', 'department-edit', 'department-delete',
+            'allowance-type-view', 'allowance-type-create', 'allowance-type-edit', 'allowance-type-delete',
+            'deduction-type-view', 'deduction-type-create', 'deduction-type-edit', 'deduction-type-delete'],
+        'tax' => ['tax-setting-view', 'tax-setting-create', 'tax-setting-edit', 'tax-setting-delete',
+            'tax-remittance-view', 'tax-remittance-create', 'tax-remittance-void'],
     ];
 
     public static function all(): array

@@ -2,7 +2,7 @@
     Receivables / payables aging (paxhitestbed's receivables-aging and payables-aging
     screens, one view for both). $kind: receivables | payables.
     Below paxhitestbed's table: the tie-out to the ledger and the documents behind
-    the figures (paxhitestbed's supplier aging), as the figures come from POS documents.
+    the figures (paxhitestbed's supplier aging), as the figures come from the documents (E-Ride: supplier bills and E-Ride's statements).
 --}}
 @php
     $L = fn ($k, $r = []) => __('ledger_reports.'.$k, $r);
@@ -94,7 +94,8 @@
                         @forelse($report['details'] ?? [] as $item)
                         <tr data-contact="{{ $item['contact_id'] }}">
                             <td>
-                                <a href="{{ url('/contacts/'.$item['contact_id']) }}">{{ $item[$isR ? 'customer_name' : 'vendor_name'] }}</a>
+                                {{-- E-Ride: a supplier opens on its statement; there is no contact page --}}
+                                @if(! empty($item['link']))<a href="{{ $item['link'] }}">{{ $item[$isR ? 'customer_name' : 'vendor_name'] }}</a>@else{{ $item[$isR ? 'customer_name' : 'vendor_name'] }}@endif
                                 <div class="ap-muted">{{ count($item['documents']) }} {{ count($item['documents']) === 1 ? $L('document_one') : $L('document_many') }}</div>
                             </td>
                             <td class="ap-num">{{ $m($item['current'] ?? 0) }}</td>
@@ -148,7 +149,7 @@
                     <tbody>
                         @foreach($report['contacts_differing'] as $c)
                         <tr>
-                            <td>@if($c['contact_id'])<a href="{{ url('/contacts/'.$c['contact_id']) }}">{{ $c['name'] }}</a>@else{{ $c['name'] }}@endif</td>
+                            <td>@if($c['contact_id'] > 0 && ! $isR && \Route::has('ledger.supplier-bill.statement'))<a href="{{ route('ledger.supplier-bill.statement', ['supplier_id' => $c['contact_id']]) }}">{{ $c['name'] }}</a>@else{{ $c['name'] }}@endif</td>{{-- E-Ride: the supplier's statement --}}
                             <td class="ap-num">{{ $m($c['documents']) }}</td>
                             <td class="ap-num">{{ $m($c['ledger']) }}</td>
                             <td class="ap-num"><strong>{{ $m($c['difference']) }}</strong></td>

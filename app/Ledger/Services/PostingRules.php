@@ -57,8 +57,14 @@ class PostingRules
     const PAYMENT_TRANSFER = 'payment_transfer';
     const PAYMENT_ACCOUNT_TXN = 'payment_account_txn';
     const ACCOUNTS_TYPES = [self::INCOME, self::EXPENSE, self::SUPPLIER_BILL, self::SUPPLIER_PAYMENT, self::PAYMENT_TRANSFER, self::PAYMENT_ACCOUNT_TXN];
+    // paxhitestbed's payroll and tax (App\Ledger\Payroll; see forPayroll() and below)
+    const PAYROLL = 'payroll';
+    const STAFF_LOAN = 'staff_loan';
+    const TAX_REMITTANCE = 'tax_remittance';
+    const PAYROLL_TYPES = [self::PAYROLL, self::STAFF_LOAN, self::TAX_REMITTANCE];
     const TYPES = [self::MOVE, self::DEPARTURE, self::STATEMENT, self::STATEMENT_PAID,
-        self::INCOME, self::EXPENSE, self::SUPPLIER_BILL, self::SUPPLIER_PAYMENT, self::PAYMENT_TRANSFER, self::PAYMENT_ACCOUNT_TXN];
+        self::INCOME, self::EXPENSE, self::SUPPLIER_BILL, self::SUPPLIER_PAYMENT, self::PAYMENT_TRANSFER, self::PAYMENT_ACCOUNT_TXN,
+        self::PAYROLL, self::STAFF_LOAN, self::TAX_REMITTANCE];
 
     private $codes;
 
@@ -475,6 +481,162 @@ class PostingRules
         }
 
         return (int) $id;
+    }
+
+    // ---------------------------------------------------------------- payroll and tax (paxhitestbed)
+    //
+    // paxhitestbed's PayrollAccountingService, StaffLoanAccounting and TaxRemittanceService, on the sync:
+    //
+    //   payroll paid               Dr 661 salaries (gross + loan repayments)   Cr each tax's liability (431 CNPS, 447 State)
+    //                              Dr 664 employer charges (employer side)     Cr 421 staff advances (loan repayments)
+    //                                                                          Cr the payment account it was paid from (net)
+    //                              (unpaid: reversed)
+    //   loan or advance given      Dr 421 staff advances                       Cr the payment account it was paid from (cancelled: reversed)
+    //   tax remittance             Dr the liability (431 / 447)                Cr the payment account it was paid from (voided: reversed)
+    //
+    // The accounts come from Mapping settings, group "Payroll and tax" (App\Ledger\Payroll\PayrollAccounts).
+
+    /** A paid payroll's entry, on its pay date. An unpaid one has none. */
+    public function forPayroll(\App\Ledger\Models\Payroll $p): ?array
+    {
+        if (! $p->isPaid() || ! $p->pay_date) {
+            return null;
+        }
+        $p->loadMissing('staff', 'details');
+        $accounts = \App\Ledger\Payroll\PayrollAccounts::class;
+        $name = $p->staff ? $p->staff->name : '#'.$p->staff_id;
+        $month = $p->salary_month->translatedFormat('F Y');
+        $desc = __('ledger_payroll.l_salary_payment', ['name' => $name, 'month' => $month]);
+        $loans = $p->loanRepayments();
+        $lines = [['account_id' => $accounts::need('payroll'), 'debit' => round((float) $p->gross_salary + $loans, 2), 'credit' => 0,
+            'description' => __('ledger_payroll.l_gross', ['name' => $name])]];
+        if ((float) $p->employer_tax > 0) {
+            $lines[] = ['account_id' => $accounts::need('payroll_employer'), 'debit' => round((float) $p->employer_tax, 2), 'credit' => 0,
+                'description' => __('ledger_payroll.l_employer', ['name' => $name])];
+        }
+        foreach ($this->withholdings($p) as $accountId => $credit) {
+            $lines[] = ['account_id' => $accountId, 'debit' => 0, 'credit' => $credit['amount'], 'description' => $credit['label'].' - '.$name];
+        }
+        if ($loans > 0) {
+            $lines[] = ['account_id' => $accounts::need('staff_advances'), 'debit' => 0, 'credit' => $loans, 'description' => __('ledger_payroll.l_loan_repaid', ['name' => $name])];
+        }
+        $lines[] = ['account_id' => $this->moneyAccount($p->payment_account_id, $p->payment_method), 'debit' => 0, 'credit' => round((float) $p->net_salary, 2),
+            'description' => __('ledger_payroll.l_net', ['name' => $name])];
+
+        return [
+            'date' => $p->pay_date->toDateString(),
+            'description' => $desc,
+            'reference' => $p->staff->staff_no ?? null,
+            'journal_type' => 'payroll',
+            'lines' => $lines,
+        ];
+    }
+
+    /**
+     * The withholdings by the account each is owed to (paxhitestbed withholdingsByAccount): from the
+     * payroll's itemised tax lines; a line naming no account goes to payroll_tax (the employee side)
+     * or payroll_social (the employer side). The rounding difference to the payroll's totals goes on
+     * the largest balance of its side. Without lines: employee tax to payroll_tax, employer to payroll_social.
+     */
+    private function withholdings(\App\Ledger\Models\Payroll $p): array
+    {
+        $accounts = \App\Ledger\Payroll\PayrollAccounts::class;
+        $by = [];
+        $add = function ($accountId, string $side, float $amount) use (&$by) {
+            $by[$accountId] ??= ['employee' => 0.0, 'employer' => 0.0];
+            $by[$accountId][$side] += $amount;
+        };
+        $lines = \App\Ledger\Models\PayrollTaxLine::where('payroll_id', $p->id)->get();
+        if ($lines->isEmpty()) {
+            if ((float) $p->tax > 0) {
+                $add($accounts::need('payroll_tax'), 'employee', (float) $p->tax);
+            }
+            if ((float) $p->employer_tax > 0) {
+                $add($accounts::need('payroll_social'), 'employer', (float) $p->employer_tax);
+            }
+        } else {
+            foreach ($lines as $l) {
+                if ((float) $l->employee_amount != 0.0) {
+                    $add($l->liability_account_id ?: $accounts::need('payroll_tax'), 'employee', (float) $l->employee_amount);
+                }
+                if ((float) $l->employer_amount != 0.0) {
+                    $add($l->liability_account_id ?: $accounts::need('payroll_social'), 'employer', (float) $l->employer_amount);
+                }
+            }
+            foreach (['employee' => (float) $p->tax, 'employer' => (float) $p->employer_tax] as $side => $target) {
+                $posted = round(array_sum(array_column($by, $side)), 2);
+                if (abs($posted - $target) <= 0.001) {
+                    continue;
+                }
+                $largest = null;
+                foreach ($by as $id => $c) {
+                    if ($c[$side] > 0 && ($largest === null || $c[$side] > $by[$largest][$side])) {
+                        $largest = $id;
+                    }
+                }
+                if ($largest === null) {
+                    $largest = $accounts::need($side === 'employee' ? 'payroll_tax' : 'payroll_social');
+                    $by[$largest] ??= ['employee' => 0.0, 'employer' => 0.0];
+                }
+                $by[$largest][$side] += $target - $posted;
+            }
+        }
+        $out = [];
+        foreach ($by as $id => $c) {
+            $amount = round($c['employee'] + $c['employer'], 2);
+            if ($amount == 0.0) {
+                continue;
+            }
+            $acc = ChartOfAccount::find($id);
+            $out[$id] = ['label' => __('ledger_payroll.l_withheld', ['account' => $acc ? Preview::accountName($acc) : '#'.$id]), 'amount' => $amount];
+        }
+
+        return $out;
+    }
+
+    /** A loan or salary advance given: Dr staff advances / Cr the payment account, on the day it was given. Cancelled: none. */
+    public function forStaffLoan(\App\Ledger\Models\StaffLoan $loan): ?array
+    {
+        $amount = round((float) $loan->amount, 2);
+        if ($loan->status !== 'active' || $amount <= 0) {
+            return null;
+        }
+        $name = $loan->staff->name ?? '#'.$loan->staff_id;
+        $desc = __('ledger_payroll.l_loan_given', ['title' => $loan->title, 'name' => $name]);
+
+        return [
+            'date' => $loan->given_on->toDateString(),
+            'description' => $desc,
+            'reference' => $loan->staff->staff_no ?? null,
+            'journal_type' => 'payroll',
+            'lines' => [
+                ['account_id' => \App\Ledger\Payroll\PayrollAccounts::need('staff_advances'), 'debit' => $amount, 'credit' => 0, 'description' => $loan->title.' - '.$name],
+                ['account_id' => $this->moneyAccount($loan->payment_account_id, null), 'debit' => 0, 'credit' => $amount, 'description' => __('ledger_payroll.l_loan_paid_out', ['title' => $loan->title, 'name' => $name])],
+            ],
+        ];
+    }
+
+    /** Withheld tax paid over: Dr the liability / Cr the payment account, on the payment date. Voided: none. */
+    public function forTaxRemittance(\App\Ledger\Models\TaxRemittance $r): ?array
+    {
+        $amount = round((float) $r->amount, 2);
+        if ($r->isVoided() || $amount <= 0) {
+            return null;
+        }
+        $liability = ChartOfAccount::find($r->liability_account_id);
+        $desc = __('ledger_payroll.tax_remittance').' - '.($liability ? Preview::accountName($liability) : '').' ('.$r->salary_month->translatedFormat('F Y').')';
+        $credit = $r->payment_account_id ? $this->paymentAccountLedger($r->payment_account_id) : (int) $r->source_account_id;
+
+        return [
+            'date' => $r->payment_date->toDateString(),
+            'description' => $desc,
+            'reference' => $r->reference,
+            'journal_type' => 'remittance',
+            'lines' => [
+                ['account_id' => (int) $r->liability_account_id, 'debit' => $amount, 'credit' => 0, 'description' => __('ledger_payroll.l_tax_paid_over').' - '.$desc],
+                ['account_id' => $credit, 'debit' => 0, 'credit' => $amount, 'description' => __('ledger_payroll.l_payment').' - '.$desc],
+            ],
+        ];
     }
 
     // ---------------------------------------------------------------- helpers

@@ -26,18 +26,23 @@ class CustomerCollection
     public function forYear(string $from, string $to, array $daybookRows = [], array $months = []): array
     {
         $bid = Ledger::businessId();
-        $sales = DB::table('transactions as t')
-            ->where('t.business_id', $bid)->where('t.type', 'sell')->where('t.status', 'final')
-            ->whereDate('t.transaction_date', '>=', $from)->whereDate('t.transaction_date', '<=', $to)
-            ->leftJoin(DB::raw('(SELECT return_parent_id, SUM(final_total) AS returned FROM transactions
-                                 WHERE business_id = '.(int) $bid." AND type = 'sell_return' AND return_parent_id IS NOT NULL
-                                 GROUP BY return_parent_id) r"), 'r.return_parent_id', '=', 't.id')
-            ->leftJoin(DB::raw('(SELECT transaction_id, SUM(IF(is_return = 1, -amount, amount)) AS paid FROM transaction_payments
-                                 WHERE business_id = '.(int) $bid.' AND transaction_id IS NOT NULL
-                                 GROUP BY transaction_id) p'), 'p.transaction_id', '=', 't.id')
-            ->leftJoin('contacts as c', 'c.id', '=', 't.contact_id')
-            ->get(['t.id', 't.contact_id', 't.final_total', DB::raw('COALESCE(r.returned, 0) as returned'), DB::raw('COALESCE(p.paid, 0) as paid'),
-                'c.name', 'c.supplier_business_name', 'c.is_default']);
+        // E-Ride: a sale is a bus ticket (a booking) of this branch whose money came in during the year:
+        // billed its fare less what was refunded on it, paid its ticket money (bus_money_moves) less the
+        // same refunds; the customer is the passenger's account, none for a counter walk-in. (posinnova:
+        // final POS sales, their returns and payments, and POS contacts.)
+        $agency = DB::table('ledger_businesses')->where('id', $bid)->where('owner_type', \App\Ledger\ERide\Books::AGENCY)->value('owner_id');
+        $money = DB::table('bus_money_moves')->where('agency_id', (string) $agency)->whereNull('skipped')
+            ->whereIn('kind', ['sale', 'refund_owed', 'cash_refund'])
+            ->where('at', '>=', $from.' 00:00:00')->where('at', '<=', $to.' 23:59:59')
+            ->groupBy('booking_id')
+            ->select('booking_id', DB::raw("SUM(IF(kind = 'sale', amount, 0)) AS sold"), DB::raw("SUM(IF(kind = 'sale', 0, amount)) AS refunded"));
+        $sales = DB::query()->fromSub($money, 'mv')
+            ->leftJoin('bus_bookings as b', 'b.id', '=', 'mv.booking_id')
+            ->leftJoin('users as u', 'u.id', '=', 'b.customer_id')
+            ->where('mv.sold', '>', 0)
+            ->get(['mv.booking_id as id', 'b.customer_id as contact_id', DB::raw('GREATEST(COALESCE(b.amount, 0), mv.sold) AS final_total'),
+                'mv.refunded as returned', DB::raw('mv.sold - mv.refunded AS paid'), DB::raw("TRIM(CONCAT(COALESCE(u.first_name, ''), ' ', COALESCE(u.last_name, ''))) AS name"),
+                DB::raw('NULL AS supplier_business_name'), DB::raw('(b.customer_id IS NULL) AS is_default')]);
 
         $count = ['total' => 0, 'full' => 0, 'part' => 0, 'none' => 0];
         $billed = 0.0;
@@ -55,7 +60,7 @@ class CustomerCollection
             $billed += $b;
             $collected += $paid;
 
-            $k = (int) $s->contact_id;
+            $k = (string) $s->contact_id; // E-Ride: user ids are UUIDs
             $byCustomer[$k] = $byCustomer[$k] ?? ['name' => $s->supplier_business_name ?: ($s->name ?: __('ledger_daybook.walk_in')),
                 'walk_in' => (bool) $s->is_default, 'billed' => 0.0, 'paid' => 0.0, 'outstanding' => 0.0, 'sales' => 0];
             $byCustomer[$k]['billed'] += $b;
@@ -74,7 +79,8 @@ class CustomerCollection
         foreach ($months as $m) {
             $cash = 0.0;
             foreach ($daybookRows as $r) {
-                if ($r['source'] === 'sell' && $r['date'] >= $m['start'] && $r['date'] <= $m['end']) {
+                // E-Ride: ticket money, counter and app (posinnova: payments on sales, 'sell')
+                if (str_starts_with($r['source'], 'bus_move_') && $r['date'] >= $m['start'] && $r['date'] <= $m['end']) {
                     $cash += $r['direction'] === DaybookService::IN ? $r['amount'] : -$r['amount'];
                 }
             }

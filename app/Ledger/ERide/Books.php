@@ -32,7 +32,9 @@ class Books
     public const COMPANY = 'bus_company';
 
     /** What only the manager or director may do. */
-    public const OWNER_ONLY = ['accounting-period-reopen', 'year-end-closing-approve', 'budget-approve'];
+    public const OWNER_ONLY = ['accounting-period-reopen', 'year-end-closing-approve', 'budget-approve',
+        // payroll: approving a payroll (when the books require it) and the payroll settings are the manager's
+        'payroll-approve', 'payroll-setting'];
 
     /** The current request's books: ['business_id', 'type', 'owner', 'role', 'name', 'portal']. */
     protected static ?array $current = null;

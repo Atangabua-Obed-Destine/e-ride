@@ -48,7 +48,7 @@
 </style>
 @php
     $icons = ['ok' => 'fa-check-circle', 'warning' => 'fa-exclamation-triangle', 'critical' => 'fa-times-circle'];
-    $moneyCols = ['amount', 'debit', 'credit', 'difference', 'posinnova', 'ledger', 'stored_balance', 'lines_balance',
+    $moneyCols = ['amount', 'debit', 'credit', 'difference', 'posinnova', 'records', 'ledger', 'stored_balance', 'lines_balance',
         'header_total', 'line_total', 'document_amount', 'entry_amount'];
     $o = $status['opening'];
 @endphp

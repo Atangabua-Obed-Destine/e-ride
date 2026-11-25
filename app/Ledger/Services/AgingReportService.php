@@ -33,6 +33,9 @@ use Illuminate\Support\Facades\DB;
  * aging tie-out): money posted to 411 / 401 other than through a document (a
  * journal entry typed by hand, a document that failed to post) shows as the
  * difference, customer by customer.
+ *
+ * E-Ride: the documents are the supplier bills and E-Ride's statements (payables); nothing is sold
+ * on account, so receivables has no documents and only ties out 411 (see openDocuments()).
  */
 class AgingReportService
 {
@@ -199,7 +202,7 @@ class AgingReportService
         }
         $names = array_column($contacts, 'name', 'contact_id');
         $missing = array_diff(array_keys($byContact), array_keys($names));
-        $missing = array_filter($missing, fn ($id) => $id > 0);
+        $missing = array_filter($missing, fn ($id) => $id > 0 || $id === self::ERIDE); // E-Ride: and E-Ride's own row
         if ($missing) {
             foreach ($this->contactNames($missing) as $id => $n) {
                 $names[$id] = $n;
@@ -228,131 +231,88 @@ class AgingReportService
             'customer_name' => $a['name'],
             'vendor_name' => $a['name'],
             'supplier_name' => $a['name'],
+            // E-Ride: a supplier opens on its statement (posinnova: the POS contact page)
+            'link' => ! $receivable && $a['contact_id'] > 0 && \Route::has('ledger.supplier-bill.statement')
+                ? route('ledger.supplier-bill.statement', ['supplier_id' => $a['contact_id']]) : null,
         ]);
     }
 
     /**
-     * Every document with something owed on it on $D, as PostingRules puts it on
-     * the control account: [id, type, number, date, due_date, days_overdue,
-     * bracket, owed, contact_id, contact_name, journal_entry_id].
+     * Every document with something owed on it on $D: [id, type, number, date, due_date,
+     * days_overdue, bracket, owed, contact_id, contact_name, journal_entry_id].
+     *
+     * E-Ride (posinnova read POS sales, purchases, expenses and their payments):
+     *   payables     the supplier bills still owed on $D (SupplierPayables, the same figures as the
+     *                bills' own aging), and E-Ride's monthly statements posted and not yet paid on $D
+     *                (they are on 401 too), each due on its own due date;
+     *   receivables  none: bus tickets are paid when they are sold and the Income module records
+     *                money received, so nothing is sold on account. Whatever is on 411 was typed
+     *                by hand and shows as the difference with the ledger.
      */
     private function openDocuments(string $type, string $D, int $control, int $sign, array &$problems): array
     {
-        $bid = Ledger::businessId();
-        $types = self::TYPES[$type];
-        $next = Carbon::parse($D)->addDay()->toDateString();
-
-        // Only documents that can still be open on $D: not settled now, or settled
-        // by a payment made after $D. Discounts have no payments, so always count.
-        $docs = DB::table('transactions as t')
-            ->leftJoin('contacts as c', 'c.id', '=', 't.contact_id')
-            ->where('t.business_id', $bid)
-            ->whereIn('t.type', $types)
-            ->whereNotNull('t.contact_id')
-            ->where('t.transaction_date', '<', $next)
-            ->where(function ($w) use ($bid, $next) {
-                $w->whereNull('t.payment_status')
-                    ->orWhere('t.payment_status', '!=', 'paid')
-                    ->orWhere('t.type', 'ledger_discount')
-                    ->orWhereExists(function ($q) use ($bid, $next) {
-                        $q->select(DB::raw(1))->from('transaction_payments as p')
-                            ->whereColumn('p.transaction_id', 't.id')->where('p.business_id', $bid)
-                            ->where('p.paid_on', '>=', $next);
-                    });
-            })
-            ->orderBy('t.transaction_date')->orderBy('t.id')
-            ->select('t.*', DB::raw("COALESCE(NULLIF(c.supplier_business_name, ''), c.name) as aging_contact_name"))
-            ->get();
-
-        if ($docs->isEmpty()) {
+        if ($type !== 'payable') {
             return [];
         }
-
-        $payments = DB::table('transaction_payments')->where('business_id', $bid)
-            ->whereIn('transaction_id', $docs->pluck('id')->all())
-            ->where('paid_on', '<', $next)
-            ->orderBy('paid_on')->orderBy('id')
-            ->get()->groupBy('transaction_id');
-
-        $rules = new PostingRules();
-        $onControl = function (?array $entry) use ($control, $sign): float {
-            $sum = 0.0;
-            foreach ($entry['lines'] ?? [] as $l) {
-                if ((int) $l['account_id'] === $control) {
-                    $sum += $sign * ((float) $l['debit'] - (float) $l['credit']);
-                }
-            }
-
-            return $sum;
-        };
-        $try = function (callable $fn) use (&$problems) {
-            try {
-                return $fn();
-            } catch (\RuntimeException $e) {
-                $problems[$e->getMessage()] = ($problems[$e->getMessage()] ?? 0) + 1;
-
-                return null;
-            }
-        };
-
-        // amount on the control account of each document, returns folded into
-        // the document they were made from
-        $owed = [];
-        $byId = $docs->keyBy('id');
-        foreach ($docs as $t) {
-            $amount = $onControl($try(fn () => $rules->forTransaction($t)));
-            foreach ($payments->get($t->id, []) as $p) {
-                $amount += $onControl($try(fn () => $rules->forPayment($p, $t)));
-            }
-            if (abs($amount) < 0.005) {
-                continue;
-            }
-            $isReturn = in_array($t->type, ['sell_return', 'purchase_return']) && $t->return_parent_id;
-            $key = $isReturn ? (int) $t->return_parent_id : (int) $t->id;
-            $owed[$key] = ($owed[$key] ?? 0.0) + $amount;
-        }
-
-        // the documents returns were made from, when they are not open themselves
-        $parents = array_diff(array_keys($owed), $byId->keys()->all());
-        if ($parents) {
-            $more = DB::table('transactions as t')->leftJoin('contacts as c', 'c.id', '=', 't.contact_id')
-                ->where('t.business_id', $bid)->whereIn('t.id', $parents)
-                ->select('t.*', DB::raw("COALESCE(NULLIF(c.supplier_business_name, ''), c.name) as aging_contact_name"))
-                ->get();
-            foreach ($more as $m) {
-                $byId[$m->id] = $m;
-            }
-        }
-
-        $journal = DB::table('transaction_mappings')->where('business_id', $bid)
-            ->whereNotIn('transaction_type', ['payment', 'account_transaction'])->whereIn('transaction_id', array_keys($owed))
-            ->where('status', 'posted')->pluck('journal_entry_id', 'transaction_id');
-
         $asOf = Carbon::parse($D);
+        $row = function (array $doc) use ($asOf) {
+            $days = (int) Carbon::parse($doc['due_date'])->diffInDays($asOf, false);
+
+            return $doc + ['days_overdue' => max(0, $days), 'bracket' => $this->findBracketIndex(max(0, $days))];
+        };
         $out = [];
-        foreach ($owed as $id => $amount) {
-            $t = $byId[$id] ?? null;
-            if (! $t) {
-                continue;
-            }
-            $due = $this->dueDate($t);
-            $days = (int) $due->diffInDays($asOf, false);
-            $out[] = [
-                'id' => (int) $t->id,
-                'type' => $t->type,
-                'number' => $t->invoice_no ?: ($t->ref_no ?: '#'.$t->id),
-                'date' => substr((string) $t->transaction_date, 0, 10),
-                'due_date' => $due->toDateString(),
-                'days_overdue' => max(0, $days),
-                'bracket' => $this->findBracketIndex(max(0, $days)),
-                'owed' => round($amount, 2),
-                'contact_id' => (int) $t->contact_id,
-                'contact_name' => $t->aging_contact_name ?: '#'.$t->contact_id,
-                'journal_entry_id' => isset($journal[$id]) ? (int) $journal[$id] : null,
-            ];
+        foreach (app(SupplierPayables::class)->openBills(null, $D) as $b) {
+            $out[] = $row([
+                'id' => (int) $b->id,
+                'type' => PostingRules::SUPPLIER_BILL,
+                'number' => $b->number ?: ($b->supplier_reference ?: '#'.$b->id),
+                'date' => substr((string) $b->bill_date, 0, 10),
+                'due_date' => substr((string) ($b->due_date ?: $b->bill_date), 0, 10),
+                'owed' => round((float) $b->owed, 2),
+                'contact_id' => (int) $b->supplier_id,
+                'contact_name' => $b->supplier_name ?: '#'.$b->supplier_id,
+                'journal_entry_id' => $b->journal_entry_id ? (int) $b->journal_entry_id : null,
+            ]);
+        }
+        foreach (self::erideStatementsOwed($D) as $s) {
+            $out[] = $row($s + ['type' => PostingRules::STATEMENT, 'contact_id' => self::ERIDE, 'contact_name' => 'E-Ride']);
         }
 
         return $out;
+    }
+
+    /** E-Ride: the contact of E-Ride's own statements in the aging (suppliers are item_suppliers ids, always positive). */
+    public const ERIDE = -1;
+
+    /**
+     * E-Ride's statements of the open books' branch that are on 401 on $D (their entry posted by then)
+     * and not paid by then: [id, number, date, due_date, owed, journal_entry_id].
+     */
+    public static function erideStatementsOwed(string $D): array
+    {
+        $bid = Ledger::businessId();
+        $agency = DB::table('ledger_businesses')->where('id', $bid)->where('owner_type', \App\Ledger\ERide\Books::AGENCY)->value('owner_id');
+        if (! $agency) {
+            return [];
+        }
+        $paid = DB::table('transaction_mappings')->where('business_id', $bid)->where('transaction_type', PostingRules::STATEMENT_PAID)
+            ->where('status', 'posted')->whereDate('transaction_date', '<=', $D)->pluck('transaction_id')->all();
+
+        return DB::table('transaction_mappings as tm')
+            ->join('bus_statements as s', 's.id', '=', 'tm.transaction_id')
+            ->where('tm.business_id', $bid)->where('tm.transaction_type', PostingRules::STATEMENT)->where('tm.status', 'posted')
+            ->whereDate('tm.transaction_date', '<=', $D)->where('s.agency_id', (string) $agency)
+            ->whereNotIn('tm.transaction_id', $paid ?: [''])
+            ->orderBy('s.month')
+            ->get(['s.id', 's.reference', 's.month', 's.due_on', 's.total', 'tm.transaction_date', 'tm.journal_entry_id'])
+            ->map(fn ($s) => [
+                'id' => (string) $s->id,
+                'number' => $s->reference ?: Carbon::parse($s->month)->translatedFormat('F Y'),
+                'date' => substr((string) $s->transaction_date, 0, 10),
+                'due_date' => substr((string) ($s->due_on ?: $s->transaction_date), 0, 10),
+                'owed' => round((float) $s->total, 2),
+                'journal_entry_id' => $s->journal_entry_id ? (int) $s->journal_entry_id : null,
+            ])->all();
     }
 
     /** A document's due date: its date plus its pay term; no term, due on its date. */
@@ -374,27 +334,46 @@ class AgingReportService
             return [];
         }
         $bid = Ledger::businessId();
+        // E-Ride: the lines carry no contact; each is given to the supplier of the bill or payment
+        // behind its entry (through its mapping row; a reversal points at the same row), or to E-Ride
+        // for its statement. Lines typed by hand keep their own contact, if any (0: none).
+        $kinds = [PostingRules::SUPPLIER_BILL, PostingRules::SUPPLIER_PAYMENT, PostingRules::STATEMENT, PostingRules::STATEMENT_PAID];
         $rows = DB::table('journal_entry_lines as l')
             ->join('journal_entries as j', 'j.id', '=', 'l.journal_entry_id')
+            ->leftJoin('transaction_mappings as tm', function ($q) use ($bid, $kinds) {
+                $q->on('tm.id', '=', 'j.reference_id')->where('tm.business_id', $bid)->whereIn('tm.transaction_type', $kinds)
+                    ->where(fn ($w) => $w->whereColumn('j.reference_type', 'tm.transaction_type')->orWhere('j.reference_type', 'transaction_mapping'));
+            })
+            ->leftJoin('supplier_bills as sb', fn ($q) => $q->where('tm.transaction_type', PostingRules::SUPPLIER_BILL)
+                ->on(DB::raw('CAST(sb.id AS CHAR)'), '=', 'tm.transaction_id'))
+            ->leftJoin('supplier_payments as sp', fn ($q) => $q->where('tm.transaction_type', PostingRules::SUPPLIER_PAYMENT)
+                ->on(DB::raw('CAST(sp.id AS CHAR)'), '=', 'tm.transaction_id'))
             ->where('l.business_id', $bid)->where('j.business_id', $bid)
             ->whereIn('l.account_id', $accounts)
             ->where('j.is_posted', 1)->whereNull('j.deleted_at')
             ->where('j.entry_date', '<=', $D)
-            ->groupBy('l.contact_id')
-            ->select('l.contact_id', DB::raw('SUM(l.debit - l.credit) as net'))
+            ->groupBy('cid')
+            ->select(DB::raw('COALESCE(sb.supplier_id, sp.supplier_id, CASE WHEN tm.transaction_type IN (\''.PostingRules::STATEMENT.'\', \''.PostingRules::STATEMENT_PAID.'\') THEN '.self::ERIDE.' END, l.contact_id, 0) as cid'),
+                DB::raw('SUM(l.debit - l.credit) as net'))
             ->get();
         $out = [];
         foreach ($rows as $r) {
-            $out[(int) $r->contact_id] = round($sign * (float) $r->net, 2);
+            $out[(int) $r->cid] = round(($out[(int) $r->cid] ?? 0) + $sign * (float) $r->net, 2);
         }
 
         return $out;
     }
 
+    /** E-Ride: the suppliers of the Income & Expense module (item_suppliers), and E-Ride itself (posinnova: POS contacts). */
     private function contactNames(array $ids): array
     {
-        return DB::table('contacts')->where('business_id', Ledger::businessId())->whereIn('id', $ids)
-            ->pluck(DB::raw("COALESCE(NULLIF(supplier_business_name, ''), name)"), 'id')->all();
+        $names = DB::table('item_suppliers')->where('business_id', Ledger::businessId())->whereIn('id', array_filter($ids, fn ($id) => $id > 0))
+            ->pluck('title', 'id')->all();
+        if (in_array(self::ERIDE, $ids, true)) {
+            $names[self::ERIDE] = 'E-Ride';
+        }
+
+        return $names;
     }
 
     /**

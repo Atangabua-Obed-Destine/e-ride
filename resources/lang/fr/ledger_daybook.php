@@ -78,6 +78,16 @@ return [
     'src_account_opening_balance' => 'Solde d\'ouverture du compte de paiement',
     'src_manual' => 'Écriture de journal',
     'src_other' => 'Autre écriture',
+    // E-Ride : les documents des livres des bus
+    'src_bus_move_counter' => 'Billets, guichet',
+    'src_bus_move_app' => 'Billets, application',
+    'src_bus_departure' => 'Départ du voyage',
+    'src_bus_statement' => 'Relevé E-Ride',
+    'src_bus_statement_paid' => 'Relevé E-Ride payé',
+    'src_income' => 'Recette',
+    'src_supplier_bill' => 'Facture fournisseur',
+    'src_supplier_payment' => 'Paiement fournisseur',
+    'src_account_withdrawal' => 'Retrait',
 
     // le récapitulatif
     'guide_columns_title' => 'Ce que signifie chaque colonne',
