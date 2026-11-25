@@ -5,8 +5,17 @@
 @push('head')
 <script>window.busTodayPage = true;</script>
 <style>
-    .t-grid { display: grid; grid-template-columns: minmax(0, 1.5fr) minmax(0, 1fr); gap: 16px; align-items: start; }
-    @media (max-width: 991px) { .t-grid { grid-template-columns: minmax(0, 1fr); } }
+    /* Phones: one column (requests, to-dos, buses). Tablets: requests and to-dos beside the buses.
+       Wide screens: the three side by side, each scrolling on its own, so all of it is in view. */
+    .t-grid { display: grid; grid-template-columns: minmax(0, 1.5fr) minmax(0, 1fr); grid-template-areas: "req bus" "todo bus"; gap: 0 16px; align-items: start; }
+    .t-req { grid-area: req; } .t-todo { grid-area: todo; } .t-bus { grid-area: bus; }
+    @media (max-width: 991px) { .t-grid { grid-template-columns: minmax(0, 1fr); grid-template-areas: "req" "todo" "bus"; } }
+    @media (min-width: 1200px) {
+        .t-grid { grid-template-columns: minmax(0, 1.25fr) minmax(0, 1fr) minmax(0, 1fr); grid-template-areas: "req todo bus"; }
+        .t-grid > .t-col { max-height: var(--t-h, none); overflow-y: auto; scrollbar-width: thin; }
+        .t-grid > .t-col.t-req { padding-right: 2px; }
+        .t-alert { padding: 8px 12px; margin-bottom: 10px; }
+    }
     .req { border: 2px solid #fde2e2; border-radius: 16px; background: #fff; padding: 14px; display: flex; gap: 14px; animation: pop .35s ease; }
     .req.is-urgent { border-color: var(--red); }
     @keyframes pop { from { transform: translateY(-6px); opacity: 0; } to { transform: none; opacity: 1; } }
@@ -52,26 +61,26 @@
 </div>
 
 @foreach($suggestions as $s)
-    <div class="alert alert-warning d-flex flex-wrap align-items-center gap-2">
+    <div class="alert alert-warning t-alert d-flex flex-wrap align-items-center gap-2">
         <div class="flex-grow-1"><b>{{ translate('E-Ride reports') }}: {{ $s->title }}</b> · {{ $s->starts_at->translatedFormat('D j M H:i') }} - {{ $s->ends_at->translatedFormat('D j M H:i') }}
             <div class="small">{{ translate('Your departures inside may not be able to leave. Handle them in one step.') }}</div></div>
         @if($busStaff->role === 'manager')<a class="btn btn-dark btn-sm" href="{{ route('bus-partner.closures', ['area' => $s->id]) }}#declare">{{ translate('Handle it') }}</a>@endif
     </div>
 @endforeach
 @foreach($atRisk as $c)
-    <div class="alert alert-warning d-flex flex-wrap align-items-center gap-2">
+    <div class="alert alert-warning t-alert d-flex flex-wrap align-items-center gap-2">
         <div class="flex-grow-1"><b>{{ \Modules\BusManagement\Service\ClosureService::kindLabel($c->kind) }}{{ $c->note ? ': ' . $c->note : '' }}</b>
             <div class="small">{{ translate(key: 'Departures at risk. Decide by {time}, or passengers are moved.', replace: ['time' => $c->decide_by->translatedFormat('D j M H:i')]) }}</div></div>
         @if($busStaff->role === 'manager')<a class="btn btn-dark btn-sm" href="{{ route('bus-partner.closures.show', $c->id) }}">{{ translate('Decide') }}</a>@endif
     </div>
 @endforeach
 
-<div class="t-grid">
-    <div>
-        <section class="mb-3" aria-labelledby="reqTitle">
-            <div class="d-flex align-items-center gap-2 mb-2"><h2 class="b-h" id="reqTitle">{{ translate('Seat requests to answer') }}</h2><span class="b-tag bad" id="reqCount" style="display:none"></span></div>
-            <div id="requests" class="d-flex flex-column gap-2" aria-live="polite"></div>
-        </section>
+<div class="t-grid" id="tGrid">
+    <section class="t-col t-req mb-3" aria-labelledby="reqTitle">
+        <div class="d-flex align-items-center gap-2 mb-2"><h2 class="b-h" id="reqTitle">{{ translate('Seat requests to answer') }}</h2><span class="b-tag bad" id="reqCount" style="display:none"></span></div>
+        <div id="requests" class="d-flex flex-column gap-2" aria-live="polite"></div>
+    </section>
+    <div class="t-col t-todo">
         <section class="b-card p-3 mb-3" aria-labelledby="payTitle">
             <h2 class="b-h mb-1" id="payTitle">{{ translate('Accepted, waiting for payment') }}</h2>
             <div class="b-hint mb-2">{{ translate('Seats stay held until the passenger pays or the time runs out.') }}</div>
@@ -85,7 +94,7 @@
         </section>
         @endif
     </div>
-    <section class="b-card p-3" aria-labelledby="depTitle">
+    <section class="t-col t-bus b-card p-3 mb-3" aria-labelledby="depTitle">
         <h2 class="b-h mb-2" id="depTitle">{{ translate('Buses today') }}</h2>
         <div class="sp-legend mb-2"><span><i style="background:#9ca3af"></i>{{ translate('On board') }}</span><span><i style="background:#2563eb"></i>{{ translate('App') }}</span><span><i style="background:#1d2d2b"></i>{{ translate('Counter') }}</span><span><i style="background:#f59e0b"></i>{{ translate('Held') }}</span><span><i style="background:#e9eded"></i>{{ translate('Free') }}</span></div>
         <div id="departures"></div>
@@ -169,10 +178,12 @@
         soundBtn.querySelector('span').textContent = soundOn ? T.soundOn : T.soundOff;
     }
     function chime() {
+        if (!document.getElementById('requests').isConnected) return; // a screen the workspace let go
         if (navigator.vibrate) navigator.vibrate([200, 100, 200]);
         if (!soundOn) return;
         try {
-            audio = audio || new (window.AudioContext || window.webkitAudioContext)();
+            // Made in the workspace window: it rings with Today in a tab behind another screen.
+            audio = busDesk.audio();
             [880, 1320].forEach(function (f, i) {
                 var o = audio.createOscillator(), g = audio.createGain(), t = audio.currentTime + i * 0.18;
                 o.frequency.value = f; o.connect(g); g.connect(audio.destination);
@@ -257,16 +268,31 @@
         }).then(function (d) {
             offset = new Date(d.now).getTime() - Date.now();
             var ids = d.requests.map(function (b) { return b.id; });
-            if (known && ids.some(function (id) { return known.indexOf(id) < 0; })) { chime(); busToast(T.newReq); }
+            if (known && ids.some(function (id) { return known.indexOf(id) < 0; })) { chime(); busDesk.toast(T.newReq); }
             known = ids; data = d;
             if (window.busSetBadge) busSetBadge(d.count);
+            // On a wide screen, the count on Today's tab while another screen is in front.
+            var deskTop = busDesk.top();
+            if (deskTop) { try { deskTop.PI_DESK.badge(window, d.count); } catch (e) {} }
             if (!Object.keys(busy).length) renderAll();
         }).catch(function () {});
     }
     (function poll() { load().finally(function () { setTimeout(poll, 8000); }); })();
 
+    // Wide screens: the three columns end at the bottom of the window (each scrolls on its own).
+    var grid = document.getElementById('tGrid');
+    function fitGrid() {
+        if (window.innerWidth < 1200) { grid.style.removeProperty('--t-h'); return; }
+        var top = grid.getBoundingClientRect().top + window.scrollY;
+        var below = parseFloat(getComputedStyle(document.body).paddingBottom) || 0;
+        grid.style.setProperty('--t-h', Math.max(320, Math.floor(window.innerHeight - top - below - 12)) + 'px');
+    }
+    fitGrid();
+    window.addEventListener('resize', fitGrid);
+
     // Countdowns, every second, without rebuilding the cards.
-    setInterval(function () {
+    var ticker = setInterval(function () {
+        fitGrid();
         document.getElementById('clock').textContent = new Date(now()).toLocaleString([], {weekday: 'long', day: 'numeric', month: 'long', hour: '2-digit', minute: '2-digit'});
         document.querySelectorAll('.req').forEach(function (el) {
             var s = left(el.dataset.deadline), c = 2 * Math.PI * 27;
@@ -282,6 +308,8 @@
             if (s === 0) document.getElementById('cfGo').disabled = true;
         }
     }, 1000);
+    // The workspace let this screen go (it opened again in a tab): stop here.
+    window.addEventListener('pi-desk-freed', function () { clearInterval(ticker); });
 
     // Accept: the tickets as they will be, then (with a paper copy) the pencil tick, then Accept.
     var cfModalEl = document.getElementById('cfModal'), cfModal = new bootstrap.Modal(cfModalEl), cfBooking = null, cfPaper = document.getElementById('cfPaper');

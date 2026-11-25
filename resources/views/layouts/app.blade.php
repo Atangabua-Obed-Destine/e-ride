@@ -5,6 +5,13 @@
     the portal header (whose books are open, back to the portal), paxhitestbed's accounting
     menu in its order (Budget, Accounting, Accounting reports), and ledger-compat.css/js,
     which let the Bootstrap 3 markup of the screens run on E-Ride's Bootstrap 5.
+
+    On a wide screen it is the same desktop workspace as the portals (posinnova's,
+    layouts/partials/desktop.blade.php): one shell with the portal, whose menus are the
+    accounting groups and then the portal's own (Modules/BusManagement/Lib/PortalMenu.php),
+    so "Today" or "Departures" open as tabs from here; the accounting menu is the icon rail;
+    the Home tab is the accounting home. Opened as a tab of a portal, it keeps its own
+    accounting menu beside the screen (the portal's menus are around it).
 --}}
 @php
     use App\Ledger\Permissions;
@@ -106,7 +113,47 @@
             $menu[] = [$title, $allowed];
         }
     }
-    $portalHome = $books ? ($books['portal'] === 'bus-company' ? route('bus-company.overview') : route('bus-partner.departures')) : url('/');
+    // The portal's menus, for the role these books give (the manager or director owns them).
+    $portalMenus = [];
+    if ($books && $books['portal'] === 'bus-company') {
+        $portalMenus = \Modules\BusManagement\Lib\PortalMenu::company($books['role'] === 'owner' ? \Modules\BusManagement\Entities\BusCompanyStaff::DIRECTOR : \Modules\BusManagement\Entities\BusCompanyStaff::ACCOUNTANT);
+        $portalHome = route('bus-company.overview');
+    } elseif ($books) {
+        $branchRole = $books['role'] === 'owner' ? \Modules\BusManagement\Entities\BusStaff::MANAGER : \Modules\BusManagement\Entities\BusStaff::ACCOUNTANT;
+        $portalMenus = \Modules\BusManagement\Lib\PortalMenu::branch($books['owner'], $branchRole);
+        $portalHome = route(\Modules\BusManagement\Lib\PortalMenu::branchHome($branchRole));
+    } else {
+        $portalHome = url('/');
+    }
+    // The desktop workspace (layouts/partials/desktop.blade.php): the accounting groups fold on
+    // the rail (one icon each) and are a menu each; then the portal's menus, without Accounting.
+    $groupIcons = ['bi-person-badge', 'bi-arrow-left-right', 'bi-pie-chart', 'bi-bank', 'bi-journal-text', 'bi-bar-chart-line'];
+    $side = [];
+    foreach ($menu as $i => [$title, $items]) {
+        $side[] = ['heading' => $title, 'quiet' => true, 'drop' => [$groupIcons[$i] ?? 'bi-folder', $title],
+            'links' => array_map(fn ($it) => [$it[0], null, $it[1], $it[2]], $items)];
+    }
+    foreach ($portalMenus as [$key, $label, $links]) {
+        $links = array_values(array_filter($links, fn ($l) => !str_ends_with($l[0], '.accounting')));
+        if ($links) {
+            $side[] = ['heading' => $label, 'class' => 'pi-portal', 'links' => array_map(fn ($l) => [route($l[0]), $l[1], $l[2], false, null], $links)];
+        }
+    }
+    $ownerId = $books ? (string) $books['owner']->id : '';
+    // The Home tab: where the accounting opens (ledger.home sends to the chart of accounts, as on posinnova).
+    $ledgerHome = Route::has('ledger.chart-of-accounts.index') ? route('ledger.chart-of-accounts.index') : route('ledger.home');
+    $deskCfg = [
+        'home' => $ledgerHome,
+        'brand' => $books['name'] ?? 'E-Ride',
+        'who' => auth()->id() . ':' . $ownerId,
+        'suffix' => ' - ' . ($books['name'] ?? 'E-Ride'),
+        'place' => [($books['portal'] ?? '') === 'bus-company' ? 'bi-building' : 'bi-shop', $books['name'] ?? ''],
+        'user' => trim((auth()->user()->first_name ?? '') . ' ' . (auth()->user()->last_name ?? '')) . ' · ' . (($books['role'] ?? '') === 'owner' ? translate(($books['portal'] ?? '') === 'bus-company' ? 'Director' : 'Manager') : translate('Accountant')),
+        // A portal screen opened here keeps its own title (" · Agency" or " · Company" taken off).
+        'strip' => $books ? [' · ' . ($books['portal'] === 'bus-company' ? $books['owner']->name : $books['owner']->displayName())] : [],
+        'first' => [$ledgerHome, 'bi-book', $books['name'] ?? '', request()->routeIs('ledger.home', 'ledger.chart-of-accounts.index')],
+        'side' => $side,
+    ];
 @endphp
 <!DOCTYPE html>
 <html lang="{{ str_replace('_', '-', app()->getLocale()) }}">
@@ -119,40 +166,39 @@
     <title>@yield('title') - {{ $books['name'] ?? 'E-Ride' }}</title>
     <link rel="icon" href="{{ dynamicAsset('public/assets/admin-module/img/favicon.png') }}">
     <link rel="stylesheet" href="{{ dynamicAsset('public/assets/admin-module/css/bootstrap.min.css') }}">
+    <link rel="stylesheet" href="{{ dynamicAsset('public/assets/admin-module/css/bootstrap-icons.min.css') }}">
     <link rel="stylesheet" href="{{ dynamicAsset('public/assets/ledger/fontawesome/css/fontawesome-all.min.css') }}">
     <link rel="stylesheet" href="{{ dynamicAsset('public/assets/admin-module/plugins/select2/select2.min.css') }}">
     <link rel="stylesheet" href="{{ dynamicAsset('public/assets/ledger/toastr.min.css') }}">
     <link rel="stylesheet" href="{{ dynamicAsset('public/assets/ledger/ledger-compat.css') }}?v=2">
+    @include('layouts.partials.desktop', ['part' => 'head'])
     @yield('css')
 </head>
 <body class="ledger-body">
-<header class="ledger-top">
-    <button type="button" class="ledger-menu-btn" aria-controls="ledger-nav" aria-expanded="false" onclick="document.body.classList.toggle('ledger-nav-open'); this.setAttribute('aria-expanded', document.body.classList.contains('ledger-nav-open'))">
-        <i class="fa fa-bars" aria-hidden="true"></i><span class="visually-hidden">{{ __('ledger.menu_accounting') }}</span>
-    </button>
-    <div class="ledger-who">
-        <strong>{{ __('ledger.menu_accounting') }}</strong>
-        <span>{{ $books['name'] ?? '' }}</span>
-    </div>
-    <a class="ledger-back" href="{{ $portalHome }}"><i class="fa fa-arrow-left" aria-hidden="true"></i> {{ translate('Back to the portal') }}</a>
-</header>
-<div class="ledger-shell">
-    <nav id="ledger-nav" class="ledger-nav" aria-label="{{ __('ledger.menu_accounting') }}">
-        <a href="{{ route('ledger.home') }}" class="ledger-nav-home {{ request()->routeIs('ledger.home') ? 'active' : '' }}"><i class="fa fa-book" aria-hidden="true"></i> {{ $books['name'] ?? '' }}</a>
-        @foreach($menu as [$title, $items])
-            <div class="ledger-nav-group">
-                <div class="ledger-nav-title">{{ $title }}</div>
-                @foreach($items as [$href, $label, $active])
-                    <a href="{{ $href }}" class="{{ $active ? 'active' : '' }}" @if($active) aria-current="page" @endif>{{ $label }}</a>
-                @endforeach
+@include('layouts.partials.desktop', ['part' => 'titlebar', 'desk' => $deskCfg])
+<div class="ledger-shell thetop">
+    @include('layouts.partials.desktop', ['part' => 'side', 'desk' => $deskCfg, 'piClass' => 'ledger-nav', 'piId' => 'ledger-nav', 'piLabel' => __('ledger.menu_accounting')])
+    <main class="ledger-col">
+        <header class="ledger-top" id="pi-header">
+            @include('layouts.partials.desktop', ['part' => 'toolbar'])
+            <button type="button" class="ledger-menu-btn" aria-controls="ledger-nav" aria-expanded="false" onclick="document.body.classList.toggle('ledger-nav-open'); this.setAttribute('aria-expanded', document.body.classList.contains('ledger-nav-open'))">
+                <i class="fa fa-bars" aria-hidden="true"></i><span class="visually-hidden">{{ __('ledger.menu_accounting') }}</span>
+            </button>
+            @include('layouts.partials.desktop', ['part' => 'go'])
+            <div class="ledger-who">
+                <strong>{{ __('ledger.menu_accounting') }}</strong>
+                <span>{{ $books['name'] ?? '' }}</span>
             </div>
-        @endforeach
-    </nav>
-    <main class="ledger-main">
-        @if (session('status'))
-            <input type="hidden" id="status_span" data-status="{{ session('status.success') }}" data-msg="{{ session('status.msg') }}">
-        @endif
-        @yield('content')
+            {{-- The whole window goes back to the portal (data-pi-window), where Today is the Home tab. --}}
+            <a class="ledger-back" href="{{ $portalHome }}" data-pi-window><i class="fa fa-arrow-left" aria-hidden="true"></i> {{ translate('Back to the portal') }}</a>
+        </header>
+        @include('layouts.partials.desktop', ['part' => 'tabs'])
+        <div class="ledger-main" id="scrollable-container">
+            @if (session('status'))
+                <input type="hidden" id="status_span" data-status="{{ session('status.success') }}" data-msg="{{ session('status.msg') }}">
+            @endif
+            @yield('content')
+        </div>
     </main>
 </div>
 <script src="{{ dynamicAsset('public/assets/admin-module/js/jquery-3.6.0.min.js') }}"></script>
@@ -161,5 +207,6 @@
 <script src="{{ dynamicAsset('public/assets/ledger/toastr.min.js') }}"></script>
 <script src="{{ dynamicAsset('public/assets/ledger/ledger-compat.js') }}?v=1"></script>
 @yield('javascript')
+@include('layouts.partials.desktop', ['part' => 'status', 'desk' => $deskCfg])
 </body>
 </html>

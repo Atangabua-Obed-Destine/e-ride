@@ -1,17 +1,21 @@
 @php
     use Modules\BusManagement\Entities\BusCompanyStaff;
-    $isDirector = $busCompanyStaff->isDirector();
-    $nav = array_values(array_filter([
-        ['bus-company.overview', 'bi-speedometer2', translate('Overview')],
-        ['bus-company.reports', 'bi-graph-up', translate('Reports')],
-        ['bus-company.branches', 'bi-diagram-3', translate('Branches')],
-        ['bus-company.buses', 'bi-bus-front', translate('Buses')],
-        ['bus-company.staff', 'bi-people', translate('Staff')],
-        ['bus-company.rules', 'bi-card-checklist', translate('Booking rules')],
-        $isDirector || $busCompanyStaff->role === BusCompanyStaff::ACCOUNTANT ? ['bus-company.money', 'bi-wallet2', translate('Money')] : null,
-        // Accounting: the accounting module of all our systems, opened on the head office's own books.
-        $isDirector || $busCompanyStaff->role === BusCompanyStaff::ACCOUNTANT ? ['bus-company.accounting', 'bi-journal-text', translate('Accounting')] : null,
-    ]));
+    // The menus, grouped (Watch, Run, Money; Modules/BusManagement/Lib/PortalMenu.php): the phone's
+    // row of links and, on a wide screen, the menus, icon rail and "Go to…" of the desktop workspace
+    // (resources/views/layouts/partials/desktop.blade.php, posinnova's).
+    $menus = \Modules\BusManagement\Lib\PortalMenu::company($busCompanyStaff->role);
+    $nav = \Modules\BusManagement\Lib\PortalMenu::flat($menus);
+    $deskCfg = [
+        'home' => route('bus-company.overview'),
+        'brand' => $busCompany->name,
+        'who' => auth()->id() . ':' . $busCompany->id,
+        'suffix' => ' · ' . $busCompany->name,
+        'place' => ['bi-building', $busCompany->name . ' · ' . translate('Head office')],
+        'user' => trim(auth()->user()->first_name . ' ' . auth()->user()->last_name) . ' · ' . BusCompanyStaff::roleLabel($busCompanyStaff->role),
+        // Every accounting screen belongs to the one "Accounting" tab.
+        'alias' => ['partner/accounting' => 'partner/bus-company/accounting'],
+        'side' => array_map(fn ($m) => ['heading' => $m[1], 'links' => array_map(fn ($l) => [route($l[0]), $l[1], $l[2], request()->routeIs($l[0] . '*'), null], $m[2])], $menus),
+    ];
 @endphp
 <!DOCTYPE html>
 <html lang="{{ str_replace('_', '-', app()->getLocale()) }}">
@@ -39,16 +43,25 @@
         .ho-table td.n, .ho-table th.n { text-align: right; white-space: nowrap; }
         .ho-scroll { overflow-x: auto; }
     </style>
+    @include('layouts.partials.desktop', ['part' => 'head'])
+    {{-- busToast, busPost, busDesk: in the head, for the scripts of the page itself. --}}
+    @include('busmanagement::partner._portal_js')
     @stack('head')
 </head>
 <body>
-<header class="b-top">
+@include('layouts.partials.desktop', ['part' => 'titlebar', 'desk' => $deskCfg])
+<div class="thetop">
+@include('layouts.partials.desktop', ['part' => 'side', 'desk' => $deskCfg, 'piClass' => 'pi-desk-only', 'piLabel' => translate('Head office menu')])
+<main>
+<header class="b-top" id="pi-header">
     <div class="b-top__in">
         <div class="b-bar">
+            @include('layouts.partials.desktop', ['part' => 'toolbar'])
             <div class="b-logo">@if($busCompany->logo)<img src="{{ $busCompany->logoUrl() }}" alt="">@else{{ \Illuminate\Support\Str::upper(\Illuminate\Support\Str::substr(preg_replace('/[^A-Za-z]/', '', $busCompany->name), 0, 2)) }}@endif</div>
             <div class="b-name text-truncate">{{ $busCompany->name }}<small>{{ translate('Head office') }} · {{ translate(key: '{n} branch(es)', replace: ['n' => $busBranches->count()]) }}</small></div>
-            <span class="d-none d-md-inline small text-white-50 ms-auto">{{ auth()->user()->first_name }} · {{ BusCompanyStaff::roleLabel($busCompanyStaff->role) }}</span>
-            <form action="{{ route('bus-company.logout') }}" method="POST" class="m-0 ms-auto ms-md-0">
+            <span class="d-none d-md-inline small text-white-50 ms-md-auto">{{ auth()->user()->first_name }} · {{ BusCompanyStaff::roleLabel($busCompanyStaff->role) }}</span>
+            @include('layouts.partials.desktop', ['part' => 'go', 'piClass' => 'text-white-50 ms-auto ms-md-0'])
+            <form action="{{ route('bus-company.logout') }}" method="POST" class="m-0">
                 @csrf
                 <button type="submit" class="btn btn-sm text-white-50 px-1" title="{{ translate('Sign_out') }}" aria-label="{{ translate('Sign_out') }}"><i class="bi bi-box-arrow-right fs-5"></i></button>
             </form>
@@ -60,17 +73,19 @@
         </nav>
     </div>
 </header>
+@include('layouts.partials.desktop', ['part' => 'tabs'])
 
-<main class="b-main">
+<div class="b-main" id="scrollable-container">
     @if(session('success'))<div class="alert alert-success">{{ session('success') }}</div>@endif
     @if ($errors->any())
         <div class="alert alert-danger"><ul class="mb-0 ps-3">@foreach ($errors->all() as $error)<li>{{ $error }}</li>@endforeach</ul></div>
     @endif
     @yield('content')
+</div>
 </main>
+</div>
 
 <script src="{{ dynamicAsset('public/assets/admin-module/js/bootstrap.bundle.min.js') }}"></script>
-@include('busmanagement::partner._portal_js')
 <script>
     window.hoMoney = function (n) { return Math.round(n || 0).toLocaleString() + ' FCFA'; };
 </script>
@@ -78,5 +93,6 @@
 @if (session('toast'))
     <script>busToast(@json(session('toast')));</script>
 @endif
+@include('layouts.partials.desktop', ['part' => 'status', 'desk' => $deskCfg])
 </body>
 </html>

@@ -17,6 +17,20 @@
     .back-panel { border: 2px solid #f59e0b; border-radius: 14px; background: #fffaf0; padding: 12px 14px; margin-bottom: 16px; }
     .back-panel ol { margin: 6px 0 10px; padding-left: 20px; }
     .back-panel li { margin-bottom: 6px; }
+    /* A wide screen: one compact strip each, so the screen below stays in view. */
+    @media (min-width: 1024px) {
+        .pa { display: flex; align-items: stretch; margin-bottom: 12px; }
+        .pa-head { flex: 0 0 230px; flex-direction: column; align-items: flex-start; justify-content: center; padding: 8px 12px; font-size: 14px; }
+        #paList { flex: 1; min-width: 0; display: flex; flex-wrap: wrap; align-content: flex-start; max-height: 104px; overflow-y: auto; }
+        .pa-row { flex: 1 1 360px; min-width: 0; padding: 6px 12px; border-top: 0; border-bottom: 1px solid var(--line); border-inline-start: 1px solid var(--line); }
+        .pa-row .b-hint { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+        .pa-act { font-size: 14px; }
+        .pause-bar { padding: 6px 12px; margin-bottom: 12px; }
+        .back-panel { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 16px; padding: 8px 12px; margin-bottom: 12px; }
+        .back-panel ol { display: flex; flex-wrap: wrap; gap: 4px 18px; margin: 0; padding: 0; list-style: none; counter-reset: bp; flex: 1 1 auto; }
+        .back-panel li { margin: 0; counter-increment: bp; }
+        .back-panel li::before { content: counter(bp) ". "; font-weight: 800; }
+    }
 </style>
 <div id="pauseBar" class="pause-bar" hidden role="status">
     <i class="bi bi-pause-circle-fill fs-4" aria-hidden="true"></i>
@@ -54,15 +68,13 @@
         resume: @json(route('bus-partner.paper.resume'))};
     var esc = function (s) { var d = document.createElement('div'); d.textContent = s == null ? '' : String(s); return d.innerHTML; };
     var box = document.getElementById('paperAlarm'), list = document.getElementById('paList'), soundBtn = document.getElementById('paSound');
-    var state = null, known = {}, failedSince = null, busyKey = null, lastAlarm = 0, baseTitle = document.title, flash = false;
+    var state = null, known = {}, failedSince = null, busyKey = null, lastAlarm = 0, flash = false;
 
     // Sound: browsers only allow it after a tap on the page, so the first tap anywhere unlocks it.
     var ctx = null;
     function unlock() {
-        try {
-            ctx = ctx || new (window.AudioContext || window.webkitAudioContext)();
-            if (ctx.state === 'suspended') ctx.resume();
-        } catch (e) {}
+        // One sound for the whole window, even with this screen in several tabs (busDesk, _portal_js).
+        ctx = busDesk.audio();
         paintSound();
     }
     function paintSound() { soundBtn.hidden = !!(ctx && ctx.state === 'running'); }
@@ -73,6 +85,8 @@
     // Three loud beeps, repeated while something is left to do.
     function alarm(force) {
         if (!force && Date.now() - lastAlarm < 15000) return;
+        // On a wide screen every tab has this alarm: only the one on screen sounds (or Home's).
+        if (!busDesk.maySound(box)) return;
         lastAlarm = Date.now();
         if (navigator.vibrate) navigator.vibrate([400, 150, 400, 150, 400]);
         if (!ctx || ctx.state !== 'running') return;
@@ -89,8 +103,9 @@
     function render() {
         var items = state.todo, checks = state.checks, n = items.length + checks.length;
         document.querySelectorAll('[data-paper-badge]').forEach(function (b) { b.textContent = n; b.style.display = n > 0 ? 'inline-flex' : 'none'; });
+        document.querySelectorAll('#side-bar [data-badge="paper"]').forEach(function (a) { a.setAttribute('data-count', n > 0 ? n : ''); });
         box.hidden = !n;
-        if (!n) { document.title = baseTitle; return; }
+        if (!n) { document.title = document.title.replace(/^✏️ /, ''); return; }
         document.getElementById('paTitle').textContent = T.title.replace('{n}', n);
         list.innerHTML = items.map(function (i) {
             var er = i.action === 'erase';
@@ -155,13 +170,17 @@
             if (d.todo.length || d.checks.length) alarm(fresh);
         }).catch(function () { failedSince = failedSince || Date.now(); });
     }
-    (function poll() { load().finally(function () { setTimeout(poll, 15000); }); })();
-    setInterval(function () {
+    // In a tab behind another screen this copy waits (Home's keeps watching); it asks again when it comes on screen.
+    function wanted() { var t = busDesk.top(); return !t || t === window || busDesk.onScreen() === document || busDesk.isHome(); }
+    (function poll() { (state === null || wanted() ? load() : Promise.resolve()).finally(function () { setTimeout(poll, 15000); }); })();
+    window.addEventListener('focus', function () { if (state && wanted()) load(); });
+    var flasher = setInterval(function () {
         if (!state || !state.on || !(state.todo.length || state.checks.length)) return;
         flash = !flash;
-        document.title = (flash ? '✏️ ' : '') + baseTitle;
+        document.title = (flash ? '✏️ ' : '') + document.title.replace(/^✏️ /, '');
         alarm(false);
     }, 1000);
+    window.addEventListener('pi-desk-freed', function () { clearInterval(flasher); });
 
     list.addEventListener('click', function (e) {
         var b = e.target.closest('[data-tick]');

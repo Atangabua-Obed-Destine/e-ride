@@ -4,23 +4,23 @@
     $role = $busStaff->role;
     // Counter screens: the manager and counter agents (not boarding agents, not the accountant).
     $desk = in_array($role, [BusStaff::MANAGER, BusStaff::COUNTER], true);
-    $paperOn = $desk && Route::has('bus-partner.paper') && \Modules\BusManagement\Service\PaperService::on($busAgency);
-    $nav = array_values(array_filter([
-        Route::has('bus-partner.today') && $desk ? ['bus-partner.today', 'bi-bell', translate('Today')] : null,
-        Route::has('bus-partner.sell') && $desk ? ['bus-partner.sell', 'bi-ticket-perforated', translate('Quick sell')] : null,
-        Route::has('bus-partner.collect') && $desk && \Modules\BusManagement\Lib\BusSettings::rules($busAgency->rules)['tickets'] === 'collect'
-            ? ['bus-partner.collect', 'bi-printer', translate('Collect')] : null,
-        $paperOn ? ['bus-partner.paper', 'bi-journal-check', translate('Paper sheets')] : null,
-        Route::has('bus-partner.boarding') && $role !== BusStaff::ACCOUNTANT ? ['bus-partner.boarding', 'bi-qr-code-scan', translate('Boarding')] : null,
-        ['bus-partner.departures', 'bi-calendar-week', translate('Departures')],
-        $role === BusStaff::MANAGER ? ['bus-partner.destinations', 'bi-signpost-split', translate('Destinations')] : null,
-        $role === BusStaff::MANAGER ? ['bus-partner.fleet', 'bi-bus-front', translate('Fleet')] : null,
-        $role === BusStaff::MANAGER ? ['bus-partner.payments', 'bi-wallet2', translate('Payments')] : null,
-        // Accounting: the accounting module of all our systems (/partner/accounting), opened on this branch's books.
-        in_array($role, [BusStaff::MANAGER, BusStaff::ACCOUNTANT], true) && Route::has('bus-partner.accounting') ? ['bus-partner.accounting', 'bi-journal-text', translate('Accounting')] : null,
-        $role === BusStaff::MANAGER ? ['bus-partner.staff', 'bi-people', translate('Staff')] : null,
-        $desk ? ['bus-partner.share', 'bi-share', translate('Share')] : null,
-    ]));
+    // The menus, grouped (Counter, Trips, Money, Team; Modules/BusManagement/Lib/PortalMenu.php): the
+    // phone's row of links and, on a wide screen, the menus, icon rail and "Go to…" of the desktop
+    // workspace (resources/views/layouts/partials/desktop.blade.php, posinnova's).
+    $menus = \Modules\BusManagement\Lib\PortalMenu::branch($busAgency, $role);
+    $nav = \Modules\BusManagement\Lib\PortalMenu::flat($menus);
+    $badgeOf = ['bus-partner.today' => 'requests', 'bus-partner.paper' => 'paper'];
+    $deskCfg = [
+        'home' => route(\Modules\BusManagement\Lib\PortalMenu::branchHome($role)),
+        'brand' => $busAgency->displayName(),
+        'who' => auth()->id() . ':' . $busAgency->id,
+        'suffix' => ' · ' . $busAgency->displayName(),
+        'place' => ['bi-shop', $busAgency->displayName() . ' · ' . $busAgency->origin_city],
+        'user' => trim(auth()->user()->first_name . ' ' . auth()->user()->last_name) . ' · ' . translate(ucfirst($busStaff->role)),
+        // Every accounting screen belongs to the one "Accounting" tab.
+        'alias' => ['partner/accounting' => 'partner/bus-agency/accounting'],
+        'side' => array_map(fn ($m) => ['heading' => $m[1], 'links' => array_map(fn ($l) => [route($l[0]), $l[1], $l[2], request()->routeIs($l[0] . '*'), $badgeOf[$l[0]] ?? null], $m[2])], $menus),
+    ];
     $statusLabel = match (true) {
         $busAgency->status === BusAgency::LIVE && $busAgency->online_paused_at !== null => [translate('App sales paused'), 'is-paused'],
         default => match ($busAgency->status) {
@@ -43,15 +43,24 @@
     <link rel="stylesheet" href="{{ dynamicAsset('public/assets/admin-module/css/bootstrap.min.css') }}">
     <link rel="stylesheet" href="{{ dynamicAsset('public/assets/admin-module/css/bootstrap-icons.min.css') }}">
     @include('busmanagement::partner._portal_style')
+    @include('layouts.partials.desktop', ['part' => 'head'])
+    {{-- busToast, busPost, busDesk: in the head, for the scripts of the page itself. --}}
+    @include('busmanagement::partner._portal_js')
     @stack('head')
 </head>
 <body>
-<header class="b-top">
+@include('layouts.partials.desktop', ['part' => 'titlebar', 'desk' => $deskCfg])
+<div class="thetop">
+@include('layouts.partials.desktop', ['part' => 'side', 'desk' => $deskCfg, 'piClass' => 'pi-desk-only', 'piLabel' => translate('Partner_menu')])
+<main>
+<header class="b-top" id="pi-header">
     <div class="b-top__in">
         <div class="b-bar">
+            @include('layouts.partials.desktop', ['part' => 'toolbar'])
             <div class="b-logo">@if($busAgency->logo)<img src="{{ dynamicStorage('storage/app/public/bus/logo/' . $busAgency->logo) }}" alt="">@else{{ \Illuminate\Support\Str::upper(\Illuminate\Support\Str::substr(preg_replace('/[^A-Za-z]/', '', $busAgency->name), 0, 2)) }}@endif</div>
             <div class="b-name text-truncate">{{ $busAgency->displayName() }}<small>{{ translate('Partner portal') }} · {{ $busAgency->origin_city }}</small></div>
             <span class="b-pill {{ $statusLabel[1] }} ms-auto">{{ $statusLabel[0] }}</span>
+            @include('layouts.partials.desktop', ['part' => 'go', 'piClass' => 'text-white-50'])
             <span class="d-none d-md-inline small text-white-50">{{ auth()->user()->first_name }} · {{ translate(ucfirst($busStaff->role)) }}</span>
             <form action="{{ route('bus-partner.logout') }}" method="POST" class="m-0">
                 @csrf
@@ -65,8 +74,9 @@
         </nav>
     </div>
 </header>
+@include('layouts.partials.desktop', ['part' => 'tabs'])
 
-<main class="b-main">
+<div class="b-main" id="scrollable-container">
     @if($busAgency->status === BusAgency::PAUSED)
         <div class="alert alert-danger">{{ translate('Passengers cannot book you in the E-Ride app right now. Your counter, boarding and the tickets already sold keep working.') }}
             @if($busAgency->pause_note)<b>{{ $busAgency->pause_note }}</b>@endif</div>
@@ -81,19 +91,22 @@
         @include('busmanagement::partner._paper_alarm')
     @endif
     @yield('content')
+</div>
 </main>
+</div>
 
 <script src="{{ dynamicAsset('public/assets/admin-module/js/bootstrap.bundle.min.js') }}"></script>
-@include('busmanagement::partner._portal_js')
 @include('busmanagement::partner._seatplan_js')
 @if(Route::has('bus-partner.today') && $desk)
 <script>
     // The menu badge: seat requests waiting for an answer (Today refreshes it faster itself).
     window.busSetBadge = function (n) {
         document.querySelectorAll('[data-requests-badge]').forEach(function (b) { b.textContent = n; b.style.display = n > 0 ? 'inline-flex' : 'none'; });
+        document.querySelectorAll('#side-bar [data-badge="requests"]').forEach(function (a) { a.setAttribute('data-count', n > 0 ? n : ''); });
         document.title = (n > 0 ? '(' + n + ') ' : '') + document.title.replace(/^\(\d+\) /, '');
     };
-    if (!window.busTodayPage) {
+    // Not inside a workspace tab: the window around it counts them already.
+    if (!window.busTodayPage && !document.documentElement.classList.contains('pi-framed')) {
         (function poll() {
             fetch(@json(route('bus-partner.today.feed', ['count' => 1])), {headers: {'Accept': 'application/json'}})
                 .then(function (r) { return r.ok ? r.json() : null; }).then(function (d) { if (d) busSetBadge(d.count); }).catch(function () {})
@@ -106,5 +119,6 @@
 @if (session('toast'))
     <script>busToast(@json(session('toast')));</script>
 @endif
+@include('layouts.partials.desktop', ['part' => 'status', 'desk' => $deskCfg])
 </body>
 </html>
