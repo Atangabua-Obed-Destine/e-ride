@@ -9,7 +9,8 @@
         ['bus-company.staff', 'bi-people', translate('Staff')],
         ['bus-company.rules', 'bi-card-checklist', translate('Booking rules')],
         $isDirector || $busCompanyStaff->role === BusCompanyStaff::ACCOUNTANT ? ['bus-company.money', 'bi-wallet2', translate('Money')] : null,
-        $isDirector || $busCompanyStaff->role === BusCompanyStaff::ACCOUNTANT ? ['bus-company.accounts', 'bi-journal-text', translate('Accounts')] : null,
+        // Accounting: the accounting module of all our systems, opened on the head office's own books.
+        $isDirector || $busCompanyStaff->role === BusCompanyStaff::ACCOUNTANT ? ['bus-company.accounting', 'bi-journal-text', translate('Accounting')] : null,
     ]));
 @endphp
 <!DOCTYPE html>

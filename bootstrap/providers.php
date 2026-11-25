@@ -14,6 +14,7 @@ return [
     App\Providers\RouteServiceProvider::class,
     App\Providers\RepositoryServiceProvider::class,
     App\Providers\BroadcastServiceProvider::class,
+    App\Providers\LedgerServiceProvider::class,
     \Modules\AdminModule\Providers\RepositoryServiceProvider::class,
     \Modules\AiModule\Providers\RepositoryServiceProvider::class,
     \Modules\BlogManagement\Providers\RepositoryServiceProvider::class,

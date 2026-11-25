@@ -74,6 +74,10 @@ Route::group(['prefix' => 'partner/bus-agency', 'as' => 'bus-partner.'], functio
     });
 
     // The manager only.
+    // Accounting (the accounting module of all our systems, /partner/accounting): opens this branch's books.
+    Route::middleware(BusPartner::class . ':manager,accountant')
+        ->get('accounting', [\Modules\BusManagement\Http\Controllers\Web\Partner\LedgerEntryController::class, 'branch'])->name('accounting');
+
     // Accounts (one set of books per branch): the manager and the accountant.
     Route::middleware(BusPartner::class . ':manager,accountant')->prefix('accounts')->name('accounts')->group(function () {
         $acc = \Modules\BusManagement\Http\Controllers\Web\Partner\AccountsController::class;
@@ -224,6 +228,9 @@ Route::group(['prefix' => 'partner/bus-company', 'as' => 'bus-company.'], functi
         Route::get('money', [$c, 'money'])->name('money');
         Route::get('accounts', [$c, 'accounts'])->name('accounts');
     });
+    // Accounting (the accounting module of all our systems): opens the head office's own books.
+    Route::middleware($mw)->get('accounting', [\Modules\BusManagement\Http\Controllers\Web\Partner\LedgerEntryController::class, 'company'])->name('accounting');
+
     // The head office's own books (director and accountant; regional managers are refused in the controller).
     Route::middleware($mw)->prefix('books')->name('books')->group(function () {
         $acc = \Modules\BusManagement\Http\Controllers\Web\Partner\AccountsController::class;

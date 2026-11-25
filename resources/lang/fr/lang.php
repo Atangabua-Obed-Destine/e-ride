@@ -7680,4 +7680,9 @@
   'month' => 'mois',
   'monthly pay' => 'salaire mensuel',
   '{n} people' => '{n} personnes',
+  'Accounting' => 'Comptabilité',
+  'Back to the portal' => 'Retour au portail',
+  'Open Accounting from your portal.' => 'Ouvrez la Comptabilité depuis votre portail.',
+  'This accounting screen is coming soon.' => 'Cet écran de comptabilité arrive bientôt.',
+  'Your role cannot open that page.' => 'Votre rôle ne permet pas d\'ouvrir cette page.',
 );

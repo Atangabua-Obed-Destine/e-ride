@@ -141,6 +141,8 @@ $app = Application::configure(basePath: dirname(__DIR__))
         $job('market-orders:tick')->everyMinute();
         // E-Ride Bus Travel: payments, expiring requests, the timetable opening the coming days.
         $job('bus:tick')->everyMinute();
+        // Accounting (App\Ledger): post any bus record the observers missed, retry failed postings.
+        $job('ledger:sync')->everyFiveMinutes();
         $job('hotel:tick')->everyMinute();
         // E-Ride ID Verified: documents past their expiry date stop counting.
         $schedule->call(fn() => app(\Modules\UserManagement\Service\IdVerificationService::class)->expireDue())->name('id-verifications:expire')->dailyAt('01:10')->withoutOverlapping(60);

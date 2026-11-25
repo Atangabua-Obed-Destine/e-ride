@@ -1,0 +1,139 @@
+/*
+ * The accounting screens (resources/views/ledger, paxhitestbed's module as ported to posinnova)
+ * are written for Bootstrap 3 + AdminLTE. E-Ride runs Bootstrap 5: this file supplies the
+ * Bootstrap 3 / AdminLTE classes they use, and the frame (resources/views/layouts/app.blade.php).
+ */
+
+/* ---------- Frame ---------- */
+body.ledger-body { background: #f1f5f9; color: #0f172a; font-size: 14px; }
+.ledger-top { position: sticky; top: 0; z-index: 1030; display: flex; align-items: center; gap: 12px; padding: 10px 16px; background: #111114; color: #fff; }
+.ledger-top a { color: #fff; }
+.ledger-who { display: flex; flex-direction: column; min-width: 0; flex: 1; line-height: 1.2; }
+.ledger-who strong { font-size: 15px; }
+.ledger-who span { font-size: 12px; color: #cbd5e1; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.ledger-back { font-size: 13px; text-decoration: none; white-space: nowrap; border: 1px solid #3f3f46; padding: 6px 10px; border-radius: 6px; }
+.ledger-back:hover { background: #27272a; }
+.ledger-menu-btn { background: none; border: 1px solid #3f3f46; color: #fff; border-radius: 6px; padding: 6px 10px; }
+.ledger-shell { display: flex; min-height: calc(100vh - 56px); }
+.ledger-nav { width: 250px; flex: 0 0 250px; background: #fff; border-right: 1px solid #e2e8f0; padding: 12px 0; overflow-y: auto; max-height: calc(100vh - 56px); position: sticky; top: 56px; }
+.ledger-nav a { display: block; padding: 7px 18px; color: #334155; text-decoration: none; font-size: 13.5px; border-left: 3px solid transparent; }
+.ledger-nav a:hover { background: #f8fafc; color: #0f172a; }
+.ledger-nav a.active { border-left-color: #1d4ed8; background: #eff6ff; color: #1d4ed8; font-weight: 600; }
+.ledger-nav-home { font-weight: 600; margin-bottom: 6px; }
+.ledger-nav-group { margin-top: 10px; }
+.ledger-nav-title { padding: 6px 18px; font-size: 11.5px; font-weight: 700; text-transform: uppercase; letter-spacing: .04em; color: #64748b; }
+.ledger-main { flex: 1; min-width: 0; padding: 8px 20px 40px; }
+@media (min-width: 992px) { .ledger-menu-btn { display: none; } }
+@media (max-width: 991.98px) {
+    .ledger-nav { position: fixed; top: 56px; left: 0; bottom: 0; z-index: 1020; transform: translateX(-100%); transition: transform .2s; box-shadow: 0 10px 30px rgba(0,0,0,.15); max-height: none; }
+    body.ledger-nav-open .ledger-nav { transform: none; }
+    .ledger-main { padding: 6px 10px 40px; }
+    .ledger-back { font-size: 0; padding: 6px 10px; }
+    .ledger-back i { font-size: 14px; }
+}
+
+/* ---------- AdminLTE page parts ---------- */
+.content-header { padding: 14px 0 6px; }
+.content-header h1, .content-header .tw-text-xl { font-size: 1.45rem; font-weight: 700; color: #0f172a; margin: 0; }
+.content-header > .breadcrumb { display: none; }
+.content-header h1 small, .content-header h1 > span:not(:first-child) { display: block; font-size: 58%; font-weight: 500; color: #475569; margin-top: 4px; }
+.content { padding: 8px 0; }
+.box { position: relative; background: #fff; border: 1px solid #e2e8f0; border-top: 3px solid #cbd5e1; border-radius: 6px; margin-bottom: 18px; box-shadow: 0 1px 1px rgba(0,0,0,.03); }
+.box.box-solid { border-top-width: 1px; }
+.box.box-primary { border-top-color: #1d4ed8; }
+.box.box-info { border-top-color: #0891b2; }
+.box.box-success { border-top-color: #15803d; }
+.box.box-warning { border-top-color: #b45309; }
+.box.box-danger { border-top-color: #b91c1c; }
+.box-header { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 8px; padding: 10px 14px; }
+.box-header.with-border { border-bottom: 1px solid #e2e8f0; }
+.box-title { font-size: 1.05rem; font-weight: 600; margin: 0; }
+.box-tools { display: flex; flex-wrap: wrap; gap: 6px; margin-left: auto; }
+.box-body { padding: 14px; }
+.box-footer { padding: 10px 14px; border-top: 1px solid #e2e8f0; background: #fff; border-radius: 0 0 6px 6px; }
+.small-box, .info-box { background: #fff; border: 1px solid #e2e8f0; border-radius: 6px; padding: 12px; margin-bottom: 14px; }
+
+/* ---------- Bootstrap 3 classes ---------- */
+.panel { background: #fff; border: 1px solid #e2e8f0; border-radius: 6px; margin-bottom: 18px; }
+.panel-heading { padding: 10px 14px; border-bottom: 1px solid #e2e8f0; background: #f8fafc; border-radius: 6px 6px 0 0; }
+.panel-title { font-size: 1rem; font-weight: 600; margin: 0; }
+.panel-body { padding: 14px; }
+.panel-footer { padding: 10px 14px; border-top: 1px solid #e2e8f0; background: #f8fafc; }
+.panel-primary > .panel-heading { background: #1d4ed8; color: #fff; }
+.panel-info > .panel-heading { background: #ecfeff; color: #155e75; }
+.panel-success > .panel-heading { background: #f0fdf4; color: #166534; }
+.panel-warning > .panel-heading { background: #fffbeb; color: #92400e; }
+.panel-danger > .panel-heading { background: #fef2f2; color: #991b1b; }
+.well { padding: 14px; margin-bottom: 18px; background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 6px; }
+.pull-right { float: right !important; }
+.pull-left { float: left !important; }
+.text-right { text-align: right !important; }
+.text-left { text-align: left !important; }
+.btn-default { color: #334155; background: #fff; border-color: #cbd5e1; }
+.btn-default:hover { background: #f1f5f9; color: #0f172a; border-color: #94a3b8; }
+.btn-xs { padding: 1px 6px; font-size: 12px; line-height: 1.5; border-radius: 4px; }
+.btn-block { display: block; width: 100%; }
+.btn-flat { border-radius: 0; }
+.help-block { display: block; margin-top: 4px; margin-bottom: 6px; font-size: .8rem; color: #64748b; }
+.has-error .help-block, .has-error .control-label { color: #b91c1c; }
+.has-error .form-control { border-color: #b91c1c; }
+.form-group { margin-bottom: 12px; }
+.control-label, .form-group > label { font-weight: 500; margin-bottom: 4px; display: inline-block; }
+.input-group-addon { display: flex; align-items: center; padding: .375rem .75rem; background: #f1f5f9; border: 1px solid #ced4da; font-size: .9rem; }
+.input-group > .input-group-addon:first-child { border-right: 0; border-radius: .375rem 0 0 .375rem; }
+.input-group > .input-group-addon:last-child { border-left: 0; border-radius: 0 .375rem .375rem 0; }
+.input-group-btn { display: flex; }
+.table-condensed > :not(caption) > * > * { padding: .3rem .5rem; }
+.table > thead > tr > th { vertical-align: bottom; }
+.label { display: inline-block; padding: .2em .55em; font-size: 75%; font-weight: 700; line-height: 1.2; color: #fff; border-radius: .25em; background: #64748b; }
+.label-default { background: #64748b; }
+.label-primary { background: #1d4ed8; }
+.label-info { background: #0891b2; }
+.label-success { background: #15803d; }
+.label-warning { background: #b45309; }
+.label-danger { background: #b91c1c; }
+.badge:not([class*="bg-"]):not([class*="text-bg"]) { background: #64748b; }
+.dl-horizontal dt { float: left; width: 160px; clear: left; text-align: right; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.dl-horizontal dd { margin-left: 180px; }
+.img-responsive { max-width: 100%; height: auto; }
+.collapse.in { display: block; }
+.fade.in { opacity: 1; }
+.close { float: right; font-size: 1.4rem; font-weight: 700; line-height: 1; color: #000; opacity: .5; background: none; border: 0; padding: 0 4px; }
+.close:hover { opacity: .8; }
+.modal-header { flex-wrap: nowrap; }
+.modal-header .close { order: 2; margin-left: auto; }
+.modal-title { font-size: 1.1rem; font-weight: 600; }
+.alert-dismissable .close, .alert-dismissible .close { position: absolute; top: 8px; right: 10px; }
+.form-inline .form-group { display: inline-block; margin-right: 8px; vertical-align: middle; }
+.clearfix::after { content: ""; display: table; clear: both; }
+.row > [class*="col-"] { position: relative; }
+.col-xs-1 { flex: 0 0 auto; width: 8.333333%; } .col-xs-2 { flex: 0 0 auto; width: 16.666667%; } .col-xs-3 { flex: 0 0 auto; width: 25%; }
+.col-xs-4 { flex: 0 0 auto; width: 33.333333%; } .col-xs-5 { flex: 0 0 auto; width: 41.666667%; } .col-xs-6 { flex: 0 0 auto; width: 50%; }
+.col-xs-7 { flex: 0 0 auto; width: 58.333333%; } .col-xs-8 { flex: 0 0 auto; width: 66.666667%; } .col-xs-9 { flex: 0 0 auto; width: 75%; }
+.col-xs-10 { flex: 0 0 auto; width: 83.333333%; } .col-xs-11 { flex: 0 0 auto; width: 91.666667%; } .col-xs-12 { flex: 0 0 auto; width: 100%; }
+@media (max-width: 767.98px) { .hidden-xs { display: none !important; } }
+@media (min-width: 768px) { .visible-xs { display: none !important; } }
+@media (min-width: 768px) and (max-width: 991.98px) { .hidden-sm { display: none !important; } }
+.hidden { display: none !important; }
+.sr-only { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip: rect(0,0,0,0); border: 0; }
+.table-responsive { overflow-x: auto; }
+.select2-container { width: 100% !important; }
+.select2-container .select2-selection--single { height: 38px; border-color: #ced4da; }
+.select2-container .select2-selection--single .select2-selection__rendered { line-height: 36px; }
+.select2-container .select2-selection--single .select2-selection__arrow { height: 36px; }
+
+/* ---------- posinnova's Tailwind classes on the screen titles ---------- */
+.tw-font-bold { font-weight: 700; }
+.tw-text-black { color: #0f172a; }
+.tw-text-white { color: #fff; }
+.tw-text-xl { font-size: 1.25rem; }
+@media (min-width: 768px) { .md\:tw-text-3xl { font-size: 1.6rem; } }
+.tw-dw-btn { display: inline-block; padding: 6px 12px; border-radius: 6px; border: 1px solid transparent; }
+.tw-dw-btn-primary { background: #1d4ed8; color: #fff; }
+
+/* ---------- Print ---------- */
+@media print {
+    .ledger-top, .ledger-nav, .box-tools, .no-print { display: none !important; }
+    .ledger-main { padding: 0; }
+    body.ledger-body { background: #fff; }
+}

@@ -16,7 +16,8 @@
         $role === BusStaff::MANAGER ? ['bus-partner.destinations', 'bi-signpost-split', translate('Destinations')] : null,
         $role === BusStaff::MANAGER ? ['bus-partner.fleet', 'bi-bus-front', translate('Fleet')] : null,
         $role === BusStaff::MANAGER ? ['bus-partner.payments', 'bi-wallet2', translate('Payments')] : null,
-        in_array($role, [BusStaff::MANAGER, BusStaff::ACCOUNTANT], true) && Route::has('bus-partner.accounts') ? ['bus-partner.accounts', 'bi-journal-text', translate('Accounts')] : null,
+        // Accounting: the accounting module of all our systems (/partner/accounting), opened on this branch's books.
+        in_array($role, [BusStaff::MANAGER, BusStaff::ACCOUNTANT], true) && Route::has('bus-partner.accounting') ? ['bus-partner.accounting', 'bi-journal-text', translate('Accounting')] : null,
         $role === BusStaff::MANAGER ? ['bus-partner.staff', 'bi-people', translate('Staff')] : null,
         $desk ? ['bus-partner.share', 'bi-share', translate('Share')] : null,
     ]));
