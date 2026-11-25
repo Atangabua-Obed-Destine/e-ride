@@ -13,9 +13,9 @@ use Illuminate\Support\Facades\DB;
 /**
  * Cash and bank in the ledger (paxhitestbed Admin\CashAccountController):
  * the ledger account each payment method posts to, and the ledger account
- * behind each of PosInnova's payment accounts (table `accounts`: cash boxes,
+ * behind each payment account (E-Ride: paxhitestbed's payment_accounts: cash boxes,
  * bank accounts, mobile-money wallets). A payment that names a payment
- * account posts to that account's ledger account (accounts.chart_of_account_id);
+ * account posts to that account's ledger account (payment_accounts.chart_of_account_id);
  * otherwise to its method's (PostingRules::cashAccount).
  */
 class CashAccountController extends LedgerController
@@ -67,8 +67,11 @@ class CashAccountController extends LedgerController
                 if (! isset($own[(int) $accountId])) {
                     continue;
                 }
-                DB::table('accounts')->where('business_id', Ledger::businessId())->where('id', (int) $accountId)
-                    ->update(['chart_of_account_id' => $ledgerId ?: null]);
+                // E-Ride: paxhitestbed's payment accounts; a payment account always keeps a ledger account
+                if ($ledgerId) {
+                    DB::table('payment_accounts')->where('business_id', Ledger::businessId())->where('id', (int) $accountId)
+                        ->update(['chart_of_account_id' => $ledgerId, 'updated_at' => now()]);
+                }
             }
         });
 
@@ -82,21 +85,17 @@ class CashAccountController extends LedgerController
             ->orderBy('account_code')->get(['id', 'account_code', 'account_name', 'account_name_fr']);
     }
 
-    /** PosInnova's payment accounts of this business that are still open. */
+    /** The payment accounts of these books that are in use (E-Ride: paxhitestbed's Payment Accounts, payment_accounts). */
     private function paymentAccounts()
     {
-        // E-Ride: the payment accounts arrive with paxhitestbed's Payment accounts (stage 2).
-        if (! \Illuminate\Support\Facades\Schema::hasTable('accounts')) {
-            return collect();
-        }
-
-        return DB::table('accounts')->where('business_id', Ledger::businessId())->where('is_closed', 0)->whereNull('deleted_at')
-            ->orderBy('name')->get(['id', 'name', 'account_number', 'chart_of_account_id']);
+        return DB::table('payment_accounts')->where('business_id', Ledger::businessId())->where('status', 1)
+            ->orderBy('title')->get(['id', DB::raw('title as name'), 'account_number', 'chart_of_account_id', 'current_balance']);
     }
 
     /**
-     * Books beside the ledger: what the payment accounts show (PosInnova's account book:
-     * credits less debits) beside the balance of the ledger account they are linked to.
+     * Books beside the ledger: what the payment accounts show (their book: credits less
+     * debits, payment_account_transactions) beside the balance of the ledger account they
+     * are linked to (paxhitestbed CashAccounts::comparison).
      */
     private function comparison()
     {
@@ -105,10 +104,9 @@ class CashAccountController extends LedgerController
         if ($linked->isEmpty()) {
             return collect();
         }
-        $book = DB::table('account_transactions as at')->join('accounts as a', 'a.id', '=', 'at.account_id')
-            ->where('a.business_id', $b)->whereNull('at.deleted_at')
-            ->whereIn('at.account_id', $linked->flatten()->pluck('id'))
-            ->groupBy('at.account_id')->selectRaw("at.account_id, SUM(IF(at.type = 'credit', at.amount, -at.amount)) as bal")
+        $book = DB::table('payment_account_transactions as at')->where('at.business_id', $b)
+            ->whereIn('at.payment_account_id', $linked->flatten()->pluck('id'))
+            ->groupBy('at.payment_account_id')->selectRaw("at.payment_account_id as account_id, SUM(IF(at.transaction_type = 'credit', at.amount, -at.amount)) as bal")
             ->pluck('bal', 'account_id');
         $ledger = DB::table('journal_entry_lines as l')->join('journal_entries as j', 'j.id', '=', 'l.journal_entry_id')
             ->where('j.business_id', $b)->whereNull('j.deleted_at')->where('j.is_posted', 1)

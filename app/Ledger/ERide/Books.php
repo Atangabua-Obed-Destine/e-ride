@@ -129,6 +129,26 @@ class Books
         return self::$current;
     }
 
+    /**
+     * The buses of the open books' owner, for a fixed asset that is a bus: a branch's own buses
+     * (and its company's shared ones), or all of a company's buses. [id => "registration · name"]
+     */
+    public static function fleet(): array
+    {
+        $owner = self::$current['owner'] ?? null;
+        if (! $owner) {
+            return [];
+        }
+        $q = \Modules\BusManagement\Entities\BusVehicle::query()->where('status', '!=', 'retired');
+        if ($owner instanceof BusCompany) {
+            $q->where('company_id', $owner->id);
+        } else {
+            $q->where(fn ($w) => $w->where('agency_id', $owner->id)->when($owner->company_id, fn ($x) => $x->orWhere('company_id', $owner->company_id)));
+        }
+
+        return $q->orderBy('registration')->get()->mapWithKeys(fn ($v) => [(string) $v->id => trim($v->registration.' · '.$v->name, ' ·')])->all();
+    }
+
     /** Gate answer for a ledger permission (null: not a ledger permission, let the Gate decide). */
     public static function allows(string $ability): ?bool
     {

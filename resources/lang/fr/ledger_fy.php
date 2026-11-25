@@ -114,7 +114,7 @@ return [
     'sum_expenses' => 'Charges (classe 6)',
     'sum_result' => 'Résultat de la période',
     'sum_cash' => 'Variation nette de la trésorerie (classe 5)',
-    'warn_not_in_ledger' => ':documents document(s) et :payments paiement(s) datés de cette période ne sont pas en comptabilité. Consultez l\'état du grand livre avant de clôturer.',
+    'warn_not_in_ledger' => ':documents enregistrement(s) des bus (argent des billets, voyages partis) et :payments autre(s) enregistrement(s) datés de ce mois ne sont pas en comptabilité. Consultez Voir les transactions avant de clôturer.',
     'note_close' => 'Une fois clôturé, plus rien ne peut être passé dans :month. Ce qui sera enregistré plus tard pour ces dates sera comptabilisé à la date de son enregistrement. Une période peut être rouverte, avec un motif, tant que l\'exercice est ouvert.',
     'note_reopen' => 'La réouverture permet de passer à nouveau des écritures dans :month, et ses chiffres publiés peuvent alors changer. Le motif est conservé sur la période.',
 ];

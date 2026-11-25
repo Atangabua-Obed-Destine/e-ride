@@ -237,6 +237,8 @@ class SyscohadaChart
             'eride_commission' => '632',   // E-Ride's monthly commission
             'eride_payable' => '401',      // what is owed to E-Ride until the statement is paid
             'head_office' => '1811',       // a company branch: money held or paid by the head office
+            'till_short' => '658',         // a till count short of the books
+            'till_over' => '758',          // a till count over the books
             // posinnova's
             'customers' => '411',
             'vat_collected' => '4431',

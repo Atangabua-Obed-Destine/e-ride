@@ -107,7 +107,8 @@ class YearEndClosingService
         foreach ($items as $key => $item) {
             $on = in_array($key, $ticked, true);
             if ($on && empty($item['completed'])) {
-                $items[$key] = ['completed' => true, 'completed_by' => $user ? trim($user->user_full_name) : null, 'completed_at' => now()->toDateTimeString()];
+                // E-Ride: the user's first and last name (no user_full_name)
+                $items[$key] = ['completed' => true, 'completed_by' => $user ? trim($user->first_name.' '.$user->last_name) : null, 'completed_at' => now()->toDateTimeString()];
             } elseif (! $on) {
                 $items[$key] = ['completed' => false, 'completed_by' => null, 'completed_at' => null];
             }
@@ -470,7 +471,11 @@ class YearEndClosingService
 
         $critical = [];
         try {
-            $critical = array_column(array_filter((new LedgerHealth())->checks(), fn ($c) => $c['state'] === LedgerHealth::CRITICAL), 'label');
+            // E-Ride: the full checks read posinnova's POS tables; until the Ledger health screen has its
+            // bus version, the closing asks the ones that read only the ledger.
+            $health = new LedgerHealth();
+            $all = \App\Ledger\ERide\Screens::isReady('ledger.ledger-health') ? $health->checks() : $health->ledgerChecks();
+            $critical = array_column(array_filter($all, fn ($c) => $c['state'] === LedgerHealth::CRITICAL), 'label');
         } catch (\Throwable $e) {
             $critical = [$e->getMessage()];
         }
@@ -480,7 +485,10 @@ class YearEndClosingService
         $add('stock_accounts', ! $missing, true, $missing ? __('ledger_periodend.chk_stock_accounts_todo', ['codes' => implode(', ', $missing)]) : null);
 
         $entered = $closing->closing_stock_value !== null;
-        $add('stock_value', $entered, true, $entered ? __('ledger_periodend.chk_stock_value_ok', ['amount' => Ledger::money($closing->closing_stock_value)]) : null);
+        // E-Ride: bus branches keep no stock: with nothing on 311 at the closing date the closing stock is 0 until one is entered.
+        $noStock = ! $entered && abs($this->stockOnBooks($date)) < 0.005;
+        $add('stock_value', $entered || $noStock, true, $entered ? __('ledger_periodend.chk_stock_value_ok', ['amount' => Ledger::money($closing->closing_stock_value)])
+            : ($noStock ? __('ledger_periodend.chk_stock_value_ok', ['amount' => Ledger::money(0)]) : null));
 
         // Not blocking: things to look at.
         $notReconciled = app(BankReconciliationService::class)->notReconciledTo($year->start_date->toDateString(), $year->end_date->toDateString());

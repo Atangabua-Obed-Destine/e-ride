@@ -83,6 +83,7 @@ class FixedAssetController extends LedgerController
         $this->allow('fixed-asset-create');
 
         return view('ledger.fixed-assets.create', [
+            'fleet' => \App\Ledger\ERide\Books::fleet(), // E-Ride: a bus of the fleet
             'categories' => FixedAssetCategory::active()->orderBy('name')->get(),
         ]);
     }
@@ -108,6 +109,7 @@ class FixedAssetController extends LedgerController
             'useful_life_months' => 'required|integer|min:1',
             'depreciation_method' => ['required', Rule::in(array_merge(FixedAssetCategory::METHODS, ['none']))],
             'depreciation_start_date' => 'nullable|date|after_or_equal:acquisition_date',
+            'vehicle_id' => ['nullable', Rule::in(array_keys(\App\Ledger\ERide\Books::fleet()))], // E-Ride: a bus of the fleet
             'vendor' => 'nullable|string|max:255',
             'warranty_expiry_date' => 'nullable|date',
             'insurance_value' => 'nullable|numeric|min:0',
@@ -117,6 +119,7 @@ class FixedAssetController extends LedgerController
 
         try {
             $asset = DB::transaction(fn () => FixedAsset::create([
+                'vehicle_id' => $request->vehicle_id ?: null, // E-Ride
                 'name' => $request->name,
                 'name_fr' => $request->name_fr ?: $request->name,
                 'description' => $request->description,
@@ -258,7 +261,7 @@ class FixedAssetController extends LedgerController
             'disposal_method' => ['nullable', Rule::in(FixedAsset::DISPOSAL_METHODS)],
             'disposal_reason' => 'nullable|string|max:500',
             'notes' => 'nullable|string|max:500',
-            'payment_account_id' => ['nullable', Rule::exists('accounts', 'id')->where('business_id', Ledger::businessId())],
+            'payment_account_id' => ['nullable', Rule::exists('payment_accounts', 'id')->where('business_id', Ledger::businessId())],
         ]);
         $reason = $request->disposal_reason
             ?? trim(($request->disposal_method ? __('ledger_assets.'.$request->disposal_method) : '').($request->notes ? ' — '.$request->notes : ''), ' —');

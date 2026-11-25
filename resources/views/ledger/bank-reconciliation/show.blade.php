@@ -71,7 +71,7 @@
                     </form>
                     @endcan
                     @else
-                    <div class="ap-note" style="margin-bottom: 12px;">@lang('ledger_periodend.completed_by_on', ['date' => optional($rec->reconciled_at)->format('d/m/Y'), 'name' => trim(optional($rec->reconciledBy)->user_full_name ?? '')])</div>
+                    <div class="ap-note" style="margin-bottom: 12px;">@lang('ledger_periodend.completed_by_on', ['date' => optional($rec->reconciled_at)->format('d/m/Y'), 'name' => trim(optional($rec->reconciledBy)->first_name.' '.optional($rec->reconciledBy)->last_name)])</div> {{-- E-Ride: first and last name (no user_full_name) --}}
                     @endif
                     @if($rec->statement_reference || $rec->notes)
                     <dl class="ap-dl" style="margin-top: 10px;">

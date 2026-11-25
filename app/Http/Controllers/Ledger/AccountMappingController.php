@@ -79,6 +79,8 @@ class AccountMappingController extends LedgerController
             $row('refunds_after_trip', '', __('ledger.map_refunds_after_trip'), $L('hint_refunds_after_trip')),
             $row('vat_collected', '', __('ledger.map_vat_collected'), $L('hint_vat_collected')),
             $row('gateway_fees', '', __('ledger.map_gateway_fees'), $L('hint_gateway_fees')),
+            $row('till_short', '', __('ledger.map_till_short'), $L('hint_till_short')),
+            $row('till_over', '', __('ledger.map_till_over'), $L('hint_till_over')),
         ]];
         $groups['eride'] = ['title' => $L('group_eride'), 'icon' => 'fa-handshake', 'color' => 'info', 'rows' => [
             $row('eride_commission', '', __('ledger.map_eride_commission'), $L('hint_eride_commission')),
@@ -97,6 +99,13 @@ class AccountMappingController extends LedgerController
         $expense[] = $row('expense_category', '', $L('any_other_category'), $L('hint_expense_category'));
         $expense[] = $row('expense_payable', '', __('ledger.map_expense_payable'), $L('hint_expense_payable'));
         $groups['expenses'] = ['title' => $L('group_expenses'), 'icon' => 'fa-receipt', 'color' => 'danger', 'rows' => $expense];
+        // E-Ride: paxhitestbed's income categories (Income & Expense), built as the expense ones
+        $income = [];
+        foreach ($this->incomeCategories() as $c) {
+            $income[] = $row('income_category', (string) $c->id, $c->name, __('ledger_accounts.hint_income_category'), $L('note_category_fallback'));
+        }
+        $income[] = $row('income_category', '', $L('any_other_category'), __('ledger_accounts.hint_income_category'));
+        $groups['income'] = ['title' => __('ledger_accounts.group_income'), 'icon' => 'fa-hand-holding-usd', 'color' => 'success', 'rows' => $income];
         $methods = [];
         foreach (LedgerHealth::paymentMethods() as $method => $label) {
             $methods[] = $row('payment_method', $method, $label, $L('hint_payment_method'));
@@ -155,7 +164,7 @@ class AccountMappingController extends LedgerController
                 $row = DefaultAccountMapping::where('mapping_type', $type)->where('category_key', $key)->first();
                 if (! $acc) {
                     // An expense category left blank uses "any other category" again; other rows keep their account.
-                    if ($row && $type === 'expense_category' && $key !== '') {
+                    if ($row && in_array($type, ['expense_category', 'income_category'], true) && $key !== '') {
                         $row->delete();
                         $saved++;
                     }
@@ -287,6 +296,8 @@ class AccountMappingController extends LedgerController
                 DB::raw('bk.code as number'), DB::raw('mv.kind as doc_status'), DB::raw('NULL as contact_id'), DB::raw('mv.method as on_id')], $cols));
         $parts[PostingRules::DEPARTURE] = $join(DB::table('bus_departures as d')->where('d.agency_id', $agency)
             ->whereIn('d.status', [\Modules\BusManagement\Entities\BusDeparture::DEPARTED, \Modules\BusManagement\Entities\BusDeparture::CANCELLED]), 'd.id', PostingRules::DEPARTURE)
+            // a trip that left holding no ticket money posts nothing: not listed
+            ->where(fn ($w) => $w->whereNull('m.status')->orWhere('m.status', '!=', 'none'))
             ->leftJoin('bus_destinations as ds', 'ds.id', '=', 'd.destination_id')
             ->select(array_merge([DB::raw('CAST(d.id AS CHAR) as id'), DB::raw("'".PostingRules::DEPARTURE."' as type"), DB::raw('COALESCE(DATE(d.departed_at), d.date) as date'),
                 DB::raw('m.amount as amount'), DB::raw("CONCAT(DATE_FORMAT(d.date, '%d/%m'), ' ', LEFT(COALESCE(d.delayed_to, d.time), 5), ' ', COALESCE(ds.city, '')) as number"),
@@ -300,6 +311,25 @@ class AccountMappingController extends LedgerController
                 DB::raw($kind === PostingRules::STATEMENT ? 'LAST_DAY(s.month) as date' : 'DATE(s.paid_at) as date'), DB::raw('s.total as amount'),
                 DB::raw("DATE_FORMAT(s.month, '%m/%Y') as number"), 's.status as doc_status', DB::raw('NULL as contact_id'), DB::raw('NULL as on_id')], $cols));
         }
+        // E-Ride: paxhitestbed's Income & Expense and Payment Accounts records (on every set of books)
+        $own = fn (string $table, string $kind) => $join(DB::table($table.' as r')->where('r.business_id', $b), 'r.id', $kind);
+        $parts[PostingRules::INCOME] = $own('incomes', PostingRules::INCOME)->select(array_merge([DB::raw('CAST(r.id AS CHAR) as id'), DB::raw("'".PostingRules::INCOME."' as type"),
+            'r.date as date', 'r.amount', 'r.title as number', DB::raw('NULL as doc_status'), DB::raw('NULL as contact_id'), 'r.payment_method as on_id'], $cols));
+        $parts[PostingRules::EXPENSE] = $own('expenses', PostingRules::EXPENSE)->select(array_merge([DB::raw('CAST(r.id AS CHAR) as id'), DB::raw("'".PostingRules::EXPENSE."' as type"),
+            'r.date as date', 'r.amount', 'r.title as number', DB::raw('NULL as doc_status'), DB::raw('NULL as contact_id'), 'r.payment_method as on_id'], $cols));
+        $parts[PostingRules::SUPPLIER_BILL] = $own('supplier_bills', PostingRules::SUPPLIER_BILL)->where('r.status', '!=', 'draft')
+            ->select(array_merge([DB::raw('CAST(r.id AS CHAR) as id'), DB::raw("'".PostingRules::SUPPLIER_BILL."' as type"),
+                'r.bill_date as date', 'r.total as amount', 'r.number as number', 'r.status as doc_status', DB::raw('NULL as contact_id'), DB::raw('NULL as on_id')], $cols));
+        $parts[PostingRules::SUPPLIER_PAYMENT] = $own('supplier_payments', PostingRules::SUPPLIER_PAYMENT)
+            ->select(array_merge([DB::raw('CAST(r.id AS CHAR) as id'), DB::raw("'".PostingRules::SUPPLIER_PAYMENT."' as type"),
+                'r.payment_date as date', 'r.amount', 'r.number as number', DB::raw("IF(r.voided_at IS NULL, NULL, 'void') as doc_status"), DB::raw('NULL as contact_id'), 'r.payment_method as on_id'], $cols));
+        $parts[PostingRules::PAYMENT_TRANSFER] = $own('payment_account_transfers', PostingRules::PAYMENT_TRANSFER)
+            ->select(array_merge([DB::raw('CAST(r.id AS CHAR) as id'), DB::raw("'".PostingRules::PAYMENT_TRANSFER."' as type"),
+                'r.transfer_date as date', 'r.amount', DB::raw('NULL as number'), DB::raw('NULL as doc_status'), DB::raw('NULL as contact_id'), DB::raw('NULL as on_id')], $cols));
+        $parts[PostingRules::PAYMENT_ACCOUNT_TXN] = $own('payment_account_transactions', PostingRules::PAYMENT_ACCOUNT_TXN)->whereNotNull('r.contra_account_id')
+            ->where(fn ($w) => $w->whereNull('r.reference_type')->orWhere('r.reference_type', 'opening_balance'))
+            ->select(array_merge([DB::raw('CAST(r.id AS CHAR) as id'), DB::raw("'".PostingRules::PAYMENT_ACCOUNT_TXN."' as type"),
+                'r.transaction_date as date', 'r.amount', 'r.title as number', 'r.transaction_type as doc_status', DB::raw('NULL as contact_id'), DB::raw('NULL as on_id')], $cols));
 
         if ($f['type'] !== 'all' && isset($parts[$f['type']])) {
             $union = $parts[$f['type']];
@@ -349,12 +379,24 @@ class AccountMappingController extends LedgerController
         foreach ($rows->items() as $r) {
             $r->contact = null;
             $r->link = $r->type === PostingRules::DEPARTURE && \Route::has('bus-partner.departures') ? ['url' => route('bus-partner.departures'), 'modal' => false] : null;
-            $r->label = trim(__('ledger.doc_'.$r->type).' '.($r->number ?: '#'.$r->id));
+            $r->label = trim(\App\Ledger\Services\PaymentBook::docLabel($r->type).' '.($r->number ?: '#'.$r->id));
             $r->reference = match ($r->type) {
                 PostingRules::MOVE => implode(' · ', array_filter([__('ledger.move_'.$r->doc_status), $methods[$r->on_id] ?? null])),
                 PostingRules::DEPARTURE => __('ledger.trip_'.$r->doc_status),
+                // E-Ride: paxhitestbed's Income & Expense and Payment Accounts records
+                PostingRules::INCOME, PostingRules::EXPENSE, PostingRules::SUPPLIER_PAYMENT => implode(' · ', array_filter([
+                    $r->doc_status ? __('ledger_accounts.state_'.$r->doc_status) : null, $methods[$r->on_id] ?? null])) ?: null,
+                PostingRules::SUPPLIER_BILL => __('ledger_accounts.state_'.$r->doc_status),
+                PostingRules::PAYMENT_ACCOUNT_TXN => __('ledger_accounts.'.($r->doc_status === 'credit' ? 'deposit' : 'withdraw')),
                 default => null,
             };
+            $show = [PostingRules::INCOME => 'ledger.income.show', PostingRules::EXPENSE => 'ledger.expense.show',
+                PostingRules::SUPPLIER_BILL => 'ledger.supplier-bill.show', PostingRules::SUPPLIER_PAYMENT => 'ledger.supplier-payment.show'][$r->type] ?? null;
+            if ($show) {
+                $r->link = ['url' => route($show, $r->id), 'modal' => false];
+            } elseif ($r->type === PostingRules::PAYMENT_TRANSFER) {
+                $r->link = ['url' => route('ledger.payment-account-transfer.index'), 'modal' => false];
+            }
             $r->entry = $r->journal_entry_id && isset($entries[$r->journal_entry_id]) ? $entries[$r->journal_entry_id] : null;
             $r->state = $r->map_status ?: (($from && $r->date < $from) ? 'history' : 'unposted');
         }
@@ -461,7 +503,7 @@ class AccountMappingController extends LedgerController
         }
         $msg = implode(', ', $parts).'.';
         foreach (array_slice($done['failed'], 0, 3) as [$type, $id, $why]) {
-            $msg .= ' '.__('ledger.doc_'.$type).' #'.$id.': '.$why;
+            $msg .= ' '.\App\Ledger\Services\PaymentBook::docLabel($type).' #'.$id.': '.$why;
         }
 
         return $msg;
@@ -549,7 +591,7 @@ class AccountMappingController extends LedgerController
                 }
             }
             foreach (array_slice($done['failed'], 0, 20) as [$type, $id, $why]) {
-                $p['warnings'][] = __('ledger.doc_'.$type).' #'.$id.': '.$why;
+                $p['warnings'][] = \App\Ledger\Services\PaymentBook::docLabel($type).' #'.$id.': '.$why;
             }
             if (count($done['failed']) === $count) {
                 $p['ok'] = false;
@@ -589,6 +631,13 @@ class AccountMappingController extends LedgerController
     private function postableAccounts()
     {
         return ChartOfAccount::postable()->orderBy('account_code')->get(['id', 'account_code', 'account_name', 'account_name_fr']);
+    }
+
+    /** E-Ride: the categories of the Income screens (paxhitestbed's Income & Expense). */
+    private function incomeCategories()
+    {
+        return DB::table('income_categories')->where('business_id', Ledger::businessId())->whereNull('deleted_at')
+            ->orderBy('name')->get(['id', 'name', 'parent_id']);
     }
 
     private function expenseCategories()

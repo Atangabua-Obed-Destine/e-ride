@@ -97,6 +97,19 @@ class LedgerSetup
                     $add('payment_method', $method, $code);
                 }
 
+                // E-Ride: buses are the agencies' main asset: a category ready for them
+                if (isset($ids['245'], $ids['284'], $ids['681'])
+                    && ! \App\Ledger\Models\FixedAssetCategory::withTrashed()->where('code', 'BUS')->exists()) {
+                    \App\Ledger\Models\FixedAssetCategory::create([
+                        'business_id' => $businessId, 'code' => 'BUS', 'name' => __('ledger_assets.cat_buses', [], 'en'),
+                        'name_fr' => __('ledger_assets.cat_buses', [], 'fr'), 'depreciation_method' => 'straight_line',
+                        'useful_life_years' => 10, 'salvage_value_percent' => 10,
+                        'asset_account_id' => $ids['245'], 'depreciation_account_id' => $ids['681'],
+                        'accumulated_depreciation_account_id' => $ids['284'], 'disposal_account_id' => $ids['812'] ?? null,
+                        'is_active' => true, 'created_by' => $userId,
+                    ]);
+                }
+
                 if (AccountingSetting::getValue('books_opened_at') === null) {
                     AccountingSetting::setValue('books_opened_at', Carbon::now()->toDateTimeString());
                     // Documents dated before this are history: the sync does not post them unless asked.

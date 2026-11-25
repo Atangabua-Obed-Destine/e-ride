@@ -282,7 +282,7 @@ return [
     'col_document_date' => 'Document date',
     'col_entry_date' => 'Entry date',
     'col_contact' => 'Contact',
-    'col_posinnova' => 'PosInnova',
+    'col_posinnova' => 'Payment accounts',
     'hint_supplier_advances' => 'Debit: money paid to a supplier before the bill (409)',
 
     // ---- E-Ride (bus books) ----
@@ -296,4 +296,6 @@ return [
     'hint_eride_commission' => 'Debit: E-Ride\'s monthly commission (632)',
     'hint_eride_payable' => 'Credit when E-Ride\'s statement is made, debit when it is paid (401)',
     'hint_head_office' => 'A company branch: money collected or paid by the head office (1811)',
+    'hint_till_short' => 'Debit when a till count finds less cash than the books (658)',
+    'hint_till_over' => 'Credit when a till count finds more cash than the books (758)',
 ];

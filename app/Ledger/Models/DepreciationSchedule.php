@@ -146,9 +146,9 @@ class DepreciationSchedule extends Model
             'is_system_generated' => true,
         ], [
             ['account_id' => $category->depreciation_account_id, 'debit' => $amount, 'credit' => 0,
-                'description' => __('ledger_assets.Depreciation').' — '.$asset->name],
+                'description' => __('ledger_assets.Depreciation').' — '.$asset->name] + array_filter(['vehicle_id' => $asset->vehicle_id]), // E-Ride: the bus
             ['account_id' => $category->accumulated_depreciation_account_id, 'debit' => 0, 'credit' => $amount,
-                'description' => __('ledger_assets.Accumulated depreciation').' — '.$asset->name],
+                'description' => __('ledger_assets.Accumulated depreciation').' — '.$asset->name] + array_filter(['vehicle_id' => $asset->vehicle_id]),
         ], $userId);
 
         $asset->recordDepreciation($amount, $date->toDateString(), $entry->id);

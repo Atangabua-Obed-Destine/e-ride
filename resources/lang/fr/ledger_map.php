@@ -281,7 +281,7 @@ return [
     'col_document_date' => 'Date de la pièce',
     'col_entry_date' => 'Date de l\'écriture',
     'col_contact' => 'Tiers',
-    'col_posinnova' => 'PosInnova',
+    'col_posinnova' => 'Comptes de paiement',
     'hint_supplier_advances' => 'Débit : argent versé à un fournisseur avant la facture (409)',
 
     // ---- E-Ride (livres des agences de bus) ----
@@ -295,4 +295,6 @@ return [
     'hint_eride_commission' => 'Débit : la commission mensuelle d\'E-Ride (632)',
     'hint_eride_payable' => 'Crédit à l\'émission du relevé E-Ride, débit à son paiement (401)',
     'hint_head_office' => 'Une agence d\'une compagnie : l\'argent encaissé ou payé par le siège (1811)',
+    'hint_till_short' => 'Débit quand un comptage trouve moins d\'argent que les comptes (658)',
+    'hint_till_over' => 'Crédit quand un comptage trouve plus d\'argent que les comptes (758)',
 ];

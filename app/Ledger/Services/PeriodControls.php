@@ -92,7 +92,8 @@ class PeriodControls
                 throw new \RuntimeException(__('ledger_fy.reopen_later_first', ['months' => $laterClosed->implode(', ')]));
             }
 
-            $who = $userId ? (optional(\App\User::find($userId))->username ?: '#'.$userId) : '-';
+            $u = $userId ? \App\User::find($userId) : null; // E-Ride: users have a first and last name, no username
+            $who = $userId ? (trim(optional($u)->first_name.' '.optional($u)->last_name) ?: '#'.$userId) : '-';
             $period->forceFill([
                 'is_closed' => false,
                 'closing_note' => trim(($period->closing_note ? $period->closing_note."\n" : '')
@@ -195,22 +196,27 @@ class PeriodControls
             $q->whereNull('m.id')->orWhere('m.status', 'failed');
         };
 
-        $documents = DB::table('transactions as t')
-            ->where('t.business_id', $bid)->whereIn('t.type', PostingRules::TYPES)
-            ->where('t.status', '!=', 'draft')
-            ->whereDate('t.transaction_date', '>=', $from)->whereDate('t.transaction_date', '<=', $to)
-            ->leftJoin('transaction_mappings as m', function ($j) use ($bid) {
-                $j->on('m.transaction_id', '=', 't.id')->on('m.transaction_type', '=', 't.type')->where('m.business_id', $bid);
-            })
-            ->where($missing)->count();
-
-        $payments = DB::table('transaction_payments as p')
-            ->where('p.business_id', $bid)
-            ->whereDate('p.paid_on', '>=', $from)->whereDate('p.paid_on', '<=', $to)
-            ->leftJoin('transaction_mappings as m', function ($j) use ($bid) {
-                $j->on('m.transaction_id', '=', 'p.id')->where('m.transaction_type', 'payment')->where('m.business_id', $bid);
-            })
-            ->where($missing)->count();
+        // E-Ride: the bus records of the month that post themselves (money moves, trips that
+        // left), not in the ledger yet or refused. Anything else the sync tried and failed on
+        // (statements, income, expenses...) is counted from its mapping.
+        $agency = DB::table('ledger_businesses')->where('id', $bid)->where('owner_type', \App\Ledger\ERide\Books::AGENCY)->value('owner_id');
+        $documents = 0;
+        if ($agency) {
+            $documents += DB::table('bus_money_moves as mv')->where('mv.agency_id', $agency)->whereNull('mv.skipped')
+                ->where('mv.at', '>=', $from.' 00:00:00')->where('mv.at', '<=', $to.' 23:59:59')
+                ->leftJoin('transaction_mappings as m', function ($j) use ($bid) {
+                    $j->on('m.transaction_id', '=', 'mv.id')->where('m.transaction_type', PostingRules::MOVE)->where('m.business_id', $bid);
+                })->where($missing)->count();
+            $documents += DB::table('bus_departures as d')->where('d.agency_id', $agency)
+                ->where('d.status', \Modules\BusManagement\Entities\BusDeparture::DEPARTED)
+                ->whereDate('d.date', '>=', $from)->whereDate('d.date', '<=', $to)
+                ->leftJoin('transaction_mappings as m', function ($j) use ($bid) {
+                    $j->on('m.transaction_id', '=', 'd.id')->where('m.transaction_type', PostingRules::DEPARTURE)->where('m.business_id', $bid);
+                })->where($missing)->count();
+        }
+        $payments = DB::table('transaction_mappings')->where('business_id', $bid)->where('status', 'failed')
+            ->whereNotIn('transaction_type', [PostingRules::MOVE, PostingRules::DEPARTURE])
+            ->whereDate('transaction_date', '>=', $from)->whereDate('transaction_date', '<=', $to)->count();
 
         $warnings = [];
         if ($documents + $payments > 0) {

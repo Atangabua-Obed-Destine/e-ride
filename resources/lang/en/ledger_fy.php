@@ -117,7 +117,7 @@ return [
     'sum_expenses' => 'Expenses (class 6)',
     'sum_result' => 'Result for the month',
     'sum_cash' => 'Net cash and bank movement (class 5)',
-    'warn_not_in_ledger' => ':documents document(s) and :payments payment(s) dated in this month are not in the ledger. See Ledger health before closing.',
+    'warn_not_in_ledger' => ':documents bus record(s) (ticket money, trips that left) and :payments other record(s) dated in this month are not in the ledger. See View Transactions before closing.',
     'note_close' => 'Once closed, nothing can be posted into :month. Anything recorded later for these dates is posted on the day it is recorded instead. A month can be reopened, with a reason, while the year is open.',
     'note_reopen' => 'Reopening lets entries be posted into :month again, and its reported figures may then change. The reason is kept on the month.',
 ];

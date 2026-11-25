@@ -200,7 +200,7 @@
                 <div class="box-header with-border"><h3 class="box-title">@lang('ledger_periodend.meta_information')</h3></div>
                 <div class="box-body">
                     <small class="text-muted">
-                        <p style="margin-bottom: 4px;"><strong>@lang('ledger_periodend.created_by'):</strong> {{ trim(optional($e->creator)->user_full_name ?? '') ?: '-' }}</p>
+                        <p style="margin-bottom: 4px;"><strong>@lang('ledger_periodend.created_by'):</strong> {{ trim(optional($e->creator)->first_name.' '.optional($e->creator)->last_name) ?: '-' }}</p> {{-- E-Ride: first and last name (no user_full_name) --}}
                         <p style="margin-bottom: 4px;"><strong>@lang('ledger_periodend.created_at'):</strong> {{ optional($e->created_at)->format('d/m/Y H:i') }}</p>
                         <p style="margin-bottom: 0;"><strong>@lang('ledger_periodend.last_updated'):</strong> {{ optional($e->updated_at)->format('d/m/Y H:i') }}</p>
                     </small>

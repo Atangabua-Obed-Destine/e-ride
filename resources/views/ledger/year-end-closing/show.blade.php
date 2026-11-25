@@ -43,7 +43,7 @@
                 </div>
                 <div class="col-md-3 col-sm-6">
                     <div class="info-box"><span class="info-box-icon bg-yellow"><i class="fa fa-user"></i></span>
-                        <div class="info-box-content"><span class="info-box-text">@lang('ledger_periodend.prepared_by')</span><span class="info-box-number" style="font-size: 15px;">{{ trim(optional($closing->creator)->user_full_name ?? '') ?: 'N/A' }}</span></div></div>
+                        <div class="info-box-content"><span class="info-box-text">@lang('ledger_periodend.prepared_by')</span><span class="info-box-number" style="font-size: 15px;">{{ trim(optional($closing->creator)->first_name.' '.optional($closing->creator)->last_name) ?: 'N/A' }}</span></div></div> {{-- E-Ride: first and last name (no user_full_name) --}}
                 </div>
             </div>
 
@@ -153,7 +153,7 @@
                         <dt>@lang('ledger_periodend.income_summary_account')</dt><dd>{{ $closing->incomeSummaryAccount ? $closing->incomeSummaryAccount->account_code.' '.Preview::accountName($closing->incomeSummaryAccount) : '-' }}</dd>
                         <dt>@lang('ledger_periodend.retained_earnings_account')</dt><dd>{{ $closing->retainedEarningsAccount ? $closing->retainedEarningsAccount->account_code.' '.Preview::accountName($closing->retainedEarningsAccount) : '-' }}</dd>
                         @if($closing->approved_at)
-                        <dt>@lang('ledger_periodend.approved_by')</dt><dd>{{ trim(optional($closing->approver)->user_full_name ?? '') ?: '-' }} · {{ $closing->approved_at->format('d/m/Y H:i') }}</dd>
+                        <dt>@lang('ledger_periodend.approved_by')</dt><dd>{{ trim(optional($closing->approver)->first_name.' '.optional($closing->approver)->last_name) ?: '-' }} · {{ $closing->approved_at->format('d/m/Y H:i') }}</dd> {{-- E-Ride: first and last name (no user_full_name) --}}
                         @endif
                     </dl>
                 </div>

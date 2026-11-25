@@ -59,6 +59,19 @@
                         </div>
                     </div>
                     <div class="col-md-4">
+                        @if(!empty($fleet))
+                        {{-- E-Ride: the asset is a bus of the fleet (its wear then counts in the bus's profit) --}}
+                        <div class="form-group{{ $err('vehicle_id') }}">
+                            <label for="vehicle_id">@lang('ledger_assets.bus_of_fleet')</label>
+                            <select class="form-control" id="vehicle_id" name="vehicle_id">
+                                <option value="">@lang('ledger_assets.not_a_bus')</option>
+                                @foreach($fleet as $vid => $vlabel)
+                                    <option value="{{ $vid }}" @selected(old('vehicle_id') === $vid)>{{ $vlabel }}</option>
+                                @endforeach
+                            </select>
+                            <span class="help-block">@lang('ledger_assets.bus_of_fleet_help')</span>
+                        </div>
+                        @endif
                         <div class="form-group{{ $err('serial_number') }}">
                             <label for="serial_number">@lang('ledger_assets.serial_number')</label>
                             <input type="text" class="form-control" id="serial_number" name="serial_number" value="{{ old('serial_number') }}">

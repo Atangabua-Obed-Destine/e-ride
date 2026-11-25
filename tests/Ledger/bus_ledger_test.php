@@ -170,9 +170,56 @@ try {
         $ok(Ledger::forBusiness($bidA, fn() => JournalEntry::find($draft->id))->is_posted && $eq($bal('571'), 50000), 'posted with the review tick: 571 = 50 000');
     }
 
+    // ---- 5b. Closing the month (review), a ticket sold while it is closed, reopening with a reason.
+    $period = Ledger::forBusiness($bidA, fn() => \App\Ledger\Models\AccountingPeriod::where('start_date', '<=', today())->where('end_date', '>=', today())->first());
+    $ok((bool)$period, 'this month is a period of the books');
+    if ($period) {
+        $earlier = Ledger::forBusiness($bidA, fn() => \App\Ledger\Models\AccountingPeriod::where('end_date', '<', $period->start_date)->get());
+        foreach ($earlier as $e) { // months before the books started: closed first, in order
+            $call('POST', "/partner/accounting/accounting-periods/{$e->id}/close", ['reviewed' => 1], $mgrA);
+        }
+        $r = $call('GET', "/partner/accounting/accounting-periods/{$period->id}/preview/close", [], $mgrA, true);
+        $ok($r->getStatusCode() === 200 && str_contains($r->getContent(), 'ap-preview'), 'month close preview renders (' . $r->getStatusCode() . ')');
+        $call('POST', "/partner/accounting/accounting-periods/{$period->id}/close", [], $mgrA);
+        $ok(!Ledger::forBusiness($bidA, fn() => \App\Ledger\Models\AccountingPeriod::find($period->id))->is_closed, 'closing without the review tick is refused');
+        $call('POST', "/partner/accounting/accounting-periods/{$period->id}/close", ['reviewed' => 1], $mgrA);
+        $ok(Ledger::forBusiness($bidA, fn() => \App\Ledger\Models\AccountingPeriod::find($period->id))->is_closed, 'month closed through the review');
+        $late = $move(['kind' => 'sale', 'method' => 'cash', 'amount' => 3000, 'staff_user_id' => $agentA->id, 'departure_id' => (string)$depB->id === '' ? null : null]);
+        $lateMap = Ledger::forBusiness($bidA, fn() => \App\Ledger\Models\TransactionMapping::where('transaction_type', PostingRules::MOVE)->where('transaction_id', (string)$late->id)->first());
+        $ok($lateMap && $lateMap->status === 'failed', 'a ticket sold while the month is closed is not posted into it (listed as failed: ' . ($lateMap?->status ?? 'no mapping') . ' ' . ($lateMap?->error ?? '') . ')');
+        // the accountant cannot reopen; the manager can, with a reason
+        $call('POST', "/partner/accounting/accounting-periods/{$period->id}/reopen", ['reviewed' => 1, 'reason' => 'Late ticket'], $mgrA);
+        $ok(!Ledger::forBusiness($bidA, fn() => \App\Ledger\Models\AccountingPeriod::find($period->id))->is_closed, 'the manager reopens the month with a reason');
+        Ledger::forBusiness($bidA, fn() => (new LedgerSync())->sweep());
+        $lateMap = Ledger::forBusiness($bidA, fn() => \App\Ledger\Models\TransactionMapping::where('transaction_type', PostingRules::MOVE)->where('transaction_id', (string)$late->id)->first());
+        $ok($lateMap && $lateMap->status === 'posted', 'the sweep posts it once the month is open');
+    }
+
+    // ---- 5c. Counter tills: the agent's till, a count short with a note, then voided.
+    $tillBal = fn() => round((float)Ledger::forBusiness($bidA, fn() => JournalEntryLine::where('account_id', ChartOfAccount::where('account_code', '5712')->value('id'))
+        ->where('agent_id', $agentA->id)->whereHas('journalEntry', fn($q) => $q->where('is_posted', true))->selectRaw('COALESCE(SUM(debit - credit), 0) as b')->value('b')), 2);
+    $held = $tillBal();
+    $ok($held > 0, "the agent's till holds the counter cash ($held)");
+    $r = $call('GET', '/partner/accounting/tills', [], $mgrA);
+    $ok($r->getStatusCode() === 200 && str_contains($r->getContent(), 'Ledger Agent A'), 'Counter tills lists the agent (' . $r->getStatusCode() . ')');
+    $safe = $acc('571');
+    $safeBefore = $bal('571');
+    $call('POST', '/partner/accounting/tills/count', ['agent_id' => $agentA->id, 'counted' => $held - 500, 'to_account_id' => $safe, 'count_date' => today()->toDateString(), 'note' => ''], $mgrA);
+    $ok($eq($tillBal(), $held), 'a count without the review tick is refused');
+    $call('POST', '/partner/accounting/tills/count', ['agent_id' => $agentA->id, 'counted' => $held - 500, 'to_account_id' => $safe, 'count_date' => today()->toDateString(), 'note' => '', 'reviewed' => 1], $mgrA);
+    $ok($eq($tillBal(), $held), 'a count that differs needs a note');
+    $call('POST', '/partner/accounting/tills/count', ['agent_id' => $agentA->id, 'counted' => $held - 500, 'to_account_id' => $safe, 'count_date' => today()->toDateString(), 'note' => 'Change given wrongly', 'reviewed' => 1], $mgrA);
+    $ok($eq($tillBal(), 0) && $eq($bal('571') - $safeBefore, $held - 500) && $eq($bal('658'), 500), 'count posted: till 0, safe + counted, 500 short on 658');
+    $tc = Ledger::forBusiness($bidA, fn() => \App\Ledger\Models\TillCount::latest('id')->first());
+    $ok($tc && $tc->status === 'posted' && $eq($tc->difference, -500), 'the count is recorded with its difference');
+    if ($tc) {
+        $call('POST', "/partner/accounting/tills/{$tc->id}/void", ['reason' => 'Counted twice', 'reviewed' => 1], $mgrA);
+        $ok($eq($tillBal(), $held) && $eq($bal('658'), 0) && Ledger::forBusiness($bidA, fn() => \App\Ledger\Models\TillCount::find($tc->id))->status === 'void', 'voiding reverses it: the till holds its cash again');
+    }
+
     // ---- 6. Every screen of the stage opens.
     $pages = ['chart-of-accounts', 'fiscal-years', 'journal-entries', 'general-ledger', 'general-ledger/trial-balance', 'general-ledger/balance-sheet',
-        'general-ledger/income-statement', 'mappings/settings', 'cash-accounts', 'mappings/transactions', 'general-ledger/account/' . $acc('5712')];
+        'general-ledger/income-statement', 'mappings/settings', 'cash-accounts', 'mappings/transactions', 'general-ledger/account/' . $acc('5712'), 'tills'];
     foreach ($pages as $p) {
         $r = $call('GET', '/partner/accounting/' . $p, [], $mgrA);
         $ok($r->getStatusCode() === 200, "page $p opens (" . $r->getStatusCode() . ')');

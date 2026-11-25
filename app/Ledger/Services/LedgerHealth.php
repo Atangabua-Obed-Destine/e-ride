@@ -64,6 +64,28 @@ class LedgerHealth
         return $checks;
     }
 
+    /**
+     * E-Ride: the checks that read only the ledger (postings that failed, the entries, where they
+     * are filed). The others read posinnova's POS tables (transactions, transaction_payments...)
+     * and wait for the bus version of the Ledger health screen; the year-end closing asks these
+     * meanwhile (YearEndClosingService::checks).
+     */
+    public function ledgerChecks(): array
+    {
+        $failed = DB::table('transaction_mappings')->where('business_id', $this->bid)->where('status', 'failed')
+            ->orderByDesc('updated_at')->get(['transaction_date', 'amount', 'error']);
+        $rows = $failed->take(self::MAX_ROWS)->map(fn ($m) => ['date' => $this->date($m->transaction_date), 'amount' => (float) $m->amount, 'reason' => $m->error])->all();
+        $checks = array_merge(
+            [$this->check('failed', 'mappings', $failed->count(), (float) $failed->sum('amount'), $rows, self::CRITICAL)],
+            $this->entryChecks(),
+            $this->placementChecks()
+        );
+        $rank = [self::CRITICAL => 0, self::WARNING => 1, self::OK => 2];
+        usort($checks, fn ($a, $b) => $rank[$a['state']] <=> $rank[$b['state']]);
+
+        return $checks;
+    }
+
     public function worstState(array $checks): string
     {
         foreach ([self::CRITICAL, self::WARNING] as $state) {

@@ -265,7 +265,7 @@ class DepreciationService
                 'reference_type' => 'asset_disposal',
                 'reference_id' => $asset->id,
                 'is_system_generated' => true,
-            ], array_map(fn ($l) => ['account_id' => $l[0], 'debit' => $l[1], 'credit' => $l[2], 'description' => $l[3].' — '.$asset->name], $lines), $userId);
+            ], array_map(fn ($l) => ['account_id' => $l[0], 'debit' => $l[1], 'credit' => $l[2], 'description' => $l[3].' — '.$asset->name] + array_filter(['vehicle_id' => $asset->vehicle_id]), $lines), $userId);
 
             // a month calculated but not posted no longer applies
             DepreciationSchedule::where('fixed_asset_id', $asset->id)->where('status', DepreciationSchedule::STATUS_PENDING)->delete();
@@ -314,7 +314,7 @@ class DepreciationService
                 'reference_id' => $asset->id,
                 'is_system_generated' => true,
             ], [
-                ['account_id' => $category->asset_account_id, 'debit' => $cost, 'credit' => 0, 'description' => __('ledger_assets.fixed_asset_acquisition').' — '.$asset->name],
+                ['account_id' => $category->asset_account_id, 'debit' => $cost, 'credit' => 0, 'description' => __('ledger_assets.fixed_asset_acquisition').' — '.$asset->name] + array_filter(['vehicle_id' => $asset->vehicle_id]), // E-Ride: the bus
                 ['account_id' => $credit, 'debit' => 0, 'credit' => $cost, 'description' => $text.' — '.$asset->name],
             ], $userId);
             $asset->forceFill(['purchase_journal_entry_id' => $entry->id, 'updated_by' => $userId])->save();
@@ -323,13 +323,13 @@ class DepreciationService
         });
     }
 
-    /** The ledger account behind one of the business's payment accounts (accounts.chart_of_account_id). */
+    /** The ledger account behind one of the business's payment accounts (E-Ride: payment_accounts.chart_of_account_id). */
     public function cashAccountFor(?int $paymentAccountId): ?int
     {
         if (! $paymentAccountId) {
             return null;
         }
-        $id = DB::table('accounts')->where('business_id', Ledger::businessId())->where('id', $paymentAccountId)->value('chart_of_account_id');
+        $id = DB::table('payment_accounts')->where('business_id', Ledger::businessId())->where('id', $paymentAccountId)->value('chart_of_account_id');
 
         return $id ? (int) $id : null;
     }
@@ -337,8 +337,9 @@ class DepreciationService
     /** The business's payment accounts that have a ledger account (the "Paid into" / "Paid from" lists). */
     public static function paymentAccounts()
     {
-        return DB::table('accounts')->where('business_id', Ledger::businessId())->where('is_closed', 0)->whereNull('deleted_at')
-            ->whereNotNull('chart_of_account_id')->orderBy('name')->get(['id', 'name']);
+        // E-Ride: paxhitestbed's payment accounts (Payment Accounts screens), the active ones
+        return DB::table('payment_accounts')->where('business_id', Ledger::businessId())->where('status', 1)
+            ->whereNotNull('chart_of_account_id')->orderBy('title')->get(['id', DB::raw('title as name')]);
     }
 
     private function firstDetail(string $prefix): ?int

@@ -21,6 +21,20 @@ class Permissions
         'recurring_entries' => ['recurring-entry-list', 'recurring-entry-create', 'recurring-entry-edit', 'recurring-entry-delete', 'recurring-entry-process'],
         'year_end_closing' => ['year-end-closing-list', 'year-end-closing-create', 'year-end-closing-edit', 'year-end-closing-delete', 'year-end-closing-approve'],
         'fixed_assets' => ['fixed-asset-list', 'fixed-asset-create', 'fixed-asset-edit', 'fixed-asset-delete'],
+        'counter_tills' => ['till-count-view', 'till-count-create', 'till-count-void'], // E-Ride (bus counters)
+        // paxhitestbed's Income & Expense and Payment Accounts (AccountingPermissionSeeder)
+        'income_expense' => ['income-view', 'income-create', 'income-edit', 'income-delete',
+            'income-category-view', 'income-category-create', 'income-category-edit', 'income-category-delete',
+            'expense-view', 'expense-create', 'expense-edit', 'expense-delete',
+            'expense-category-view', 'expense-category-create', 'expense-category-edit', 'expense-category-delete'],
+        'supplier_bills' => ['supplier-bill-view', 'supplier-bill-create', 'supplier-bill-approve', 'supplier-bill-void',
+            'supplier-payment-view', 'supplier-payment-create', 'supplier-payment-void'],
+        'payment_accounts' => ['payment-account-view', 'payment-account-create', 'payment-account-edit', 'payment-account-delete',
+            'payment-account-book', 'payment-account-deposit', 'payment-account-withdraw',
+            'payment-account-transaction-edit', 'payment-account-transaction-delete',
+            'payment-account-transfer-view', 'payment-account-transfer-create', 'payment-account-transfer-edit', 'payment-account-transfer-delete',
+            'payment-account-report-view', 'payment-account-report-export', 'payment-account-report-cashflow',
+            'payment-account-report-statement', 'payment-account-report-summary', 'payment-account-report-link'],
     ];
 
     public static function all(): array

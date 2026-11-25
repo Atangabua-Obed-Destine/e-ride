@@ -19,6 +19,7 @@ class FixedAsset extends Model
     use SoftDeletes, Auditable, BelongsToBusiness;
 
     protected $fillable = [
+        'vehicle_id', // E-Ride: a bus of the fleet
         'asset_code',
         'name',
         'name_fr',

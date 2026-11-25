@@ -105,6 +105,8 @@ class LedgerSync
             PostingRules::MOVE => $this->move((int) $id),
             PostingRules::DEPARTURE => $this->departure((string) $id),
             PostingRules::STATEMENT, PostingRules::STATEMENT_PAID => $this->statement((string) $id, $kind),
+            PostingRules::INCOME, PostingRules::EXPENSE, PostingRules::SUPPLIER_BILL, PostingRules::SUPPLIER_PAYMENT,
+            PostingRules::PAYMENT_TRANSFER, PostingRules::PAYMENT_ACCOUNT_TXN => $this->accountsRecord($kind, (int) $id),
             default => 'none',
         };
     }
@@ -182,6 +184,80 @@ class LedgerSync
         return $this->apply($map, fn () => $kind === PostingRules::STATEMENT ? $this->rules->forStatement($s) : $this->rules->forStatementPaid($s), $kind, $id);
     }
 
+    // ------------------------------------------------------------------ Income & Expense, Payment Accounts
+
+    /** The model class of each kind, and the column of its own date (for "history" before post_from_date). */
+    private const ACCOUNTS_SOURCES = [
+        PostingRules::INCOME => [\App\Ledger\Models\Income::class, 'date', 'incomes'],
+        PostingRules::EXPENSE => [\App\Ledger\Models\Expense::class, 'date', 'expenses'],
+        PostingRules::SUPPLIER_BILL => [\App\Ledger\Models\SupplierBill::class, 'bill_date', 'supplier_bills'],
+        PostingRules::SUPPLIER_PAYMENT => [\App\Ledger\Models\SupplierPayment::class, 'payment_date', 'supplier_payments'],
+        PostingRules::PAYMENT_TRANSFER => [\App\Ledger\Models\PaymentAccountTransfer::class, 'transfer_date', 'payment_account_transfers'],
+        PostingRules::PAYMENT_ACCOUNT_TXN => [\App\Ledger\Models\PaymentAccountTransaction::class, 'transaction_date', 'payment_account_transactions'],
+    ];
+
+    /** One record of paxhitestbed's Income & Expense / Payment Accounts (the models are scoped to the open books). */
+    public function accountsRecord(string $kind, int $id): string
+    {
+        [$class, $dateCol] = self::ACCOUNTS_SOURCES[$kind];
+        $model = $class::find($id);
+        $map = TransactionMapping::where('transaction_type', $kind)->where('transaction_id', (string) $id)->first();
+        if (! $model) {
+            return $map ? $this->apply($map, null, $kind, $id) : 'none';
+        }
+        if (! $map && $this->isHistory($model->{$dateCol})) {
+            return 'history';
+        }
+        $map = $map ?: new TransactionMapping(['transaction_type' => $kind, 'transaction_id' => (string) $id]);
+        $method = [PostingRules::INCOME => 'forIncome', PostingRules::EXPENSE => 'forExpense', PostingRules::SUPPLIER_BILL => 'forSupplierBill',
+            PostingRules::SUPPLIER_PAYMENT => 'forSupplierPayment', PostingRules::PAYMENT_TRANSFER => 'forPaymentAccountTransfer',
+            PostingRules::PAYMENT_ACCOUNT_TXN => 'forPaymentAccountTransaction'][$kind];
+
+        return $this->apply($map, fn () => $this->rules->{$method}($model), $kind, $id);
+    }
+
+    /**
+     * Catch-up for those records: never looked at, failed, changed since the last sweep, or
+     * deleted while their entry stands (changes made without Eloquent).
+     */
+    private function sweepAccounts(): array
+    {
+        $bid = Ledger::businessId();
+        $stats = [];
+        $since = AccountingSetting::getValue('last_sweep_at');
+        $since = $since ? Carbon::parse($since)->subMinutes(10) : null;
+        foreach (self::ACCOUNTS_SOURCES as $kind => [, $dateCol, $table]) {
+            $q = DB::table($table.' as r')->where('r.business_id', $bid)
+                ->leftJoin('transaction_mappings as m', function ($j) use ($bid, $kind) {
+                    $j->on('m.transaction_id', '=', DB::raw('CAST(r.id AS CHAR)'))->where('m.transaction_type', $kind)->where('m.business_id', $bid);
+                })
+                ->where(function ($w) use ($since) {
+                    $w->whereNull('m.id')->orWhere('m.status', 'failed');
+                    if ($since) {
+                        $w->orWhere('r.updated_at', '>=', $since);
+                    }
+                });
+            if ($this->postFrom) {
+                $q->where('r.'.$dateCol, '>=', $this->postFrom);
+            }
+            if ($kind === PostingRules::PAYMENT_ACCOUNT_TXN) {
+                $q->where(fn ($w) => $w->whereNull('r.reference_type')->orWhere('r.reference_type', 'opening_balance')) // only manual ones post by themselves
+                    ->where(fn ($w) => $w->whereNotNull('r.contra_account_id')->orWhereNotNull('m.id')); // and only when the other side is named
+            }
+            $ids = $q->pluck('r.id')->unique();
+            // gone, with an entry still standing
+            $gone = DB::table('transaction_mappings as m')->where('m.business_id', $bid)->where('m.transaction_type', $kind)->where('m.status', 'posted')
+                ->whereNotExists(fn ($x) => $x->from($table.' as r')->whereColumn(DB::raw('CAST(r.id AS CHAR)'), 'm.transaction_id'))
+                ->pluck('m.transaction_id');
+            foreach ($ids->merge($gone)->unique() as $id) {
+                $r = $this->accountsRecord($kind, (int) $id);
+                $stats[$r] = ($stats[$r] ?? 0) + 1;
+            }
+        }
+
+        return $stats;
+    }
+
     private function isHistory($date): bool
     {
         return $this->postFrom && $date && substr((string) $date, 0, 10) < $this->postFrom;
@@ -220,11 +296,13 @@ class LedgerSync
             }
         }
 
+        if (! $map->exists) {
+            // E-Ride: the entry's reference is the mapping row, so it exists first (outside the
+            // transaction: a refused posting must still leave the row to record "failed" on)
+            $map->forceFill(['status' => $map->status ?: 'none'])->save();
+        }
         try {
             return DB::transaction(function () use ($map, $want, $userId, $kind, $fp) {
-                if (! $map->exists) {
-                    $map->save(); // E-Ride: the entry's reference is the mapping row
-                }
                 $had = $map->journal_entry_id ? JournalEntry::find($map->journal_entry_id) : null;
                 $result = 'posted';
                 if ($had && $had->is_posted && ! $had->is_reversed) {
@@ -328,6 +406,10 @@ class LedgerSync
         $bid = Ledger::businessId();
         $agency = $this->agencyId();
         $stats = [];
+        // paxhitestbed's Income & Expense and Payment Accounts: on every set of books, a head office's too
+        foreach ($this->sweepAccounts() as $r => $n) {
+            $stats[$r] = ($stats[$r] ?? 0) + $n;
+        }
         if (! $agency) {
             return $stats; // a head office's own books: nothing comes from the bus records here (yet)
         }

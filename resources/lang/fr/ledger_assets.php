@@ -144,7 +144,7 @@ return [
     'record_purchase' => 'Comptabiliser l\'acquisition',
     'paid_from' => 'Payé depuis',
     'owed_to_supplier_option' => 'Pas encore payé : dû au fournisseur (401)',
-    'record_purchase_note' => 'Seulement si l\'immobilisation n\'a pas été saisie comme achat dans PosInnova : un achat passe déjà sa propre écriture.',
+    'record_purchase_note' => 'Seulement si l\'achat n\'a pas déjà été saisi comme dépense ou facture fournisseur : celles-ci passent leur propre écriture.',
 
     // Reports
     'asset_register' => 'Registre des immobilisations',
@@ -290,4 +290,8 @@ return [
     'fh_cash_accounts' => 'Trésorerie dans la comptabilité',
     'fh_ledger_health' => 'Santé du grand livre',
     'fh_asset_register' => 'Registre des immobilisations',
+    'bus_of_fleet' => 'Bus de la flotte',
+    'not_a_bus' => 'Pas un bus',
+    'bus_of_fleet_help' => 'Quand l\'immobilisation est l\'un de vos bus, son amortissement mensuel compte dans le résultat de ce bus.',
+    'cat_buses' => 'Bus et cars',
 ];

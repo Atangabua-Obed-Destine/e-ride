@@ -39,7 +39,7 @@
                 <select name="type" id="f_type" class="form-control input-sm" onchange="this.form.submit()">
                     <option value="all">@lang('ledger_map.all')</option>
                     @foreach($types as $t)
-                    <option value="{{ $t }}" @selected($f['type'] === $t)>{{ __('ledger.doc_'.$t) }}</option>
+                    <option value="{{ $t }}" @selected($f['type'] === $t)>{{ \App\Ledger\Services\PaymentBook::docLabel($t) }}</option>
                     @endforeach
                 </select>
             </div>
@@ -138,7 +138,7 @@
                         @endif
                         <td>{{ ($rows->currentPage() - 1) * $rows->perPage() + $loop->iteration }}</td>
                         <td style="white-space: nowrap;">{{ \Carbon\Carbon::parse($r->date)->format('d/m/Y') }}</td>
-                        <td><span class="label label-{{ ['sell' => 'primary', 'sell_return' => 'info', 'purchase' => 'success', 'purchase_return' => 'success', 'expense' => 'danger', 'payment' => 'warning'][$r->type] ?? 'default' }}">{{ __('ledger.doc_'.$r->type) }}</span></td>
+                        <td><span class="label label-{{ ['sell' => 'primary', 'sell_return' => 'info', 'purchase' => 'success', 'purchase_return' => 'success', 'expense' => 'danger', 'payment' => 'warning'][$r->type] ?? 'default' }}">{{ \App\Ledger\Services\PaymentBook::docLabel($r->type) }}</span></td>
                         <td>
                             @if($r->link && $r->link['modal'])
                             <a href="#" class="btn-modal" data-href="{{ $r->link['url'] }}" data-container=".view_modal">{{ $r->label }}</a>

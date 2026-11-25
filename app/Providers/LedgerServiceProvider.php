@@ -35,6 +35,8 @@ class LedgerServiceProvider extends ServiceProvider
         \Modules\BusManagement\Entities\BusMoneyMove::observe(\App\Ledger\LedgerObserver::class);
         \Modules\BusManagement\Entities\BusDeparture::observe(\App\Ledger\LedgerObserver::class);
         \Modules\BusManagement\Entities\BusStatement::observe(\App\Ledger\LedgerObserver::class);
+        // paxhitestbed's Income & Expense and Payment Accounts records that post
+        \App\Ledger\AccountsObserver::register();
 
         $router = $this->app['router'];
         $router->aliasMiddleware(RequireLedgerReview::ALIAS, RequireLedgerReview::class);

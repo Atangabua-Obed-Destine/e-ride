@@ -49,7 +49,16 @@ class PostingRules
     const DEPARTURE = 'bus_departure';
     const STATEMENT = 'bus_statement';
     const STATEMENT_PAID = 'bus_statement_paid';
-    const TYPES = [self::MOVE, self::DEPARTURE, self::STATEMENT, self::STATEMENT_PAID];
+    // paxhitestbed's Income & Expense and Payment Accounts (App\Ledger\Models; see forIncome() and below)
+    const INCOME = 'income';
+    const EXPENSE = 'expense';
+    const SUPPLIER_BILL = 'supplier_bill';
+    const SUPPLIER_PAYMENT = 'supplier_payment';
+    const PAYMENT_TRANSFER = 'payment_transfer';
+    const PAYMENT_ACCOUNT_TXN = 'payment_account_txn';
+    const ACCOUNTS_TYPES = [self::INCOME, self::EXPENSE, self::SUPPLIER_BILL, self::SUPPLIER_PAYMENT, self::PAYMENT_TRANSFER, self::PAYMENT_ACCOUNT_TXN];
+    const TYPES = [self::MOVE, self::DEPARTURE, self::STATEMENT, self::STATEMENT_PAID,
+        self::INCOME, self::EXPENSE, self::SUPPLIER_BILL, self::SUPPLIER_PAYMENT, self::PAYMENT_TRANSFER, self::PAYMENT_ACCOUNT_TXN];
 
     private $codes;
 
@@ -250,6 +259,222 @@ class PostingRules
                 ['account_id' => $from, 'debit' => 0, 'credit' => $total, 'description' => $desc],
             ],
         ];
+    }
+
+    // ---------------------------------------------------------------- Income & Expense, Payment Accounts (paxhitestbed)
+    //
+    // paxhitestbed posts these from its observers (TransactionAutoMapService with the category
+    // mapping, CashAccounts for the money side) and from SupplierPayables; here they go through the
+    // same sync as the bus records (fingerprint, reverse and re-post on a change, health):
+    //
+    //   income                     Dr the money's account          Cr income category (7xx)
+    //   expense                    Dr expense category (6xx)       Cr the money's account
+    //   supplier bill approved     Dr each line's 6xx (+ 4452 VAT) Cr 401 suppliers       (voided: reversed)
+    //   supplier payment           Dr 401 suppliers                Cr the bank / cash it left (voided: reversed)
+    //   fund transfer              Dr receiving account's 5xx      Cr sending account's 5xx
+    //   deposit / opening balance  Dr the account's 5xx            Cr the other side named on it
+    //   withdrawal                 Dr the other side named on it   Cr the account's 5xx
+    //
+    // "The money's account": the payment account's own ledger account when one is named
+    // (payment_accounts.chart_of_account_id), otherwise the payment method's (Mapping settings).
+
+    /** @return array|null the entry (same shape as forMove()) */
+    public function forIncome(\App\Ledger\Models\Income $i): ?array
+    {
+        $amount = round((float) $i->amount, 2);
+        if ($amount <= 0 || ! $i->status) {
+            return null;
+        }
+        $cat = $i->category;
+        $desc = trim(($cat->name ?? __('ledger_accounts.doc_income')).' - '.$i->title, ' -');
+
+        return [
+            'date' => $i->date->toDateString(),
+            'description' => $desc,
+            'reference' => $i->invoice_id ?: $i->reference,
+            'journal_type' => 'cash',
+            'lines' => [
+                ['account_id' => $this->moneyAccount($i->payment_account_id, $i->payment_method), 'debit' => $amount, 'credit' => 0, 'description' => $desc],
+                ['account_id' => $this->categoryAccount('income_category', $i->category_id, $cat->name ?? null), 'debit' => 0, 'credit' => $amount, 'description' => $desc],
+            ],
+        ];
+    }
+
+    public function forExpense(\App\Ledger\Models\Expense $e): ?array
+    {
+        $amount = round((float) $e->amount, 2);
+        if ($amount <= 0 || ! $e->status) {
+            return null;
+        }
+        $cat = $e->category;
+        $desc = trim(($cat->name ?? __('ledger_accounts.doc_expense')).' - '.$e->title, ' -');
+
+        return [
+            'date' => $e->date->toDateString(),
+            'description' => $desc,
+            'reference' => $e->invoice_id ?: $e->reference,
+            'journal_type' => 'cash',
+            'lines' => [
+                ['account_id' => $this->categoryAccount('expense_category', $e->category_id, $cat->name ?? null), 'debit' => $amount, 'credit' => 0, 'description' => $desc],
+                ['account_id' => $this->moneyAccount($e->payment_account_id, $e->payment_method), 'debit' => 0, 'credit' => $amount, 'description' => $desc],
+            ],
+        ];
+    }
+
+    /** An approved bill: the cost (and recoverable VAT) and the debt, on the bill date. A draft or a voided bill has none. */
+    public function forSupplierBill(\App\Ledger\Models\SupplierBill $b): ?array
+    {
+        if (! $b->isApproved() || round((float) $b->total, 2) <= 0) {
+            return null;
+        }
+        $supplier = $b->supplier->title ?? '';
+        $desc = trim(__('ledger_accounts.doc_supplier_bill').' '.$b->number.' - '.$supplier.($b->supplier_reference ? ' ('.$b->supplier_reference.')' : ''));
+        $lines = [];
+        foreach ($b->lines()->with('category')->get() as $l) {
+            $account = $l->account_id ?: ($b->isOpeningBalance() ? null : $this->categoryAccount('expense_category', $l->expense_category_id, $l->category->name ?? null));
+            if (! $account) {
+                throw new \RuntimeException(__('ledger_accounts.err_opening_account'));
+            }
+            $lines[] = ['account_id' => (int) $account, 'debit' => round((float) $l->amount, 2), 'credit' => 0,
+                'description' => trim(($l->description ?: ($l->category->name ?? __('ledger_accounts.opening_balance'))).' - '.$supplier, ' -')];
+        }
+        if (round((float) $b->vat_amount, 2) > 0) {
+            $lines[] = ['account_id' => $this->mapping('vat_deductible'), 'debit' => round((float) $b->vat_amount, 2), 'credit' => 0,
+                'description' => __('ledger_accounts.vat_recoverable').' - '.$supplier];
+        }
+        $lines[] = ['account_id' => (int) ($b->payable_account_id ?: $this->mapping('suppliers')), 'debit' => 0, 'credit' => round((float) $b->total, 2),
+            'description' => __('ledger_accounts.owed_to').' '.$supplier.' - '.$b->number];
+
+        return [
+            'date' => $b->bill_date->toDateString(),
+            'description' => $desc,
+            'reference' => $b->supplier_reference ?: $b->number,
+            'journal_type' => 'purchase',
+            'lines' => $lines,
+        ];
+    }
+
+    /** A payment: Dr the supplier account(s) of the bills it pays, Cr the bank or cash it left. A voided one has none. */
+    public function forSupplierPayment(\App\Ledger\Models\SupplierPayment $p): ?array
+    {
+        $amount = round((float) $p->amount, 2);
+        if ($p->isVoid() || $amount <= 0) {
+            return null;
+        }
+        $supplier = $p->supplier->title ?? '';
+        $byPayable = [];
+        $numbers = [];
+        foreach ($p->allocations()->with('bill')->get() as $a) {
+            $acc = (int) ($a->bill->payable_account_id ?? 0) ?: $this->mapping('suppliers');
+            $byPayable[$acc] = round(($byPayable[$acc] ?? 0) + (float) $a->amount, 2);
+            $numbers[] = $a->bill->number ?? '';
+        }
+        if (! $byPayable) {
+            $byPayable[$this->mapping('suppliers')] = $amount;
+        }
+        $desc = trim(__('ledger_accounts.doc_supplier_payment').' '.$p->number.' - '.$supplier.($numbers ? ' ('.implode(', ', array_filter($numbers)).')' : ''));
+        $lines = [];
+        foreach ($byPayable as $acc => $part) {
+            $lines[] = ['account_id' => $acc, 'debit' => $part, 'credit' => 0, 'description' => __('ledger_accounts.paid_to').' '.$supplier];
+        }
+        $lines[] = ['account_id' => (int) $p->cash_account_id, 'debit' => 0, 'credit' => $amount, 'description' => $desc];
+        $code = (string) ChartOfAccount::whereKey($p->cash_account_id)->value('account_code');
+
+        return [
+            'date' => $p->payment_date->toDateString(),
+            'description' => $desc,
+            'reference' => $p->reference ?: $p->number,
+            'journal_type' => str_starts_with($code, '52') ? 'bank' : 'cash',
+            'lines' => $lines,
+        ];
+    }
+
+    /** A fund transfer (paxhitestbed CashAccounts::postTransfer). Nothing when both accounts use the same ledger account. */
+    public function forPaymentAccountTransfer(\App\Ledger\Models\PaymentAccountTransfer $t): ?array
+    {
+        $amount = round((float) $t->amount, 2);
+        if ($amount <= 0) {
+            return null;
+        }
+        $from = $this->paymentAccountLedger($t->from_account_id);
+        $to = $this->paymentAccountLedger($t->to_account_id);
+        if ($from === $to) {
+            return null;
+        }
+        $desc = __('ledger_accounts.transfer').': '.($t->fromAccount->title ?? '').' → '.($t->toAccount->title ?? '');
+
+        return [
+            'date' => $t->transfer_date->toDateString(),
+            'description' => $desc,
+            'reference' => null,
+            'journal_type' => 'cash',
+            'lines' => [
+                ['account_id' => $to, 'debit' => $amount, 'credit' => 0, 'description' => __('ledger_accounts.transfer_in')],
+                ['account_id' => $from, 'debit' => 0, 'credit' => $amount, 'description' => __('ledger_accounts.transfer_out')],
+            ],
+        ];
+    }
+
+    /**
+     * A deposit, a withdrawal or an opening balance typed on a payment account, when the other
+     * side of its entry is named (contra_account_id). paxhitestbed posts none of these; without
+     * the other side E-Ride does the same, and Cash accounts shows the book beside the ledger.
+     */
+    public function forPaymentAccountTransaction(\App\Ledger\Models\PaymentAccountTransaction $tx): ?array
+    {
+        $amount = round((float) $tx->amount, 2);
+        if (! $tx->isManual() || ! $tx->contra_account_id || $amount <= 0) {
+            return null;
+        }
+        $cash = $this->paymentAccountLedger($tx->payment_account_id);
+        $desc = trim(($tx->title ?: __('ledger_accounts.doc_payment_account_txn')).' - '.($tx->paymentAccount->title ?? ''), ' -');
+        $in = $tx->transaction_type === 'credit';
+
+        return [
+            'date' => $tx->transaction_date->toDateString(),
+            'description' => $desc,
+            'reference' => $tx->payment_reference,
+            'journal_type' => $tx->reference_type === 'opening_balance' ? 'opening' : 'cash',
+            'lines' => [
+                ['account_id' => $in ? $cash : (int) $tx->contra_account_id, 'debit' => $amount, 'credit' => 0, 'description' => $desc],
+                ['account_id' => $in ? (int) $tx->contra_account_id : $cash, 'debit' => 0, 'credit' => $amount, 'description' => $desc],
+            ],
+        ];
+    }
+
+    /** The account money went through: the payment account's ledger account, or the payment method's. */
+    public function moneyAccount($paymentAccountId, ?string $method): int
+    {
+        if ($paymentAccountId) {
+            return $this->paymentAccountLedger($paymentAccountId);
+        }
+        if (! $method) {
+            throw new \RuntimeException(__('ledger_accounts.err_no_money_side'));
+        }
+
+        return $this->mapping('payment_method', $method);
+    }
+
+    /** A payment account's own ledger account, or a clear refusal. */
+    public function paymentAccountLedger($paymentAccountId): int
+    {
+        $a = \App\Ledger\Models\PaymentAccount::find($paymentAccountId);
+        if (! $a || ! $a->chart_of_account_id) {
+            throw new \RuntimeException(__('ledger_accounts.err_account_unlinked', ['name' => $a->title ?? '#'.$paymentAccountId]));
+        }
+
+        return (int) $a->chart_of_account_id;
+    }
+
+    /** A category's account (its own mapping, else the type's '' row), or a refusal naming the category. */
+    private function categoryAccount(string $type, $categoryId, ?string $name): int
+    {
+        $id = DefaultAccount::id($type, (string) $categoryId);
+        if (! $id) {
+            throw new \RuntimeException(__('ledger.err_no_mapping', ['type' => __('ledger_accounts.map_'.$type), 'key' => $name ? '('.$name.')' : '']));
+        }
+
+        return (int) $id;
     }
 
     // ---------------------------------------------------------------- helpers

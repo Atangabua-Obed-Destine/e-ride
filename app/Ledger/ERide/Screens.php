@@ -19,6 +19,15 @@ class Screens
         'ledger.mappings.settings',
         'ledger.cash-accounts',
         'ledger.mappings.transactions',
+        'ledger.tills.index',
+        // stage 2
+        'ledger.bank-reconciliation.index',
+        'ledger.recurring-entries.index',
+        'ledger.year-end-closing.index',
+        'ledger.income.index', 'ledger.income-category.index', 'ledger.expense.index', 'ledger.expense-category.index',
+        'ledger.supplier-bill.index', 'ledger.supplier-payment.index', 'ledger.supplier-bill.aging',
+        'ledger.payment-account.index', 'ledger.payment-account-transfer.index',
+        'ledger.payment-account-report.cashflow', 'ledger.payment-account-report.unlinked',
     ];
 
     public static function ready(): array
@@ -38,8 +47,9 @@ class Screens
      */
     public const PENDING = [
         'ledger.ledger-health', 'ledger.daybook.', 'ledger.budget.', 'ledger.budget-line.', 'ledger.budget-sheet.',
-        'ledger.accounting-reports.', 'ledger.fixed-assets.', 'ledger.fixed-asset-categories.', 'ledger.bank-reconciliation.',
-        'ledger.recurring-entries.', 'ledger.year-end-closing.',
+        'ledger.accounting-reports.', 'ledger.fixed-assets.', 'ledger.fixed-asset-categories.',
+        // E-Ride: bank reconciliation, recurring entries and year-end closing work on the bus books
+        // (tests/Ledger/periodend_test.php); their menu entries come with STAGE_1.
     ];
 
     public static function isPending(?string $route): bool

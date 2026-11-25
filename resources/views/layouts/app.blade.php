@@ -11,6 +11,15 @@
     $books = $ledgerBooks ?? \App\Ledger\ERide\Books::current();
     // [route, label, permissions (any), path prefix after partner/accounting/ that marks it active]
     $groups = [
+        [__('ledger.menu_income_expense'), [
+            ['ledger.income.index', 'ledger.menu_income', ['income-view'], 'account/income'],
+            ['ledger.income-category.index', 'ledger.menu_income_categories', ['income-category-view', 'income-view'], 'account/income-category'],
+            ['ledger.expense.index', 'ledger.menu_expense', ['expense-view'], 'account/expense'],
+            ['ledger.expense-category.index', 'ledger.menu_expense_categories', ['expense-category-view', 'expense-view'], 'account/expense-category'],
+            ['ledger.supplier-bill.index', 'ledger.menu_supplier_bills', ['supplier-bill-view'], 'account/supplier-bills'],
+            ['ledger.supplier-payment.index', 'ledger.menu_supplier_payments', ['supplier-payment-view'], 'account/supplier-payments'],
+            ['ledger.supplier-bill.aging', 'ledger.menu_payables_aging_bills', ['supplier-bill-view'], null],
+        ]],
         [__('ledger.menu_budget'), [
             ['ledger.budget.dashboard', 'ledger.menu_budget_dashboard', ['budget-view'], 'budget/dashboard'],
             ['ledger.budget-sheet.index', 'ledger.menu_ie_sheet', ['budget-view'], 'budget-sheet'],
@@ -23,6 +32,13 @@
             ['ledger.budget.reports.variance', 'ledger.menu_variance_report', ['budget-view'], null],
             ['ledger.budget.reports.department', 'ledger.menu_department_report', ['budget-view'], null],
             ['ledger.budget.reports.cashflow', 'ledger.menu_cashflow_projection', ['budget-view'], null],
+        ]],
+        [__('ledger.menu_payment_accounts'), [
+            ['ledger.payment-account.index', 'ledger.menu_account_list', ['payment-account-view'], 'payment-account'],
+            ['ledger.payment-account-transfer.index', 'ledger.menu_fund_transfers', ['payment-account-view', 'payment-account-transfer-view'], 'payment-account-transfer'],
+            ['ledger.tills.index', 'ledger.menu_counter_tills', ['till-count-view'], 'tills'],
+            ['ledger.payment-account-report.cashflow', 'ledger.menu_cashflow_report', ['payment-account-report-cashflow'], null],
+            ['ledger.payment-account-report.unlinked', 'ledger.menu_payment_account_report', ['payment-account-report-statement'], null],
         ]],
         [__('ledger.menu_accounting'), [
             ['ledger.chart-of-accounts.index', 'ledger.menu_chart_of_accounts', ['chart-of-accounts-view'], 'chart-of-accounts'],

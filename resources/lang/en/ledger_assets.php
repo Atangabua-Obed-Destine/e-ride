@@ -144,7 +144,7 @@ return [
     'record_purchase' => 'Record the purchase in the ledger',
     'paid_from' => 'Paid from',
     'owed_to_supplier_option' => 'Not paid yet: owed to the supplier (401)',
-    'record_purchase_note' => 'Only when the asset was not entered as a purchase in PosInnova: a purchase already posts its own entry.',
+    'record_purchase_note' => 'Only when the purchase was not already entered as an expense or a supplier bill: those post their own entry.',
 
     // Reports
     'asset_register' => 'Asset Register',
@@ -290,4 +290,8 @@ return [
     'fh_cash_accounts' => 'Cash and bank in the ledger',
     'fh_ledger_health' => 'Ledger health',
     'fh_asset_register' => 'Asset Register',
+    'bus_of_fleet' => 'Bus of the fleet',
+    'not_a_bus' => 'Not a bus',
+    'bus_of_fleet_help' => 'When the asset is one of your buses, its monthly depreciation counts in that bus\'s profit.',
+    'cat_buses' => 'Buses and coaches',
 ];
