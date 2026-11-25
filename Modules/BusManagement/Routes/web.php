@@ -84,6 +84,11 @@ Route::group(['prefix' => 'partner/bus-agency', 'as' => 'bus-partner.'], functio
         Route::get('cash', [$acc, 'cash'])->name('.cash');
         Route::get('reconcile', [$acc, 'reconcile'])->name('.reconcile');
         Route::get('buses', [$acc, 'buses'])->name('.buses');
+        Route::get('staff-pay', [$acc, 'staffPay'])->name('.pay');
+        Route::post('staff-pay/people/{employee?}', [$acc, 'saveEmployee'])->name('.employee')->whereUuid('employee');
+        Route::get('payslips/{payslip}', [$acc, 'payslip'])->name('.payslip')->whereNumber('payslip');
+        Route::get('budget', [$acc, 'budget'])->name('.budget');
+        Route::post('budget', [$acc, 'saveBudget'])->name('.budget.save');
         Route::get('reports', [$acc, 'reports'])->name('.reports');
         Route::get('journal', [$acc, 'journal'])->name('.journal');
         Route::get('settings', [$acc, 'settings'])->name('.settings');
@@ -228,6 +233,11 @@ Route::group(['prefix' => 'partner/bus-company', 'as' => 'bus-company.'], functi
         Route::get('money', [$acc, 'money'])->name('.money');
         Route::get('reconcile', [$acc, 'reconcile'])->name('.reconcile');
         Route::get('buses', [$acc, 'buses'])->name('.buses');
+        Route::get('staff-pay', [$acc, 'staffPay'])->name('.pay');
+        Route::post('staff-pay/people/{employee?}', [$acc, 'saveEmployee'])->name('.employee')->whereUuid('employee');
+        Route::get('payslips/{payslip}', [$acc, 'payslip'])->name('.payslip')->whereNumber('payslip');
+        Route::get('budget', [$acc, 'budget'])->name('.budget');
+        Route::post('budget', [$acc, 'saveBudget'])->name('.budget.save');
         Route::get('reports', [$acc, 'reports'])->name('.reports');
         Route::get('journal', [$acc, 'journal'])->name('.journal');
         Route::get('settings', [$acc, 'settings'])->name('.settings');

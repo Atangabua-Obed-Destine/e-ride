@@ -144,6 +144,7 @@ class AccountingPreview
             case BusAccDocument::EXPENSE:
                 $add(translate('Category'), $acc($d->account_id));
                 $add(translate('Amount'), $this->money($d->amount));
+                $add(translate('VAT on the invoice (recovered)'), !empty($d->lines['vat']) ? $this->money($d->lines['vat']) : null);
                 $add(translate('Paid from'), $d->money_account_id ? $acc($d->money_account_id) : translate('Not paid yet: owed to the supplier'));
                 $add(translate('Supplier'), $d->supplier);
                 $add(translate('Due on'), $d->due_on?->format('d/m/Y'));
@@ -157,6 +158,7 @@ class AccountingPreview
             case BusAccDocument::INCOME:
                 $add(translate('Category'), $acc($d->account_id));
                 $add(translate('Amount'), $this->money($d->amount));
+                $add(translate('VAT included (collected)'), !empty($d->lines['vat']) ? $this->money($d->lines['vat']) : null);
                 $add(translate('Received into'), $acc($d->money_account_id));
                 break;
             case BusAccDocument::TRANSFER:
@@ -210,6 +212,31 @@ class AccountingPreview
                 $add(translate('Direction'), ($d->lines['direction'] ?? '') === 'from_branch' ? translate('Handed in by the branch') : translate('Sent to the branch'));
                 $add(translate('Amount'), $this->money($d->amount));
                 $add(translate('Head office account'), $acc($d->money_account_id));
+                break;
+            case BusAccDocument::PAYROLL:
+                $add(translate('Month'), \Illuminate\Support\Carbon::createFromFormat('Y-m-d', ($d->lines['month'] ?? $d->date->format('Y-m')) . '-01')->translatedFormat('F Y'));
+                $add(translate('People paid'), (string)($d->lines['people'] ?? 0));
+                $add(translate('Gross pay'), $this->money($d->lines['gross'] ?? 0));
+                $add(translate('Net to pay the staff'), $this->money($d->lines['net'] ?? 0));
+                $add(translate('Owed to CNPS (both shares)'), $this->money($d->lines['cnps'] ?? 0));
+                $add(translate('Owed to the State (withheld and employer taxes)'), $this->money($d->lines['state'] ?? 0));
+                $add(translate('Cost to the employer'), $this->money(($d->lines['gross'] ?? 0) + ($d->lines['employer_cnps'] ?? 0) + ($d->lines['employer_taxes'] ?? 0)));
+                break;
+            case BusAccDocument::STAFF_PAY:
+                $add(translate('Payroll'), $d->parent?->number);
+                $add(translate('Amount'), $this->money($d->amount));
+                $add(translate('Paid from'), $acc($d->money_account_id));
+                break;
+            case BusAccDocument::REMITTANCE:
+                $add(translate('Paid to'), match ($d->lines['to'] ?? '') { 'cnps' => translate('CNPS (social security)'), 'vat' => translate('VAT'), default => translate('Taxes withheld for the State') });
+                $add(translate('Amount'), $this->money($d->amount));
+                $add(translate('Paid from'), $acc($d->money_account_id));
+                break;
+            case BusAccDocument::VAT_RETURN:
+                $add(translate('Month'), \Illuminate\Support\Carbon::createFromFormat('Y-m-d', $d->lines['month'] . '-01')->translatedFormat('F Y'));
+                $add(translate('VAT collected'), $this->money($d->lines['collected'] ?? 0));
+                $add(translate('VAT to recover'), $this->money($d->lines['deductible'] ?? 0));
+                $add(($d->lines['due'] ?? 0) >= 0 ? translate('VAT to pay') : translate('VAT credit carried'), $this->money(abs($d->lines['due'] ?? 0)));
                 break;
             case BusAccDocument::OPENING:
                 $add(translate('Books start on'), $d->date->format('d/m/Y'));

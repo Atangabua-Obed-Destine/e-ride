@@ -62,6 +62,7 @@
                 <div class="col-12"><label class="form-label" for="in_bus">{{ translate('Bus (optional)') }}</label>
                     <select class="form-select" id="in_bus" name="vehicle_id"><option value="">{{ translate('Not for one bus') }}</option>
                         @foreach($buses as $bus)<option value="{{ $bus->id }}">{{ $bus->registration }}</option>@endforeach</select></div>
+                @if($vatOn)<div class="col-12"><label class="small"><input type="checkbox" class="form-check-input" name="vat_included" value="1" checked> {{ translate('The price includes VAT') }}</label></div>@endif
                 <div class="col-12"><label class="form-label" for="in_note">{{ translate('Note (optional)') }}</label>
                     <input type="text" class="form-control" id="in_note" name="note" maxlength="500"></div>
             </div>

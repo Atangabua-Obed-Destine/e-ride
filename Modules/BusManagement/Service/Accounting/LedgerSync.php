@@ -361,9 +361,44 @@ class LedgerSync
 
         return $this->ledger->post($books->agency_id, [
             'date' => $m->at, 'journal' => in_array($m->kind, [BusMoneyMove::SALE, BusMoneyMove::REBOOK], true) ? 'sales' : 'cash',
-            'memo' => $memo, 'lines' => $lines, 'auto' => true,
+            'memo' => $memo, 'lines' => $this->vatSplit($books, $lines), 'auto' => true,
             'source_type' => 'move', 'source_id' => (string)$m->id, 'source_key' => 'move:' . $m->id,
         ]);
+    }
+
+    /**
+     * When the books carry VAT on tickets (Settings), a ticket sale or a refund after the trip is
+     * split: the price before VAT on the sales account, the VAT on 4431 "VAT collected". The
+     * ticket money held before the trip (4771) stays at the full price.
+     */
+    public function vatSplit(BusAccBook $books, array $lines): array
+    {
+        if (!$books->setting('vat_registered') || !$books->setting('vat_on_tickets')) {
+            return $lines;
+        }
+        $rate = (float)$books->setting('vat_rate', 19.25);
+        $out = [];
+        $vatAccount = null;
+        foreach ($lines as $l) {
+            $acc = $l[0];
+            if (!($acc instanceof \Modules\BusManagement\Entities\BusAccAccount) || !in_array($acc->role, ['sales_online', 'sales_counter', 'refunds_given'], true)) {
+                $out[] = $l;
+                continue;
+            }
+            $vatAccount ??= $this->ledger->account($books->agency_id, 'vat_out');
+            $debit = round((float)($l[1] ?? 0), 2);
+            $credit = round((float)($l[2] ?? 0), 2);
+            $amount = max($debit, $credit);
+            $net = round($amount / (1 + $rate / 100), 2);
+            $vat = round($amount - $net, 2);
+            $l[1] = $debit > 0 ? $net : 0;
+            $l[2] = $credit > 0 ? $net : 0;
+            $out[] = $l;
+            if ($vat > 0) {
+                $out[] = [$vatAccount, $debit > 0 ? $vat : 0, $credit > 0 ? $vat : 0, 'departure_id' => $l['departure_id'] ?? null, 'channel' => $l['channel'] ?? null];
+            }
+        }
+        return $out;
     }
 
     /** Trip tags for a line: the trip, its bus, its route, the sales channel. */
@@ -435,7 +470,7 @@ class LedgerSync
                         $entry = $this->ledger->post($books->agency_id, [
                             'date' => $when->gt(now()) ? now() : $when, 'journal' => 'sales', 'auto' => true,
                             'memo' => translate('Trip left: its tickets become sales') . ' · ' . $d->leavesAt()->format('d/m H:i') . ' ' . ($d->destination?->city ?? ''),
-                            'lines' => $lines, 'source_type' => 'departure', 'source_id' => (string)$d->id,
+                            'lines' => $this->vatSplit($books, $lines), 'source_type' => 'departure', 'source_id' => (string)$d->id,
                             // A trip recognized again after running again gets its own key.
                             'source_key' => 'dep:' . $d->id . (($n = BusAccEntry::where('agency_id', $books->agency_id)->where('source_type', 'departure')->where('source_id', (string)$d->id)->whereNull('reverses_id')->count()) ? ':' . $n : ''),
                         ]);

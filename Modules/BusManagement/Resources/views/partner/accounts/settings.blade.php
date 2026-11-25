@@ -92,6 +92,32 @@
 
         <form class="acc-card acc-form" method="POST" action="{{ route($acc . '.settings.save') }}">
             @csrf
+            <input type="hidden" name="eride_from" value="{{ $books->setting('eride_from', 'mtn') }}">
+            @unless($isCompanyBooks)<input type="hidden" name="refunds_from" value="{{ $books->setting('refunds_from', 'mtn') }}">@endunless
+            <h2 class="acc-h">{{ translate('VAT') }}</h2>
+            <p class="b-hint">{{ translate('Only if these books are registered for VAT. Ask your tax adviser whether your tickets carry VAT.') }}</p>
+            <input type="hidden" name="vat_registered" value="0">
+            <label class="small d-block mb-2"><input type="checkbox" class="form-check-input" name="vat_registered" value="1" @checked($books->setting('vat_registered'))> {{ translate('Registered for VAT') }}</label>
+            @unless($isCompanyBooks)
+                <input type="hidden" name="vat_on_tickets" value="0">
+                <label class="small d-block mb-2"><input type="checkbox" class="form-check-input" name="vat_on_tickets" value="1" @checked($books->setting('vat_on_tickets'))> {{ translate('Ticket prices include VAT') }}</label>
+            @endunless
+            <div class="row g-2"><div class="col-sm-4"><label class="form-label" for="st_vat">{{ translate('VAT rate') }} (%)</label>
+                <input type="number" class="form-control" id="st_vat" name="vat_rate" min="0" max="50" step="0.01" value="{{ $books->setting('vat_rate', 19.25) }}"></div></div>
+            <h2 class="acc-h mt-4">{{ translate('Employer rates for staff pay') }} (%)</h2>
+            <p class="b-hint">{{ translate('The work accident rate depends on your risk group on the CNPS registration. Confirm every rate with your accountant.') }}</p>
+            @php $rates = array_merge(\Modules\BusManagement\Lib\CameroonPayroll::EMPLOYER_DEFAULTS, (array)$books->setting('pay_rates', [])); @endphp
+            <div class="row g-2">
+                @foreach(['pension' => translate('CNPS pension'), 'family' => translate('CNPS family allowances'), 'accident' => translate('CNPS work accident'), 'cfc' => translate('CFC (housing fund)'), 'fne' => translate('FNE (employment fund)')] as $k => $l)
+                    <div class="col-sm-4"><label class="form-label" for="rate_{{ $k }}">{{ $l }}</label>
+                        <input type="number" class="form-control" id="rate_{{ $k }}" name="pay_rates[{{ $k }}]" min="0" max="30" step="0.01" value="{{ $rates[$k] }}"></div>
+                @endforeach
+            </div>
+            <button class="btn btn-dark btn-sm mt-3">{{ translate('Save') }}</button>
+        </form>
+
+        <form class="acc-card acc-form" method="POST" action="{{ route($acc . '.settings.save') }}">
+            @csrf
             <h2 class="acc-h">{{ translate('Which account pays') }}</h2>
             <div class="row g-2">
                 @unless($isCompanyBooks)

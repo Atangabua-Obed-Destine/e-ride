@@ -23,11 +23,16 @@ class BusAccDocument extends Model
     public const ASSET = 'asset';
     public const DISPOSAL = 'disposal';
     public const BRANCH_MONEY = 'branch_money';
+    public const PAYROLL = 'payroll';
+    public const STAFF_PAY = 'staff_pay';
+    public const REMITTANCE = 'remittance';
+    public const VAT_RETURN = 'vat_return';
 
     public const PREFIX = [
         self::EXPENSE => 'EXP', self::BILL_PAYMENT => 'PAY', self::INCOME => 'INC', self::TRANSFER => 'TRF',
         self::CASH_COUNT => 'CNT', self::CHECK => 'CHK', self::JOURNAL => 'JNL', self::OPENING => 'OPN',
         self::ASSET => 'BUS', self::DISPOSAL => 'DSP', self::BRANCH_MONEY => 'HOB',
+        self::PAYROLL => 'SAL', self::STAFF_PAY => 'SPY', self::REMITTANCE => 'REM', self::VAT_RETURN => 'VAT',
     ];
 
     protected $table = 'bus_acc_documents';
@@ -96,6 +101,10 @@ class BusAccDocument extends Model
             self::ASSET => 'Bus added',
             self::DISPOSAL => 'Bus sold or retired',
             self::BRANCH_MONEY => 'Money with a branch',
+            self::PAYROLL => 'Payroll',
+            self::STAFF_PAY => 'Staff paid',
+            self::REMITTANCE => 'Paid to CNPS or the State',
+            self::VAT_RETURN => 'VAT return',
             default => 'Opening balances',
         });
     }

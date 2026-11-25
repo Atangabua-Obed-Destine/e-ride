@@ -39,6 +39,10 @@
     </div>
     <div class="row g-3 mt-0">
         @include('busmanagement::partner.accounts._tags', ['idp' => 'ex'])
+        @if($vatOn)
+            <div class="col-sm-4"><label class="form-label" for="ex_vat">{{ translate('VAT on the invoice (optional)') }}</label>
+                <input type="number" class="form-control" id="ex_vat" name="vat" min="0" step="1" placeholder="0"></div>
+        @endif
         <div class="col-sm-4"><label class="form-label" for="ex_ref">{{ translate('Receipt or invoice number') }}</label>
             <input type="text" class="form-control" id="ex_ref" name="reference" maxlength="100"></div>
         <div class="col-sm-8"><label class="form-label" for="ex_note">{{ translate('Note (optional)') }}</label>

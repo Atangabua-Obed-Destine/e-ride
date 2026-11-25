@@ -225,13 +225,15 @@ class AccountingService
             'departure_id' => ['nullable', 'string'],
             'reference' => ['nullable', 'string', 'max:100'],
             'note' => ['nullable', 'string', 'max:500'],
-        ], ['account_id' => translate('category'), 'money_account_id' => translate('paid from'), 'supplier' => translate('supplier')]);
+            'vat' => ['nullable', 'numeric', 'min:0', 'lt:amount'],
+        ], ['account_id' => translate('category'), 'money_account_id' => translate('paid from'), 'supplier' => translate('supplier'), 'vat' => translate('VAT on the invoice')]);
         $category = $this->ownAccount($agency, $data['account_id'], 'expense');
+        $vat = $this->vatRegistered($agency) ? round((float)($data['vat'] ?? 0), 2) : 0.0;
         $tags = $this->tags($agency, $data);
         $amount = round((float)$data['amount'], 2);
         $later = $data['paid'] === 'later';
 
-        return DB::transaction(function () use ($agency, $data, $userId, $category, $tags, $amount, $later) {
+        return DB::transaction(function () use ($agency, $data, $userId, $category, $tags, $amount, $later, $vat) {
             $credit = $later ? [$this->ledger->account($agency, 'suppliers'), 0, $amount, 'memo' => $data['supplier']]
                 : $this->moneyLine($agency, $data, 0, $amount);
             $doc = $this->document($agency, BusAccDocument::EXPENSE, $data, $userId, [
@@ -241,7 +243,11 @@ class AccountingService
                 'supplier' => $data['supplier'] ?? null, 'owed' => $later ? $amount : 0, 'due_on' => $later ? ($data['due_on'] ?? null) : null,
             ] + $tags);
             $memo = $category->displayName() . ($data['supplier'] ?? null ? ' · ' . $data['supplier'] : '') . ($data['note'] ?? null ? ' · ' . $data['note'] : '');
-            $this->postDocument($agency, $doc, $later ? 'purchase' : 'cash', $memo, [[$category, $amount, 0] + $tags, $credit], $userId);
+            $debits = $vat > 0 ? [[$category, $amount - $vat, 0] + $tags, [$this->ledger->account($agency, 'vat_in'), $vat, 0]] : [[$category, $amount, 0] + $tags];
+            if ($vat > 0) {
+                $doc->update(['lines' => ['vat' => $vat]]);
+            }
+            $this->postDocument($agency, $doc, $later ? 'purchase' : 'cash', $memo, array_merge($debits, [$credit]), $userId);
             return $doc->fresh();
         });
     }
@@ -298,18 +304,25 @@ class AccountingService
             'departure_id' => ['nullable', 'string'],
             'reference' => ['nullable', 'string', 'max:100'],
             'note' => ['nullable', 'string', 'max:500'],
+            'vat_included' => ['nullable', 'boolean'],
         ], ['account_id' => translate('category'), 'money_account_id' => translate('received into')]);
         $category = $this->ownAccount($agency, $data['account_id'], 'revenue');
+        $vatIn = $this->vatRegistered($agency) && !empty($data['vat_included']);
         $tags = $this->tags($agency, $data);
         $amount = round((float)$data['amount'], 2);
 
-        return DB::transaction(function () use ($agency, $data, $userId, $category, $tags, $amount) {
+        return DB::transaction(function () use ($agency, $data, $userId, $category, $tags, $amount, $vatIn) {
             $debit = $this->moneyLine($agency, $data, $amount, 0);
             $doc = $this->document($agency, BusAccDocument::INCOME, $data, $userId, [
                 'amount' => $amount, 'account_id' => (string)$category->id, 'money_account_id' => (string)$debit[0]->id, 'staff_user_id' => $debit['staff_user_id'] ?? null,
             ] + $tags);
+            $vat = $vatIn ? round($amount - $amount / (1 + $this->vatRateOf($agency) / 100), 2) : 0.0;
+            $credits = $vat > 0 ? [[$category, 0, $amount - $vat] + $tags, [$this->ledger->account($agency, 'vat_out'), 0, $vat]] : [[$category, 0, $amount] + $tags];
+            if ($vat > 0) {
+                $doc->update(['lines' => ['vat' => $vat]]);
+            }
             $this->postDocument($agency, $doc, 'cash', $category->displayName() . ($data['note'] ?? null ? ' · ' . $data['note'] : ''),
-                [$debit, [$category, 0, $amount] + $tags], $userId);
+                array_merge([$debit], $credits), $userId);
             return $doc->fresh();
         });
     }
@@ -618,6 +631,13 @@ class AccountingService
                 }
                 DB::table('bus_acc_cleared')->where('document_id', $doc->id)->delete();
             }
+            if ($doc->type === BusAccDocument::PAYROLL && BusAccDocument::where('parent_id', $doc->id)->where('type', BusAccDocument::STAFF_PAY)->where('status', 'posted')->exists()) {
+                throw ValidationException::withMessages(['document' => translate('The staff were paid on this payroll: void that payment first.')]);
+            }
+            if ($doc->type === BusAccDocument::STAFF_PAY && $doc->parent_id) {
+                $payroll = BusAccDocument::whereKey($doc->parent_id)->lockForUpdate()->first();
+                $payroll->update(['owed' => round($payroll->owed + $doc->amount, 2)]);
+            }
             if ($doc->type === BusAccDocument::BILL_PAYMENT && $doc->parent_id) {
                 $bill = BusAccDocument::whereKey($doc->parent_id)->lockForUpdate()->first();
                 $bill->update(['owed' => round($bill->owed + $doc->amount, 2)]);
@@ -737,7 +757,21 @@ class AccountingService
             'refunds_from' => [$agency instanceof BusCompany ? 'nullable' : 'required', Rule::in(['mtn', 'orange', 'bank', 'safe', 'fapshi'])],
             'eride_from' => ['required', Rule::in(['mtn', 'orange', 'bank', 'safe', 'fapshi'])],
         ])->validate();
-        $books->update(['settings' => array_merge($books->settings ?? [], array_filter(['refunds_from' => $data['refunds_from'] ?? null, 'eride_from' => $data['eride_from']]))]);
+        Validator::make($data, [
+            'vat_rate' => ['nullable', 'numeric', 'min:0', 'max:50'],
+            'pay_rates' => ['nullable', 'array'],
+            'pay_rates.*' => ['nullable', 'numeric', 'min:0', 'max:30'],
+        ])->validate();
+        $extra = [];
+        if (array_key_exists('vat_registered', $data)) {
+            $extra['vat_registered'] = (bool)$data['vat_registered'];
+            $extra['vat_on_tickets'] = (bool)($data['vat_on_tickets'] ?? false) && $extra['vat_registered'];
+            $extra['vat_rate'] = round((float)($data['vat_rate'] ?? 19.25), 2);
+        }
+        if (isset($data['pay_rates']) && is_array($data['pay_rates'])) {
+            $extra['pay_rates'] = array_map(fn($v) => round((float)$v, 3), array_intersect_key($data['pay_rates'], \Modules\BusManagement\Lib\CameroonPayroll::EMPLOYER_DEFAULTS));
+        }
+        $books->update(['settings' => array_merge($books->settings ?? [], array_filter(['refunds_from' => $data['refunds_from'] ?? null, 'eride_from' => $data['eride_from']]), $extra)]);
         return $books;
     }
 
@@ -1174,6 +1208,16 @@ class AccountingService
     protected function own(BusAgency|BusCompany $agency, $model): void
     {
         abort_unless((string)$model->agency_id === (string)$agency->id, 404);
+    }
+
+    public function vatRegistered(BusAgency|BusCompany $agency): bool
+    {
+        return (bool)$this->ledger->books($agency)?->setting('vat_registered', false);
+    }
+
+    public function vatRateOf(BusAgency|BusCompany $agency): float
+    {
+        return (float)($this->ledger->books($agency)?->setting('vat_rate', 19.25) ?? 19.25);
     }
 
     public function userName(?string $id): string

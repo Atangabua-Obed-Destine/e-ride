@@ -7,6 +7,7 @@
         [$acc . '.money', translate('Money')],
         $isCompanyBooks ? null : [$acc . '.cash', translate('Agent cash')],
         $carriesBuses ? [$acc . '.buses', translate('Buses')] : null,
+        [$acc . '.pay', translate('Staff pay')],
         [$acc . '.reports', translate('Reports')],
         [$acc . '.journal', translate('Journal')],
         [$acc . '.settings', translate('Settings')],
@@ -18,6 +19,6 @@
 </div>
 <nav class="acc-sub" aria-label="{{ translate('Accounts') }}">
     @foreach($accTabs as [$name, $label])
-        <a href="{{ route($name) }}" class="{{ request()->routeIs($name) || ($name === $acc . '.journal' && request()->routeIs($acc . '.document')) || ($name === $acc . '.money' && request()->routeIs($acc . '.reconcile')) ? 'active' : '' }}">{{ $label }}</a>
+        <a href="{{ route($name) }}" class="{{ request()->routeIs($name) || ($name === $acc . '.journal' && request()->routeIs($acc . '.document')) || ($name === $acc . '.money' && request()->routeIs($acc . '.reconcile')) || ($name === $acc . '.reports' && request()->routeIs($acc . '.budget')) ? 'active' : '' }}">{{ $label }}</a>
     @endforeach
 </nav>

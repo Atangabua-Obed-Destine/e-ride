@@ -7,10 +7,10 @@
 @endpush
 
 @php
-    $tabs = ['income' => translate('Income statement'), 'profit' => translate('Profit by bus, route or trip'), 'cash' => translate('Cash flow'), 'trial' => translate('Trial balance'), 'balance' => translate('Balance sheet')];
+    $tabs = ['income' => translate('Income statement'), 'profit' => translate('Profit by bus, route or trip'), 'cash' => translate('Cash flow'), 'budget' => translate('Budget against actual'), 'trial' => translate('Trial balance'), 'balance' => translate('Balance sheet')];
     $q = ['from' => $from, 'to' => $to, 'by' => $by, 'scope' => $scope];
     if ($scope === 'all') {
-        unset($tabs['cash']);
+        unset($tabs['cash'], $tabs['budget']);
     }
 @endphp
 
@@ -45,7 +45,8 @@
             </div>
         @endif
         <button class="btn btn-soft btn-sm">{{ translate('Show') }}</button>
-        <a class="btn btn-soft btn-sm ms-auto" href="{{ route($acc . '.reports', $q + ['tab' => $tab, 'csv' => 1]) }}"><i class="bi bi-download"></i> CSV</a>
+        @if($tab === 'budget')<a class="btn btn-dark btn-sm ms-auto" href="{{ route($acc . '.budget', ['year' => \Illuminate\Support\Carbon::parse($from)->year]) }}">{{ translate('Edit the budget') }}</a>@endif
+        <a class="btn btn-soft btn-sm {{ $tab === 'budget' ? '' : 'ms-auto' }}" href="{{ route($acc . '.reports', $q + ['tab' => $tab, 'csv' => 1]) }}"><i class="bi bi-download"></i> CSV</a>
         <button type="button" class="btn btn-soft btn-sm" onclick="window.print()"><i class="bi bi-printer"></i> {{ translate('Print') }}</button>
     </form>
     <h2 class="acc-h">{{ $tabs[$tab] }} · {{ $tab === 'balance' ? \Illuminate\Support\Carbon::parse($to)->format('d/m/Y') : \Illuminate\Support\Carbon::parse($from)->format('d/m/Y') . ' - ' . \Illuminate\Support\Carbon::parse($to)->format('d/m/Y') }}</h2>

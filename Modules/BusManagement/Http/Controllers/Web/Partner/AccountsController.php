@@ -12,6 +12,8 @@ use Modules\BusManagement\Entities\BusAccDocument;
 use Modules\BusManagement\Entities\BusAccEntry;
 use Modules\BusManagement\Entities\BusAccLine;
 use Modules\BusManagement\Entities\BusAccAsset;
+use Modules\BusManagement\Entities\BusAccEmployee;
+use Modules\BusManagement\Entities\BusAccPayslip;
 use Modules\BusManagement\Entities\BusAgency;
 use Modules\BusManagement\Entities\BusCompany;
 use Modules\BusManagement\Entities\BusCompanyStaff;
@@ -24,6 +26,7 @@ use Modules\BusManagement\Service\Accounting\AccountingService;
 use Modules\BusManagement\Service\Accounting\AccReports;
 use Modules\BusManagement\Service\Accounting\Ledger;
 use Modules\BusManagement\Service\Accounting\LedgerSync;
+use Modules\BusManagement\Service\Accounting\PayService;
 use Symfony\Component\HttpFoundation\StreamedResponse;
 
 /**
@@ -201,6 +204,65 @@ class AccountsController extends Controller
         return view('busmanagement::partner.accounts.buses', compact('books', 'assets', 'inBooks') + $this->formData($agency));
     }
 
+    protected function pay(): PayService
+    {
+        return app(PayService::class);
+    }
+
+    /** Staff pay: the people paid, the monthly payrolls, and what is owed to CNPS, the State and in VAT. */
+    public function staffPay(Request $r)
+    {
+        $agency = $this->agency($r);
+        if (!$books = $this->books($r)) {
+            return redirect()->route($this->ar($r) . '.setup');
+        }
+        $employees = BusAccEmployee::where('agency_id', $agency->id)->orderByDesc('active')->orderBy('name')->get();
+        $payrolls = BusAccDocument::where('agency_id', $agency->id)->where('type', BusAccDocument::PAYROLL)->orderByDesc('date')->orderByDesc('created_at')->limit(24)->get();
+        $owed = $this->pay()->owedToAuthorities($agency);
+        $rates = $this->pay()->employerRates($agency);
+        $vatOn = $this->pay()->vatOn($agency);
+        $remittances = BusAccDocument::with('moneyAccount')->where('agency_id', $agency->id)->whereIn('type', [BusAccDocument::REMITTANCE, BusAccDocument::VAT_RETURN])
+            ->orderByDesc('date')->orderByDesc('created_at')->limit(20)->get();
+        return view('busmanagement::partner.accounts.pay', compact('books', 'employees', 'payrolls', 'owed', 'rates', 'vatOn', 'remittances') + $this->formData($agency));
+    }
+
+    public function saveEmployee(Request $r, ?string $employee = null)
+    {
+        $agency = $this->agency($r);
+        $model = $employee ? BusAccEmployee::where('agency_id', $agency->id)->findOrFail($employee) : null;
+        $this->pay()->saveEmployee($agency, $r->only(['name', 'job', 'base_pay', 'cnps_number', 'niu', 'phone', 'hired_on', 'active']), $model);
+        return back()->with('success', $model ? translate('Saved.') : translate('Added to the staff.'));
+    }
+
+    /** One payslip, ready to print. */
+    public function payslip(Request $r, int $payslip)
+    {
+        $agency = $this->agency($r);
+        $slip = BusAccPayslip::with(['employee', 'document'])->where('agency_id', $agency->id)->findOrFail($payslip);
+        return view('busmanagement::partner.accounts.payslip', ['slip' => $slip, 'owner' => $agency]);
+    }
+
+    /** The budget of a year: an amount per income and spending account and month. */
+    public function budget(Request $r)
+    {
+        $agency = $this->agency($r);
+        if (!$books = $this->books($r)) {
+            return redirect()->route($this->ar($r) . '.setup');
+        }
+        $year = (int)$r->input('year', today()->year);
+        $year = max($books->starts_on->year, min(today()->year + 1, $year));
+        $accounts = $this->pay()->budgetAccounts($agency);
+        $budget = $this->pay()->budget($agency, $year);
+        return view('busmanagement::partner.accounts.budget', compact('books', 'year', 'accounts', 'budget'));
+    }
+
+    public function saveBudget(Request $r)
+    {
+        $agency = $this->agency($r);
+        $this->pay()->saveBudget($agency, (int)$r->input('year'), (array)$r->input('amounts', []));
+        return back()->with('success', translate('Budget saved.'));
+    }
+
     public function reports(Request $r)
     {
         $agency = $this->agency($r);
@@ -208,16 +270,17 @@ class AccountsController extends Controller
             return redirect()->route($this->ar($r) . '.setup');
         }
         [$from, $to] = $this->period($r);
-        $tab = in_array($r->input('tab'), ['income', 'profit', 'cash', 'trial', 'balance'], true) ? $r->input('tab') : 'income';
+        $tab = in_array($r->input('tab'), ['income', 'profit', 'cash', 'budget', 'trial', 'balance'], true) ? $r->input('tab') : 'income';
         $by = in_array($r->input('by'), ['bus', 'route', 'trip'], true) ? $r->input('by') : 'bus';
         $scope = $agency instanceof BusCompany && $r->input('scope') === 'all' ? 'all' : 'own';
-        if ($scope === 'all' && $tab === 'cash') {
+        if ($scope === 'all' && in_array($tab, ['cash', 'budget'], true)) {
             $tab = 'income';
         }
         $data = $scope === 'all' ? $this->reports->combined($agency, $tab, $from, $to, $by) : match ($tab) {
             'income' => $this->reports->incomeStatement($agency, $from, $to),
             'profit' => $this->reports->profit($agency, $from, $to, $by),
             'cash' => $this->reports->cashFlow($agency, $from, $to),
+            'budget' => $this->reports->budgetVsActual($agency, $from, $to),
             'trial' => $this->reports->trialBalance($agency, $from, $to),
             'balance' => $this->reports->balanceSheet($agency, $to),
         };
@@ -267,7 +330,8 @@ class AccountsController extends Controller
         $entries = BusAccEntry::with('lines')->whereIn('id', array_filter([$doc->entry_id, $doc->void_entry_id, $doc->auto_reverse_entry_id]))->orderBy('number')->get()
             ->map(fn($e) => $this->preview->entry($e, $accounts));
         $payments = $doc->type === BusAccDocument::EXPENSE ? BusAccDocument::with('moneyAccount')->where('parent_id', $doc->id)->orderBy('date')->get() : collect();
-        return view('busmanagement::partner.accounts.document', compact('books', 'doc', 'entries', 'payments') + $this->formData($agency));
+        $payslips = $doc->type === BusAccDocument::PAYROLL ? BusAccPayslip::where('document_id', $doc->id)->orderBy('id')->get() : collect();
+        return view('busmanagement::partner.accounts.document', compact('books', 'doc', 'entries', 'payments', 'payslips') + $this->formData($agency));
     }
 
     public function settings(Request $r)
@@ -305,14 +369,14 @@ class AccountsController extends Controller
 
     public function saveSettings(Request $r)
     {
-        $this->service->saveSettings($this->agency($r), $r->only(['refunds_from', 'eride_from']));
+        $this->service->saveSettings($this->agency($r), $r->only(['refunds_from', 'eride_from', 'vat_registered', 'vat_on_tickets', 'vat_rate', 'pay_rates']));
         return back()->with('success', translate('Saved.'));
     }
 
     // ------------------------------------------------------------------ preview and confirm
 
     public const ACTIONS = ['open', 'expense', 'pay', 'income', 'transfer', 'count', 'check', 'journal', 'void', 'close', 'reopen',
-        'asset', 'dispose', 'branchmoney', 'closeyear', 'reopenyear'];
+        'asset', 'dispose', 'branchmoney', 'closeyear', 'reopenyear', 'payroll', 'staffpay', 'remit', 'vatreturn'];
 
     public function previewAction(Request $r, string $action)
     {
@@ -342,6 +406,7 @@ class AccountsController extends Controller
         $message = match ($action) {
             'open' => translate('The books are open.'),
             'closeyear' => translate('The year is closed.'),
+            'payroll' => translate('Payroll posted. Pay the staff from its page.'),
             'reopenyear' => translate('The year is open again.'),
             'void' => translate('Voided: the entry was reversed.'),
             'close' => translate('The month is closed.'),
@@ -386,6 +451,25 @@ class AccountsController extends Controller
                 fn() => $this->service->branchMoney($agency, $data, $uid), function (&$out) {
                     $out['notes'][] = translate('Posted in the head office books and in the branch books together.');
                 }],
+            'payroll' => [translate('Payroll'), translate('I checked each person, their pay this month and any extra, against the attendance and the contracts.'),
+                fn() => $this->pay()->payroll($agency, $data, $uid), function (&$out, $d) {
+                    if (!$d instanceof BusAccDocument) {
+                        return;
+                    }
+                    $n = fn($v) => \Modules\BusManagement\Lib\AccFormat::n($v);
+                    $rows = BusAccPayslip::where('document_id', $d->id)->orderBy('id')->get()->map(fn($p) => [
+                        $p->detail['name'] ?? '', $n($p->gross), $n($p->cnps), $n($p->irpp + $p->cac), $n($p->cfc + $p->crtv + $p->tdl), $n($p->net), $n($p->employer_cnps + $p->employer_taxes),
+                    ])->all();
+                    $out['effects'][] = ['title' => translate('Payslips'), 'columns' => [translate('Person'), translate('Gross'), 'CNPS', translate('IRPP and CAC'),
+                        translate('CFC, CRTV, TDL'), translate('Net to pay'), translate('Employer charges')], 'numeric' => [1, 2, 3, 4, 5, 6], 'rows' => $rows];
+                    $out['notes'][] = translate('The withholdings follow the DGI scale (IRPP, CAC, CFC, CRTV) and CNPS rules. The TDL bands and the employer rates come from Settings: confirm them with your accountant.');
+                }],
+            'staffpay' => [translate('Pay the staff'), translate('The net pay of each person left the account chosen, for this total.'),
+                fn() => $this->pay()->payStaff($agency, $doc(), $data, $uid), null],
+            'remit' => [translate('Pay CNPS, the State or VAT'), translate('I paid this amount and I have the receipt.'),
+                fn() => $this->pay()->remit($agency, $data, $uid), null],
+            'vatreturn' => [translate('VAT return'), translate('These figures match the VAT return I file for this month.'),
+                fn() => $this->pay()->vatReturn($agency, $data, $uid), null],
             'closeyear' => [translate('Close the year'), translate('Every month of the year is checked and closed. Nothing more can be dated in it.'),
                 fn() => $this->service->closeYear($agency, (int)$r->input('year'), $uid), function (&$out, $res) use ($agency, $r) {
                     foreach ($res['results'] ?? [] as $x) {
@@ -496,6 +580,7 @@ class AccountsController extends Controller
     protected function formData(BusAgency|BusCompany $agency): array
     {
         $accounts = BusAccAccount::where('agency_id', $agency->id)->where('active', true)->orderBy('code')->get();
+        view()->share('vatOn', (bool)$this->ledger->books($agency)?->setting('vat_registered'));
         if ($agency instanceof BusCompany) {
             return [
                 'expenseCats' => $accounts->filter(fn($a) => $a->type === 'expense' && $a->category)->values(),
@@ -565,6 +650,12 @@ class AccountsController extends Controller
                         fputcsv($out, [translate($row['label']), $n($row['amount'])]);
                     }
                     fputcsv($out, [translate('Money at the end'), $n($data['closing'])]);
+                    break;
+                case 'budget':
+                    fputcsv($out, [translate('Account'), translate('Name'), translate('Budget'), translate('Actual'), translate('Difference')]);
+                    foreach (array_merge($data['rows']['income'], $data['rows']['spending']) as $row) {
+                        fputcsv($out, [$row['account']->code, $row['account']->displayName(), $n($row['budget']), $n($row['actual']), $n($row['diff'])]);
+                    }
                     break;
                 case 'trial':
                     fputcsv($out, [translate('Account'), translate('Name'), translate('Opening debit'), translate('Opening credit'), translate('Debit'), translate('Credit'), translate('Closing debit'), translate('Closing credit')]);

@@ -522,6 +522,46 @@ class AccReports
             'total_has' => $totalHas, 'total_owes' => $totalOwes, 'total_equity' => $totalEquity, 'balanced' => abs($totalHas - $totalOwes - $totalEquity) < 0.01];
     }
 
+    /**
+     * Budget against actual for the whole months from $from to $to: per income and spending account,
+     * what was planned, what happened (posted lines, the year-end closing left out), the difference
+     * and the share used. Spending over its budget and income under it are flagged.
+     */
+    public function budgetVsActual(BusAgency|BusCompany $agency, string $from, string $to): array
+    {
+        $start = Carbon::parse($from)->startOfMonth();
+        $end = Carbon::parse($to)->endOfMonth();
+        $budget = [];
+        for ($m = $start->copy(); $m->lte($end); $m->addMonth()) {
+            foreach (DB::table('bus_acc_budgets')->where('agency_id', $agency->id)->where('year', $m->year)->where('month', $m->month)->get() as $r) {
+                $budget[(string)$r->account_id] = ($budget[(string)$r->account_id] ?? 0) + (float)$r->amount;
+            }
+        }
+        $is = $this->incomeStatement($agency, $start->toDateString(), $end->toDateString());
+        $actual = [];
+        foreach (array_merge($is['income'], $is['spending']) as $r) {
+            $actual[(string)$r['account']->id] = $r['amount'];
+        }
+        $rows = ['income' => [], 'spending' => []];
+        foreach ($this->accounts($agency) as $a) {
+            if (!in_array($a->type, ['revenue', 'expense'], true)) {
+                continue;
+            }
+            $b = round($budget[(string)$a->id] ?? 0, 2);
+            $act = round($actual[(string)$a->id] ?? 0, 2);
+            if (abs($b) < 0.005 && abs($act) < 0.005) {
+                continue;
+            }
+            $income = $a->type === 'revenue';
+            $rows[$income ? 'income' : 'spending'][] = ['account' => $a, 'budget' => $b, 'actual' => $act, 'diff' => round($act - $b, 2),
+                'used' => $b > 0 ? round($act / $b * 100) : null, 'flag' => $b > 0 && ($income ? $act < $b : $act > $b)];
+        }
+        $sum = fn($list, $k) => round(array_sum(array_column($list, $k)), 2);
+        return ['from' => $start->toDateString(), 'to' => $end->toDateString(), 'rows' => $rows,
+            'income_budget' => $sum($rows['income'], 'budget'), 'income_actual' => $sum($rows['income'], 'actual'),
+            'spending_budget' => $sum($rows['spending'], 'budget'), 'spending_actual' => $sum($rows['spending'], 'actual')];
+    }
+
     /** One branch in figures, for the head office. */
     public function branchFigures(BusAgency $agency, string $from, string $to): ?array
     {

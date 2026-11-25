@@ -52,6 +52,37 @@
             </tbody></table>
         </div>
 
+        @if($doc->type === 'payroll')
+            <div class="acc-card">
+                <h2 class="acc-h">{{ translate('Payslips') }}</h2>
+                <div class="acc-scroll"><table class="acc-t">
+                    <thead><tr><th>{{ translate('Person') }}</th><th class="n">{{ translate('Gross') }}</th><th class="n">{{ translate('Withheld') }}</th><th class="n">{{ translate('Net') }}</th><th></th></tr></thead>
+                    <tbody>
+                    @foreach($payslips as $p)
+                        <tr><td>{{ $p->detail['name'] ?? '' }}</td><td class="n">{{ F::n($p->gross) }}</td><td class="n">{{ F::n($p->gross - $p->net) }}</td><td class="n fw-bold">{{ F::n($p->net) }}</td>
+                            <td class="text-end"><a class="btn btn-light btn-sm" href="{{ route($acc . '.payslip', $p->id) }}" target="_blank" rel="noopener">{{ translate('Payslip') }}</a></td></tr>
+                    @endforeach
+                    </tbody>
+                </table></div>
+            </div>
+            @if($doc->status === 'posted' && $doc->owed > 0)
+                <form class="acc-card acc-form" data-acc-action="staffpay" data-acc-title="{{ translate('Pay the staff') }}">
+                    <input type="hidden" name="document" value="{{ $doc->id }}">
+                    <h2 class="acc-h">{{ translate('Pay the staff') }} · {{ F::n($doc->owed) }} FCFA</h2>
+                    <div class="row g-2">
+                        <div class="col-sm-4"><label class="form-label" for="sp_date">{{ translate('Date') }}</label>
+                            <input type="date" class="form-control" id="sp_date" name="date" value="{{ today()->toDateString() }}" min="{{ $doc->date->toDateString() }}" max="{{ today()->toDateString() }}" required></div>
+                        <div class="col-sm-4"><label class="form-label" for="sp_money">{{ translate('Paid from') }}</label>
+                            <select class="form-select" id="sp_money" name="money_account_id" required><option value="">{{ translate('Choose') }}</option>
+                                @foreach($moneyAccounts->where('role', '!=', 'counter_cash') as $ma)<option value="{{ $ma->id }}">{{ $ma->displayName() }}</option>@endforeach</select></div>
+                        <div class="col-sm-4"><label class="form-label" for="sp_ref">{{ translate('Reference') }}</label>
+                            <input type="text" class="form-control" id="sp_ref" name="reference" maxlength="100"></div>
+                    </div>
+                    <button type="submit" class="btn btn-primary mt-3">{{ translate('Check and pay') }}</button>
+                </form>
+            @endif
+        @endif
+
         @if($doc->type === 'expense' && $payments->isNotEmpty())
             <div class="acc-card">
                 <h2 class="acc-h">{{ translate('Payments') }}</h2>
