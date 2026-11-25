@@ -904,7 +904,9 @@ if (!function_exists('getRoutes')) {
                 "destination" => $destination,
                 "intermediates" => $waypoints,
                 "travelMode" => $travelMode,
-                "routingPreference" => "TRAFFIC_AWARE",
+                // Without live traffic: Google bills it in its cheaper "Essentials"
+                // tier (traffic-aware routing is "Pro", twice the price).
+                "routingPreference" => "TRAFFIC_UNAWARE",
                 "computeAlternativeRoutes" => false,
                 "languageCode" => "en-US",
                 "units" => "METRIC"
@@ -962,18 +964,86 @@ if (!function_exists('getRoutes')) {
         }
         $driveEntry = $buildEntry($driveRoute, 'DRIVE', 1);
 
-        $bikeRoute = $driveRoute;
-        $bikeDivisor = $convert_to_bike;
-        if (in_array('TWO_WHEELER', $drivingMode)) {
-            $twoWheelerRoute = $fetchRoute('TWO_WHEELER');
-            if (!isset($twoWheelerRoute['error'])) {
-                $bikeRoute = $twoWheelerRoute;
-                $bikeDivisor = 1;
-            }
-        }
-        $bikeEntry = $buildEntry($bikeRoute, 'TWO_WHEELER', $bikeDivisor);
+        // Motorbikes follow the car route, a little faster. Google's own two-wheeler
+        // routing is billed at its most expensive tier, on top of the car call.
+        $bikeEntry = $buildEntry($driveRoute, 'TWO_WHEELER', $convert_to_bike);
 
         return [$bikeEntry, $driveEntry];
+    }
+}
+if (!function_exists('liveTripRoutes')) {
+    /**
+     * getRoutes() for a trip followed live: both apps ask every few seconds, and
+     * each Google call is billed. Google is asked once per leg (to the pickup, then
+     * the trip), and the answer is shared by both apps. After that the stored route
+     * is cut at the driver's position and its distance and time shrink with it.
+     * Google is asked again only when the driver leaves the route (more than 80 m
+     * off), at most once every 30 seconds per trip.
+     */
+    function liveTripRoutes(string $tripId, string $leg, array $origin, array $destination, array $intermediate = [], array $drivingMode = ['DRIVE']): array
+    {
+        $key = 'live_route:' . $tripId . ':' . $leg . ':' . round((float)$destination[0], 5) . ',' . round((float)$destination[1], 5);
+        $lat = (float)$origin[0];
+        $lng = (float)$origin[1];
+        $stored = Cache::get($key);
+        $routes = is_array($stored) ? ($stored['routes'] ?? null) : null;
+
+        if ($routes) {
+            $main = collect($routes)->firstWhere('drive_mode', $drivingMode[0] ?? 'DRIVE') ?? $routes[0];
+            if (!empty($main['encoded_polyline']) && !isDriverDeviated($main['encoded_polyline'], $lat, $lng, 80)) {
+                return liveRoutesFromPosition($routes, $lat, $lng);
+            }
+        }
+        if (!Cache::add($key . ':asked', 1, 30)) {
+            return $routes ? liveRoutesFromPosition($routes, $lat, $lng) : ['error' => 'Route asked a moment ago'];
+        }
+
+        $fresh = getRoutes($origin, $destination, $intermediate, $drivingMode);
+        if (!isset($fresh['error']) && isset($fresh[0]['encoded_polyline'])) {
+            Cache::put($key, ['routes' => $fresh], now()->addHours(6));
+        }
+        return $fresh;
+    }
+}
+if (!function_exists('liveRoutesFromPosition')) {
+    /** The stored routes cut at the driver's position, distance and time in proportion. */
+    function liveRoutesFromPosition(array $routes, float $lat, float $lng): array
+    {
+        $out = [];
+        foreach ($routes as $route) {
+            $polyline = $route['encoded_polyline'] ?? null;
+            $fullKm = $polyline ? polylineLengthKm($polyline) : 0;
+            if ($fullKm <= 0) {
+                $out[] = $route;
+                continue;
+            }
+            $left = slicePolylineFromVehiclePosition($polyline, $lat, $lng);
+            $ratio = min(1, polylineLengthKm($left) / $fullKm);
+            $km = round(($route['distance'] ?? 0) * $ratio, 2);
+            $sec = (int)round(($route['duration_sec'] ?? 0) * $ratio);
+            $trafficSec = (int)round(($route['duration_in_traffic_sec'] ?? 0) * $ratio);
+            $out[] = array_merge($route, [
+                'distance' => (double)$km,
+                'distance_text' => number_format($km, 2) . ' km',
+                'duration' => number_format($sec / 60, 2) . ' min',
+                'duration_sec' => $sec,
+                'duration_in_traffic' => number_format($trafficSec / 60, 2) . ' min',
+                'duration_in_traffic_sec' => $trafficSec,
+                'encoded_polyline' => $left,
+            ]);
+        }
+        return $out;
+    }
+}
+if (!function_exists('polylineLengthKm')) {
+    function polylineLengthKm(string $encoded): float
+    {
+        $points = decodePolyline($encoded);
+        $m = 0;
+        for ($i = 1; $i < count($points); $i++) {
+            $m += haversineDistance($points[$i - 1][0], $points[$i - 1][1], $points[$i][0], $points[$i][1]);
+        }
+        return $m / 1000;
     }
 }
 if (!function_exists('onErrorImage')) {

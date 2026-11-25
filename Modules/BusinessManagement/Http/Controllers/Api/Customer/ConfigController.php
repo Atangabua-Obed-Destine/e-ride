@@ -437,10 +437,13 @@ class ConfigController extends Controller
 
         $drivingMode = resolveDrivingMode($trip->vehicleCategory?->type);
 
-        $getRoutes = getRoutes(
-            originCoordinates: $pickupCoordinates,
-            destinationCoordinates: $destinationCoordinates,
-            intermediateCoordinates: $intermediateCoordinates,
+        // Asked every few seconds by both apps: the stored route, cut at the driver.
+        $getRoutes = liveTripRoutes(
+            tripId: (string)$trip->id,
+            leg: $trip->current_status == ONGOING ? 'trip' : 'pickup',
+            origin: $pickupCoordinates,
+            destination: $destinationCoordinates,
+            intermediate: $intermediateCoordinates,
             drivingMode: $drivingMode,
         );
 

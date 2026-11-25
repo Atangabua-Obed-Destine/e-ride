@@ -101,10 +101,13 @@ class LocationController extends Controller
                             return response()->json(responseFormatter(constant: DEFAULT_200, content: ''));
                         }
 
-                        $response = getRoutes(
-                            originCoordinates: [$lat,$lng],
-                            destinationCoordinates: $destinationCoordinates,
-                            intermediateCoordinates: $intermediateCoordinates,
+                        // Off the route: the trip's shared live route (Google at most every 30 s).
+                        $response = liveTripRoutes(
+                            tripId: (string)$tripNavigation->trip->id,
+                            leg: 'trip',
+                            origin: [$lat, $lng],
+                            destination: $destinationCoordinates,
+                            intermediate: $intermediateCoordinates,
                             drivingMode: resolveDrivingMode($tripNavigation->trip->vehicleCategory?->type)
                         );
 
