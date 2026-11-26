@@ -97,15 +97,26 @@ class PaymentAccountController extends LedgerController
             if ($opening > 0) {
                 $tx = PaymentBook::record([
                     'payment_account_id' => $account->id, 'transaction_type' => 'credit', 'amount' => $opening,
-                    'transaction_date' => now()->toDateString(), 'title' => __('ledger_accounts.opening_balance'),
+                    // E-Ride: what the account held on the day the books start (the opening balance's own date)
+                    'transaction_date' => $this->openingDate(), 'title' => __('ledger_accounts.opening_balance'),
                     'description' => __('ledger_accounts.opening_balance_desc'), 'reference_type' => 'opening_balance',
                     'contra_account_id' => $request->contra_account_id ?: null, 'created_by' => auth()->id(),
                 ]);
                 $msg .= $this->sync($tx);
             }
         });
+        // E-Ride: ticket money and till counts already posted on its ledger account join its book
+        \App\Ledger\ERide\BusBook::backfill();
 
         return $this->ok(route('ledger.payment-account.index'), $msg);
+    }
+
+    /** E-Ride: the books' start date (an opening balance is what the account held then), or today. */
+    private function openingDate(): string
+    {
+        $from = \App\Ledger\Models\AccountingSetting::getValue('post_from_date');
+
+        return $from && $from < now()->toDateString() ? (string) $from : now()->toDateString();
     }
 
     public function edit($id)
@@ -126,6 +137,9 @@ class PaymentAccountController extends LedgerController
             'chart_of_account_id' => $request->chart_of_account_id, 'description' => $request->description,
             'status' => $request->status ?? 1, 'updated_by' => auth()->id(),
         ]);
+        if ($account->wasChanged(['chart_of_account_id', 'status'])) {
+            \App\Ledger\ERide\BusBook::rebuild(); // E-Ride: the bus money follows the account's ledger account
+        }
 
         return $this->ok(route('ledger.payment-account.index'), __('ledger_accounts.payment_account_updated_successfully'));
     }

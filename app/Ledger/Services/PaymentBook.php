@@ -74,10 +74,39 @@ class PaymentBook
         }
     }
 
+    /** E-Ride: accounts whose rebuild waits for the end of a sync run (null: rebuild at once). */
+    private static ?array $deferred = null;
+
+    /**
+     * E-Ride: run $fn with the running balances rebuilt once at the end, not after each
+     * movement (a sync run can put hundreds of ticket payments into one account's book).
+     */
+    public static function deferRecompute(callable $fn)
+    {
+        if (self::$deferred !== null) {
+            return $fn();
+        }
+        self::$deferred = [];
+        try {
+            return $fn();
+        } finally {
+            $ids = array_keys(self::$deferred);
+            self::$deferred = null;
+            foreach ($ids as $id) {
+                self::recompute($id);
+            }
+        }
+    }
+
     /** Rebuild an account's running balance from its transactions, in date order. */
     public static function recompute(?int $accountId): void
     {
         if (! $accountId) {
+            return;
+        }
+        if (self::$deferred !== null) {
+            self::$deferred[$accountId] = true;
+
             return;
         }
         $balance = 0.0;
@@ -138,7 +167,14 @@ class PaymentBook
     /** The payment methods of these books (the bus books' methods). */
     public static function methods(): array
     {
-        return LedgerHealth::paymentMethods();
+        // E-Ride: the ways money is paid or received at the office, named plainly (Mapping settings keeps the
+        // ticket-side names: counter cash there is the agents' tills)
+        $out = [];
+        foreach (array_keys(LedgerHealth::paymentMethods()) as $m) {
+            $out[$m] = __('ledger_accounts.pay_'.$m);
+        }
+
+        return $out;
     }
 
     public static function methodLabel(?string $method): string

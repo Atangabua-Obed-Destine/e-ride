@@ -82,6 +82,18 @@
                                     </select>
                                 </div>
                                 @endif
+                                {{-- E-Ride: the bus an expense is for (fuel, tyres, repairs), so it counts in that bus's profit --}}
+                                @if(! empty($fleet))
+                                <div class="form-group col-md-4 mb-3">
+                                    <label for="vehicle_id">@lang('ledger_accounts.field_bus')</label>
+                                    <select class="form-control" name="vehicle_id" id="vehicle_id">
+                                        <option value="">@lang('ledger_accounts.no_bus')</option>
+                                        @foreach($fleet as $vid => $vlabel)
+                                        <option value="{{ $vid }}" @selected((string) old('vehicle_id', $row->vehicle_id ?? '') === (string) $vid)>{{ $vlabel }}</option>
+                                        @endforeach
+                                    </select>
+                                </div>
+                                @endif
                             </div>
                         </div>
 

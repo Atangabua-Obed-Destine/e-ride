@@ -207,8 +207,25 @@ abstract class IncomeExpenseController extends LedgerController
             'note' => 'nullable|string|max:5000',
             // E-Ride: an expense may say its department (the payroll's), for departmental budgets
             'department_id' => ['nullable', \Illuminate\Validation\Rule::exists('departments', 'id')->where('business_id', $bid)],
+            // E-Ride: the bus an expense is for, one of these books' fleet
+            'vehicle_id' => ['nullable', \Illuminate\Validation\Rule::in(array_keys(\App\Ledger\ERide\Books::fleet()))],
             'attach' => 'nullable|file|mimes:jpg,jpeg,png,pdf,doc,docx,zip,rar,csv,xls,xlsx,ppt,pptx|max:20480',
         ], [], ['category' => __('ledger_accounts.field_category'), 'title' => __('ledger_accounts.field_title'), 'amount' => __('ledger_accounts.field_amount')]);
+        // E-Ride: no account chosen, but one payment account sits on the ledger account this way of paying
+        // posts to (the safe for cash, the bank for a transfer): the money is that account's, so its book follows
+        if (! $request->filled('payment_account_id')) {
+            try {
+                $ledger = (new \App\Ledger\Services\PostingRules())->moneyAccount(null, $request->payment_method);
+                $only = PaymentAccount::where('chart_of_account_id', $ledger)->where('status', 1)->pluck('id');
+                // only when its book can take it: otherwise it stays "link it later", as paxhitestbed allows
+                if ($only->count() === 1 && ($this->side() === 'income'
+                        || PaymentBook::available((int) $only->first(), 'expense', $row->id ?? null) >= round((float) $request->amount, 2) - 0.005)) {
+                    $request->merge(['payment_account_id' => (int) $only->first()]);
+                }
+            } catch (\RuntimeException $e) {
+                // the way of paying has no account yet: the posting says so
+            }
+        }
         // money out of an account needs the money to be there (paxhitestbed: insufficient_balance_in_account)
         if ($this->side() === 'expense' && $request->filled('payment_account_id')) {
             $available = PaymentBook::available((int) $request->payment_account_id, 'expense', $row->id ?? null);
@@ -234,6 +251,7 @@ abstract class IncomeExpenseController extends LedgerController
         ]);
         if ($this->side() === 'expense') {
             $row->department_id = $request->department_id ?: null; // E-Ride: departmental budgets
+            $row->vehicle_id = $request->vehicle_id ?: null; // E-Ride: profit by bus
         }
     }
 
@@ -275,6 +293,8 @@ abstract class IncomeExpenseController extends LedgerController
             'account_help' => 'payment_account_help_text_'.$this->side(),
             // E-Ride: the departments an expense may be spent for (none: the field is not shown)
             'departments' => $this->side() === 'expense' ? \App\Ledger\Services\BudgetLineChoices::locations() : collect(),
+            // E-Ride: the buses an expense may be for (none: the field is not shown)
+            'fleet' => $this->side() === 'expense' ? \App\Ledger\ERide\Books::fleet() : [],
         ];
     }
 

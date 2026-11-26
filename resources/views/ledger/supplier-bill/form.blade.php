@@ -14,8 +14,9 @@
 @php
     $kind = old('kind', $row->kind ?? 'bill');
     $lines = old('lines', $row && ! $row->isOpeningBalance()
-        ? $row->lines->map(fn ($l) => ['description' => $l->description, 'expense_category_id' => $l->expense_category_id, 'amount' => (int) round($l->amount)])->all() : []);
-    if (! $lines) { $lines = [['description' => '', 'expense_category_id' => '', 'amount' => '']]; }
+        ? $row->lines->map(fn ($l) => ['description' => $l->description, 'expense_category_id' => $l->expense_category_id, 'amount' => (int) round($l->amount), 'vehicle_id' => $l->vehicle_id])->all() : []);
+    if (! $lines) { $lines = [['description' => '', 'expense_category_id' => '', 'amount' => '', 'vehicle_id' => '']]; }
+    $fleet = $fleet ?? [];
     $openingLine = $row && $row->isOpeningBalance() ? $row->lines->first() : null;
     $supplierId = old('supplier_id', $row->supplier_id ?? $selected_supplier);
 @endphp
@@ -88,6 +89,7 @@
                             <tr>
                                 <th style="width:38%">@lang('ledger_accounts.expense_category_one') <span class="text-danger">*</span></th>
                                 <th>@lang('ledger_accounts.description')</th>
+                                @if($fleet)<th style="width:20%">@lang('ledger_accounts.field_bus')</th>@endif
                                 <th class="ap-num" style="width:180px">@lang('ledger_accounts.amount') <span class="text-danger">*</span></th>
                                 <th style="width:50px"></th>
                             </tr>
@@ -107,6 +109,11 @@
                                     </select>
                                 </td>
                                 <td><input type="text" name="lines[{{ $i }}][description]" class="form-control" maxlength="255" value="{{ $line['description'] ?? '' }}"></td>
+                                @if($fleet)
+                                <td><select name="lines[{{ $i }}][vehicle_id]" class="form-control"><option value="">@lang('ledger_accounts.no_bus')</option>
+                                    @foreach($fleet as $vid => $vlabel)<option value="{{ $vid }}" @selected((string) ($line['vehicle_id'] ?? '') === (string) $vid)>{{ $vlabel }}</option>@endforeach
+                                </select></td>
+                                @endif
                                 <td><input type="number" step="1" min="0" name="lines[{{ $i }}][amount]" class="form-control ap-num line-amount" value="{{ $line['amount'] ?? '' }}"></td>
                                 <td><button type="button" class="btn btn-sm btn-outline-danger remove-line" title="@lang('ledger_accounts.remove')"><i class="fas fa-times"></i></button></td>
                             </tr>
@@ -115,13 +122,13 @@
                         <tfoot>
                             <tr>
                                 <td><button type="button" class="btn btn-sm btn-outline-primary" id="add-line"><i class="fas fa-plus"></i> @lang('ledger_accounts.add_a_line')</button></td>
-                                <td class="text-end">@lang('ledger_accounts.vat_recoverable')</td>
+                                <td class="text-end" @if($fleet) colspan="2" @endif>@lang('ledger_accounts.vat_recoverable')</td>
                                 <td><input type="number" step="1" min="0" name="vat_amount" id="vat_amount" class="form-control ap-num" value="{{ old('vat_amount', $row ? (int) round($row->vat_amount) : '') }}"></td>
                                 <td></td>
                             </tr>
                             <tr>
                                 <td></td>
-                                <td class="text-end"><strong>@lang('ledger_accounts.total')</strong></td>
+                                <td class="text-end" @if($fleet) colspan="2" @endif><strong>@lang('ledger_accounts.total')</strong></td>
                                 <td class="ap-num"><strong id="lines-total">0</strong></td>
                                 <td></td>
                             </tr>
@@ -193,6 +200,11 @@
             </select>
         </td>
         <td><input type="text" name="lines[__i__][description]" class="form-control" maxlength="255"></td>
+        @if($fleet)
+        <td><select name="lines[__i__][vehicle_id]" class="form-control"><option value="">@lang('ledger_accounts.no_bus')</option>
+            @foreach($fleet as $vid => $vlabel)<option value="{{ $vid }}">{{ $vlabel }}</option>@endforeach
+        </select></td>
+        @endif
         <td><input type="number" step="1" min="0" name="lines[__i__][amount]" class="form-control ap-num line-amount"></td>
         <td><button type="button" class="btn btn-sm btn-outline-danger remove-line" title="@lang('ledger_accounts.remove')"><i class="fas fa-times"></i></button></td>
     </tr>

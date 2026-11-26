@@ -62,6 +62,7 @@ class LedgerSync
     public static function flush(): array
     {
         $done = [];
+        \App\Ledger\ERide\BusBook::forget(); // payment accounts may have been added since the last run
         while (! empty(self::$queue)) {
             $queue = self::$queue;
             self::$queue = [];
@@ -70,15 +71,18 @@ class LedgerSync
                     continue;
                 }
                 Ledger::forBusiness($businessId, function () use ($items, &$done) {
-                    $sync = new self();
-                    foreach ($items as [$kind, $id]) {
-                        try {
-                            $done[$kind.':'.$id] = $sync->record($kind, $id);
-                        } catch (\Throwable $e) {
-                            \Log::error('Ledger sync '.$kind.' '.$id.': '.$e->getMessage());
-                            $done[$kind.':'.$id] = 'error';
+                    // E-Ride: the payment account books touched are rebuilt once, at the end (App\Ledger\ERide\BusBook)
+                    PaymentBook::deferRecompute(function () use ($items, &$done) {
+                        $sync = new self();
+                        foreach ($items as [$kind, $id]) {
+                            try {
+                                $done[$kind.':'.$id] = $sync->record($kind, $id);
+                            } catch (\Throwable $e) {
+                                \Log::error('Ledger sync '.$kind.' '.$id.': '.$e->getMessage());
+                                $done[$kind.':'.$id] = 'error';
+                            }
                         }
-                    }
+                    });
                 });
             }
         }
@@ -349,9 +353,12 @@ class LedgerSync
                         'status' => 'posted',
                         'error' => null,
                     ])->save();
+                    // E-Ride: bus money also moves in the payment account's book
+                    \App\Ledger\ERide\BusBook::sync($kind, (int) $map->id, $want['lines'], $want['date'], $want['description'], $want['reference'] ?? null);
                 } else {
                     $map->fill(['journal_entry_id' => null, 'status' => 'none', 'fingerprint' => null, 'error' => null,
                         'mapped_at' => now(), 'mapped_by' => $userId])->save();
+                    \App\Ledger\ERide\BusBook::sync($kind, (int) $map->id, null, null, null);
                 }
 
                 return $result;
@@ -416,6 +423,12 @@ class LedgerSync
      * and statements that changed.
      */
     public function sweep(): array
+    {
+        // E-Ride: the payment account books touched are rebuilt once, at the end
+        return PaymentBook::deferRecompute(fn () => $this->sweepRun());
+    }
+
+    private function sweepRun(): array
     {
         $bid = Ledger::businessId();
         $agency = $this->agencyId();

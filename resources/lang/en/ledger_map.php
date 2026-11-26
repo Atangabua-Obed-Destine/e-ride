@@ -238,6 +238,7 @@ return [
     'h_suppliers_tie_out_label' => 'What is owed to suppliers and E-Ride differs from the bills',
     'h_suppliers_tie_out_detail' => 'The balance of 401 beside the approved supplier bills still unpaid and the E-Ride statements not paid yet.',
     'h_suppliers_tie_out_action' => 'Look for a failed or unposted document of the supplier, or a manual entry on 401 with their name.',
+    'hint_office_cash' => 'Cash paid or received at the office when no payment account is chosen (the office safe). Counter cash from tickets goes to the agents\' tills instead.',
     'h_opening_entry_label' => 'Opening entry of the books',
     'h_opening_entry_missing' => 'The books start on :date but the opening entry (what customers and suppliers owed that day) has not been made, so their balances in the ledger leave out everything before it.',
     'h_opening_entry_not_live' => 'The opening entry is not posted, or has been reversed, so customer and supplier balances leave out everything before the books started.',

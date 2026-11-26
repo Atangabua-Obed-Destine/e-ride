@@ -716,6 +716,7 @@ class LedgerHealth
             'orange' => __('ledger.method_orange'),
             'fapshi' => __('ledger.method_fapshi'),
             'company' => __('ledger.method_company'),
+            'bank' => __('ledger.method_bank'),
         ];
     }
 }

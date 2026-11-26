@@ -228,6 +228,7 @@ class SupplierPayables
         }
         $lines = [];
         $categories = ExpenseCategory::where('status', 1)->pluck('id')->flip();
+        $fleet = \App\Ledger\ERide\Books::fleet(); // E-Ride: a line may be for one of the buses
         foreach ($data['lines'] ?? [] as $line) {
             $amount = round((float) ($line['amount'] ?? 0), 2);
             $categoryId = $line['expense_category_id'] ?? null;
@@ -241,7 +242,9 @@ class SupplierPayables
             if (! $categoryId || ! isset($categories[(int) $categoryId])) {
                 throw new \RuntimeException(__('ledger_accounts.err_line_category'));
             }
-            $lines[] = ['description' => $description ?: null, 'expense_category_id' => (int) $categoryId, 'account_id' => null, 'amount' => $amount];
+            $bus = (string) ($line['vehicle_id'] ?? '');
+            $lines[] = ['description' => $description ?: null, 'expense_category_id' => (int) $categoryId, 'account_id' => null, 'amount' => $amount,
+                'vehicle_id' => $bus !== '' && isset($fleet[$bus]) ? $bus : null];
         }
         if (! $lines) {
             throw new \RuntimeException(__('ledger_accounts.err_bill_no_lines'));

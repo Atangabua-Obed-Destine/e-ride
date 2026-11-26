@@ -322,7 +322,8 @@ class PostingRules
             'reference' => $e->invoice_id ?: $e->reference,
             'journal_type' => 'cash',
             'lines' => [
-                ['account_id' => $this->categoryAccount('expense_category', $e->category_id, $cat->name ?? null), 'debit' => $amount, 'credit' => 0, 'description' => $desc],
+                ['account_id' => $this->categoryAccount('expense_category', $e->category_id, $cat->name ?? null), 'debit' => $amount, 'credit' => 0, 'description' => $desc]
+                    + ($e->vehicle_id ? ['vehicle_id' => (string) $e->vehicle_id] : []), // E-Ride: the bus it was spent on
                 ['account_id' => $this->moneyAccount($e->payment_account_id, $e->payment_method), 'debit' => 0, 'credit' => $amount, 'description' => $desc],
             ],
         ];
@@ -343,7 +344,8 @@ class PostingRules
                 throw new \RuntimeException(__('ledger_accounts.err_opening_account'));
             }
             $lines[] = ['account_id' => (int) $account, 'debit' => round((float) $l->amount, 2), 'credit' => 0,
-                'description' => trim(($l->description ?: ($l->category->name ?? __('ledger_accounts.opening_balance'))).' - '.$supplier, ' -')];
+                'description' => trim(($l->description ?: ($l->category->name ?? __('ledger_accounts.opening_balance'))).' - '.$supplier, ' -')]
+                + ($l->vehicle_id ? ['vehicle_id' => (string) $l->vehicle_id] : []); // E-Ride: the bus the line is for
         }
         if (round((float) $b->vat_amount, 2) > 0) {
             $lines[] = ['account_id' => $this->mapping('vat_deductible'), 'debit' => round((float) $b->vat_amount, 2), 'credit' => 0,
@@ -457,6 +459,10 @@ class PostingRules
         }
         if (! $method) {
             throw new \RuntimeException(__('ledger_accounts.err_no_money_side'));
+        }
+        // E-Ride: cash paid or received at the office is the office's (571), not a counter agent's till (5712)
+        if ($method === 'cash' && ($office = DefaultAccount::id('office_cash'))) {
+            return (int) $office;
         }
 
         return $this->mapping('payment_method', $method);

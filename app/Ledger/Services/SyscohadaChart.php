@@ -238,6 +238,7 @@ class SyscohadaChart
             'eride_payable' => '401',      // what is owed to E-Ride until the statement is paid
             'head_office' => '1811',       // a company branch: money held or paid by the head office
             'till_short' => '658',         // a till count short of the books
+            'office_cash' => '571',        // cash spent or received at the office with no payment account named
             'till_over' => '758',          // a till count over the books
             // posinnova's
             'customers' => '411',
@@ -271,6 +272,7 @@ class SyscohadaChart
             'orange' => '5522',   // Orange Money at the counter
             'fapshi' => '5523',   // paid in the app or on the web, through the agency's Fapshi
             'company' => '1811',  // collected on the head office's account (company money mode)
+            'bank' => '521',      // a bank transfer (spending, staff pay, suppliers)
         ];
     }
 }

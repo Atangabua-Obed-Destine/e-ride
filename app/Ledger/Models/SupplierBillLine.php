@@ -14,7 +14,7 @@ class SupplierBillLine extends Model
 {
     use BelongsToBusiness;
 
-    protected $fillable = ['business_id', 'supplier_bill_id', 'line_number', 'description', 'expense_category_id', 'account_id', 'amount'];
+    protected $fillable = ['business_id', 'supplier_bill_id', 'line_number', 'description', 'expense_category_id', 'account_id', 'amount', 'vehicle_id'];
 
     protected $casts = ['amount' => 'float'];
 

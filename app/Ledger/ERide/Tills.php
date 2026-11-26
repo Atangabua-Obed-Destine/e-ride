@@ -128,6 +128,8 @@ class Tills
                 'is_system_generated' => true,
             ], $lines, $userId);
             $count->forceFill(['journal_entry_id' => $entry->id])->save();
+            // the counted cash in the book of the payment account it was put into
+            BusBook::till($count, $toAccountId, $date, __('ledger_tills.entry_desc', ['agent' => $name]));
 
             return $count;
         });
@@ -145,6 +147,7 @@ class Tills
                 LedgerPoster::reverse($entry, 'till_count_void', $count->id, $userId, $reason);
             }
             $count->forceFill(['status' => 'void', 'void_reason' => $reason, 'voided_by' => $userId, 'voided_at' => now()])->save();
+            BusBook::tillVoided($count);
         });
     }
 

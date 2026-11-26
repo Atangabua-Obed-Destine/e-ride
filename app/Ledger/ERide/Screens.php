@@ -39,6 +39,7 @@ class Screens
         'ledger.payroll-setting.index',
         'ledger.staff-hourly-attendance.index', 'ledger.staff-hourly-attendance.report',
         'ledger.combined.index',
+        'ledger.bus-profit.index', // profit by bus, trip or route (E-Ride)
         // budgets
         'ledger.budget.dashboard', 'ledger.budget-sheet.index', 'ledger.budget.index', 'ledger.budget-line.index',
         'ledger.budget.reports.performance', 'ledger.budget.reports.variance', 'ledger.budget.reports.department', 'ledger.budget.reports.cashflow',

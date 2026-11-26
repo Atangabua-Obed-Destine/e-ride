@@ -98,6 +98,7 @@ class AccountMappingController extends LedgerController
         }
         $expense[] = $row('expense_category', '', $L('any_other_category'), $L('hint_expense_category'));
         $expense[] = $row('expense_payable', '', __('ledger.map_expense_payable'), $L('hint_expense_payable'));
+        $expense[] = $row('office_cash', '', __('ledger.map_office_cash'), $L('hint_office_cash'));
         $groups['expenses'] = ['title' => $L('group_expenses'), 'icon' => 'fa-receipt', 'color' => 'danger', 'rows' => $expense];
         // E-Ride: paxhitestbed's income categories (Income & Expense), built as the expense ones
         $income = [];

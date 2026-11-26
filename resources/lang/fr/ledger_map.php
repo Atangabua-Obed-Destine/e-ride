@@ -237,6 +237,7 @@ return [
     'h_suppliers_tie_out_label' => 'Ce qui est dû aux fournisseurs et à E-Ride diffère des factures',
     'h_suppliers_tie_out_detail' => 'Le solde du 401 à côté des factures fournisseurs approuvées non payées et des relevés E-Ride pas encore payés.',
     'h_suppliers_tie_out_action' => 'Cherchez une pièce du fournisseur en échec ou non comptabilisée, ou une écriture manuelle au 401 à son nom.',
+    'hint_office_cash' => 'Espèces payées ou reçues au bureau quand aucun compte de paiement n\'est choisi (le coffre du bureau). Les espèces des billets vont dans la caisse des agents.',
     'h_opening_entry_label' => 'Écriture d\'ouverture de la comptabilité',
     'h_opening_entry_missing' => 'La comptabilité commence le :date mais l\'écriture d\'ouverture (ce que clients et fournisseurs devaient ce jour-là) n\'a pas été passée : leurs soldes au grand livre ignorent tout ce qui précède.',
     'h_opening_entry_not_live' => 'L\'écriture d\'ouverture n\'est pas comptabilisée, ou a été contre-passée : les soldes clients et fournisseurs ignorent tout ce qui précède l\'ouverture.',

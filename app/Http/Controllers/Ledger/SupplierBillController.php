@@ -254,6 +254,7 @@ class SupplierBillController extends LedgerController
             'lines.*.description' => 'nullable|string|max:255',
             'lines.*.expense_category_id' => 'nullable|integer',
             'lines.*.amount' => 'nullable|numeric',
+            'lines.*.vehicle_id' => 'nullable|string|max:36', // E-Ride: the bus a line is for
             'opening_account_id' => ['nullable', \Illuminate\Validation\Rule::exists('chart_of_accounts', 'id')->where('business_id', $bid)],
             'opening_amount' => 'nullable|numeric',
         ], [], ['supplier_id' => __('ledger_accounts.supplier'), 'bill_date' => __('ledger_accounts.bill_date')]);
@@ -291,6 +292,7 @@ class SupplierBillController extends LedgerController
             'categories' => $categories,
             'kept_categories' => $kept,
             'opening_accounts' => $this->payables()->openingBalanceAccounts(),
+            'fleet' => \App\Ledger\ERide\Books::fleet(), // E-Ride: the buses a line may be for
         ];
     }
 }

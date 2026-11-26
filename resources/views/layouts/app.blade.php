@@ -85,6 +85,7 @@
         ]],
         [__('ledger.menu_accounting_reports'), [
             ['ledger.accounting-reports.index', 'ledger.menu_reports_dashboard', ['accounting-report-view'], null],
+            ['ledger.bus-profit.index', 'ledger.menu_bus_profit', ['accounting-report-view'], 'accounting-reports/bus-profit'],
             ['ledger.combined.index', 'ledger.menu_combined', ['trial-balance-view'], 'combined'],
             ['ledger.accounting-reports.receivables-aging', 'ledger.menu_receivables_aging', ['accounting-report-view'], 'accounting-reports/receivables-aging'],
             ['ledger.accounting-reports.payables-aging', 'ledger.menu_payables_aging', ['accounting-report-view'], 'accounting-reports/payables-aging'],
